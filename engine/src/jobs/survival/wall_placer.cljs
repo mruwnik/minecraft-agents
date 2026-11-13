@@ -65,7 +65,7 @@
         health (.-health (.self p))]
     (if (hit-since? c (:seal-health (ctx/mem c)))
       (do (ctx/update-mem! c assoc :seal-health health) :hit)
-      (let [fillable (remove #(and (access/trespass-refusal c :dig %) (= :loose (seal/kind (u/seen-name p %)))) cells)
+      (let [fillable (remove #(and (access/trespass-refusal c :dig %) (= :loose (fill/kind (u/seen-name p %)))) cells)
             e (await (ctx/call c :fill 'jobs.blocks.fill-cells
                                {:cells (mapv lb/cell fillable) :order :given :least 1 :clear-loose true :shut-open true :in-place true :danger? true
                                 :purpose (flight/plug-purpose c) :ignore-zones? true :use {:blocks (vec (flight/blocks c))} :ways #{:carried}

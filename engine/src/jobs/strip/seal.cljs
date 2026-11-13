@@ -5,7 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.seal :as seal]
+            [jobs.lib.shelter.fill :as fill]
             [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as b]
             [jobs.lib.cost.risk :as risk]
@@ -68,7 +68,7 @@
   "What a block name means for the seal: :solid (done), :open (replaceable or not read yet), :loose (dig it first)
   or :container (never touched)."
   [n]
-  (if (nil? n) :open (seal/kind n)))
+  (if (nil? n) :open (fill/kind n)))
 
 (defn at-of [at] (some-> at b/cell))
 

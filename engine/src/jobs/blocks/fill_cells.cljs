@@ -102,7 +102,7 @@
                           (and shut? (fill/open-openable p cell)) [cell :shut]
                           (and in-place? (fill/sealed? p cell)) nil
                           :else (if-let [n (u/seen-name p cell)]
-                                  [cell (seal/kind n)]
+                                  [cell (fill/kind n)]
                                   (when in-place? [cell :open])))))
                 (filter (fn [[_ k]] (or (#{:open :shut} k) (and clear? (#{:loose :container} k)))))
                 (remove (comp (:occupied (ctx/mem c) #{}) first)))

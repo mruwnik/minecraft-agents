@@ -3,7 +3,11 @@
   on, and the cells still to fill (fill-cells, open-cells). Placing them is jobs.survival.dig-in-cells."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.click :as click]
+            [jobs.lib.danger :as danger]
+            [jobs.lib.found :as found]
             [jobs.lib.land :as land]
+            [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (def sides [[1 0] [-1 0] [0 1] [0 -1]])
@@ -14,6 +18,18 @@
   "Blocks that stop a mob although their collision shape does not fill the cell: fences (1.5 high), walls, panes,
   iron bars, gates, doors and trapdoors."
   #"(_fence|_fence_gate|_wall|_pane|_door|_trapdoor)$|^iron_bars$")
+
+(def loose #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate|sapling)$|^cobweb$")
+
+(defn kind
+  "What a block name means for a fill: :open (air, water or replaceable), :container (never touched), :loose (dug first with
+  :clear-loose) or :solid (done)."
+  [n]
+  (cond
+    (or (bs/air n) (= "water" n) (bs/replaceable n)) :open
+    (found/containers n) :container
+    (or (bs/clearable n) (and n (re-find loose n))) :loose
+    :else :solid))
 
 (defn open-openable
   "The block at cell when it is a door, gate or trapdoor (wooden, copper or iron) standing open, else nil."
@@ -72,7 +88,45 @@
                       (when-not (or (sealed? roof) (some sealed? supports)) [support])
                       [roof]))))
 
+(defn fixture?
+  "Whether a block no fill places into or clears stands in the cell: a bed, container or workstation (kind :container,
+  or :solid not sealed?). The cell over it is filled instead."
+  [p cell]
+  (let [n (u/seen-name p cell)]
+    (boolean (and n (#{:container :solid} (kind n)) (not (sealed? p cell))))))
+
+(defn room-columns
+  "The [x z] columns beside the feet whose feet-height cell lies in a closed room with a door (reach-room/room*, the
+  body's own feet and head cells counted solid) roofed over every cell (sh-sense/room-roofed?), within sh-sense/spawn-free-radius of
+  the feet and with no hostile the body knows of in it (danger/seen-hostiles), while the body's own cells open it (no
+  closed room round the feet): the body stands in its wall or doorway, and that side is the room's, a way no mob comes."
+  [p {:keys [x y z] :as feet}]
+  (let [base (reach-room/shut-kind-at p)
+        kind-at (reach-room/room-kind-at p (fn [cx cy cz] (if (and (== cx x) (== cz z) (<= y cy (inc y))) :solid (base cx cy cz))))
+        gap? (delay (nil? (reach-room/room-flood p (reach-room/room-kind-at p base) x y z)))
+        mobs (delay (set (map #(let [{:keys [x y z]} (danger/mob-pos p %)] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])
+                              (danger/seen-hostiles p))))
+        safe? (fn [{:keys [cells]}]
+                (and (not-any? @mobs cells)
+                     (every? (fn [[cx cy cz]] (let [cell {:x cx :y cy :z cz}]
+                                                (and (sh-sense/room-roofed? p cell) (<= (u/dist feet cell) sh-sense/spawn-free-radius))))
+                             cells)))]
+    (reduce (fn [found [dx dz]]
+              (let [col [(+ x dx) (+ z dz)]]
+                (if (or (contains? found col) (not (sh-sense/room-roofed? p {:x (first col) :y y :z (second col)})) (not @gap?))
+                  found
+                  (let [room (reach-room/room* p {:x (first col) :y y :z (second col)} kind-at)]
+                    (if (and room (seq (:doors room)) (contains? (:cells room) [(first col) y (second col)]) (safe? room))
+                      (into found (map (fn [[cx _ cz]] [cx cz])) (:cells room))
+                      found)))))
+            #{}
+            (concat sides corners))))
+
 (defn open-cells
-  "The fill-cells around the feet cell that are not sealed? in the world; the roof support away from threats."
+  "The fill-cells around the feet cell that are not sealed? in the world; the roof support away from threats. A
+  fixture? cell, and the cells of a room-columns column, are no fill target."
   ([p feet] (open-cells p feet nil))
-  ([p feet threats] (fill-cells #(sealed? p %) feet threats #(stand-on? p %))))
+  ([p feet threats]
+   (let [rooms (delay (room-columns p feet))]
+     (filterv #(not (or (fixture? p %) (contains? @rooms [(:x %) (:z %)])))
+              (fill-cells #(sealed? p %) feet threats #(stand-on? p %))))))

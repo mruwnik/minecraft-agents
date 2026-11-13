@@ -81,6 +81,10 @@
 
 (defn room-roof-height [] (settings/get settings ::room-roof-height))
 
+(def spawn-free-radius
+  "Blocks round a player in which no mob spawns (the vanilla rule, spherical): a dark cell nearer than this to the body is no danger."
+  24)
+
 (defn block-light-at
   "Block light (0-15) of the cell, or nil when no light data is loaded there."
   [p {:keys [x y z]}]

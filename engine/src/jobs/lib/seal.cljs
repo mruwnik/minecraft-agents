@@ -5,10 +5,8 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
-            [jobs.lib.found :as found]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
@@ -61,14 +59,3 @@
 
 (defn mob-wait-ms [] (settings/ticks->ms (settings/get settings ::mob-wait-ticks)))
 
-(def loose #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate|sapling)$|^cobweb$")
-
-(defn kind
-  "What a block name means for a fill: :open (air, water or replaceable), :container (never touched), :loose (dug first with
-  :clear-loose) or :solid (done)."
-  [n]
-  (cond
-    (or (bs/air n) (= "water" n) (bs/replaceable n)) :open
-    (found/containers n) :container
-    (or (bs/clearable n) (and n (re-find loose n))) :loose
-    :else :solid))

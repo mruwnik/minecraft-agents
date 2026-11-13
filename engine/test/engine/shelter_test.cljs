@@ -32,6 +32,7 @@
             [engine.perception :as perception]
             [engine.perception.store :as store]
             [engine.test-util :as tu :refer [run-until-empty]]
+            [engine.hut-shelter-test :as hut]
             [engine.reach-test :as reach-test]
             [engine.shelter-support :refer [walls-cheap day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted no-way-stops emitted-by floor bed-room dirt-stack wall-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
@@ -1609,6 +1610,13 @@
         "a corner floor that is no full cube but is stood on (a slab top) is walled out")
     (is (empty? (filter #(= [1 1] [(:x %) (:z %)]) (corners #(and (floor? %) (not= slab %)))))
         "a corner floor nobody stands on needs no walls")))
+
+(deftest open-cells-leave-the-room-a-body-stands-in-the-wall-of-and-a-chest
+  ;; the hut of hut-shelter-test (room x 4..6 z -1..1), the body in a hole cut in its north wall at z -2, a chest outside
+  (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z -2} {"5,64,-2" "air" "5,65,-2" "air" "4,64,-3" "chest"}))]
+    (is (= #{{:x 5 :y 64 :z -3} {:x 5 :y 65 :z -3} {:x 4 :y 65 :z -3} {:x 6 :y 64 :z -3} {:x 6 :y 65 :z -3}}
+           (set (fill/open-cells p {:x 5 :y 64 :z -2})))
+        "the outside side and corners, the cell over the chest, none in the room")))
 
 (deftest fill-cells-put-the-roof-support-away-from-the-threats
   (let [feet {:x 0 :y 64 :z 0}

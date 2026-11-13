@@ -11,7 +11,7 @@
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
-            [jobs.lib.seal :as seal]
+            [jobs.lib.shelter.fill :as fill]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]))
 
@@ -58,7 +58,7 @@
 (defn openings
   "{:open [cells] :unseen [cells]}: the open cells beside the own cells (a set) within r of centre that no open way of other
   cells within r + margin links to the seeds (where the body may walk back), and the cells there kind-at cannot name.
-  kind-at: cell -> jobs.lib.seal/kind of the seen block, nil when not seen."
+  kind-at: cell -> jobs.lib.fill/kind of the seen block, nil when not seen."
   [kind-at own seeds centre r]
   (let [kind-at (memoize kind-at)
         box? #(within? centre (+ r margin) %)
@@ -89,7 +89,7 @@
   "openings for the call: its own cells, seeds, :at and :radius."
   [c]
   (let [p (:primitives c)
-        kind-at #(some-> (u/seen-name p (a/cell %)) seal/kind)]
+        kind-at #(some-> (u/seen-name p (a/cell %)) fill/kind)]
     (openings kind-at (ledger/own-cells c) (seeds c) (centre c) (:radius (:args c)))))
 
 (defn to-look

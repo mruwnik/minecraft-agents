@@ -15,9 +15,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]))
 
-(def spawn-free-radius
-  "Blocks round a player in which no mob spawns (the vanilla rule, spherical): a dark cell nearer than this to the body is no danger."
-  24)
+(def spawn-free-radius sh-sense/spawn-free-radius)
 
 (defn shut-in?
   "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out) or an entry
