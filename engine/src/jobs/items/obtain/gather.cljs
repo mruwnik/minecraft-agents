@@ -238,10 +238,12 @@
       (do (ctx/update-mem! c dissoc :approach) :again))))
 
 (defn ^:async torch-step!
-  "Before a mine that must stair or tunnel down to an ore not seen starts (its own ways lack :gather, so it cannot stock torches itself): get the
+  "Before a mine that must stair or tunnel down to an ore not seen starts, or runs again after it ended :no-torches (its own ways lack :gather, so it cannot stock torches itself): get the
   torches here with an obtain child, as jobs.lib.torch-stock does for a mine called alone. :continue while it runs, else nil."
   [c need]
-  (when (and (:tunnel? need) (= 'jobs.gather.mine (:job need)) (not (seen-of c need)) (not (get-in (ctx/mem c) [:gather :before])))
+  (when (and (= 'jobs.gather.mine (:job need)) (not (get-in (ctx/mem c) [:gather :before]))
+             (or (and (:tunnel? need) (not (seen-of c need)))
+                 (= (:key need) (get-in (ctx/mem c) [:gather :torches-for]))))
     (or (await (fetch-need/return! c))
         (await (torch-stock/torches! c)))))
 
@@ -436,6 +438,8 @@
                         (:chest need) (do (ctx/update-mem! c assoc-in [:gather :chest-tried (:key need)] true) :again)
                         (torch-due c (:cause e)) (book-light! c (torch-due c (:cause e)))
                         (light-settling? c (:cause e)) :again
+                        (and (= :no-torches (contract/cause-key e)) (not (:torches-tried (ctx/mem c))) (torch-stock/fetch-allows? c))
+                        (do (ctx/update-mem! c assoc-in [:gather :torches-for] (:key need)) :again)
                         (and (#{:flooded :wet :exposed :hazard} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
                         (and (:tunnel? need) (not at) (pos? (u/cut-cells (:cut res))) (strip-on! c need (:cut res) (= :descent-stopped (contract/cause-key e)))) :again

@@ -196,6 +196,22 @@
           (is (< 0 (+ (get (f/inv s) "torch" 0) (count (filter #(= "torch" (.-item (.-args %))) (f/calls s "place")))))
               "the torches are carried or were placed (a walk to the floor's edge hangs them to see the floor), not lost"))))))
 
+(deftest a-mine-of-a-seen-ore-that-stops-for-torches-gets-them-and-mines-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit-runs (atom 0)
+              s (f/start (ore-world {"1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "coal" :count 2} {:name "crafting_table" :count 1}]) [f/own-zone])
+              s (assoc-in s [:eng :jobs 'jobs.gather.mine :round]
+                          (fn ^:async f [c]
+                            (if (pos? (torch/torches-held (:primitives c)))
+                              (do (swap! lit-runs inc) :continue)
+                              (ctx/end c :condition-failed {:reason :no-torches} {:reason :no-torches :got 0}))))]
+          (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather}} 60))
+          (is (some :at (f/events-of s :obtain.gathering)) "the ore was seen: no stock before the first run")
+          (is (seq (f/events-of s :torch.stocked)) "obtain got the torches the mine's ways cannot")
+          (is (pos? @lit-runs) "and the mine ran again with them"))))))
+
 (deftest a-smelted-product-without-its-input-names-the-smelt-not-a-block-recipe
   (async done
     (tu/run-async done
