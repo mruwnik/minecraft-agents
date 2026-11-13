@@ -352,6 +352,22 @@
           (is (seq (events-of (:seen own) :go-to.restored)) "its own cells are put back")
           (is (empty? (events-of (:seen free) :go-to.restored)) "natural ground is left open"))))))
 
+(deftest go-to-into-its-own-house-goes-round-to-its-door-rather-than-cut-the-house
+  ;; Tamsin H11 (card 7f632862): go-home from a tunnel beside its house cut in through the wall, floor and bed; a way in
+  ;; ends in its holes, which stay its stand, so the put-back the own cut is priced at is never made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hut (shape/with-author {:id "hut" :parts [{:id "shell" :box [[-3 64 -3] [3 66 3]] :want "dirt"}]} "Fake")
+              ;; a closet [4 64 0] in a stone block east of the hut, its west side the hut's east wall; the door is the west wall's [-3 64 0]
+              blocks (apply dissoc (merge room (box 4 64 -3 8 67 3 "stone")) ["-3,64,0" "-3,65,0" "4,64,0" "4,65,0"])
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 4 :y 64 :z 0}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    'jobs.movement.go-to {:pos [0 64 0] :range 1} {:plans {"hut" hut}}))]
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (seq (dug-cells p)) "it digs out of the closet")
+          (is (not-any? (fn [[x y z]] (and (<= -3 x 3) (<= 64 y 66) (<= -3 z 3))) (dug-cells p)) "but not through its own house")
+          (is (empty? (events-of seen :go-to.dug-own-build))))))))
+
 (deftest go-to-pillars-out-of-a-pit-walled-by-its-own-plan-rather-than-cut-the-walls
   (async done
     (tu/run-async done

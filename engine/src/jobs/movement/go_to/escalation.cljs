@@ -426,7 +426,7 @@
                                                 (when-not (and s (= :past-worth (:why e)) (past-from? s)) s))))
         ;; a way through the body's own builds, priced against the one that spares them (own-way)
         priced-own (delay (when (and (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet))) (own-may-beat? (:primitives c) feet e))
-                            (some-> (own-way (:primitives c) feet e (choose (may-dig-fn c true) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)
+                            (some-> (own-way (:primitives c) feet e (choose (may-dig-fn c true goal) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)
                                     worth-it)))
         own (delay (when-not (= :none (:step @priced-own)) @priced-own))
         e (cond
@@ -839,7 +839,7 @@
             feet (end/feet-cell c)
             goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
             plan (fn [floors-unseen-ok?]
-                   (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (pickaxe-fetch c (fetch-tool? c))
+                   (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c) goal) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (pickaxe-fetch c (fetch-tool? c))
                                 (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c) :plugs (stair-mem/plugs-of c)
                                                      :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m)) :bound-s (call-budget-s c) :tolls (walk-tolls c)}
                                                     (range-opts c pos)))))
