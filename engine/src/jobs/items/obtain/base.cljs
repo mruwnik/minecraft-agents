@@ -37,14 +37,16 @@
   (get-in (ctx/left c) [:spend :job-time] ##Inf))
 
 (defn job-time-binds?
-  "Whether the call's job time left, not its worth, is what search-worth is capped by."
+  "Whether the call's job time left is under its worth, so a search's legs run out of time before they stop paying."
   [c]
   (< (job-time-left c) (ctx/worth c)))
 
 (defn search-worth
-  "Seconds a search for the call's need may spend: the call's worth (ctx/worth), within the job time it has left, less what a mine for it already spent without a find (::spent, gather/way-left)."
+  "Seconds a find of the call's need is worth to a search: the call's worth (ctx/worth), less what a mine for it already
+  spent without a find (::spent, gather/way-left). The job time left is when the search must end (job-time-left), not
+  what a find is worth: a call worth far more than its time still pays for a long-odds look."
   [c]
-  (- (min (ctx/worth c) (job-time-left c)) (::spent c 0)))
+  (- (ctx/worth c) (::spent c 0)))
 
 (defn wanted-fields
   "{:item name} or {:any-of [..]} of the args, for reasons and results."

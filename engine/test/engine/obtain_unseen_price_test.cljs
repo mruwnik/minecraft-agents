@@ -338,7 +338,7 @@
       (is (= (cost/worth-to nil ["beef"] nil) (price/price-of c)) "no fish without a rod: the beef search")
       (is (nil? (obtain/not-worth c))))))
 
-(deftest a-deep-tunnels-find-is-priced-within-the-job-time-the-call-has-left
+(deftest a-deep-tunnels-legs-end-with-the-job-time-the-call-has-left-but-its-find-keeps-the-calls-worth
   ;; obtain-strip-on's first case passes :spend :job-time as get-kit's bill children get it
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor [-40 -50 -45 50 45] :floor-block "stone" :time 6000 :self {:pos [0.5 -39 0.5]}
                                             :inventory [{:name "stone_pickaxe" :count 1} {:name "torch" :count 14}]}))
@@ -347,8 +347,15 @@
         need (first (table/gather-needs {"raw_iron" 1} (game/version-of p)))
         cost-left (fn [job-s] (with-redefs [ctx/mem (constantly {:gather {:climbed {"raw_iron" true}}})]
                                 (:cost (plan/tunnel-way (assoc (rooted c0 5000) :left (constantly {:spend {:job-time job-s}}) :jobs.items.obtain.base/spent 85) need))))]
-    (is (infinite? (cost-left 515)) "a find at y -39 costs more than the 515 s a default call has left, whatever its worth")
-    (is (< (cost-left 2700) js/Infinity) "a bill item's child has 2700 s")))
+    (is (< (cost-left 515) js/Infinity) "the legs that fit in a default call's 515 s are priced at the call's worth of 5000, not at 515")
+    (is (= (cost-left 515) (cost-left 2700)) "more time walks more legs at the same seconds per find")
+    (is (infinite? (cost-left 1)) "no leg fits in 1 s")))
+
+(deftest a-finds-worth-is-the-calls-worth-not-the-job-time-it-has-left
+  ;; Tamsin j128: obtain white_wool :worth 30000 priced each walk against the 719 s of its default job time
+  (let [c {:quote-call {:worth 30000} :left (constantly {:spend {:job-time 720}})}]
+    (is (= 30000 (base/search-worth c)))
+    (is (= 29915 (base/search-worth (assoc c :jobs.items.obtain.base/spent 85))) "less what a mine spent without a find")))
 
 (deftest the-job-time-left-binds-a-search-when-it-is-under-the-calls-worth
   (let [c {:quote-call {:worth 5000} :left (constantly {})}]

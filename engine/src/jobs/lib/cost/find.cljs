@@ -154,19 +154,22 @@
 
 (defn search-s
   "Seconds a search spends per find: legs of leg-s seconds, leg i finding with (chance i) (leg-chance's), walked until
-  leg-stops? on the worth left, the seconds expected until a find or that stop over the chance of a find by then: a
-  search tried before a sure way of cost C (taken when it finds none) is cheaper exactly when this is under C.
-  Infinity when no leg pays, chance is nil (none priced) or the worth has no bound (it sets no stop). A chance alike
-  for every leg (a number) is leg-s / chance once the first leg pays, however many legs the worth pays for. Each leg
-  spends leg-s (positive) of a finite worth, so it ends."
-  [chance leg-s worth]
-  {:pre [(pos? leg-s)]}
-  (cond
-    (not (and chance (js/isFinite worth))) js/Infinity
-    (number? chance) (if (leg-stops? leg-s chance worth) js/Infinity (/ leg-s chance))
-    :else
-    (loop [i 0 spent 0 miss 1 expect 0]
-      (let [p (chance i)]
-        (if (leg-stops? leg-s p (- worth spent))
-          (if (< miss 1) (/ expect (- 1 miss)) js/Infinity)
-          (recur (inc i) (+ spent leg-s) (* miss (- 1 p)) (+ expect (* miss leg-s))))))))
+  leg-stops? on the worth left or the next leg outlasts the time (seconds the search may run, default no limit), the
+  seconds expected until a find or that stop over the chance of a find by then: a search tried before a sure way of
+  cost C (taken when it finds none) is cheaper exactly when this is under C. The time ends legs, it is not what a find
+  is worth. Infinity when no leg pays or fits, chance is nil (none priced) or the worth has no bound (it sets no stop).
+  A chance alike for every leg (a number) is leg-s / chance once the first leg pays and fits, however many legs follow.
+  Each leg spends leg-s (positive) of a finite worth, so it ends."
+  ([chance leg-s worth] (search-s chance leg-s worth ##Inf))
+  ([chance leg-s worth time]
+   {:pre [(pos? leg-s)]}
+   (let [stops? (fn [p spent] (or (leg-stops? leg-s p (- worth spent)) (< time (+ spent leg-s))))]
+     (cond
+       (not (and chance (js/isFinite worth))) js/Infinity
+       (number? chance) (if (stops? chance 0) js/Infinity (/ leg-s chance))
+       :else
+       (loop [i 0 spent 0 miss 1 expect 0]
+         (let [p (chance i)]
+           (if (stops? p spent)
+             (if (< miss 1) (/ expect (- 1 miss)) js/Infinity)
+             (recur (inc i) (+ spent leg-s) (* miss (- 1 p)) (+ expect (* miss leg-s))))))))))

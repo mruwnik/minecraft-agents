@@ -6,7 +6,7 @@
             [jobs.items.craft :as craft]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.crops :as crops]
-            [jobs.items.obtain.base :refer [explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
+            [jobs.items.obtain.base :refer [explore-opts gathers? job-time-left makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.seen :refer [growable? ripe-crop seen-of sheep-in-range shears-source standing-crops]]
@@ -243,7 +243,7 @@
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each its walk (its
-  danger is go-to's quote's, priced as the search walks it), a look of the gather's scan radius (cost/look-leg-chance), within the call's search-worth, then
+  danger is go-to's quote's, priced as the search walks it), a look of the gather's scan radius (cost/look-leg-chance), within the call's search-worth and job time left, then
   the walk to what it saw. Infinity when the call may not search, its search for the need ran already (it found none:
   the seen way or the tunnel is next) or no chance is priced (logs and other blocks)."
   [c need]
@@ -253,17 +253,17 @@
           self (u/self-pos c)
           r (search-scan-radius)
           leg (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))]
-      (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r (ledger/own-cells c)) leg (search-worth c))
+      (+ (cost/search-s (cost/look-leg-chance p (notes/notes c) (search-names need) [(:x self) (:z self)] r (ledger/own-cells c)) leg (search-worth c) (job-time-left c))
          (:cost (cost/walk-cost {:distance r}))))))
 
 (defn first-leg-pays?
   "Whether the call's search-worth pays for a search's first leg for need, a straight walk of its spacing, at the chance
-  its look finds one (cost/look-leg-chance, 1 when none is priced): the search's own :price stop, before it starts."
+  its look finds one (cost/look-leg-chance, 1 when none is priced), within the job time left: the search's own :price stop, before it starts."
   [c need]
   (let [self (u/self-pos c)
         leg (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))
         chance (cost/look-leg-chance (:primitives c) (notes/notes c) (search-names need) [(:x self) (:z self)] (search-scan-radius) (ledger/own-cells c))]
-    (not (cost/leg-stops? leg (cost/chance-of (or chance 1) 0) (search-worth c)))))
+    (and (<= leg (job-time-left c)) (not (cost/leg-stops? leg (cost/chance-of (or chance 1) 0) (search-worth c))))))
 
 (defn climb-sealed?
   "Whether the body has seen an unbreakable block (jobs.lib.access.rules) in a cell a stair up of climb steps along the
@@ -293,7 +293,7 @@
 (defn tunnel-way
   "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: the torches it stocks first
   (stock-s), a stair from the feet to the tunnel height y, then a strip tunnel there, legs of the blocks one torch of the kind carried
-  lights (cost/torch-gap-of) finding by cost/tunnel-chance within the call's search-worth (cost/search-s). y is the cheaper of the
+  lights (cost/torch-gap-of) finding by cost/tunnel-chance within the call's search-worth and the job time the stock and stair leave (cost/search-s). y is the cheaper of the
   feet (a stair down to cost/ore-level when that is lower) and, with the ore's level above the feet, that level by a
   stair up (obtain.gather climbs it: not once climbed, nor through a climb-sealed? rock). The stair down and the legs
   are lit as they go (cost/lit-way-s), the stair up is dug dark (cost/dark-way-s of the kit), each over stair-time's
@@ -318,7 +318,7 @@
                                  (lit-steps-s :down dy item))
                          leg (strip-s n item)]
                      {:way :tunnel :y y
-                      :cost (+ stock stair (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))
+                      :cost (+ stock stair (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c) (- (job-time-left c) stock stair)))}))
             here (at-y (min feet (or level feet)))
             up (when (and level (> level feet) (not (get-in (ctx/mem c) [:gather :climbed (:key need)]))
                           (not (climb-sealed? p self (- level feet))))

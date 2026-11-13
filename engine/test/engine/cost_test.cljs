@@ -902,6 +902,8 @@
   (is (= 24 (cost/search-s 0.25 6 1e15)) "a worth that pays for 1e14 legs is priced without walking them")
   (is (> 1e-9 (js/Math.abs (- (cost/search-s 0.25 6 1e3) (cost/search-s (constantly 0.25) 6 1e3)))) "the same as each leg walked")
   (is (infinite? (cost/search-s 0.25 6 20)) "a worth whose first leg does not pay walks none")
+  (is (infinite? (cost/search-s 0.25 6 1e3 5)) "a first leg that outlasts the time walks none")
+  (is (= 24 (cost/search-s 0.25 6 1e3 6)) "the time ends legs; the worth, not the time, says whether one pays")
   (is (infinite? (cost/search-s 0 6 1e15)))
   (is (number? (cost/tunnel-chance "iron" 16 cost/torch-gap)) "a tunnel's legs all cut rock alike"))
 
