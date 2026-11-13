@@ -13,7 +13,7 @@
            [:set [24 0 10] "torch"] [:set [28 0 10] "torch"] [:set [24 0 14] "torch"] [:set [28 0 14] "torch"]
            [:fill [21 0 7] [31 2 7] "cobblestone"] [:fill [21 0 17] [31 2 17] "cobblestone"] [:fill [21 0 7] [21 2 17] "cobblestone"] [:fill [31 0 7] [31 2 17] "cobblestone"]
            [:set [21 0 12] "oak_door[facing=west,half=lower,hinge=left,open=false]"] [:set [21 1 12] "oak_door[facing=west,half=upper,hinge=left,open=false]"]]
-  :body {:at [26.5 0 12.5] :effects [["resistance" 600 4]] :inventory [["dirt" 3]] :settle-s 3}
+  :body {:spawnpoint :far :at [26.5 0 12.5] :effects [["resistance" 600 4]] :inventory [["dirt" 3]] :settle-s 3}
   :limit-s 150}
  :cases
  [{:name "pit-across-a-death-field-is-not-dug"

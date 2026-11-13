@@ -12,7 +12,7 @@
  {:tags [:night :survival]
   :time :night
   :plot {:height 10 :length 64 :width 32}
-  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 16]] :settle-s 4}}
+  :body {:spawnpoint :far :at [4.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 16]] :settle-s 4}}
  :cases
  [  {:name "lit-route-15-blocks-walks-home"
    :blocks [[:fill [18 0 14] [22 3 18] "stone" :hollow] [:fill [19 0 15] [21 2 17] "air"] [:fill [18 0 16] [18 1 16] "air"] [:set [18 0 16] "oak_door[facing=west,half=lower,hinge=left,open=true]"] [:set [18 1 16] "oak_door[facing=west,half=upper,hinge=left,open=true]"] [:set [17 0 15] "torch"]]

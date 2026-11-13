@@ -5,7 +5,7 @@
  {:tags [:night :survival :water]
   :time :night
   :plot {:height 10 :length 32 :width 32}
-  :body {:effects [["resistance" 600 4]] :settle-s 3}}
+  :body {:spawnpoint :far :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "swimmer-climbs-out-before-the-night-ends-roofed"
    :time-why :night-light
