@@ -738,6 +738,30 @@
        (is (= {:x 0.5 :y 64 :z (+ 0.5 (cost-danger/melee-reach))} (:pos felt)) "the walks' threat: a blow's reach off along the hit's direction")
        (is (empty? (danger/felt-hostiles (:primitives (ctx [drowned])) (ctx/view c))) "a mob the body knows of is not felt again")))))
 
+(defn felt-ctx [data]
+  (-> (remembering-ctx (merge at-origin {:self {:pos {:x 0.5 :y 64 :z 0.5} :health 3 :food 20} :entities []}))
+      (assoc :view (constantly {:now 10000 :data data}))))
+
+(defn hurt-data [blow]
+  (mem/add-entry mem/empty-data :hurt {:t 9000 :data (assoc blow :amount 5 :pos {:x 0.5 :y 64 :z 0.5} :damages [blow])} {:cap 50 :ttl 60000}))
+
+(deftest felt-hostiles-leaves-out-attackers-that-are-no-melee-hostile
+  ;; Would fail on old code: every attacker id became a :kind "hostile" entity, a player, golem, wolf, unknown name or arrow shooter too.
+  (are [blow] (empty? (let [c (felt-ctx (hurt-data blow))] (danger/felt-hostiles (:primitives c) (ctx/view c))))
+    {:attacker {:id 1 :name "Steve"} :dir {:x 0 :z 1}}
+    {:attacker {:id 2 :name "iron_golem"} :dir {:x 0 :z 1}}
+    {:attacker {:id 3 :name "wolf"} :dir {:x 0 :z 1}}
+    {:attacker {:id 4 :name "no_such_mob"} :dir {:x 0 :z 1}}
+    {:attacker {:id 5 :name "skeleton" :held "bow"} :damageType "minecraft:arrow" :dir {:x 0 :z 1}}
+    {:attacker {:id 6 :name "drowned" :held "trident"} :dir {:x 0 :z 1}})
+  (let [c (felt-ctx (hurt-data {:attacker {:id 7 :name "zombie"} :dir {:x 0 :z 1}}))]
+    (is (= [7] (map #(.-id %) (danger/felt-hostiles (:primitives c) (ctx/view c)))) "a melee hostile is felt")))
+
+(deftest a-felt-water-mob-counts-once-in-known-threats
+  ;; Would fail on old code: the water-mob :hurt entry (key nil) and the felt entry (key = id) were two threats of one drowned.
+  (let [c (felt-ctx (hurt-data {:attacker {:id 58552 :name "drowned"} :dir {:x 0 :z 1}}))]
+    (is (= [58552] (map :key (threats/known-threats c))))))
+
 (deftest fit-prices-the-jobs-own-quoted-seconds-before-the-category-stay
   (dear-death
    (fn []

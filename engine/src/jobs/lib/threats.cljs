@@ -182,7 +182,8 @@
                    {:mob cause :pos pos :weight (death-spot/present-share c (assoc d :mob cause)) :remembered true})
                  (for [{:keys [t data]} (ctx/entries c :hurt)
                        :let [cause (death-spot/hurt-cause data) w (fade (- now t))]
-                       :when (and (field/water-mobs cause) (:pos data) (pos? w))]
+                       :when (and (field/water-mobs cause) (:pos data) (pos? w)
+                                  (not (contains? now-keys (get-in data [:attacker :id]))))]
                    {:mob cause :pos (:pos data) :weight w :remembered true}))
          (filter #(and (string? (:mob %)) (:pos %)))
          (group-by (juxt :key field/field-key))

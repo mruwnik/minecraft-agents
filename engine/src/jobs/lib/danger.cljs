@@ -19,6 +19,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shot :as shot]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -117,17 +118,22 @@
 
 (defn felt-hostiles
   "The mobs whose blows hurt the body within ::hit-s (hit-ids) that it does not know of (not among combat/known-or-raw):
-  a player feels the blow and knows a mob is at hand. Each a JS entity, :felt true, neither seen nor heard, placed where
+  a player feels the blow and knows a mob is at hand. Only a melee hostile counts: the blow's attacker named by a type
+  minecraft-data calls hostile (a player, golem or wolf is none; a name it does not know is not taken for one), and a
+  ranged hit is left to the shot spots (shot/shot-spots). Each a JS entity, :felt true, neither seen nor heard, placed where
   the blow came from: cost.danger/melee-reach from where the body stood along the hit's :dir (the damage packet's), the
   latest blow of each mob."
   [p view]
   (let [since (- (:now view) (* 1000 (settings/get settings ::hit-s)))
         known (into #{} (map #(.-id %)) (combat/known-or-raw p (known-scan)))
         body (u/pos-of (.-pos (.self p)))
+        version (game/version-of p)
         blows (into {} (for [{:keys [data]} (mem/since view :hurt since)
                              d (or (seq (:damages data)) [data])
                              :let [id (get-in d [:attacker :id])]
-                             :when (and id (not (contains? known id)))]
+                             :when (and id (not (contains? known id))
+                                        (not (shot/shot? {:data d}))
+                                        (threat/hostile? version (select-keys (:attacker d) [:name])))]
                          [id (assoc d :at (or (:pos data) body))]))]
     (for [[id {:keys [attacker dir at]}] blows
           :let [r (cost-danger/melee-reach)
