@@ -394,7 +394,7 @@
            :running " is running, not lost"
            (:queued :resuming :continuing) (str " is " (name (:status now))
                                     (if behind (str " behind " (:id behind) " " (:name behind)) " (waiting its turn or cut by a reflex)")
-                                    ", not lost; :wait and :summary events naming another job are that job's, not this one's"
+                                    ", not lost"
                                     (when (seq holders) (str " (holding: " (str/join ", " holders) ")"))
                                     "; it runs when the body is free")
            (str " is still queued, running or cut by a reflex, not lost"
@@ -402,13 +402,27 @@
                 "; it runs when the body is free"))
          tail)))
 
+(defn split-summary
+  "A wake's quiet summary split by whose events they are: the waited job's own items go to :wait :events, the rest to
+  :others, grouped by job id (a reflex's by :reflex)."
+  [result id]
+  (let [{:keys [items more?]} (get-in result [:wait :summary])
+        own (filterv #(= id (:job %)) items)
+        others (group-by #(or (:job %) :reflex) (remove #(= id (:job %)) items))]
+    (cond-> (update result :wait dissoc :summary)
+      (seq own) (assoc-in [:wait :events] own)
+      (seq others) (assoc :others (cond-> others more? (assoc :more? true))))))
+
 (defn wait-result
-  "The submit answer with the wake that ended the wait under :wait, and :follow and :note when the job had not ended by then."
+  "The submit answer with the wake that ended the wait under :wait. When the job had not ended by then: :follow, :note,
+  the job's own :status (and :behind) under :job, and the other jobs' events apart under :others."
   ([answer id wake] (wait-result answer id wake nil))
   ([answer id wake now]
-   (cond-> (assoc answer :wait wake)
-     (not (and (= :job-finished (:wake wake)) (= id (:job wake))))
-     (assoc :follow (follow-command id) :note (unfinished-note id wake now)))))
+   (if (and (= :job-finished (:wake wake)) (= id (:job wake)))
+     (assoc answer :wait wake)
+     (-> (assoc answer :wait wake :follow (follow-command id) :note (unfinished-note id wake now))
+         (update :job merge (select-keys now [:status :behind]))
+         (split-summary id)))))
 
 (defn job-now
   "A promise of the job as show prints it (status, waiting reason), so a wait that ended first says what holds the job; for a job still waiting its turn, :behind is /status's :current (id, name) when that is another job. nil when unreadable."
@@ -450,8 +464,8 @@
                                             (fn [now]
                                               (let [waited (wait-result answer id wake now)]
                                               (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) status))
-                                                                               (update :job dissoc :status)
-                                                                               (cond-> now (assoc :now now))
+                                                                               (cond-> (not (:follow waited)) (update :job dissoc :status))
+                                                                               (cond-> now (assoc :now (dissoc now :status :behind)))
                                                                                (assoc :vitals report))) "\n"))
                                               (if (:follow waited) 1 0)))))))))))))))
 

@@ -356,10 +356,48 @@
     (is (not (str/includes? (note-of {:status :running}) "queued")))
     (is (str/includes? (note-of {:status :queued}) "j7 is queued"))))
 
-(deftest a-queued-job-names-the-job-it-waits-behind
-  (let [note (:note (jobs/wait-result {:ok true} "j7" {:wake :timeout} {:status :queued :behind {:id "j23" :name "jobs.blocks.place"}}))]
-    (is (str/includes? note "j7 is queued behind j23 jobs.blocks.place"))
-    (is (str/includes? note "naming another job are that job's"))))
+(deftest a-wait-that-ends-first-puts-the-jobs-own-status-first-and-the-others-apart
+  (let [wake {:wake :timeout :summary {:counts {:completed 1 :reflexes 1 :picked-up 1} :more? true
+                                       :items [{:event :completed :job "j23"}
+                                               {:event :fired :reflex :hostile-near}
+                                               {:event :arrived :job "j7"}
+                                               {:event :failed :job "j23"}]}}
+        result (jobs/wait-result {:ok true :job {:id "j7" :status :queued}} "j7" wake
+                                 {:status :queued :behind {:id "j23" :name "jobs.blocks.place"}})]
+    (is (= {:id "j7" :status :queued :behind {:id "j23" :name "jobs.blocks.place"}} (:job result)))
+    (is (str/includes? (:note result) "j7 is queued behind j23 jobs.blocks.place"))
+    (is (not (str/includes? (:note result) "naming another job")))
+    (is (= [{:event :arrived :job "j7"}] (get-in result [:wait :events])))
+    (is (not (contains? (:wait result) :summary)))
+    (is (= {"j23" [{:event :completed :job "j23"} {:event :failed :job "j23"}]
+            :reflex [{:event :fired :reflex :hostile-near}]
+            :more? true}
+           (:others result)))))
+
+(deftest a-finished-wait-keeps-its-summary
+  (let [wake {:wake :job-finished :job "j7" :summary {:counts {:picked-up 1}}}]
+    (is (= wake (:wait (jobs/wait-result {:ok true} "j7" wake))))
+    (is (not (contains? (jobs/wait-result {:ok true} "j7" wake) :others)))))
+
+(deftest job-now-names-the-current-job-a-queued-job-waits-behind
+  (let [get! (fn [_ path _]
+               (js/Promise.resolve
+                 {:status 200 :content-type "application/edn"
+                  :text (data/write-edn (if (= "/job?id=j7" path)
+                                          {:id "j7" :name "jobs.x" :status :queued}
+                                          {:current {:id "j23" :name "jobs.blocks.place" :extra 1}}))}))
+        own (fn [_ path _]
+              (js/Promise.resolve
+                {:status 200 :content-type "application/edn"
+                 :text (data/write-edn (if (= "/job?id=j7" path)
+                                         {:id "j7" :name "jobs.x" :status :queued}
+                                         {:current {:id "j7" :name "jobs.x"}}))}))]
+    (async done
+      (-> (js/Promise.all #js [(jobs/job-now {:socketPath "s"} "j7" get! {}) (jobs/job-now {:socketPath "s"} "j7" own {})])
+          (.then (fn [[behind alone]]
+                   (is (= {:id "j23" :name "jobs.blocks.place"} (:behind behind)))
+                   (is (not (contains? alone :behind)))
+                   (done)))))))
 
 (deftest a-refused-submit-does-not-wait
   (let [state (state-dir)]
