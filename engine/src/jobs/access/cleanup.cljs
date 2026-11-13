@@ -58,7 +58,8 @@
   - Dig the highest (then nearest) cell within jobs.lib.ledger/reach of the eye that may be dug. The entry is marked
     :removing before the dig, so a cut or restart is decided from the cell. No other block is dug to get at it
     (jobs.blocks.dig :through false): a wall in the aim line is walked round.
-  - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :ways #{:walk}: never digging a way), in legs of
+  - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :ways #{:walk}: never digging a way, and :one-way :closed:
+    never down a drop it cannot climb back, which no way of it could leave), in legs of
     ::leg-s. Before each leg a known threat whose field holds the cell (jobs.lib.threats/threats-of), or a flight whose field holds the body,
     holds that cell :danger instead (the hostile reflex acts; the cell is offered again after the hold).
   - Else finish.
@@ -361,7 +362,7 @@
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :no-way}) :again)
     :else
     (let [e (await (child/call-chase* c :walk {:pos cell :range (walk-range) :leg-s (leg-s)
-                                               :walk {:ways #{:walk} :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
+                                               :walk {:ways #{:walk} :one-way :closed :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
           status (if (= :done (:kind e)) :done :stopped)]
       (cond
         (:nearer (:data e)) nil
@@ -375,7 +376,7 @@
   "Walk to the ground at the end of the row the body stands on (go-to, range 0, no digging); counts a try."
   [c {:keys [to]}]
   (let [[x y z] to
-        r (await (child/call-walk* c :retreat {:pos {:x x :y y :z z} :range 0 :ways #{:walk}
+        r (await (child/call-walk* c :retreat {:pos {:x x :y y :z z} :range 0 :ways #{:walk} :one-way :closed
                                                :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r) (ctx/update-mem! c update :retreats (fnil inc 0)))
     :again))

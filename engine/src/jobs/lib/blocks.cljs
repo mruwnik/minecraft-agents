@@ -309,11 +309,14 @@
 
 (defn ^:async walk-request
   "go-to args of the walk to pos: range (default 3), its walk-ways (no :ignore-zones?: the call's leave to dig
-  listed cells in a zone is no leave for the walk's escalations to cut its walls), and the gates of the pens holding
+  listed cells in a zone is no leave for the walk's escalations to cut its walls; :walk alone walks :one-way :closed), and the gates of the pens holding
   animals priced at the herd's loss (cost/gate-tolls), after a look at the cells of those not yet seen."
   [c pos see? & [range]]
-  (let [tolls (into (await (pen-entry/gate-tolls! c)) (map #(assoc % :factor ##Inf)) (when (:for-plan (:args c)) (low-floor-cells c pos)))]
-    (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c)}
+  (let [tolls (into (await (pen-entry/gate-tolls! c)) (map #(assoc % :factor ##Inf)) (when (:for-plan (:args c)) (low-floor-cells c pos)))
+        ways (walk-ways c)]
+    (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways ways}
+      ;; a walk that may neither dig nor pillar has no way back up a drop it cannot climb
+      (= #{:walk} ways) (assoc :one-way :closed)
       (seq tolls) (assoc :tolls tolls))))
 
 (defn ^:async walk!*

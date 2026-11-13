@@ -673,7 +673,7 @@
           (is (= :nothing-possible (:kind e)) "the walk ran: no route is not a fact to wait on")
           (is (= {:reason :unreachable :why :no-path} (select-keys (:cause e) [:reason :why]))))))))
 
-(deftest the-walk-into-reach-clears-seals-unless-the-call-says-not
+(deftest the-walk-into-reach-clears-seals-unless-the-call-says-not-and-then-takes-no-drop-it-cannot-climb
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -684,15 +684,16 @@
                                   (ledger/write! (:store (:eng env)) [{:cell [2 64 0] :item "dirt" :before "air" :job "j9" :purpose (:purpose args) :state :placed}]))
                               args (dissoc args :purpose)
                               go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
-                              stub (fn ^:async spy [c] (swap! seen conj (:ways (:args c))) (ctx/end c :done nil {:arrived false :why :no-path}))
+                              stub (fn ^:async spy [c] (swap! seen conj (select-keys (:args c) [:ways :one-way])) (ctx/end c :done nil {:arrived false :why :no-path}))
                               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))]
                           (await (tu/child-outcome (:eng env) job (merge {:pos [12 64 0]} args) 6))
                           (first @seen)))]
-          (is (contains? (await (ways-of {})) :clear-seal) "by default a walk may dig its own seal")
-          (is (= #{:walk} (await (ways-of {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own")
-          (is (= #{:walk} (await (ways-of {:clear-seal false :purpose :shelter}))) "nor does its walk escalate by the seal beside it (dig-out, pillar)")
-          (is (contains? (await (ways-of {:purpose :shelter})) :dig-out) "any other dig beside its seal may leave the shaft")
-          (is (= #{:walk :clear-seal} (await (ways-of {:purpose :pillar}))) "a pillar the body climbed is no seal: no dig-out of the floor under it, no pillar again"))))))
+          (is (= {:ways #{:walk :clear-seal} :one-way :open} (await (ways-of {}))) "by default a walk may dig its own seal")
+          ;; Tamsin j97 (card b1ab6233): walked "drop 1" two blocks down onto a pillar in a pit it then could not leave
+          (is (= {:ways #{:walk} :one-way :closed} (await (ways-of {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own, so takes no drop it cannot climb back")
+          (is (= #{:walk} (:ways (await (ways-of {:clear-seal false :purpose :shelter})))) "nor does its walk escalate by the seal beside it (dig-out, pillar)")
+          (is (contains? (:ways (await (ways-of {:purpose :shelter}))) :dig-out) "any other dig beside its seal may leave the shaft")
+          (is (= {:ways #{:walk :clear-seal} :one-way :open} (await (ways-of {:purpose :pillar}))) "a pillar the body climbed is no seal: no dig-out of the floor under it, no pillar again"))))))
 
 (deftest the-walk-never-carries-the-calls-leave-to-dig-in-zones
   (async done

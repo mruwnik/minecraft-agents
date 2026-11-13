@@ -965,13 +965,14 @@
     (await (ticks s eng 40))
     {:calls @calls :open (mapv :reason (:open @out))})))
 
-(deftest cleanup-walks-through-go-to-never-digging-a-way
+(deftest cleanup-walks-through-go-to-never-digging-a-way-nor-down-a-drop-it-cannot-climb
+  ;; Tamsin j97 (card b1ab6233): a tidy-up with no way that climbs walked into a pit and stranded the body
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [calls]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :door-stuck}))]
           (is (seq calls))
-          (is (every? #(= {:pos {:x 9 :y 64 :z 0} :range 3 :ways #{:walk}} (select-keys % [:pos :range :ways])) calls)))))))
+          (is (every? #(= {:pos {:x 9 :y 64 :z 0} :range 3 :ways #{:walk} :one-way :closed} (select-keys % [:pos :range :ways :one-way])) calls)))))))
 
 (deftest a-walk-is-worth-the-calls-goal-and-a-fired-cleanup-the-blocks-it-takes-back
   (async done
