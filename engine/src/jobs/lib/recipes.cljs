@@ -37,18 +37,6 @@
     (map #(or (id-of %) -1) (mapcat array-seq (array-seq (.-inShape r))))
     (map #(or (id-of %) -1) (array-seq (.-ingredients r)))))
 
-(defn same-slot-sets
-  "[[result name #{names}] ...]: the items that stand in one slot of recipes making the same result (as many per craft) in the same layout."
-  [md]
-  (let [name-of (fn [id] (some-> (aget (.-items md) id) .-name))
-        groups (group-by (fn [r] [(id-of (.-result r)) (some-> (.-result r) .-count) (map #(= -1 %) (slots-of r))])
-                         (mapcat (comp array-seq second) (js/Object.entries (.-recipes md))))]
-    (for [[[out] rs] groups :when (> (count rs) 1)
-          slot (apply map vector (map slots-of rs))
-          :let [names (set (keep name-of (remove #{-1} slot)))]
-          :when (> (count names) 1)]
-      [(name-of out) names])))
-
 (defn merge-overlapping
   "The sets of sets with every two that share a member joined."
   [sets]
@@ -56,6 +44,44 @@
             (let [hit (filter #(seq (clojure.set/intersection % names)) classes)]
               (conj (remove (set hit) classes) (apply clojure.set/union names hit))))
           [] sets))
+
+(defn substitutions
+  "The distinct [a b] item swaps by which recipe slot lists xs and ys differ (shapeless lists compare as multisets, so
+  they differ by at most one swap). Recipes that change two ingredients together (a slab and its block of one copper
+  type) are variants, not stand-ins."
+  [shaped? xs ys]
+  (if shaped?
+    (distinct (for [[x y] (map vector xs ys) :when (not= x y)] [x y]))
+    (let [fx (frequencies xs) fy (frequencies ys)
+          only (fn [f g] (for [[k n] f :when (> n (get g k 0))] [k (- n (get g k 0))]))
+          dx (only fx fy) dy (only fy fx)]
+      (when (and (= 1 (count dx) (count dy)) (= (second (first dx)) (second (first dy))))
+        [[(ffirst dx) (ffirst dy)]]))))
+
+(defn same-slot-sets
+  "[[result name #{a b}] ...]: item pairs that stand in for each other: two recipes making the same result (as many per
+  craft) in the same layout that differ by that one swap, or by that swap and swaps of slots that other recipes fill with
+  yet other items (a campfire's charcoal is listed with one log only)."
+  [md]
+  (let [name-of (fn [id] (some-> (aget (.-items md) id) .-name))
+        groups (group-by (fn [r] [(id-of (.-result r)) (some-> (.-result r) .-count) (boolean (.-inShape r)) (map #(= -1 %) (slots-of r))])
+                         (mapcat (comp array-seq second) (js/Object.entries (.-recipes md))))
+        found (for [[[out _ shaped?] rs] groups :when (> (count rs) 1)
+                    :let [slots (vec (map (comp vec slots-of) rs))
+                          varied? (fn [xs ys [a b]]
+                                    (let [at (filter #(and (= a (xs %)) (= b (ys %))) (range (count xs)))]
+                                      (some #(not (contains? #{a b} (% (first at)))) slots)))
+                          pairs (for [i (range (count slots)) j (range (inc i) (count slots))
+                                      :let [xs (slots i) ys (slots j)
+                                            d (substitutions shaped? xs ys)
+                                            open (if (= 1 (count d)) d (remove #(and shaped? (varied? xs ys %)) d))]
+                                      :when (and (= 1 (count open)) (not-any? #{-1} (first open)))]
+                                  (set (first open)))]
+                    p (distinct pairs)
+                    :let [names (set (keep name-of p))]
+                    :when (= 2 (count names))]
+                [(name-of out) names])]
+    (distinct found)))
 
 (defn with-alternatives
   "The recipes of one result with, for each ingredient that has stand-ins (classes: the sets of items that fill one slot),
@@ -109,7 +135,7 @@
                                                                               (and (has-item? sl) (wood-of sl)) (conj (wood-of sl)))]
                         :when (> (count forms) 1)]
                     forms)
-        pairs (if planks? (concat (remove #(some plank-logs %) pairs) log-pairs) pairs)
+        pairs (if planks? (concat (remove #(some plank-logs %) (merge-overlapping pairs)) log-pairs) pairs)
         merged (merge-overlapping pairs)]
     (into {} (for [cls merged n cls] [n cls]))))
 

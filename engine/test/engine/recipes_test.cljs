@@ -153,3 +153,9 @@
     (is (nil? (:gather (plan logs "campfire" 1 (assoc src :gather? true)))) "nothing is gathered either")
     (is (= {"coal" 1} (:gather (plan {"oak_log" 196} "campfire" 1 (assoc src :gather? true)))) "coal is the cheaper gather")
     (is (some #(get (:needs %) "charcoal") (get (recipes/recipes-for game/default-version) "campfire")))))
+
+(deftest waxed-copper-variants-are-not-stand-ins
+  (let [rs (get (recipes/recipes-for game/default-version) "waxed_chiseled_copper")]
+    (is (seq rs))
+    (is (every? #(<= (get (:needs %) "honeycomb" 0) 1) rs) "one honeycomb, never two")
+    (is (not-any? #(and (get (:needs %) "chiseled_copper") (get (:needs %) "waxed_chiseled_copper")) rs))))
