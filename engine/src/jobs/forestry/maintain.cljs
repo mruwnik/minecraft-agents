@@ -19,6 +19,8 @@
             [jobs.lib.forestry :as lib :refer [cell-vec down feet-cell field-cells soil-for survey-field! trouble-status]]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
+            [jobs.lib.tidy-rules :as tidy]
+            [jobs.lib.tools :as tools]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]))
@@ -33,11 +35,11 @@
   With a planned cell never seen, the body looks around once from where it stands (again after moving over 3 blocks)
   before the start conditions decide, and the first round looks once more before it works.
   Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
-  Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
+  Another species' sapling or log, or a kept block (container, bed, fluid), or a block no carried tool harvests, on a planned cell is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
   A bare cell whose sapling is not carried gets it with jobs.lib.need (a seen chest, or the leaves of its tree) before
   jobs.forestry.plant-sapling plants it. With :ways #{:carried} it is skipped, with one forest.no-sapling note. Cells that cannot take a
-  sapling yet (no soil, cramped, a stray, water) are readied once per call by a jobs.forestry.prepare child; the cells it cannot ready stay
+  sapling yet (no soil, cramped, an ordinary block, water) are readied once per call by a jobs.forestry.prepare child; the cells it cannot ready stay
   (:cells-unplantable).
   A tree is left standing (forest.left, once, and skipped for the rest of the call; the next call looks again) when:
   - its column holds more than ::max-logs (6) logs and the call's :ways leave out :pillar (else it is felled from a pillar),
@@ -96,7 +98,7 @@
 (defn classify
   "What stands on the planned cell pos for species: :ripe (its log), :growing (its sapling), :bare (air over its
   soil, nothing growing below a log), :no-ground (air, but no soil below), :cramped (air over soil with a log
-  above), :unloaded, or :foreign (anything else)."
+  above), :unloaded, :stray (an ordinary block a carried tool harvests: jobs.forestry.prepare digs it) or :foreign (a plant, log, kept block or one no carried tool harvests)."
   [p pos species]
   (let [here (u/seen-name p pos)
         below (u/seen-name p (down pos))]
@@ -104,7 +106,7 @@
       (nil? here) :unloaded
       (= here (str species "_log")) :ripe
       (= here (forestry/sapling-of species)) :growing
-      (not (bs/air here)) :foreign
+      (not (bs/air here)) (if (or (forestry/sapling-name? here) (forestry/log-name? here) (tidy/keep-why here) (not (tools/can-harvest? p here))) :foreign :stray)
       (nil? below) :unloaded
       (not ((soil-for species) below)) :no-ground
       (some-> (u/seen-name p (up pos)) forestry/log-name?) :cramped
@@ -205,17 +207,17 @@
         have (if (fetching? c) (constantly true) (u/carried-names (:primitives c)))
         short (filter (fn [[_ [_ species]]] (not (have (forestry/sapling-of species)))) (:bare kinds))]
     (cond
-      (seq (:foreign kinds)) {:reason :cells-foreign :cells (cells :foreign)
+      (or (seq (:foreign kinds)) (seq (:stray kinds))) {:reason :cells-foreign :cells (cells :foreign :stray)
                               :text (str "planned tree cells hold other blocks: "
-                                         (str/join ", " (for [[pos [_ species]] (sort-by (comp cell-vec key) (:foreign kinds))]
+                                         (str/join ", " (for [[pos [_ species]] (sort-by (comp cell-vec key) (concat (:foreign kinds) (:stray kinds)))]
                                                           (str (u/seen-name (:primitives c) pos) " at " (pr-str (cell-vec pos)) " (wants a " species " tree)"))))}
       (or (seq (:no-ground kinds)) (seq (:cramped kinds))) {:reason :cells-unplantable :cells (cells :no-ground :cramped)}
       (seq short) {:reason :no-sapling :cells (vec (sort (map (comp cell-vec key) short)))})))
 
 (defn unplantable-cells
-  "The planned cells whose ground or room is not fit for a sapling yet."
+  "The planned cells whose ground, room or content is not fit for a sapling yet: those jobs.forestry.prepare works."
   [classes]
-  (keep (fn [[pos [kind _]]] (when (#{:no-ground :cramped} kind) pos)) classes))
+  (keep (fn [[pos [kind _]]] (when (#{:no-ground :cramped :stray} kind) pos)) classes))
 
 (defn checked-classes
   "classes-of the field's trees, read once per check-cache window while every cell has been seen."

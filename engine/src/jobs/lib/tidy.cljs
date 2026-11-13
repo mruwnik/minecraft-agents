@@ -114,14 +114,27 @@
              (when (and (= :dig action) (crops/seed-of was)) {:any-of [(crops/seed-of was)]}) ; a crop is put back as its seed
              (select-keys v [:zone :claim :plan])))))
 
+(defn part-of-plan?
+  "Whether block n is what a plan's cell with this want holds: a tree cell its trunk or sapling, a crop cell its crop;
+  any other want is taken as met by whatever stands there."
+  [want n]
+  (cond
+    (:tree want) (boolean (and n (re-find #"_log$|_wood$|_stem$|_sapling$|_propagule$|_fungus$" n)))
+    (:crop want) (boolean (and n (or (crops/seed-of n) (some #{n} crops/fruits))))
+    :else true))
+
 (defn own-pending
   "pending's entry for a :dig at pos in a plan this body made, a :mend (the body breaking its own build puts it back),
-  else nil; the plan the job works (:for-plan) is its own work, not a break, and so is a dig in a cell the plan wants clear. Reads the block, so call it before the act."
+  else nil; the plan the job works (:for-plan) is its own work, not a break, and so is a dig in a cell the plan wants clear
+  or a block the cell's want does not call for (a stray in a tree or crop cell). Reads the block, so call it before the act."
   [c pos]
-  (let [cell (access/cell pos)]
+  (let [cell (access/cell pos)
+        was (u/seen-name (:primitives c) pos)]
     (when-let [id (get (access/own-plans c) (get (known/footprints c) cell))]
-      (when-not (or (= id (:for-plan (:args c))) (contains? (known/clear-cells c id) cell))
-        {:cell cell :action :dig :was (u/seen-name (:primitives c) pos) :plan id :mend true}))))
+      (when-not (or (= id (:for-plan (:args c)))
+                    (contains? (known/clear-cells c id) cell)
+                    (not (part-of-plan? (get (known/cell-wants c id) (vec cell)) was)))
+        {:cell cell :action :dig :was was :plan id :mend true}))))
 
 (defn put-back-items
   "The items that put a dug block back: the block and what its dig dropped (names)."

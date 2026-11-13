@@ -805,6 +805,16 @@
           (is (= [[2 64 0]] (mapv #(let [v (.-pos (.-args %))] [(.-x v) (.-y v) (.-z v)]) (calls (:p pen) "dig"))) "the block is dug")
           (is (empty? (tidy-cells (:eng pen))) "a block in a cell the own plan wants clear is no break to put back"))))))
 
+(deftest a-stray-dug-from-a-tree-cell-of-the-bodys-own-plan-is-no-break-but-its-log-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[block mend?] [["grass_block" false] ["oak_log" true]]]
+          (let [env (setup {:self body :blocks {"2,64,0" block}
+                            :plans {"grove" (shape/with-author {:id "grove" :parts [{:id "t" :cells [[2 64 0]] :want {:tree "oak"}}]} "Fake")}})]
+            (await (tu/child-outcome (:eng env) job {:pos [2 64 0]} 10))
+            (is (= mend? (boolean (seq (tidy-cells (:eng env))))) block)))))))
+
 (deftest a-dig-for-one-plan-notes-a-cell-of-the-bodys-other-plan
   (async done
     (tu/run-async done

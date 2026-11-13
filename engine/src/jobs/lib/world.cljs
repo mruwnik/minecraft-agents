@@ -80,3 +80,8 @@
   "The cells plan id wants clear (a :want of air, such as a pen's inside): a block there is in the plan's way, not part of it."
   [ctx id]
   (memo ctx [:clear-cells id] #(into #{} (comp (filter (comp #{:clear} :want)) (map (comp vec :pos))) (:cells (plan ctx id)))))
+
+(defn cell-wants
+  "{[x y z] want}: what plan id wants in each of its cells."
+  [ctx id]
+  (memo ctx [:cell-wants id] #(into {} (map (juxt (comp vec :pos) :want)) (:cells (plan ctx id)))))

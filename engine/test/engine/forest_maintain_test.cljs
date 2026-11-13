@@ -105,7 +105,8 @@
     "birch_sapling" "dirt" "air" :foreign
     "birch_log" "dirt" "air" :foreign
     "stone" "dirt" "air" :foreign
-    "oak_leaves" "dirt" "air" :foreign
+    "grass_block" "dirt" "air" :stray
+    "chest" "dirt" "air" :foreign
     "air" "dirt" "air" :bare
     "air" "grass_block" "air" :bare
     "air" "podzol" "oak_leaves" :bare
@@ -266,6 +267,15 @@
                 (pr-str blocks))
             (is (some #(str/includes? (str (:text %)) (str found " at [3 64 0] (wants a oak tree)")) (h/events-of seen :waiting))
                 (pr-str (h/events-of seen :waiting)))))))))
+
+(deftest an-ordinary-block-on-a-planned-cell-is-dug-by-prepare-then-planted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run {:blocks (merge (ground [[3 0]]) {"3,64,0" "grass_block"}) :inventory [(item "oak_sapling" 3) (item "wooden_pickaxe" 1) (item "wooden_shovel" 1)]}
+                                      {"forest" oak-cell} {:plan "forest"} 40))]
+          (is (= [[3 64 0]] (digs p)))
+          (is (= [[3 64 0 "oak_sapling"]] (places p))))))))
 
 (deftest the-check-reads-the-cells-once-per-window
   (async done
