@@ -5,7 +5,7 @@
   After the act, `record!` writes a :tidy entry to body memory:
   {:cell [x y z] :action :dig|:place :was block-before (a dug crop also :any-of [its seed]) :now block-after :zone/:claim/:plan :tries n :job id}.
   :job is the top-level job that recorded it; the :tidy-pending trigger waits until that job has ended.
-  A hole is tidy work only in another's zone, claim or plan (tidy-work?): the body's own diggings stay.
+  A hole is tidy work only in another's zone, claim or plan, or a :mend (tidy-work?): the body's own diggings in natural ground stay.
   jobs.survival.restore-broken puts the cells back when the body is safe. Best effort, never at the cost of safety."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -139,7 +139,7 @@
 
 (defn tidy-work?
   "Whether entry e is to be put back: a placed block, or a dug one that names another's :zone, :claim or :plan, or is
-  a :mend (a break out of the body's own pen) (an entry noted before holes were noted only there may name none)."
+  a :mend (a break out of the body's own pen, or a go-to hole in a build it priced as put back) (an entry noted before holes were noted only there may name none)."
   [{:keys [action] :as e}]
   (or (not= :dig action) (boolean (some #(contains? e %) [:zone :claim :plan :mend]))))
 

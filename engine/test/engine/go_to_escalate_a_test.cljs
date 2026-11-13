@@ -222,6 +222,21 @@
             (is (empty? (events-of seen :go-to.restored)) (pr-str zones))
             (is (every? #(= "air" (block p %)) (dug-cells p)) "the stair stays dug")))))))
 
+(deftest go-to-owes-the-put-back-of-a-build-it-digs-on-open-land
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [planks (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "oak_planks")) pit-cells)
+              {:keys [eng out p seen]} (await (run-job! (merge in-pit {:blocks planks})
+                                                      'jobs.movement.go-to {:pos [10 64 0] :range 1 :ways #{:walk :stair}} nil))
+              dug (into #{} (filter #(= "air" (block p %))) (dug-cells p))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))
+          (is (seq dug) "the stair cut planks")
+          (is (= dug (holes eng)) "each plank hole is noted, as its dig was priced as put back")
+          (is (every? tidy/tidy-work? (ledger eng)) "and is tidy work: restore-broken puts it back after a cancel")
+          (is (= #{"oak_planks"} (set (keep :was (ledger eng)))) "nothing carried to put it back: left for restore-broken"))))))
+
 (deftest go-to-stairs-out-of-a-pit-and-puts-back-what-it-dug
   (async done
     (tu/run-async done

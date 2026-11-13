@@ -419,7 +419,8 @@
 (defn note-hole!
   "Write cell, where block was dug, to the tidy ledger (jobs.lib.tidy, body memory) as a :dig entry with tag merged,
   the :zone, :claim or :plan it trespassed on, and :any-of, the items that put it back (the block or what it drops);
-  only when another's zone, claim or plan covers the cell or tag has :mend (else the body's own diggings stay), it is air now
+  only when another's zone, claim or plan covers the cell, tag has :mend, or the block is one a route prices as put
+  back (cost/destroyed-s, a build: noted :mend; natural ground stays dug), it is air now
   (or dug? true: a child reported digging it, maybe since out of sight) and no tagged
   entry is there yet (a plain one the dig itself noted is replaced). The :note arg of jobs.access.stair
   (go-to's escalation), so a cut or cancel leaves no hole unknown."
@@ -428,7 +429,8 @@
   (let [p (:primitives c)
         cell (vec cell)
         noted (first (filter #(= cell (:cell %)) (tidy/entries c)))
-        v (when-not (:escalation noted) (tidy/refusal c :dig (zipmap [:x :y :z] cell)))]
+        v (when-not (:escalation noted) (tidy/refusal c :dig (zipmap [:x :y :z] cell)))
+        tag (cond-> tag (pos? (cost/destroyed-s block nil nil false)) (assoc :mend true))]
     (when (and (or v (and (:mend tag) (not (:escalation noted)))) (or dug? (bs/air (u/seen-name p (zipmap [:x :y :z] cell)))))
       (when noted (tidy/forget-cell! c cell))
       (tidy/record! c (merge {:cell cell :action :dig :was block :any-of (tidy/put-back-items block (b/drops-of p block))}
