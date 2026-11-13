@@ -108,7 +108,7 @@
     {:health (.-health self) :food (.-food self) :equipment (cost/equipment-of (.-equipment self))
      :weapon (combat/best-weapon p combat/default-weapons) :pos (u/pos-of (.-pos self))}))
 
-(defn mob-entry [p e] {:key (mob-key e) :name (.-name e) :held (.-held e) :chaser (cost/mob-kind e) :pos (danger-q/mob-pos p e)})
+(defn mob-entry [p e] {:id (.-id e) :key (mob-key e) :name (.-name e) :held (.-held e) :chaser (cost/mob-kind e) :pos (danger-q/mob-pos p e)})
 
 (defn sensed-mobs
   "The real dangers primitives p senses (jobs.lib.danger/dangers within its known-scan: seen or heard, with a way to the
@@ -171,6 +171,7 @@
                      (map #(mob-entry p %))
                      (danger-q/felt-hostiles p (ctx/view c)))
         now-keys (set (map :key sensed))
+        now-ids (set (map :id sensed))
         fled (vec (remove #(contains? now-keys (:key %)) (remembered-spots c)))
         known-keys (into now-keys (map :key) fled)
         here (u/pos-of (.-pos (.self p)))]
@@ -183,7 +184,7 @@
                  (for [{:keys [t data]} (ctx/entries c :hurt)
                        :let [cause (death-spot/hurt-cause data) w (fade (- now t))]
                        :when (and (field/water-mobs cause) (:pos data) (pos? w)
-                                  (not (contains? now-keys (get-in data [:attacker :id]))))]
+                                  (not (contains? now-ids (get-in data [:attacker :id]))))]
                    {:mob cause :pos (:pos data) :weight w :remembered true}))
          (filter #(and (string? (:mob %)) (:pos %)))
          (group-by (juxt :key field/field-key))

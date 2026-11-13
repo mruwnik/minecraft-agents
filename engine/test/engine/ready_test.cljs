@@ -772,6 +772,13 @@
   (let [c (felt-ctx (hurt-data {:attacker {:id 58552 :name "drowned"} :dir {:x 0 :z 1}}))]
     (is (= [58552] (map :key (threats/known-threats c))))))
 
+(deftest a-sensed-water-mob-keyed-by-uuid-counts-once-against-its-hurt-entry
+  ;; Would fail on old code: the :hurt entry's attacker id (numeric) was compared with the sensed mob's key (its uuid), so both were kept.
+  (let [drowned {:id 58552 :uuid "d-1" :name "drowned" :kind "hostile" :pos {:x 2.5 :y 64 :z 0.5}}
+        c (-> (remembering-ctx (merge at-origin {:self {:pos {:x 0.5 :y 64 :z 0.5} :health 3 :food 20} :entities [drowned]}))
+              (assoc :view (constantly {:now 10000 :data (hurt-data {:attacker {:id 58552 :name "drowned"} :dir {:x 0 :z 1}})})))]
+    (is (= ["d-1"] (map :key (threats/known-threats c))))))
+
 (deftest fit-prices-the-jobs-own-quoted-seconds-before-the-category-stay
   (dear-death
    (fn []
