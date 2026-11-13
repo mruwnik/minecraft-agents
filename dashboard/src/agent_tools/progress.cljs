@@ -129,9 +129,11 @@
 (defn word [x] (if (keyword? x) (name x) (str x)))
 
 (defn routine-wait?
-  "A wait the engine ends itself: a routine reason, or a check that daylight lowers (:lowered-by has :light)."
+  "A wait the engine ends itself: a routine reason, a rest after a round that ended well (:after :already; a failed
+  round's rest still wakes), or a check that daylight lowers (:lowered-by has :light)."
   [waiting]
   (or (contains? routine-reasons (reason-of waiting))
+      (and (= :resting (reason-of waiting)) (map? waiting) (= :already (:after waiting)))
       (and (map? waiting) (boolean (some #(= "light" (word %)) (:lowered-by waiting))))))
 
 (defn wait-text [waiting]
