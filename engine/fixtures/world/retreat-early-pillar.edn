@@ -22,7 +22,7 @@
             {:no-event {:source :job :kind :retreat.target} :for-s 40 :until {:source :job :kind :child_ended :data {:slot :pillar :status :done}}}]
    :after [[:body-near [10.5 3 16.5] 3]]}
   {:name "two-blocks-only-flees-as-before"
-   :body {:inventory [["dirt" 2]]}
+   :body {:inventory [["dirt" 2] ["iron_ingot" 6]]}
    :expect [{:event {:source :job :kind :retreat.target} :within-s 40}
             {:no-event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :for-s 30}]
    :limit-s 60}]}
