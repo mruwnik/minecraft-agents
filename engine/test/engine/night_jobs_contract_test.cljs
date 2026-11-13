@@ -131,6 +131,17 @@
                          #(call! (spawn-world {:blocks {"6,64,0" "red_bed"}}) 'jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}} (constantly nil))))]
           (is (= [:condition-failed :bed-outside-area] (ending-of e))))))))
 
+(deftest with-no-bed-given-a-remembered-bed-out-of-the-work-area-gives-way-to-a-free-bed-inside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [area {:jobs.lib.walk.world/area {:min [-2 60 -2] :max [3 70 2]}}
+              e (await (settings/with-settings area
+                         #(call! (tu/seeing-all (spawn-world {:blocks {"6,64,0" "red_bed" "1,64,1" "red_bed"}})) 'jobs.survival.sleep {}
+                                 (fn [eng] (mem/write! (:store eng) :bed {:pos {:x 6 :y 64 :z 0}} mem/place-policy)))))]
+          (is (not= [:condition-failed :bed-outside-area] (ending-of e)))
+          (is (= {:x 1 :y 64 :z 1} (:pos (:data e)))))))))
+
 (deftest a-bed-no-walk-reaches-is-nothing-possible-bed-unreachable
   (async done
     (tu/run-async done

@@ -63,12 +63,20 @@
 
 (defn bed-of
   "The bed to sleep in: the :bed argument (nil when it is not a position), else the remembered :bed (so a gone one is
-  found out and retracted), else the live :spawn-bed."
+  found out and retracted), else the live :spawn-bed, the first of them within the body's work area; none of them: the
+  bed sh-beds/bed-to-use picks (its bed-permit skips an occupied bed and one outside the area)."
   [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (or (mem/place (ctx/view c) :bed)
-        (sh-spawn/spawn-bed-pos (:primitives c) (ctx/view c)))))
+    (let [p (:primitives c)
+          view (ctx/view c)
+          {:keys [x y z]} (sh-sense/feet p)
+          inside? (fn [bed] (and bed (not (wworld/goal-outside-area? [x y z] bed sh-beds/bed-reach))))]
+      (or (->> [(mem/place view :bed) (sh-spawn/spawn-bed-pos p view)] (filter inside?) first)
+          (when (wworld/outside-area-fn [x y z])
+            (sh-beds/bed-to-use p view (sh-beds/bed-permit p)))
+          (mem/place view :bed)
+          (sh-spawn/spawn-bed-pos p view)))))
 
 (a/defargs settings
   {::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}
