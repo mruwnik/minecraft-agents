@@ -60,8 +60,8 @@
 (def waste-seeds "Every seed: the field crops' and the others." (into (filterv #(.endsWith % "_seeds") field-seeds) other-seeds))
 
 (def farm-goods
-  "Seeds, crops, melon, pumpkin, hay and cocoa: what a farm yields and may be put in a chest."
-  (vec (distinct (concat waste-seeds produce-items ["melon_slice" "melon" "pumpkin" "hay_block" "cocoa_beans"]))))
+  "Seeds, crops, melon, pumpkin, hay, cocoa and baked potatoes: what a farm yields and may be put in a chest."
+  (vec (distinct (concat waste-seeds produce-items ["melon_slice" "melon" "pumpkin" "hay_block" "cocoa_beans" "baked_potato"]))))
 
 (defn seed-item?
   "Whether an item name is a seed or a seed-like crop item (carrot, potato) a body keeps to sow."
