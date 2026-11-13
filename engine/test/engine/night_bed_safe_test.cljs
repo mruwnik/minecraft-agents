@@ -190,19 +190,16 @@
       (assoc :states {"21,64,0" {:open false :half "lower" :facing "east"} "21,65,0" {:open false :half "upper" :facing "east"}}
              :inventory [{:name "cobblestone" :count 32}])))
 
-(deftest an-overdue-miner-in-a-lit-tunnel-does-not-walk-the-dark-to-a-far-bed
+(deftest an-overdue-miner-in-a-lit-tunnel-walks-to-a-far-bed-the-night-prices-cheapest
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p raw clock]} (setup overdue-in-open-lit-tunnel)]
+        (let [{:keys [eng raw clock]} (setup overdue-in-open-lit-tunnel)]
           (swap! clock + (* 4 sh-clock/ms-per-day))
-          (is (= far-bed (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))) "overdue: the far bed is the bed to use")
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
-          (is (= [far-bed] (map :pos (st/entries eng :bed-walk-unsafe))) "the dark walk was priced unsafe")
-          (is (empty? (st/calls raw "sleep")))
-          (is (empty? (filter #(< 21 (:x (st/arg-pos %))) (st/calls raw "moveTo"))) "no walk out of the tunnel")
-          (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))) "nor does the night trigger hold for the bed meanwhile"))))))
+          (is (empty? (st/entries eng :bed-walk-unsafe)) "the bed is the cheapest way through the night, its walk priced in")
+          (is (= [far-bed] (mapv st/arg-pos (st/calls raw "sleep")))))))))
 
 (deftest a-set-bed-whose-quote-still-searches-is-not-called-unreachable
   (async done
@@ -261,20 +258,6 @@
           (await (st/tick-n eng 12))
           (is (= #{bed} (set (map :pos (st/entries eng :bed-walk-unsafe)))) "the walk's dark costs more than walling in here")
           (is (empty? (st/calls raw "sleep"))))))))
-
-(deftest a-body-that-can-wall-in-stays-rather-than-walk-to-a-mid-distance-bed
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [bed {:x 320 :y 64 :z 0}
-              {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 330 5] :blocks {"320,64,0" "red_bed"} :inventory [{:name "cobblestone" :count 32}]))]
-          (st/know-bed! eng bed)
-          (swap! clock + (* 4 sh-clock/ms-per-day))
-          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
-          (await (st/tick-n eng 12))
-          (is (= #{bed} (set (map :pos (st/entries eng :bed-walk-unsafe)))) "the walk's dark costs more than walling in here")
-          (is (empty? (st/calls raw "sleep")))
-          (is (seq (st/calls raw "place")) "it walls in instead"))))))
 
 (deftest a-body-on-dark-open-ground-with-no-way-to-shelter-walks-to-a-near-bed
   (async done

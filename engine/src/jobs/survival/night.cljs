@@ -575,9 +575,8 @@
 
 (defn ^:async bed-walk-safe?
   "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose hp (bed-walk-price
-  :walk-hp) is no more than staying put costs, sheltering here taking the rest of the night at most (bed-down/dig-in-time-s), or, not
-  overdue (overdue, bed-down/cheapest takes the bed whatever it costs), lying in that bed, its walk priced in, is the cheapest of
-  bed-down/answers: a body on
+  :walk-hp) is no more than staying put costs, sheltering here taking the rest of the night at most (bed-down/dig-in-time-s), or
+  lying in that bed, its walk priced in, is the cheapest of bed-down/answers by price (overdue or not): a body on
   dark open ground walks (its price with the work it costs, :walk, kept in job memory :bed-walk {:bed :walk-s} for night-answer, which weighs it). Else :bed-walk-unsafe {:pos bed :state} is remembered (sh-beds/bed-to-use skips the bed while the body's cell and the hostiles near the way are as priced) with a
   night.bed-walk-unsafe info, and false. :searching (nothing remembered) while go-to's quote still searches: no route is known yet, not none."
   [c bed]
@@ -591,8 +590,7 @@
           :searching
         (or (and (:found r)
                  (or (<= walk-hp stay)
-                     (and (not (bed-down/overdue? c))
-                          (= :bed (bed-down/cheapest-priced (await (bed-down/answers c {:bed bed :walk-s walk :log-out? (log-out-wanted? c)}))))))
+                     (= :bed (bed-down/cheapest-priced (await (bed-down/answers c {:bed bed :walk-s walk :log-out? (log-out-wanted? c)})))))
                  (do (ctx/update-mem! c assoc :bed-walk {:bed bed :walk-s walk}) true))
             (do (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state (:primitives c) (ctx/view c) bed)} sh-beds/walk-unsafe-policy)
                 (ctx/emit! c :night.bed-walk-unsafe :info
