@@ -196,7 +196,7 @@
                            {:status :no-path :reason :budget :searching true :replans (:replans done)}
 
                            (not= :door-stuck (:status done))
-                           (cond-> (with-sight (drive/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan)) last-plan to)
+                           (cond-> (with-sight (drive/partial-end c done (:status last-plan) to range (:steps last-plan) (:stop last-plan)) last-plan to)
                              (:frontier-taken last-plan) (assoc :frontier (:at (:frontier-taken last-plan)))
                              (:known (:frontier-taken last-plan)) (assoc :frontier-known true
                                                          :frontier-target (:target (:frontier-taken last-plan))))

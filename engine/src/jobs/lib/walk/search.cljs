@@ -182,7 +182,7 @@
 
 (defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (wworld/body-cell c)]
-    (cond-> [[x y z] (if (wplan/column-goal? c to) [:column to] to) range weight (policy-key policy) walls (wworld/area)]
+    (cond-> [[x y z] (if (wplan/column-goal? c to) [:column to (:ys (:column-goal c))] to) range weight (policy-key policy) walls (wworld/area)]
       pw (conj (wworld/danger-key pw) (wworld/avoid-key pw) (wworld/tolls-key pw) (wworld/unknown-key pw) (wworld/toll-inputs-key pw)))))
 
 (defn goal-unloaded?

@@ -1,6 +1,6 @@
 (ns jobs.movement.go-to.column
-  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) seen there is walked to any stand within range of it across, the
-  cheapest (wplan/column-goal?); its aimed y, for the escalation and the quote's distance, is its highest seen stand with
+  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) seen there is walked to any cell within range of the column at one
+  of its goal-ys (a seen stand of it, or up to :y-slack under one), the cheapest (wplan/column-goal?); its aimed y, for the escalation and the quote's distance, is its highest seen stand with
   no seen solid over it (trees skipped; the unseen ground under a trunk is solid), why :surface; else (the column seen only under cover) the stand nearest the body's
   feet, why :nearest-level; over the whole build height. A column with no ground seen aims provisionally at an
   estimate (estimate: the seen ground of the nearest column around it within estimate-reach of the feet, or the rim of a
@@ -11,8 +11,8 @@
   seen cells, an unseen one from the world the plans read). A y cell seen open whose floor is not yet in view is aimed
   provisionally at the lowest seen open cell of its column (open-air-under), and aims again every step.
 
-  Rules of go-to: :pos [x z] or {:x :z} (no y) walks to the cheapest stand within :range of that column across, at any
-  y (a floor under a roof through the door, a deck, the ground beside a wall) (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
+  Rules of go-to: :pos [x z] or {:x :z} (no y) walks to the cheapest cell within :range of that column at a seen stand of it or
+  up to :y-slack under one (a floor under a roof through the door, a deck, the ground at the foot of a wall; not a roof or cliff top beside it) (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
   ground nearest it, at most the y-slack setting (4) blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
@@ -56,6 +56,16 @@
       (fn [x y z] (let [k (seen x y z)] (if (keyword-identical? :unknown k) (raw x y z) k)))
       seen)))
 
+(defn cached
+  "kind-at reading each cell once: one aim reads the cells of a column over the whole build height, and again for its
+  nearest ground."
+  [kind-at]
+  (let [m (js/Map.)]
+    (fn [x y z]
+      (let [k (str x "," y "," z)
+            v (.get m k)]
+        (if (undefined? v) (let [v (kind-at x y z)] (.set m k v) v) v)))))
+
 (defn stands?
   "Feet and head cells open or water, and a solid floor under open feet."
   [kind-at x y z]
@@ -72,15 +82,18 @@
                          (and (pos? d) (>= down lo) (stands? kind-at x down z) (ok? down)) down)))
          (range 0 (inc (max (- hi y) (- y lo)))))))
 
-(defn cached
-  "kind-at reading each cell once: one aim reads the cells of a column over the whole build height, and again for its
-  nearest ground."
-  [kind-at]
-  (let [m (js/Map.)]
-    (fn [x y z]
-      (let [k (str x "," y "," z)
-            v (.get m k)]
-        (if (undefined? v) (let [v (kind-at x y z)] (.set m k v) v) v)))))
+(defn stands
+  "The ys of the column x z the body of p sees it stand at (stands?, trees read as aim reads them), highest first."
+  [p x z]
+  (let [seen (cached (surface-kind-at p))]
+    (filterv #(stands? seen x % z) (range top-y (dec (places/min-y p)) -1))))
+
+(defn goal-ys
+  "The ys a column goal with these stands is arrived at: each stand and the slack blocks under it, as the ground at
+  the foot of a wall, an eave or a step stood on is that column's (a y goal is re-aimed as far, aim); nothing over a
+  stand is (a roof or cliff top beside it)."
+  [stands slack]
+  (into (sorted-set) (mapcat #(range (- % slack) (inc %))) stands))
 
 (defn pick
   "[y why] of the stand of the column x z by the cells of kind-at: :surface, else :nearest-level to body-y; nil if none."

@@ -24,11 +24,11 @@
 (defn partial-end
   "A partial plan that was walked to its end is not an arrival unless the body is in range of the goal: then the walk
   plans again, unless the plan was cut at a step that cannot be undone, which ends it (stopped-one-way)."
-  [done planner-status to range steps stop]
+  [c done planner-status to range steps stop]
   (let [[x y z] (:at done)]
     (cond
       (not (and (= :arrived (:status done)) (= "partial" planner-status)
-                (not (u/within? {:x x :y y :z z} (zipmap [:x :y :z] to) range))))
+                (not (wplan/in-goal? c {:x x :y y :z z} (zipmap [:x :y :z] to) range))))
       done
 
       stop (merge stop {:at (:at done)})
@@ -342,7 +342,7 @@
                   walked (+ walked length)
                   walk-ms (+ walk-ms ms)
                   _ (note-mismatch! c planned began fall-margin)
-                  done (partial-end walk-result (:status last-plan) to range (:steps last-plan) (:stop last-plan))
+                  done (partial-end c walk-result (:status last-plan) to range (:steps last-plan) (:stop last-plan))
                   after (if (#{:arrived :off-plan :stuck} (:status done))
                           (executor/after-walk executor/policy replans done)
                           {:finish done})]

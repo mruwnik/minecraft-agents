@@ -11,6 +11,7 @@
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
@@ -254,19 +255,35 @@
         (ctx/emit! c :goal-resolved :info (cond-> {:goal goal :to pos} provisional (assoc :provisional true) why (assoc :why why))))
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
+(defn column-goal
+  "c's :column-goal (wplan/column-goal?) for the column of pos: its seen stands (column/stands) and the ys it is arrived
+  at, each stand and :y-slack under it (column/goal-ys)."
+  [c pos]
+  (let [stands (column/stands (:primitives c) (:x pos) (:z pos))]
+    {:x (:x pos) :z (:z pos) :stands stands :ys (column/goal-ys stands (tuning/y-slack))}))
+
 (defn with-column
-  "c with :column-goal [x z] of pos (wplan/column-goal?) when the goal is a column resolved from seen cells (mem
-  :aimed-why :surface or :nearest-level, goal-pos): its walks arrive at any stand within :range of it across."
+  "c with its :column-goal (column-goal) when the goal is a column resolved from seen cells (mem :aimed-why :surface or
+  :nearest-level, goal-pos)."
   [c pos]
   (if (and pos (#{:surface :nearest-level} (:aimed-why (ctx/mem c))))
-    (assoc c :column-goal [(:x pos) (:z pos)])
+    (assoc c :column-goal (column-goal c pos))
     (dissoc c :column-goal)))
 
 (defn goal-danger
-  "dig-stands/stay-danger of the goal pos (the calmest cell it is dug from when it is solid) over the call's stay (:stay-s, else a click's) against what the
+  "dig-stands/stay-danger of the goal pos (the calmest cell it is dug from when it is solid; of a column goal, the
+  calmest of its stands and the open cells beside its other ys, wplan/in-goal?) over the call's stay (:stay-s, else a click's) against what the
   goal is worth (ctx/worth)."
   [c pos]
-  (dig-stands/stay-danger c pos (:stay-s (:args c)) (ctx/worth c)))
+  (if-let [{:keys [x z ys stands]} (:column-goal c)]
+    (let [danger (threats/stay-danger-fn c)
+          on (set stands)
+          cells (mapcat (fn [y] (let [cell {:x x :y y :z z}]
+                                  (if (on y) [cell] (remove #{cell} (dig-stands/stand-cells c cell)))))
+                        ys)
+          ds (map #(danger % (:stay-s (:args c)) (ctx/worth c)) cells)]
+      (when (and (seq ds) (every? some? ds)) (apply min-key :risk ds)))
+    (dig-stands/stay-danger c pos (:stay-s (:args c)) (ctx/worth c))))
 
 (defn pre-aim!
   "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,

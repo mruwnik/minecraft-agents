@@ -104,7 +104,7 @@
         refusal (gaim/args-refusal c)
         aimed (when-let [t (when-not refusal (:pos (gaim/target c)))] (if (nil? (:y t)) (gaim/aimed c t) {:pos t}))
         pos (some->> (:pos aimed) (wworld/stand-goal (wworld/path-world (:primitives c))))
-        c (cond-> c (#{:surface :nearest-level} (:why aimed)) (assoc :column-goal [(:x pos) (:z pos)]))]
+        c (cond-> c (#{:surface :nearest-level} (:why aimed)) (assoc :column-goal (gaim/column-goal c pos)))]
     (cond
       refusal {:found false :reason (:reason refusal) :text (:message refusal)}
       (nil? (wworld/path-world (:primitives c))) {:found false :reason :unsupported :text "the body cannot sense the world for path planning"}

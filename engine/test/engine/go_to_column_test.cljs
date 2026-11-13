@@ -232,6 +232,19 @@
           (is (<= (js/Math.hypot (- x 10) z) 2) (pr-str (at p)))
           (is (empty? (events-of s :go-to.escalated)) "no way made"))))))
 
+(deftest a-column-goal-is-not-arrived-at-from-a-ledge-over-it
+  ;; range 2 across holds the ledge at x 12, but its top (feet 67) is 3 over the column's only stand (64): a body on it
+  ;; is not there, and drops to the ground beside the column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ledge (merge flat (box 11 64 -3 16 66 3 "stone"))
+              {:keys [out p]} (await (go! {:blocks ledge :self {:pos {:x 12.5 :y 67 :z 0.5}}} {:pos [10 0] :range 2}))
+              [x y z] (mapv #(js/Math.floor %) (at p))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= 64 y) (pr-str (at p)))
+          (is (<= (js/Math.hypot (- x 10) z) 2) (pr-str (at p))))))))
+
 (deftest a-tree-column-with-its-ground-unseen-is-not-aimed-at-a-seen-tunnel-far-below
   (let [world (merge flat (box 0 10 -3 40 62 3 "stone") (box 10 16 0 10 17 0 "air")
                      (box 10 64 0 10 68 0 "oak_log") (box 9 69 -1 11 70 1 "oak_leaves"))
