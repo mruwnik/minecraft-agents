@@ -1055,6 +1055,19 @@
           (is (not-any? #{"chicken"} (map #(.-name %) (.-inventory (.self p)))) "no raw chicken left")
           (is (> (food p) 2) "and eaten"))))))
 
+(deftest reserved-raw-food-is-not-cooked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [baked (fn ^:async baked* [food]
+                      (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food food}
+                                                    :inventory [{:name "potato" :count 4} {:name "coal" :count 2}]} :step-ms 2000)]
+                        (mem/write! (:store eng) :reserve {:id "seed-potato" :item "potato" :count :all :strength 0.8} {:cap 100 :ttl :forever})
+                        (core/submit! eng (tu/order (list 'jobs.survival.get-food {:carry 0})) {})
+                        (await (run-until-idle! eng p 40))
+                        (count (call-args p "furnace" "op"))))]
+          (is (zero? (await (baked 5))) "reserved potatoes: no furnace call"))))))
+
 (deftest food-cooking-in-a-furnace-after-a-cut-cook-is-collected-and-eaten
   (async done
     (tu/run-async done

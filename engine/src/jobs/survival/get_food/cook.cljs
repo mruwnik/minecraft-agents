@@ -10,6 +10,7 @@
             [jobs.lib.furnace :as furnace]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
@@ -47,9 +48,10 @@
 (defn food-level [c] (.-food (.self (:primitives c))))
 
 (defn raw-carried
-  "The cookable raw foods carried, as {:name :count}."
+  "The cookable raw foods carried, as {:name :count}, leaving the names the reserve register spares (jobs.lib.reserve/spared)."
   [c]
-  (filter #(contains? (cook-kinds) (:name %)) (u/inventory (:primitives c))))
+  (let [spared (reserve/spared (ctx/view c) (.self (:primitives c)))]
+    (filter #(and (contains? (cook-kinds) (:name %)) (not (contains? spared (:name %)))) (u/inventory (:primitives c)))))
 
 (defn seen-cooker
   "The nearest furnace or smoker the body has seen within radius (perception's memory, still there), as a position, or nil."
