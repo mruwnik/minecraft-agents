@@ -1,0 +1,47 @@
+;; Run 4 F4 (card dca0eb9b). Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, glowstone in the roof, shut oak door at [15 0..1 18].
+;; 1 sleep: the bed against the north wall (foot [16 0 13]); the body starts north of the hut. Should-succeed: it sleeps from inside
+;;   the room (a stand that sees the bed), not from [16 0 11] behind the wall, 2 blocks from the bed.
+;; 2/3 a walk out of the closed hut at night: with the night trigger in the register the walk would be cut outside, so it waits
+;;   :risky (should-fail: no arrival); with no :night entry (muted) the same walk goes out (should-succeed).
+;; 4 wall-in: the body stands in a hole cut in the north wall at [15 0..1 12], a chest beside the hole outside. Should-succeed: no
+;;   block goes into the room cells or the chest's cell.
+{:defaults
+ {:tags [:night :survival :run4]
+  :time :night :time-why :dawn-decision
+  :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+           [:fill [13 0 13] [17 2 17] "air"]
+           [:set [15 3 15] "glowstone"]
+           [:fill [15 0 18] [15 1 18] "air"]
+           [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=false]"]
+           [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]]
+  :body {:at [15.5 0 15.5] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "sleep-from-behind-the-back-wall-walks-in-to-the-bed"
+   :time :night-exclusive :time-why :sleep :sleep-skip true
+   :blocks [[:set [16 0 13] "red_bed[facing=south,part=foot]"] [:set [16 0 14] "red_bed[facing=south,part=head]"]]
+   :body {:at [16.5 0 9.5] :yaw 0 :effects [["resistance" 600 4]] :settle-s 3}
+   :act [[:job (jobs.survival.sleep {:worth 1200 :bed #at [16 0 13]})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 100]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 100}]
+   :after [[:body-near [16.5 0 14] 2.5]]}
+  {:name "armed-night-trigger-holds-a-walk-out-of-the-hut"
+   :act [[:job (jobs.movement.go-to {:worth 3600 :pos #at [15 0 26]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 30}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30}]
+   :after [[:body-near [15.5 0 15.5] 3]]}
+  {:name "muted-night-trigger-lets-the-walk-out-go"
+   :register []
+   :act [[:job (jobs.movement.go-to {:worth 3600 :pos #at [15 0 26]})]
+         [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60}]
+   :after [[:body-near [15.5 0 26.5] 2]]}
+  {:name "wall-in-in-a-wall-hole-spares-the-room-and-the-chest"
+   :register []
+   :blocks [[:fill [15 0 12] [15 1 12] "air"] [:set [14 0 11] "chest"]]
+   :body {:at [15.5 0 12.5] :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 16]]}
+   :act [[:job (jobs.survival.wall-in {:worth 1200 :for :night})]
+         [:await {:source :job :kind :completed :after-previous true} 60]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.wall-in"}} :within-s 60}]
+   :after [[:block [15 0 13] "air"] [:block [15 1 13] "air"] [:block [14 0 13] "air"] [:block [16 0 13] "air"]
+           [:block [14 0 11] "chest"] [:block [15 0 11] "cobblestone"]]}]}
