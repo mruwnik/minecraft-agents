@@ -3,7 +3,7 @@
 ;; stair or dig route dug. :ways #{:walk :clear-seal}, bedrock, or open ground never change the world.
 ;; Card 30615854 (Q67): it digs any block outside others' zones, claims and plans (a build too); in them nothing is dug (:why :zone). A door or gate beside the enclosure is its way
 ;; out (no escalation), and a cut escalation's holes stay in the :tidy ledger (restore-broken puts them back).
-;; It notes and puts back only holes in another's zone, claim or plan (owner Q139): the put-back cases dig through
+;; It notes and puts back only holes in another's zone, claim or plan (owner Q139), or in a build anywhere (Q174): the put-back cases dig through
 ;; another's plan with :ignore-zones?; in plain natural ground its holes stay and no put-back event comes.
 ;; Card 8e26161d: with :escalate false a shut-in body ends :shut-in true; open ground never does.
 ;; Card d0e7b7df: a fruitless re-plan after an escalation says why (info go-to.retrying), never a silent round: a wall thicker than the dig the call may spend
@@ -153,7 +153,8 @@
             {:no-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}
-  ;; Q67: the same room with no zone, claim, plan or ledger entry is a wall like any other: dug out through the cheapest way, no :zone refusal
+  ;; Q67: the same room with no zone, claim, plan or ledger entry is a wall like any other: dug out through the cheapest way, no :zone refusal;
+  ;; Q174: the dig was priced as put back (a build), so the hole is put back once through
   {:name "cobblestone-wall-room-without-zone-is-dug-out"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
@@ -161,6 +162,7 @@
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :action :kind :done :data {:name "dig"}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:escalation {:why :zone}}} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [24.5 1 16.5] 2]]
