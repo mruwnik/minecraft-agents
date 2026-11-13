@@ -447,3 +447,10 @@
   (let [at {:x 0.5 :y 62 :z 0.5}]
     (with-redefs [jobs.movement.go-to.column/kind-at (fn [_ _] (stands-world (atom 0) #{[7 62 0] [5 62 5]}))]
       (is (= {:x 7 :y 63 :z 0} (air/dry-stand nil at 20 at ##Inf)) "7 blocks east is nearer than the diagonal 5/5, found in the earlier shell"))))
+
+(deftest dry-stand-of-a-column-goal-reads-every-stand-of-it-not-the-top-one
+  (let [at {:x 0.5 :y 62 :z 0.5}
+        goal {:x 5 :y 70 :z 5}]
+    (with-redefs [jobs.movement.go-to.column/kind-at (fn [_ _] (stands-world (atom 0) #{[5 62 5]}))]
+      (is (nil? (air/dry-stand nil goal 1 at ##Inf)) "the top stand 8 over the floor: no stand within range of it")
+      (is (= {:x 5 :y 63 :z 5} (air/dry-stand nil [goal {:x 5 :y 63 :z 5}] 1 at ##Inf)) "the column's floor stand is a goal too"))))

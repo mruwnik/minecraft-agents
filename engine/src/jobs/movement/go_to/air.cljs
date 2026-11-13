@@ -47,16 +47,17 @@
               (for [dx inner dy inner dz [(- s) s]] [(+ bx dx) (+ by dy) (+ bz dz)])))))
 
 (defn dry-stand
-  "The seen cell within radius of pos (the body) and within range within of goal, nearest pos, where the body stands
+  "The seen cell within radius of pos (the body) and within range within of goal (a pos, or a seq of them: any), nearest pos, where the body stands
   out of water: feet and head open, a solid under the feet; nil when there is none. Either bound may be ##Inf, not both.
   Shells of cells round pos come nearest first, and it stops at the first shell no nearer cell can follow."
   [p goal within pos radius]
   (let [k (column/kind-at p false)
-        [gx gy gz] (mapv #(js/Math.floor (% goal)) [:x :y :z])
+        goals (mapv (fn [g] (mapv #(js/Math.floor (% g)) [:x :y :z])) (if (map? goal) [goal] goal))
         [bx by bz] (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        reach (js/Math.floor (min radius (+ within (js/Math.hypot (- gx bx) (- gy by) (- gz bz)))))
+        reach (js/Math.floor (min radius (+ within (apply max (map (fn [[gx gy gz]] (js/Math.hypot (- gx bx) (- gy by) (- gz bz))) goals)))))
         sq (fn [a b c] (+ (* a a) (* b b) (* c c)))
-        dry? (fn [[x y z]] (and (<= (sq (- x bx) (- y by) (- z bz)) (* radius radius)) (<= (sq (- x gx) (- y gy) (- z gz)) (* within within))
+        in-range? (fn [x y z] (some (fn [[gx gy gz]] (<= (sq (- x gx) (- y gy) (- z gz)) (* within within))) goals))
+        dry? (fn [[x y z]] (and (<= (sq (- x bx) (- y by) (- z bz)) (* radius radius)) (in-range? x y z)
                                 (keyword-identical? :open (k x y z)) (keyword-identical? :open (k x (inc y) z))
                                 (keyword-identical? :solid (k x (dec y) z))))
         far (fn [[x y z]] (u/dist pos {:x (+ x 0.5) :y y :z (+ z 0.5)}))]

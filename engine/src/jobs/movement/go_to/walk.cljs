@@ -41,6 +41,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.watch :as watch]
@@ -266,6 +267,13 @@
           (do (await (pace/pace! c)) (recur (inc i)))
           status)))))
 
+(defn goal-cells
+  "The cells {:x :y :z} a range of pos is measured from: one per y of c's column goal (wplan/in-goal?), else pos."
+  [c pos]
+  (if-let [ys (when (wplan/column-goal? c pos) (seq (:ys (:column-goal c))))]
+    (mapv #(assoc pos :y %) ys)
+    [pos]))
+
 (defn ^:async leave-hang!
   "The body hangs in a climbable at feet cell hang within range of pos: walk on to the nearest floor stand within range
   (jobs.lib.step-off, range 0), :again; with none a hanging body is no arrival, the call ends :unreachable."
@@ -273,7 +281,7 @@
   (let [p (:primitives c)
         [x y z] hang
         range (:range (:args c) 1)
-        stand (first (step-off/candidates p {:x x :y y :z z} {:reach 3 :ok? #(<= (u/dist % pos) range)}))]
+        stand (first (step-off/candidates p {:x x :y y :z z} {:reach 3 :ok? #(wplan/in-goal? c % pos range)}))]
     (ctx/emit! c :go-to.hanging :info {:at hang :stand (some-> stand ((juxt :x :y :z))) :text (str "within range but hanging in a climbable at " hang)})
     (if stand
       (do (await (walk-dry! c stand)) :again)
@@ -298,7 +306,7 @@
         r (:range (:args c) 1)
         keep? (not (leave-water))
         tried? (:dry-tried (ctx/mem c))
-        dry (when-not (or keep? tried?) (air/dry-stand p pos r (u/self-pos c) (swim/reach-of c ##Inf)))
+        dry (when-not (or keep? tried?) (air/dry-stand p (goal-cells c pos) r (u/self-pos c) (swim/reach-of c ##Inf)))
         status (when dry
                  (ctx/update-mem! c assoc :dry-tried true)
                  (await (walk-dry! c dry)))]

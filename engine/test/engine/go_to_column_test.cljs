@@ -622,3 +622,8 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (> 4 (js/Math.abs (- 25 (first (at p))))) (str "at " (at p)))
           (is (= 64 (js/Math.floor (second (at p)))) (str "on the floor: " (at p))))))))
+
+(deftest a-column-goals-range-is-measured-from-each-of-its-stands
+  (let [c {:column-goal {:x 10 :z 0 :ys [64 68]}}]
+    (is (= [{:x 10 :y 64 :z 0} {:x 10 :y 68 :z 0}] (gwalk/goal-cells c {:x 10 :y 68 :z 0})) "leave-hang!'s step-off and the dry stand read the floor stand, not only the top")
+    (is (= [{:x 3 :y 64 :z 3}] (gwalk/goal-cells c {:x 3 :y 64 :z 3})) "any other goal: itself")))
