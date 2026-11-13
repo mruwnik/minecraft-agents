@@ -1,6 +1,8 @@
 (ns jobs.lib.cost.tolls
   "The price of cells a walk would rather not cross, for go-to's :tolls arg (the planner's options.tolls): a farm's planted
-  cells, the cells of a zone that is not the body's. The planner knows no zones or crops: the job that does names the cells.")
+  cells, the cells of a zone that is not the body's. The planner knows no zones or crops: the job that does names the cells."
+  (:require [engine.path.planner.base :as base]
+            [jobs.lib.cost.pen :as pen]))
 
 (def farm-cell-factor
   "Times its own seconds a landing on a planted cell costs more: landed on only when the way round is over this many times longer."
@@ -39,6 +41,19 @@
   "tolls for the cells of zones the body has no business in."
   [cells]
   (tolls cells zone-factor))
+
+(defn gate-open-s
+  "Seconds a gate a walk crosses stands open: one click (the planner's open) and the crossing; go-to shuts it behind."
+  []
+  (+ (unchecked-get base/DEFAULT-COSTS "open") base/WALK-S))
+
+(defn gate-tolls
+  "tolls for the gates of a pen holding mobs (their kinds): crossing one costs what the herd may lose through it while it
+  stands open (pen/herd-loss over gate-open-s), as a factor of the crossing's own seconds, which are gate-open-s too (the
+  planner adds the click to the move that opens it)."
+  [gates mobs]
+  (let [open-s (gate-open-s)]
+    (tolls (map (juxt :x :y :z) gates) (/ (pen/herd-loss mobs open-s) open-s))))
 
 (defn flood-tolls
   "tolls for the cells of water with a roof, each factor times its own seconds more (toll-cells/flood-factor)."

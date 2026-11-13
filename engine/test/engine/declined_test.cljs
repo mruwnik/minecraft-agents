@@ -7,6 +7,7 @@
             [engine.settings :as settings]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.pen-entry :as pen-entry]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -95,28 +96,17 @@
         (is (= [:nothing-possible :out-of-reach]
                ((juxt :kind :cause) (await (in-parent walker (fn ^:async f [c] (await (b/walk!* c [4 65 4]))))))) "arrived, still out of reach")))))
 
-(deftest walk!*-keeps-out-of-pen-gates-and-warns-when-the-walk-fails
+(deftest walk!*-prices-pen-gates-at-the-herds-loss
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [args (atom nil)
-              seen (atom [])
               gate {:x 5 :y 64 :z 0}
               go-to (assoc stranded :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :nothing-possible :unreachable)))]
-          (with-redefs [pen-entry/pens! (fn ^:async p [_] [{:gates [gate] :animals 2}])]
-            (is (= :nothing-possible (:kind (await (in-parent go-to (fn ^:async g [c] (await (b/walk!* c [9 64 0]))) seen))))))
-          (is (= [(assoc gate :factor ##Inf)] (:tolls @args)))
-          (is (some #(= :blocks.pen-kept-out (:kind %)) @seen)))))))
-
-(deftest walk!*-does-not-keep-out-of-the-gate-of-the-pen-the-body-stands-in
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [args (atom nil)
-              go-to (assoc stranded :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :nothing-possible :unreachable)))]
-          (with-redefs [pen-entry/pens! (fn ^:async p [_] [{:gates [{:x 5 :y 64 :z 0}] :animals 2 :here? true}])]
+          (with-redefs [pen-entry/pens! (fn ^:async p [_] [{:gates [gate] :mobs ["cow" "sheep"]}])]
             (await (in-parent go-to (fn ^:async g [c] (await (b/walk!* c [9 64 0]))))))
-          (is (nil? (:tolls @args)) "the gate is the way out"))))))
+          (is (= (cost/gate-tolls [gate] ["cow" "sheep"]) (:tolls @args)))
+          (is (< 0 (:factor (first (:tolls @args))) ##Inf) "a price, not a wall"))))))
 
 (deftest walk-into!*-asks-go-to-for-the-slots-walk
   (async done

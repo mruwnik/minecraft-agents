@@ -433,7 +433,7 @@
   "Whether go-to's quote of the walk into reach of pos costs fewer seconds (pick/quoted-s) than digging the roof block at
   hit plus its shelter price; :continue while the quote goes on."
   [c pos hit price]
-  (let [[_ args] (await (b/walk-request c pos (:see (:args c))))
+  (let [args (await (b/walk-request c pos (:see (:args c))))
         q (await (pick/quote! c args))
         name (some-> (u/seen-block (:primitives c) (zipmap [:x :y :z] hit)) .-name)]
     (if (:estimate q)

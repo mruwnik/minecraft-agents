@@ -473,8 +473,8 @@
              (box 5 64 -4 5 64 4 "oak_fence") (box 13 64 -4 13 64 4 "oak_fence"))
       (assoc "5,64,0" "oak_fence_gate" "13,64,0" "oak_fence_gate")))
 
-(defn pen-env []
-  (bd/setup {:self body :blocks pen-blocks :inventory [{:name "dirt" :count 4}]
+(defn pen-env [& [self]]
+  (bd/setup {:self (or self body) :blocks pen-blocks :inventory [{:name "dirt" :count 4}]
              :states {"5,64,0" {:open false :facing "east"} "13,64,0" {:open false :facing "east"}}
              :entities [{:id 7 :name "cow" :kind "passive" :pos {:x 8.5 :y 64 :z 0.5}}
                         {:id 8 :name "sheep" :kind "passive" :pos {:x 10.5 :y 64 :z 1.5}}]}))
@@ -487,29 +487,40 @@
 
 (defn gate-clicks [p] (count (filterv #(= "useOn" (.-name %)) (.-calls (.-world p)))))
 
-(deftest a-place-beyond-a-pen-works-from-outside-without-using-its-gate
+(def cheap-escapes
+  "An escape prior under which the herd loses next to nothing through a gate open a second."
+  {:jobs.lib.cost.pen/escape-prior {:escapes 0.001 :animal-s 598}})
+
+(deftest a-place-beyond-a-pen-goes-round-it-while-that-costs-less-than-the-herds-loss-else-through-its-gates
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (pen-env)
               result (await (tu/child-outcome eng job {:pos [16 64 0] :item "dirt"} 40))]
           (is (= true (:placed result)))
-          (is (zero? (gate-clicks p)) "the gates stay shut, the walk went round"))))))
+          (is (zero? (gate-clicks p)) "the gates stay shut, the walk went round"))
+        (let [{:keys [eng p]} (pen-env)
+              result (await (settings/with-settings cheap-escapes #(tu/child-outcome eng job {:pos [16 64 0] :item "dirt"} 40)))]
+          (is (= true (:placed result)))
+          (is (pos? (gate-clicks p)) "the way round costs more than the herd's loss: through the gates"))))))
 
-(def pens-open {:jobs.lib.blocks/enter-pens true})
-
-(deftest a-place-inside-a-pen-from-outside-declines-naming-the-pen-and-enter-pens-allows-it
+(deftest a-place-inside-a-pen-from-outside-goes-through-its-gate
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (pen-env)
-              declined (await (tu/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40))]
-          (is (not= true (:placed declined)))
-          (is (zero? (gate-clicks p)))
-          (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
-        (let [{:keys [eng]} (pen-env)
-              allowed (await (settings/with-settings pens-open #(tu/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40)))]
-          (is (= true (:placed allowed))))))))
+        (let [{:keys [eng p]} (pen-env)
+              result (await (tu/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40))]
+          (is (= true (:placed result)))
+          (is (pos? (gate-clicks p))))))))
+
+(deftest a-body-inside-a-pen-walks-out-by-its-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (pen-env {:pos {:x 9.5 :y 64 :z 0.5}})
+              result (await (tu/child-outcome eng job {:pos [-3 64 0] :item "dirt"} 40))]
+          (is (= true (:placed result)))
+          (is (pos? (gate-clicks p))))))))
 
 (def use-on 'jobs.items.use)
 
@@ -518,24 +529,19 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [pos [[5 64 0] [7 63 2]]]
-          (let [{:keys [eng p seen]} (pen-env)
+          (let [{:keys [eng p]} (pen-env)
                 result (await (tu/child-outcome eng use-on {:on pos} 40))]
             (is (not= :unreachable (:reason result)) (pr-str pos))
-            (is (= 1 (gate-clicks p)) (pr-str pos))
-            (is (empty? (filter #(= :blocks.pen-kept-out (:kind %)) @seen)) (pr-str pos))))))))
+            (is (= 1 (gate-clicks p)) (pr-str pos))))))))
 
-(deftest a-use-on-deep-inside-a-pen-declines-naming-the-pen-and-enter-pens-allows-it
+(deftest a-use-on-deep-inside-a-pen-goes-through-its-gate
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (pen-env)
-              declined (await (tu/child-outcome eng use-on {:on [10 63 0]} 40))]
-          (is (= :unreachable (:reason declined)))
-          (is (zero? (gate-clicks p)))
-          (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
-        (let [{:keys [eng]} (pen-env)
-              allowed (await (settings/with-settings pens-open #(tu/child-outcome eng use-on {:on [10 63 0]} 40)))]
-          (is (not= :unreachable (:reason allowed))))))))
+        (let [{:keys [eng p]} (pen-env)
+              result (await (tu/child-outcome eng use-on {:on [10 63 0]} 40))]
+          (is (not= :unreachable (:reason result)))
+          (is (pos? (gate-clicks p))))))))
 
 (deftest a-use-on-ends-by-its-click-status
   (async done

@@ -1,6 +1,6 @@
 (ns jobs.lib.pen-entry
-  "The gates of the pens that hold animals near the body: a walk made for a block job keeps out of them (a go-to toll of ##Inf),
-  because a gate opened for a body lets the crowd out. A pen is the closed enclosure (jobs.lib.pen/check) round a passive
+  "The gates of the pens that hold animals near the body: a walk made for a block job crosses one at the herd's loss while
+  it stands open (cost/gate-tolls), because a gate opened for a body lets the crowd out. A pen is the closed enclosure (jobs.lib.pen/check) round a passive
   animal in sight, or a pen an open gate leaks from; its gates are all of the pen's."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -14,7 +14,7 @@
             [clojure.string :as str]))
 
 (a/defargs settings
-  {::radius {:default 24 :doc "Blocks round the body in which animals are looked for to find the pens whose gates a block job's walk keeps out of." :spec (a/int-in 1 nil)}
+  {::radius {:default 24 :doc "Blocks round the body in which animals are looked for to find the pens whose gates a block job's walk prices." :spec (a/int-in 1 nil)}
    ::max-animals {:default 12 :doc "The nearest animals checked for a pen." :spec (a/int-in 1 nil)}
    ::max-cells {:default 400 :doc "Most cells searched for one pen." :spec (a/int-in 1 nil)}
    ::open-radius {:default 6 :doc "A go-to that starts within this many blocks of an open gate of a pen holding animals warns when its goal is far from the gate." :spec (a/int-in 1 nil)}
@@ -33,8 +33,7 @@
                  inside)))
 
 (defn pens
-  "[{:gates [{:x :y :z}] :animals n :here? bool}] of the pens round the passive animals in sight, one per pen (:here?: the
-  body stands inside it); metadata :unseen?
+  "[{:gates [{:x :y :z}] :mobs [kind]}] of the pens round the passive animals in sight, one per pen; metadata :unseen?
   when a pen has cells the body has not seen. Those are noted for sense/decide! (u/*reads*) only for an animal whose
   fill met no leak but unseen cells: plausibly inside a fence ring, not loose in the open. An animal whose own floor
   is unseen (the pen is out of view) notes that floor, so it gets looked at."
@@ -49,7 +48,7 @@
         (let [cell (animal-cell e)
               k [(:x cell) (:y cell) (:z cell)]]
           (if-let [i (first (keep-indexed (fn [i f] (when (contains? (:inside f) k) i)) found))]
-            (recur (rest todo) (update-in found [i :animals] inc) unseen?)
+            (recur (rest todo) (update-in found [i :mobs] conj (.-name e)) unseen?)
             (let [answer (binding [u/*reads* nil]
                            (pen/check {:block-at block-at :at cell :near k :max-cells (settings/get settings ::max-cells)}))
                   ring? (and (#{:unloaded :leak} (:reason answer))
@@ -62,12 +61,10 @@
                   (u/note-read! :cells at)))
               (recur (rest todo)
                      (if (and (contains? (:inside answer) k) (seq (:gates answer)))
-                       (conj found {:inside (:inside answer) :gates (mapv :pos (:gates answer)) :open (mapv :pos (filter :open? (:gates answer))) :animals 1})
+                       (conj found {:inside (:inside answer) :gates (mapv :pos (:gates answer)) :open (mapv :pos (filter :open? (:gates answer))) :mobs [(.-name e)]})
                        found)
                      (or unseen? ring?)))))
-        (let [me (u/self-pos c)
-              here [(js/Math.floor (:x me)) (js/Math.floor (+ (:y me) 0.01)) (js/Math.floor (:z me))]]
-          (with-meta (mapv #(-> % (assoc :here? (contains? (:inside %) here)) (dissoc :inside)) found) {:unseen? unseen?}))))))
+        (with-meta (mapv #(dissoc % :inside) found) {:unseen? unseen?})))))
 
 (defn ^:async pens!
   "pens judged after a look at the unseen cells of the pens it read (sense/decide!: bounded per call, each cell looked

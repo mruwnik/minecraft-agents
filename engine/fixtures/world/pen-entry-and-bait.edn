@@ -2,10 +2,10 @@
 ;; inside 19..25 x 12..20, gate on the west side at [18 0 16]; two cows inside (they wander, the fence holds them).
 ;; The pen is big enough that its middle is out of reach (4.5 cells) from every cell outside the fence.
 ;; Should-succeed: go-to out of the pen with wheat in the bag (put away before the gate click) or without: gate shut behind, both cows stay;
-;; go-to away from an open stocked gate warns go-to.pen-gate-open; blocks.place deep in the pen declines with blocks.pen-kept-out,
-;; places with the enter-pens setting (gate shut behind the body); use-on at the gate from outside clicks it without entering.
-;; blocks.dig of a block outside, from inside the pen, walks out by the gate (the pen the body stands in is no keep-out): dug, gate shut, cows stay.
-;; Should-fail (no warn / declined): a goal beside the open gate; use-on deep in the pen (blocks.pen-kept-out, the lever unpowered).
+;; go-to away from an open stocked gate warns go-to.pen-gate-open; blocks.place and use-on deep in the pen walk in by the gate (its
+;; price is the herd's loss, no way round), gate shut behind the body; use-on at the gate from outside clicks it without entering.
+;; blocks.dig of a block outside, from inside the pen, walks out by the gate: dug, gate shut, cows stay.
+;; Should-fail (no warn): a goal beside the open gate.
 {:defaults
  {:tags [:animals :pen-gate :movement]
   :time :any
@@ -36,7 +36,7 @@
    :body {:at [20.5 0 16.5]}
    :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [10 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :blocks.pen-kept-out} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
+]
    :after [[:not-block [10 0 16] "dirt"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
   {:name "go-to-away-from-an-open-stocked-gate-warns"
@@ -50,13 +50,8 @@
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :go-to.pen-gate-open} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]}
-  {:name "place-deep-in-the-pen-declines-naming-the-pen"
+  {:name "place-deep-in-the-pen-walks-in-by-the-gate"
    :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [22 0 16] :item "cobblestone"})]]
-   :expect [{:event {:source :job :kind :blocks.pen-kept-out :level :warn} :within-s 80}]
-   :after [[:not-block [22 0 16] "cobblestone"] [:block [18 0 16] "oak_fence_gate[open=false]"]
-           [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
-  {:name "place-deep-in-the-pen-with-enter-pens-walks-in"
-   :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [22 0 16] :item "cobblestone" :settings {:jobs.lib.blocks/enter-pens true}})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true}} :within-s 100 :of-job true}]
    :after [[:block [22 0 16] "cobblestone"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
@@ -64,10 +59,10 @@
    :act [[:job (jobs.items.use {:worth 1200 :on #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "oak_fence_gate[open=true]"] [:body-far [21.5 0 16.5] 3]]}
-  {:name "use-on-deep-in-the-pen-declines-naming-the-pen"
+  {:name "use-on-deep-in-the-pen-walks-in-by-the-gate"
    :blocks [[:set [22 0 16] "lever[face=floor,facing=north,powered=false]"]]
    :act [[:job (jobs.items.use {:worth 1200 :on #at [22 0 16]})]]
-   :expect [{:event {:source :job :kind :blocks.pen-kept-out :level :warn} :within-s 100}]
-   :after [[:block [22 0 16] "lever[powered=false]"] [:block [18 0 16] "oak_fence_gate[open=false]"]
+   :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 100 :of-job true}]
+   :after [[:block [22 0 16] "lever[powered=true]"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]
    :limit-s 140}]}

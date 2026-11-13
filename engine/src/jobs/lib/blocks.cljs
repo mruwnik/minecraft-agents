@@ -3,7 +3,6 @@
   body-wait? tells a reason about the body (tool, item, free slot:
   the parent waits too) from one about the cell (the parent skips that cell)."
   (:require [clojure.set :as set]
-            [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.block-sets :as bs]
@@ -283,14 +282,8 @@
   "Wait reasons about the cell that can appear mid-call (a zone added, a block moved in): the call declines."
   #{:not-allowed :hazard :not-loaded :own-body :no-support})
 
-(defn kept-out-text [pens]
-  (str "the walk failed while keeping out of the gate of a pen holding animals: "
-       (str/join "; " (map (fn [{:keys [gates animals]}] (str animals " animals, gate " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))) pens))
-       "; the setting jobs.lib.blocks/enter-pens allows the walk through"))
-
 (a/defargs settings
-  {::enter-pens {:default false :doc "true: the walk of blocks.dig, place and use-on may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)." :spec boolean?}
-   ::seal-fetch {:default true :doc "How blocks.dig gets a building block to seal lava with when none is carried, whatever its :ways say: from a chest or by crafting, never by gathering in the field (the walk would enter the hole beside the lava); false seals only with a carried block." :spec boolean?}})
+  {::seal-fetch {:default true :doc "How blocks.dig gets a building block to seal lava with when none is carried, whatever its :ways say: from a chest or by crafting, never by gathering in the field (the walk would enter the hole beside the lava); false seals only with a carried block." :spec boolean?}})
 
 (def low-floor-radius 4)
 
@@ -315,35 +308,28 @@
       (seq (ledger/near-of (filterv (comp shelter-keep/shelter-purposes :purpose) (ledger/entries c)) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar]))))
 
 (defn ^:async walk-request
-  "[pens go-to-args] of the walk to pos: range (default 3), its walk-ways (no :ignore-zones?: the call's leave to dig
-  listed cells in a zone is no leave for the walk's escalations to cut its walls), and (unless the :enter-pens setting) keeping out of the
-  gates of the pens holding animals, after a look at the cells of those not yet seen, except the gates of a pen the body
-  stands in: its gate is the way out."
+  "go-to args of the walk to pos: range (default 3), its walk-ways (no :ignore-zones?: the call's leave to dig
+  listed cells in a zone is no leave for the walk's escalations to cut its walls), and the gates of the pens holding
+  animals priced at the herd's loss (cost/gate-tolls), after a look at the cells of those not yet seen."
   [c pos see? & [range]]
-  (let [pens (when-not (settings/get settings ::enter-pens) (remove :here? (await (pen-entry/pens! c))))
-        keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
-    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c)}
-            (seq keep-out) (assoc :tolls keep-out))]))
-
-(defn warn-kept-out! [c pens]
-  (when (seq pens)
-    (ctx/emit! c :blocks.pen-kept-out :warn {:pens pens :text (kept-out-text pens)})))
+  (let [gates (mapcat #(cost/gate-tolls (:gates %) (:mobs %)) (await (pen-entry/pens! c)))
+        tolls (into (vec gates) (map #(assoc % :factor ##Inf)) (when (:for-plan (:args c)) (low-floor-cells c pos)))]
+    (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c)}
+      (seq tolls) (assoc :tolls tolls))))
 
 (defn ^:async walk!*
   "walk! through ctx/call: :arrived, :continue (go-to waits on the world; the round holds still with its reason), else
   an ending: go-to's when it did not end :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable)
   when it ended not having arrived."
   [c pos & [see? range]]
-  (let [[pens args] (await (walk-request c pos see? range))
+  (let [args (await (walk-request c pos see? range))
         r (await (child/call-walk* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond
       (= :continue r) :continue
       (and arrived? (in-reach? c pos see?)) :arrived
-      :else (do (warn-kept-out! c pens)
-                (if (= :done (:kind r))
-                  (ctx/end c :nothing-possible (if arrived? :out-of-reach (:why (:data r) :unreachable)) (:data r))
-                  r)))))
+      (= :done (:kind r)) (ctx/end c :nothing-possible (if arrived? :out-of-reach (:why (:data r) :unreachable)) (:data r))
+      :else r)))
 
 (defn ^:async walk-into-reach!
   "One walk into reach of pos for blocks.dig, place and use-on: :continue (go-to waits), :again (arrived: the caller re-checks),
