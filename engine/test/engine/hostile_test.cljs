@@ -2317,3 +2317,13 @@
                                                          :entities [(assoc (skeleton 1 5 0) :visible true :held held)]}))]
                   (:burns (hostile-loss/mob-near p (first (danger-q/dangers p 16 {:ranged-radius 16} {}))))))]
     (is (= [nil true] [(burns "bow") (burns "stone_sword")]))))
+
+(deftest a-held-fight-afloat-treads-water-while-it-waits-for-the-mob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :radius 8 :hold true})
+                                                 {:floor flight-floor :blocks lake :self {:pos [3.5 63 0.5] :health 20}
+                                                  :inventory sword :entities [(drowned-at -2.5 63 0.5)]} 20))]
+          (is (breath/swimming? p) "afloat")
+          (is (some #(true? (.-tread (.-args %))) (calls p "swim")) "the wait treads water, or the body sinks under the held fight"))))))

@@ -6,6 +6,7 @@
             [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.hostile-fight :as hostile]
+            [jobs.lib.breath :as breath]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -46,7 +47,7 @@
   within :ranged-radius), except the ids in :skip. Only a hostile the body has seen is fought; one only heard is turned
   toward (:nothing-possible :heard-only), never walked to. One beyond hostile-fight/::leash of where the fight began is not a target.
   A melee hostile beyond reach is waited for, never walked to, with :hold or when it stands in or beside unlit space (hostile-fight/dark-around?: a player
-  does not chase into unlit space, more may be there unseen); the wait declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
+  does not chase into unlit space, more may be there unseen); the wait (treading water, head out, when the body swims) declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
   without a swing; a ranged one that, with another in range, is better left than walked to (hostile-fight/too-far-to-chase?: the
   priced answer says flee) ends :too-far; a creeper is a target only alone in range (hostile-fight/targets) and ends :creeper-unsafe when
   it cannot be fought hit-and-back (hostile-fight/hit-and-back-ok?) or only creepers are left: the parent, not each step, weighs fight against flight. No
@@ -313,8 +314,10 @@
   (let [tpos (u/pos-of (.-pos target))]
     (cond
       (in-reach? c target) :there
-      (hostile/held? c target) (do (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
-                                                                 :held)
+      (hostile/held? c target) (do (if (breath/swimming? (:primitives c))
+                                     (await (ctx/act c :swim #js {:ms chase-gap-ms :tread true}))
+                                     (await (combat/wait-gap! c (ctx/now c) chase-gap-ms)))
+                                   :held)
       :else
       (case (await (near/go-near! c tpos 2 (walk-opts c target)))
         :there :arrived
