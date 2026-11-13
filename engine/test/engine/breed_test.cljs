@@ -7,6 +7,7 @@
             [engine.settings :as settings]
             [engine.perception :as perception]
             [jobs.lib.animals :as animals]
+            [jobs.lib.reserve :as reserve]
             [engine.memory :as mem]
             [engine.fake :as fake]
             [engine.look-support :as ls]
@@ -92,16 +93,20 @@
                               [[{:name "wheat" :count 1}] "zombie" nil]]]
     (is (= expected (animals/food-carried (tu/fake {:inventory inv}) mob)) (str mob inv))))
 
-(deftest reserve-bait-writes-one-register-entry-per-food-and-replaces-them
+(deftest reserve-bait-holds-what-the-job-still-needs-and-replaces-its-entries
   (let [kept (atom [])
         c {:id "j1" :view (constantly {:now 1000})
            :remember (fn [kind data _] (swap! kept conj [kind data]))
            :forget (fn [kind pred] (is (= :reserve kind)) (is (pred {:by "j1"})) (is (not (pred {:by "j2"}))))}]
-    (animals/reserve-bait! c "pig")
-    (is (= [[:reserve {:id "j1-bait-carrot" :item "carrot" :count :all :strength 0.8 :by "j1"
+    (animals/reserve-bait! c "pig" 3)
+    (is (= [[:reserve {:id "j1-bait-carrot" :item "carrot" :count 3 :strength 0.8 :by "j1"
                        :why "bait for the animal job" :until (+ 1000 animals/bait-ms)}]]
-           (take 1 (filter #(= "carrot" (:item (second %))) @kept))))
-    (is (= (count (animals/breeding-food "pig")) (count @kept)))))
+           (take 1 (filter #(= "carrot" (:item (second %))) @kept)))
+        "a count, not :all: the rest carried stays free for bread")
+    (is (= (count (animals/breeding-food "pig")) (count @kept)))
+    (reset! kept [])
+    (animals/reserve-bait! c "cow" 0)
+    (is (empty? @kept) "nothing left to feed: the old entries dropped, none written")))
 
 (deftest herd-adults-and-babies
   (let [p (tu/fake {:entities [(cow 1 5) (cow 2 2) (cow 3 3 {:baby true}) (cow 4 40) (ent 5 "pig" 1)]})
@@ -122,7 +127,8 @@
           (is (= :fed (:reason (done-event s))))
           (is (= ["u1" "u2"] (:fed (done-event s))))
           (is (= 0 (count-of s "wheat")))
-          (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s)))))))))
+          (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s))))
+          (is (empty? (reserve/entries (mem/view (:store (:eng s))))) "the cleanup releases the bait"))))))
 
 (defn bred-entry [{:keys [eng]} mob]
   (mem/latest (mem/view (:store eng)) (keyword "bred" mob)))

@@ -1,5 +1,6 @@
 (ns jobs.animals.herd
   (:require [plan.pen-fit :as pen-fit]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
@@ -364,7 +365,7 @@
   unsafe restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a pause, so a
   step that keeps answering at once never spins."
   [c]
-  (animals/reserve-bait! c (:mob (:args c)))
+  (animals/reserve-bait! c (:mob (:args c)) 1)
   (ctx/update-mem! c update :origin #(or % (u/self-pos c)))
   (when-not (free-to-leave? c) (restart! c))
   (await (pace/steps! c (fn ^:async herd-step []
@@ -380,6 +381,7 @@
   shut, by the run's own ending phases, a step per round. Done when the body is safe (animal free, gate shut, body
   outside)."
   [c _]
+  (reserve/release! c)
   (if (or (:finished (ctx/mem c)) (free-to-leave? c))
     (ctx/end c :done nil {})
     (do (when-not (:ending (ctx/mem c)) (end! c :cancelled))

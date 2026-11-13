@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.notes :as notes]
+            [jobs.items.craft :as craft]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.crops :as crops]
             [jobs.items.obtain.base :refer [explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
@@ -17,6 +18,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.stair-cells :as geo]
@@ -34,12 +36,19 @@
   [plans]
   (or (first (remove (fn [pl] (some #(= :smelt (:op %)) (:steps pl))) plans)) (first plans)))
 
+(defn spendable
+  "{name total} the craft children may use: the carried items the reserve register leaves free (reserve/free) to
+  jobs.items.craft's chooser, worn-out tools left out. A spare tool's craft, which may take held units once nothing
+  else can be got, asks as :craft."
+  [c]
+  (storage/usable-totals (reserve/free c (if (= :torches (craft/slot-of c)) :craft-held :craft))))
+
 (defn craft-plan
   "{:item name :steps [..]} for the first of names a craft chain of allowed steps (a smelt step needs the :smelt way,
-  any other :craft) makes n more of from what is carried, else nil."
+  any other :craft) makes n more of from what is carried (spendable), else nil."
   [c names n]
   (let [p (:primitives c)
-        have (storage/usable-totals (u/inventory p))
+        have (spendable c)
         mem (ctx/mem c)
         table? (and (not (get-in mem [:craft :table-unreachable]))
                     (crafting-table/at-hand? p mem))
@@ -392,7 +401,7 @@
   Of several names that lack wool, the one gathering the least (pick-plan)."
   [c names n]
   (let [p (:primitives c)
-        have (storage/usable-totals (u/inventory p))
+        have (spendable c)
         version (game/version-of p)
         seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius (seen-radius) :max 1}))
         seen (set (filter seen? (recipes/stone-materials version)))

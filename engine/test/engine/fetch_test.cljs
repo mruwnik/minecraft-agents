@@ -962,7 +962,7 @@
     (with-redefs [ctx/mem (constantly mem)
                   ctx/frozen-call (constantly nil)
                   crafting-table/nearest (constantly nil)]
-      (mapv :op (:steps (plan/craft-plan {:primitives (:p s)} ["wooden_pickaxe"] 1))))))
+      (mapv :op (:steps (plan/craft-plan {:primitives (:p s) :view #(mem/view (:store (:eng s)))} ["wooden_pickaxe"] 1))))))
 
 (def bed-recipe {"white_bed" {:count 1 :needs {"oak_planks" 3 "white_wool" 3} :table true}})
 

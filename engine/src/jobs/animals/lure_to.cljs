@@ -1,5 +1,6 @@
 (ns jobs.animals.lure-to
   (:require [jobs.lib.animal-spare :as spare]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.checks :as checks]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.price :as price]
@@ -521,7 +522,7 @@
   "The whole attempt: steps until the job ends; yields only while a child waits on the world. Each walk leg is a comfort
   section (escort/walk-legs!), so a limit crossed during one ends the lure when it closes."
   [c]
-  (animals/reserve-bait! c (:mob (:args c)))
+  (animals/reserve-bait! c (:mob (:args c)) 1)
   (await (pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r))))))
 
 (defn ^:async shut-held!
@@ -539,6 +540,7 @@
   "However the lure ended: the food is put away unless :keep-food, the gates held open are shut (not with :keep-food),
   then the gates the legs left open are shut (escort/close-up!). Done."
   [c _]
+  (reserve/release! c)
   (when-not (:keep-food (:args c)) (await (bait/put-food-away! c)))
   (let [r (or (await (shut-held! c))
               (await (escort/close-up! c (fn [c _] (ctx/end c :done nil)))))]

@@ -1,5 +1,6 @@
 (ns jobs.animals.breed
   (:require [jobs.lib.work-place :as work-place]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
@@ -178,6 +179,7 @@
   "However the run ended: the hand put back as note-hand! found it, then the body walked out of the known pen to where
   the run started; done with {:hand outcome} once the hand was noted, else with no data."
   [c _]
+  (reserve/release! c)
   (mark-bred! c)
   (when (and (:hand-noted (ctx/mem c)) (not (:hand-outcome (ctx/mem c))))
     (let [outcome (await (restore-hand! c (:hand-before (ctx/mem c))))]
@@ -481,5 +483,5 @@
 (defn ^:async round
   "The whole attempt: steps (a pace between; can-run? is asked between them) until the job ends."
   [c]
-  (animals/reserve-bait! c (:mob (:args c)))
+  (animals/reserve-bait! c (:mob (:args c)) (- (wanted c) (count (:fed (ctx/mem c)))))
   (next-call/on-ending c (await (pace/steps! c #(step c))) 'jobs.animals.breed args))

@@ -32,14 +32,17 @@
 (def food-carried bait/food-carried)
 
 (defn reserve-bait!
-  "Reserve the foods of mob as bait in the register (strength 0.8, 5 minutes, ended with this job): an unnamed meal leaves them alone until near starving. Call it each round."
-  [c mob]
+  "Reserve n of each food of mob as bait in the register (strength 0.8, 5 minutes, released by the job's cleanup): an
+  unnamed meal or craft leaves them alone until near starving; the rest carried stays free. n is what the job still
+  feeds or holds out (a lure keeps its one in hand); none reserves nothing. Call it each round."
+  [c mob n]
   (let [until (+ (:now (ctx/view c)) bait-ms)]
     (ctx/forget-where! c reserve/kind #(= (:id c) (:by %)))
-    (doseq [food (get breeding-food mob)]
-      (ctx/remember! c reserve/kind {:id (str (:id c) "-bait-" food) :item food :count :all :strength 0.8 :by (:id c)
-                                     :why "bait for the animal job" :until until}
-                     reserve/policy))))
+    (when (pos? n)
+      (doseq [food (get breeding-food mob)]
+        (ctx/remember! c reserve/kind {:id (str (:id c) "-bait-" food) :item food :count n :strength 0.8 :by (:id c)
+                                       :why "bait for the animal job" :until until}
+                       reserve/policy)))))
 
 (defn herd
   "The JS entities named mob within radius of the body, nearest first, as a vector."
