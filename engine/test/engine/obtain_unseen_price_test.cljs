@@ -12,6 +12,7 @@
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.gather :as gather]
             [jobs.items.obtain.need :as need]
+            [jobs.items.obtain.chain :as chain]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.price :as price]
             [jobs.items.obtain.seen :as seen]
@@ -278,9 +279,9 @@
         smelts {:steps [{:op :smelt :count 3}]}
         price (cost/smelt-price :version v)]
     (is (> price (cost/smelt-step)) "the worth table's fuel share is in it")
-    (is (= (* 3 price) (plan/steps-s c smelts)))
+    (is (= (* 3 price) (chain/steps-s c smelts)))
     (is (= (* 3 price) (plan/plan-cost c v (assoc smelts :gather {}))))
-    (is (= (* 3 price) (plan/smelt-s c 3)))))
+    (is (= (* 3 price) (chain/smelt-s c 3)))))
 
 (deftest a-seen-trees-check-that-looks-first-calls-the-gather-and-hangs-no-torch
   ;; a dark-hall refusal resting on an unseen edge carries the walk to look (ready/priced): the engine runs it before the start

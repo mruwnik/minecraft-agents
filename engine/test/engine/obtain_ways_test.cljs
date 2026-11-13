@@ -17,6 +17,7 @@
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.bill :as bill]
+            [jobs.items.obtain.chain :as chain]
             [jobs.items.obtain.plan :as plan]
             [jobs.lib.cost :as cost]
             [jobs.items.craft :as craft]
@@ -237,6 +238,6 @@
                 :args {:item "bread" :count 5 :ways #{:craft :gather}}
                 :view (constantly {:now 1000 :data (reduce #(mem/add-entry %1 reserve/kind {:t 0 :data %2} reserve/policy) mem/empty-data entries)})})
         bait {:id "j9-bait-wheat" :item "wheat" :count 3 :strength 0.8 :by "agent"}]
-    (is (some? (plan/craft-plan (body []) ["bread"] 5)) "15 free wheat make 5 bread")
-    (is (nil? (plan/craft-plan (body [bait]) ["bread"] 5)) "3 held as bait: the craft would end short, so no chain from what is carried")
+    (is (some? (chain/craft-plan (body []) ["bread"] 5)) "15 free wheat make 5 bread")
+    (is (nil? (chain/craft-plan (body [bait]) ["bread"] 5)) "3 held as bait: the craft would end short, so no chain from what is carried")
     (is (= {"wheat" 3} (:gather (plan/gather-plan (body [bait]) ["bread"] 5))) "the held units are got, so the chest fetch brings enough")))

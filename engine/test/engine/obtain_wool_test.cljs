@@ -155,6 +155,20 @@
           (is (<= 2 (wool-count s)) "wool carried")
           (is (re-find #"shear" (pr-str (wool-source s))) "the text says it sheared"))))))
 
+(deftest wool-is-sheared-with-shears-smelted-from-carried-raw-iron-when-only-the-kept-pair-lives
+  ;; Tamsin j114: 2 raw iron carried and the 2 sheep the hunt keeps: the hunt spared both and the bed had no source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (into h/sword (carried "raw_iron" 2 "coal" 1 "furnace" 1))
+              s (await (scenario {:item "white_wool" :count 2}
+                                 {:inventory inv :recipes shears-recipe :entities [(sheep 1 3 "white") (sheep 2 6 "white")]} 20))
+              _ (.advance (.-world (:p s)) 2000)
+              _ (await (tu/run-ticks (:eng s) (:clock s) 60 700))]
+          (is (empty? (attacked s)) "no sheep was killed")
+          (is (= :make (:how (wool-source s))))
+          (is (<= 2 (wool-count s)) "wool carried"))))))
+
 (deftest wool-is-hunted-when-shears-are-neither-carried-nor-craftable-and-says-so
   (async done
     (tu/run-async done

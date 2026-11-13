@@ -2,9 +2,10 @@
   "A gather need against the body: the blocks and sheep seen for it, and the need made ready to run."
   (:require [cljs.spec.alpha :as s]
             [engine.ctx :as ctx]
-            [jobs.items.obtain.base :refer [search-worth seen-radius]]
+            [jobs.items.obtain.base :refer [makes? search-worth seen-radius]]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
+            [jobs.items.obtain.chain :as chain]
             [jobs.items.obtain.chest :as chest]
             [jobs.items.obtain.table :refer [grass-seeds]]
             [jobs.lib.animals :as animals]
@@ -52,15 +53,21 @@
 (defn shears-source
   "How the body gets shears for wool: :carried, :craft (2 iron ingots carried), :chest (shears or 2 iron ingots in a
   booked chest the chest source would walk to: allowed, not given up, and no dearer to walk to there and back than the
-  walk to the nearest sheep, which the hunt that needs no shears costs too), else nil."
+  walk to the nearest sheep, which the hunt that needs no shears costs too), :make (a chain of the call's allowed steps
+  makes them from what is carried, 2 raw iron smelted, gathering nothing, its steps no dearer than that walk or no
+  sheep in sight a hunt would take: it keeps the last spare/wool-keep of a colour), else nil."
   [c]
-  (let [near-sheep (first (sheep-in-range c))
+  (let [sheep (sheep-in-range c)
+        near-sheep (first sheep)
+        hunt-takes? (some #(pos? (spare/takeable-adults spare/wool-keep %)) (vals (frequencies (map #(.-color %) sheep))))
         me (u/self-pos c)
         bound (if near-sheep (approach-bound c near-sheep) ##Inf)
         reachable? #(<= (* 2 (pick/walk-s me {:pos (:pos %) :range 0})) bound)
-        in-chest (fn [item n] (some #(and (>= (get (:stock %) item 0) n) (reachable? %)) (chest/candidates c [item])))]
+        in-chest (fn [item n] (some #(and (>= (get (:stock %) item 0) n) (reachable? %)) (chest/candidates c [item])))
+        made (when (makes? c) (chain/craft-plan c ["shears"] 1))]
     (or (spare/shears-at-hand (u/inventory (:primitives c)))
-        (when (or (in-chest "shears" 1) (in-chest "iron_ingot" 2)) :chest))))
+        (when (or (in-chest "shears" 1) (in-chest "iron_ingot" 2)) :chest)
+        (when (and made (empty? (:gather made)) (or (not hunt-takes?) (<= (chain/steps-s c made) bound))) :make))))
 
 (defn gather-carried [p {:keys [key]}]
   (reduce + 0 (for [[k v] (storage/carried-totals (u/inventory p)) :when (if (= "log" key) (trees/log-name? k) (= key k))] v)))
@@ -150,12 +157,12 @@
     :else (first (seen-blocks-of c need false))))
 
 (defn with-block*
-  "The need with the nearest seen water as the :pos a bucket is filled at, :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, craftable from 2 iron ingots or in a booked chest, else hunts."
+  "The need with the nearest seen water as the :pos a bucket is filled at, :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears-source has a way to shears or a shear child is under way (its iron may be in the furnace), else hunts."
   [c need]
   (cond
     (:chest need) need
 
-    (and (:sheep need) (shears-source c))
+    (and (:sheep need) (or (get-in (ctx/mem c) [:gather :shear]) (shears-source c)))
     (assoc need :job 'jobs.animals.shear :args {:color (:sheep need) :radius (seen-radius)})
 
     (and (= "obsidian" (:key need))

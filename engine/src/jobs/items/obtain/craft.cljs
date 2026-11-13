@@ -4,7 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.items.craft :as craft]
             [jobs.items.obtain.base :refer [carried-of child-ways seen-radius tried!]]
-            [jobs.items.obtain.plan :refer [craft-plan]]
+            [jobs.items.obtain.chain :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]

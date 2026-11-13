@@ -397,6 +397,8 @@
             (keep-crafting-items! c (:uses pl))
             (when (tree? need)
               (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
+            (when (= 'jobs.animals.shear (:job need))
+              (ctx/update-mem! c assoc-in [:gather :shear] true))
             (let [at (:pos (seen-of c need))]
               (when at (ctx/update-mem! c assoc-in [:gather :at] [(:x at) (:z at)]))
               (ctx/emit! c :obtain.gathering :info
@@ -410,6 +412,7 @@
                                        :carried "wool by shearing: shears carried"
                                        :craft "wool by shearing: shears will be crafted from 2 iron ingots"
                                        :chest "wool by shearing: shears or iron fetched from a chest"
+                                       :make "wool by shearing: shears will be made from what is carried"
                                        "wool by killing sheep: no shears and no iron for shears (the last 2 adults of a colour live)")
                             :how (or how :kill)})))
             (when-let [{:keys [wanted taking]} (:wool-fallback pl)]
@@ -422,7 +425,7 @@
               (let [res (merge (when (map? (:cause e)) (:cause e)) (:data e))
                     before (get-in (ctx/mem c) [:gather :before])
                     at (get-in (ctx/mem c) [:gather :at])]
-                (ctx/update-mem! c update :gather dissoc :before :item :tree :at)
+                (ctx/update-mem! c update :gather dissoc :before :item :tree :at :shear)
                 (ctx/update-mem! c update :given-up u/add-given-up (:given-up res))
                 (release-crafting-items! c)
                 (if (> (gather-carried p need) before)

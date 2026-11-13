@@ -3,10 +3,10 @@
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.notes :as notes]
-            [jobs.items.craft :as craft]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.crops :as crops]
             [jobs.items.obtain.base :refer [explore-opts gathers? job-time-left makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
+            [jobs.items.obtain.chain :refer [craft-plan furnace-free smelt-s spendable steps-s]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.seen :refer [growable? ripe-crop seen-of sheep-in-range shears-source standing-crops]]
@@ -19,7 +19,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
-            [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.stair-cells :as geo]
@@ -31,34 +30,6 @@
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [jobs.lib.walk-risk :as walk-risk]))
-
-(defn furnace-free
-  "Of plans in order of preference, the first with no smelt step (a furnace needs fuel and time), else the first."
-  [plans]
-  (or (first (remove (fn [pl] (some #(= :smelt (:op %)) (:steps pl))) plans)) (first plans)))
-
-(defn spendable
-  "{name total} the craft children may use: the carried items the reserve register leaves free (reserve/free) to
-  jobs.items.craft's chooser, worn-out tools left out. A spare tool's craft, which may take held units once nothing
-  else can be got, asks as :craft."
-  [c]
-  (storage/usable-totals (reserve/free c (if (= :torches (craft/slot-of c)) :craft-held :craft))))
-
-(defn craft-plan
-  "{:item name :steps [..]} for the first of names a craft chain of allowed steps (a smelt step needs the :smelt way,
-  any other :craft) makes n more of from what is carried (spendable), else nil."
-  [c names n]
-  (let [p (:primitives c)
-        have (spendable c)
-        mem (ctx/mem c)
-        table? (and (not (get-in mem [:craft :table-unreachable]))
-                    (crafting-table/at-hand? p mem))
-        version (game/version-of p)]
-    (furnace-free
-     (keep (fn [name]
-             (when-let [pl (recipes/plan version have name n (assoc (source-opts) :table? table?))]
-               (when (plan-allowed? c pl) (assoc pl :item name))))
-           names))))
 
 (defn pick-plan
   "Of the gather plans (one per wanted name) the one that gathers the least wool, so the colour the body carries
@@ -124,17 +95,6 @@
     (->> [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]]
          (filter open?)
          (every? #(torch/perceived-dark? p %)))))
-
-(defn smelt-s
-  "Seconds n smelted items take, fuel included (the plan holds no fuel fetch: the smelt child gets its own)."
-  [c n]
-  (* n (cost/smelt-price :version (game/version-of (:primitives c)))))
-
-(defn steps-s
-  "Seconds the craft and smelt steps of a plan take."
-  [c pl]
-  (let [{smelts true crafts false} (group-by #(= :smelt (:op %)) (:steps pl))]
-    (+ (* (cost/craft-step-s) (count crafts)) (smelt-s c (reduce + 0 (map :count smelts))))))
 
 (defn walk-s
   "The straight walk to `at` and back, and its risk there and back (jobs.lib.walk-risk/estimate on the straight way,
