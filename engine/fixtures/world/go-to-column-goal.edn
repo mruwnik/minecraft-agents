@@ -3,7 +3,7 @@
 ;; goal column is more than 8 above/below the feet (perception is 16 blocks, so the far column is unseen from the start).
 ;; Should-succeed: column goal, :unknown far plateau/valley column, y 3 off, far plateau column, valley column, y goal inside the far plateau, :unknown goal inside a mound,
 ;; :unknown block goal with :range 1 (stands beside it), a column in a roofed hut, a 4-high hall or under a chest hung under the roof (its floor),
-;; a wall under an eave (the ground beside it), a deck over a ditch (the deck). Should-fail: a column behind a bottomless gap ends :arrived false, bounded.
+;; a wall under an eave (the ground beside it), a deck over a ditch (the deck), from a ledge over the column (down to its ground), a doorless hut (dug in to its floor). Should-fail: a column behind a bottomless gap ends :arrived false, bounded.
 {:defaults
  {:tags [:movement :go-to :column]
   :time :any
@@ -134,4 +134,19 @@
             [:fill [31 0 10] [33 2 22] "air"] [:fill [31 2 14] [33 2 18] "oak_planks"]]
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [32 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true :why :column}} :within-s 120 :of-job true}]
-   :after [[:body-near [32.5 3 16.5] 1.5] [:block [32 2 16] "oak_planks"]]}]}
+   :after [[:body-near [32.5 3 16.5] 1.5] [:block [32 2 16] "oak_planks"]]}
+  {:name "column-goal-is-not-arrived-at-from-a-ledge-over-it"
+   ;; card aa864d25: the ledge top (feet 3) is within range 2 of the column across but above its only stand (feet 0): not there
+   :blocks [[:fill [0 0 0] [10 2 31] "stone"]]
+   :body {:at [10.5 3 16.5]}
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [12 16] :range 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true :why :column}} :within-s 60 :of-job true}]
+   :after [[:body-near [12.5 0 16.5] 2.5]]}
+  {:name "column-goal-in-a-doorless-hut-digs-in-to-its-floor"
+   ;; card 2574d3a3: no walk reaches the column's floor or roof; the dig route to the floor (one wall cell, its put-back) is cheaper than any way onto the roof
+   :blocks [[:fill [30 0 14] [34 0 18] "oak_planks"] [:fill [30 1 14] [34 3 18] "oak_planks"] [:fill [30 4 14] [34 4 18] "oak_planks"]
+            [:fill [31 1 15] [33 3 17] "air"]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [32 16] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true :why :column}} :within-s 150 :of-job true}]
+   :after [[:body-near [32.5 1 16.5] 1.5] [:block [32 4 16] "oak_planks"]]}]}

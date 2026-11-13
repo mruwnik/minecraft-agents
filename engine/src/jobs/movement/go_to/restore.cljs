@@ -11,6 +11,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.movement.go-to.holes :refer [note-placed! own-holes]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]))
@@ -56,14 +57,19 @@
       (reach-room/closes-in? p :fill cell) :needed
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
 
+(defn short?
+  "Whether the body's feet are out of the call's range of goal pos (a column goal's: wplan/in-goal?)."
+  [c pos]
+  (let [feet (zipmap [:x :y :z] (end/feet-cell c))
+        r (:range (:args c) 1)]
+    (if (wplan/column-goal? c pos) (not (wplan/in-goal? c feet pos r)) (> (u/dist feet pos) r))))
+
 (defn goal-cell?
   "Whether cell is the goal's feet or head cell while the body is still outside the call's range of it: the walk ends in it."
   [c pos cell]
   (let [goal (when (:y pos) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
-        [gx gy gz] goal
-        feet (end/feet-cell c)]
-    (boolean (and goal (#{[gx gy gz] [gx (inc gy) gz]} (vec cell))
-                  (> (u/dist (zipmap [:x :y :z] feet) pos) (:range (:args c) 1))))))
+        [gx gy gz] goal]
+    (boolean (and goal (#{[gx gy gz] [gx (inc gy) gz]} (vec cell)) (short? c pos)))))
 
 (defn ahead-cell?
   "Whether cell is held for the walk: the goal's feet or head cell, or a cell of the last dug route (memory :route-ahead,
@@ -76,14 +82,12 @@
         near (when (seq route) (apply min-key #(at (route %)) (range (count route))))
         i (.indexOf route (vec cell))]
     (boolean (or (goal-cell? c pos cell)
-                 (and (:y pos) (> (u/dist (zipmap [:x :y :z] feet) pos) (:range (:args c) 1))
-                      near (>= i near))))))
+                 (and (:y pos) (short? c pos) near (>= i near))))))
 
 (defn shut-in-short?
   "Whether the body is out of the call's range of a cell goal pos and shut in where it stands (escape/walk-enclosed?)."
   [c pos]
-  (boolean (and (:y pos) (> (u/dist (zipmap [:x :y :z] (end/feet-cell c)) pos) (:range (:args c) 1))
-                (escape/walk-enclosed? c))))
+  (boolean (and (:y pos) (short? c pos) (escape/walk-enclosed? c))))
 
 (defn ^:async restore-round!
   "Put back the next hole this job's escalations dug (own-holes, each in another's zone, claim or plan: undoing the

@@ -59,6 +59,16 @@
             (is (= {:arrived true} @out) wall)
             (is (= [:dig-route] (mapv :step (events-of seen :go-to.escalated))) wall)))))))
 
+(deftest go-to-a-column-in-a-doorless-hut-digs-in-to-its-floor-not-to-its-roof
+  ;; the column's stands are the floor (64) and the roof (67): one plank cut reaches the floor, the roof no dig route
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 8 :y 64 :z 0}} :blocks (built-wall "oak_planks")} {:pos [0 0] :range 0}))]
+          (is (= {:arrived true :resolved {:x 0 :y 64 :z 0} :why :column} @out) (pr-str @out))
+          (is (= [0 64 0] (feet p)))
+          (is (= [:dig-route] (mapv :step (events-of seen :go-to.escalated)))))))))
+
 (deftest escape-choose-never-digs-built-blocks-in-a-claimed-zone
   (doseq [wall ["oak_planks" "bricks" "glass" "white_wool" "cobblestone" "stone_bricks"]]
     (is (= {:step :none :why :no-dig} (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)})

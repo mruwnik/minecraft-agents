@@ -83,7 +83,7 @@
     doors are walls.")
 
 (a/defargs args
-  {:pos {:doc "target position [x y z] or {:x :y :z}; [x z] or {:x :z}: any stand of that column (within :range of it across), the cheapest to reach" :spec column/pos-or-column? :default nil}
+  {:pos {:doc "target position [x y z] or {:x :y :z}; [x z] or {:x :z}: any seen stand of that column, or the ground up to :y-slack under one (a wall's foot), within :range, the cheapest to reach" :spec column/pos-or-column? :default nil}
    :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
    :range {:doc "how close counts as there: arrive within this many cells of :pos (a sphere)" :spec (a/num-in 0 nil) :default 1}
    :see {:doc "true: a cell within :range counts as there only when the eye there sees the block at :pos (jobs.lib.aim: a clear line over seen cells to its centre or a face), as a body that digs, places or uses it needs; a [x z] column goal ignores it" :spec boolean? :default false}
@@ -113,7 +113,7 @@
      (await
       (cond
         (:restore-now m) (await (restore/restore-round! c pos))
-        (:escalation m) (await (esc/escalation-round! c pos))
+        (:escalation m) (await (esc/escalation-round! c (or (:escalation-pos m) pos)))
         (:seal-clearing m) (await (walk/clear-seals! c))
         (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                               (await (esc/escalate! c pos nil)))

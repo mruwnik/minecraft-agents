@@ -32,6 +32,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.sight :as wsight]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.threats :as threats]
             [jobs.lib.toll-cells :as tc]
@@ -1029,6 +1030,29 @@
    :guess-risk (guess-risk c) :worth-s (let [m (ctx/mem c)] (if-let [rs (:route-search m)] (:worth-s rs) (when (:escalation m) (:fallback-s (:replan-budget m))))) :bound-s (call-budget-s c)
    :max-damage (:max-damage (wworld/walk-settings c)) :tolls (walk-tolls c)
    :risk-s (fn [cells goal work-s] (walk-risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
+
+(defn column-target
+  "The cell go-to call c's escalation makes a way to for pos: for a column goal (:column-goal) of more than one stand,
+  the stand ({:x :y :z}) the cheapest dig route from feet ends in :range of (route-answer's :seconds over way-opts: a
+  built cell costs its put-back), :searching while one of their searches goes on in slice; else, or when no stand has
+  a route, pos (the aimed stand: a stair or pillar is chosen to it as before)."
+  [c feet pos slice]
+  (let [{:keys [x z stands]} (:column-goal c)]
+    (if (or (not (wplan/column-goal? c pos)) (< (count stands) 2) (contains? (skips c) :dig-route))
+      pos
+      (let [p (:primitives c)
+            may-dig? (may-dig-fn c)
+            base (way-opts c feet (fetch-tool? c) slice)
+            priced (mapv (fn [y]
+                           (let [cell {:x x :y y :z z}
+                                 o (merge base (range-opts c cell))
+                                 a (route-answer p feet [x y z] may-dig? (:own? o) false (:fetch? o) (search-opts o))]
+                             [cell (cond (= :searching a) :searching (:dig a) (:seconds a))]))
+                         stands)
+            routes (filter (comp number? second) priced)]
+        (cond (some #(= :searching (second %)) priced) :searching
+              (seq routes) (first (apply min-key second routes))
+              :else pos)))))
 
 (defn detour-way
   "A buried body's way to a goal its only found way reaches by a long detour (walk.cljs :detour): the cheapest cells

@@ -50,7 +50,7 @@
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.cut :refer [walk-tolls]]
             [jobs.movement.go-to.route-ways :as route-ways]
-            [jobs.movement.go-to.escalate-choose :refer [way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? pickaxe-fetch route-tool gap-fill
+            [jobs.movement.go-to.escalate-choose :refer [column-target way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? pickaxe-fetch route-tool gap-fill
                                                          goal-way dig-leg dig-toward dig-way drop-fill out-of-sight? refused-drop? damage-refused? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
                                                          route-owner searched-cells-of route-slice route-epoch routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
@@ -311,11 +311,10 @@
     (when (and spot (some-> (block-at [x (inc top) z]) dig-route/open?) (not (contains? (:approached (ctx/mem c)) spot)))
       spot)))
 
-(defn ^:async choose-escalation!
-  "escalate!'s choice and start of the next way, or its give-up."
-  [c pos failed]
-  (let [c (with-own-pen c)
-        {:keys [tries status result]} (:give-up (ctx/mem c))
+(defn ^:async choose-way!
+  "choose-escalation!'s choice and start of the next way to pos, or its give-up, its searches in slice."
+  [c pos failed slice]
+  (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         feet (end/feet-cell c)
         counted (count-escalation (ctx/mem c) (if (:dive-climb (ctx/mem c))
                                                 (- (:y pos) (second feet))
@@ -323,7 +322,6 @@
         n (:fruitless counted)
         _ (when (worth-another? c feet n nil) (await (look-round! c feet)))
         goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
-        slice (route-slice (route-owner c))
         shut? (delay (escape/walk-enclosed? c))
         opts (merge (way-opts c feet (fetch-tool? (:primitives c) (:doors (:args c)) shut?) slice) (range-opts c pos))
         worth (ctx/worth c)
@@ -470,6 +468,23 @@
                                   (assoc :escalations (inc (:escalations % 0)) :escalation (assoc (dissoc e :weighed) :guesses (guesses e)) :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
+
+(defn ^:async choose-escalation!
+  "escalate!'s choice and start of the next way, or its give-up: to a column goal's stand the cheapest dig route
+  reaches (column-target, memory :escalation-pos, which the escalation's rounds work toward), else to pos."
+  [c pos failed]
+  (let [c (with-own-pen c)
+        feet (end/feet-cell c)
+        slice (route-slice (route-owner c))
+        to (column-target c feet pos slice)]
+    (if (= :searching to)
+      (do (keep-routes! slice)
+          (ctx/hold-still! c :searching)
+          (search-begun! c feet (mapv #(js/Math.floor (% pos)) [:x :y :z]) (way-opts c feet (fetch-tool? c) nil))
+          (ctx/update-mem! c #(-> % (dissoc :escalation) (assoc :escalate-now true :escalate-failed failed)))
+          :again)
+      (do (if (= to pos) (ctx/update-mem! c dissoc :escalation-pos) (ctx/update-mem! c assoc :escalation-pos to))
+          (await (choose-way! c to failed slice))))))
 
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (a give-up
