@@ -505,6 +505,23 @@
           (is (= :no-baby (:reason e)))
           (is (re-find #"no calf" (:why e))))))))
 
+(deftest a-body-walked-off-during-the-calf-wait-walks-back-to-count-the-calf
+  ;; Sorrel run 4: the wait yields, a farm job walked the body out of range, and the count saw "adults 0, babies 0".
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})]
+          (core/submit! (:eng s) (tu/order (list 'jobs.animals.breed {:mob "cow"})) {})
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 5}
+                   (fn ^:async phases []
+                     (loop [n 0] (when (and (< n 20) (< (count (interacts s)) 2)) (await (run-ticks s 1 700)) (recur (inc n))))
+                     (swap! (fake/state (:p s)) assoc-in [:self :pos] [30 64 0])
+                     (fake/add-entity! (:p s) (cow 3 4 {:baby true}))
+                     (await (run-ticks s 60 700)))))
+          (let [e (done-event s)]
+            (is (= :fed (:reason e)) "the calf is counted from where the pair was fed")
+            (is (= 1 (:babies e)))))))))
+
 (def known-pen {:min {:x 7 :y 64 :z -7} :max {:x 19 :y 64 :z 7}})
 
 (deftest breed-walks-to-a-known-pen-out-of-view-feeds-and-leaves-it-shut

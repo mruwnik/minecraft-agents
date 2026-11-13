@@ -63,7 +63,9 @@
 
   After a pair was fed with no baby in view, the run watches for the calf, a one-second pause (a jobs.time.noop child)
   at a time, until one shows or the setting calf-wait-s (the 30 s the animals stay in love) is over: the fed pair must
-  first walk together, and the calf shows a few seconds after they meet. :babies is what the body sees.
+  first walk together, and the calf shows a few seconds after they meet. :babies is what the body sees. The wait yields,
+  so another job may walk the body off: with no fed animal in view at the count, it walks back (once) to where it last
+  fed one and counts there.
 
   A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
   one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).
@@ -170,7 +172,7 @@
     (let [r (await (ctx/act c :unequip #js {}))]
       (if (= "full" (.-status r)) :full :emptied))))
 
-(declare leave-pen! mark-bred! cooling-adults)
+(declare leave-pen! mark-bred! cooling-adults pen-cell)
 
 (defn ^:async cleanup
   "However the run ended: the hand put back as note-hand! found it, then the body walked out of the known pen to where
@@ -263,14 +265,33 @@
                        :else [:done nil])]
     (contract/with-because (ctx/end c kind cause (result c reason)) ending)))
 
+(defn pair-in-view?
+  "Whether an animal the run fed is in view."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        fed (set (:fed (ctx/mem c)))]
+    (boolean (some #(contains? fed (animals/key-of %)) (animals/adults (:primitives c) mob radius)))))
+
+(defn back-to-pair?
+  "Whether the calf count must first walk back to where the last animal was fed: a pair was fed, no calf is in view
+  and neither is any fed animal (the wait yields, so another job may have walked the body off), once per run."
+  [c]
+  (let [m (ctx/mem c)]
+    (and (>= (count (:fed m)) 2) (:fed-from m) (not (:back-walked m))
+         (zero? (new-babies c)) (not (pair-in-view? c)))))
+
 (defn ^:async finish!
   "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), with ending (a failed
-  fetch's) as its :because. The hand is put back by cleanup. Resolves to :continue while a calf is awaited (one-second pause children, re-asked each round)."
+  fetch's) as its :because. The hand is put back by cleanup. Resolves to :continue while a calf is awaited (one-second
+  pause children, re-asked each round) or while the body walks back to the fed pair to count (back-to-pair?)."
   [c reason & [ending]]
-  (if-not (calf-pending? c)
-    (finish-now! c reason ending)
-    (do (await (child/pause! c 1 :calf-wait))
-        :continue)))
+  (cond
+    (calf-pending? c) (do (await (child/pause! c 1 :calf-wait)) :continue)
+    (back-to-pair? c) (if (= :continue (await (child/call-walk* c :back {:pos (:fed-from (ctx/mem c)) :range 1})))
+                        :continue
+                        (do (ctx/update-mem! c assoc :back-walked true)
+                            (await (finish! c reason ending))))
+    :else (finish-now! c reason ending)))
 
 (defn pen-box
   "The known pen's box ({:min :max}): :box, else the box of the plan part; nil when neither is known."
@@ -336,7 +357,7 @@
         (case status
           :used (cond
                   (fed? raw) (do (animals/note-love! c k)
-                                 (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0))))
+                                 (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0 :fed-from (pen-cell (u/self-pos c))))))
                   (baby? raw) (do (animals/give-up! c k :baby)
                                   (ctx/emit! c :breed.baby :warn {:uuid k :text "fed a baby the sensing missed; given up on"}))
                   (zero? (or (:consumed raw) 0)) (refused! c k)
