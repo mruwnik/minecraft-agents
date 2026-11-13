@@ -264,16 +264,23 @@
           (is (= :risky (:reason (waiting-of eng id))))
           (is (= 1 (count (st/calls p "place")))))))))
 
-(deftest a-queued-walk-with-an-acceptable-risk-goes-out-at-night-without-digging-in-again
+(deftest a-queued-walk-with-an-acceptable-risk-goes-out-at-night-only-with-the-night-trigger-muted
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/mute! eng :night nil)
           (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [15 64 0]})) {})
           (await (tu/run-until-empty eng 60))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the walk runs at night")
-          (is (<= (count (st/calls p "place")) 1) "no dig-in on the way"))))))
+          (is (<= (count (st/calls p "place")) 1) "no dig-in on the way"))
+        (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))
+              id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [15 64 0]})) {})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (await (ticks eng 20))
+          (is (= inside (st/pos-of p)) "armed, the trigger would cut the walk: it waits in the room")
+          (is (= [:risky :dawn] ((juxt :reason :wait) (waiting-of eng id)))))))))
 
 ;; ------------------------------------------------------------------ in-place jobs still run
 
@@ -323,13 +330,14 @@
           (await (ticks eng 20))
           (is (= inside (st/pos-of p)) "the body stays in the hut"))))))
 
-(deftest a-queued-craft-with-an-acceptable-walk-risk-goes-to-the-table-at-night
+(deftest a-queued-craft-with-an-acceptable-walk-risk-goes-to-the-table-at-night-with-the-night-trigger-muted
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
                                             (assoc :inventory [{:name "wheat" :count 3}])))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/mute! eng :night nil)
           (core/submit! eng (tu/order '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}})) {})
           (await (tu/run-until-empty eng 60))
           (is (> 4 (js/Math.abs (- 10 (:x (st/pos-of p))))) "it walks to the table"))))))

@@ -3,6 +3,8 @@
   night trigger's test. The rest lives in jobs.lib.shelter.*."
   (:require [engine.args :as a]
             [engine.memory :as mem]
+            [engine.core.base :as base]
+            [engine.core.register :as register]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
@@ -180,6 +182,13 @@
                  (or (and (not (and (buried-outside-hut? p) (:buried-works args))) (not (sh-inside/safe-from-night? p)))
                      (breached-home? p view)
                      (seq (open-doors p view))))))))
+
+(defn night-armed?
+  "Whether the body's :night trigger entry is in the firing order (register/effective-register: registered, not muted,
+  the order bin/triggers shows): out of a shelter at night it fires and takes the body back in. False with no engine in c."
+  [c]
+  (boolean (when-let [eng (some-> (:engine c) (#(when (:state %) %)))]
+             (some #(= :night (:id %)) (register/effective-register (base/state eng) (base/ttl-now eng))))))
 
 (defn leave-wanted?
   "Whether the dawn trigger holds (see triggers.survival.dawn): by day, shut in the body's own shelter (no
