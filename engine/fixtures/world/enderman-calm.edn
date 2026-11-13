@@ -20,8 +20,8 @@
   ;; Should-fail: the enderman's health under 40 (a swing provokes it).
   {:name "fight-leaves-a-calm-enderman-alone"
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 900 4]]}
-   :act [[:summon "enderman" [18.5 0 18.5] "{NoAI:1b}"]
-         [:summon "zombie" [21.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "enderman" [19.5 0 19.5] "{NoAI:1b}"]
+         [:summon "zombie" [21.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 60}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]

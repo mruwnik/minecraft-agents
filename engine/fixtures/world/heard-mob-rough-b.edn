@@ -18,7 +18,7 @@
    :after [[:entities "type=zombie,tag=wt" [[4 0 4] [28 4 28]] 1] [:body-far [22.5 0 16.5] 4]]}
   {:name "seen-zombie-in-the-light-is-fought"
    :blocks [[:fill [5 6 5] [27 6 27] "glowstone"]]
-   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near} :data {:outcome :done}} :within-s 45}]
    :after [[:entities "type=zombie,tag=wt" [[4 0 4] [28 4 28]] 0]]
