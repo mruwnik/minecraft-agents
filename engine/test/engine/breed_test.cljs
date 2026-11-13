@@ -528,6 +528,21 @@
             (is (= :fed (:reason e)) "the calf is counted from where the pair was fed")
             (is (= 1 (:babies e)))))))))
 
+(deftest a-calf-in-the-known-pen-beyond-the-radius-is-counted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})]
+          (core/submit! (:eng s) (tu/order (list 'jobs.animals.breed {:mob "cow" :radius 4 :box {:min {:x -1 :y 64 :z -2} :max {:x 12 :y 64 :z 2}}})) {})
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 5}
+                   (fn ^:async phases []
+                     (loop [n 0] (when (and (< n 20) (< (count (interacts s)) 2)) (await (run-ticks s 1 700)) (recur (inc n))))
+                     (fake/add-entity! (:p s) (cow 3 11 {:baby true}))
+                     (await (run-ticks s 30 700)))))
+          (let [e (done-event s)]
+            (is (= :fed (:reason e)) (pr-str (select-keys e [:reason :babies :adults])))
+            (is (= 1 (:babies e)))))))))
+
 (deftest a-failed-walk-back-to-the-pair-is-named-in-the-no-baby-ending
   (async done
     (tu/run-async done

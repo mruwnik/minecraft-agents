@@ -10,6 +10,7 @@
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
+            [jobs.lib.hunting :as hunting]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -64,7 +65,8 @@
 
   After a pair was fed with no baby in view, the run watches for the calf, a one-second pause (a jobs.time.noop child)
   at a time, until one shows or the setting calf-wait-s (the 30 s the animals stay in love) is over: the fed pair must
-  first walk together, and the calf shows a few seconds after they meet. :babies is what the body sees. The wait yields,
+  first walk together, and the calf shows a few seconds after they meet. :babies is what the body sees within :radius
+  or in the known pen. The wait yields,
   so another job may walk the body off: with no fed animal in view at the count, it walks back (once) to where it last
   fed one and counts there.
 
@@ -123,12 +125,22 @@
   [c]
   (* 2 (:pairs (:args c) 1)))
 
+(declare pen-box)
+
+(defn count-radius
+  "Radius of the herd counts (babies, the fed pair, the result): :radius, widened to cover the known pen from where the
+  body stands now, since a caller measures :radius from where it stood and the body moves."
+  [c]
+  (let [r (:radius (:args c))
+        box (pen-box c)]
+    (if box (max r (hunting/reach (assoc c :args {:box box}))) r)))
+
 (defn new-babies
   "How many babies of the mob are in view beyond those there at the first feeding; none before it."
   [c]
-  (let [{:keys [mob radius]} (:args c)
+  (let [{:keys [mob]} (:args c)
         before (:babies-before (ctx/mem c))]
-    (if before (max 0 (- (count (animals/babies (:primitives c) mob radius)) before)) 0)))
+    (if before (max 0 (- (count (animals/babies (:primitives c) mob (count-radius c))) before)) 0)))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 15 (wanted c)) ##Inf]}})
@@ -194,9 +206,8 @@
   "Remember what the hand holds and the babies in view, once per run, before the first feeding."
   [c]
   (when-not (:hand-noted (ctx/mem c))
-    (let [{:keys [mob radius]} (:args c)]
-      (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c))) :hand-noted true
-                       :babies-before (count (animals/babies (:primitives c) mob radius))))))
+    (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c))) :hand-noted true
+                     :babies-before (count (animals/babies (:primitives c) (:mob (:args c)) (count-radius c))))))
 
 (defn mark-bred!
   "Leave one entry of kind :bred/<mob> when the run fed at least two animals, for (since :bred/cow)."
@@ -242,7 +253,8 @@
   "The run's result so far: why it ended, who was fed, refused and given up on, what is in view and a text."
   [c reason]
   (let [m (ctx/mem c)
-        {:keys [mob radius]} (:args c)
+        mob (:mob (:args c))
+        radius (count-radius c)
         p (:primitives c)
         result {:reason reason
                 :fed (vec (:fed m))
@@ -271,9 +283,8 @@
 (defn pair-in-view?
   "Whether an animal the run fed is in view."
   [c]
-  (let [{:keys [mob radius]} (:args c)
-        fed (set (:fed (ctx/mem c)))]
-    (boolean (some #(contains? fed (animals/key-of %)) (animals/adults (:primitives c) mob radius)))))
+  (let [fed (set (:fed (ctx/mem c)))]
+    (boolean (some #(contains? fed (animals/key-of %)) (animals/adults (:primitives c) (:mob (:args c)) (count-radius c))))))
 
 (defn back-to-pair?
   "Whether the calf count must first walk back to where the last animal was fed: a pair was fed, no calf is in view
