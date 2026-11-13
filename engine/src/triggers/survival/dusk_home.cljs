@@ -14,5 +14,4 @@
   [p view _args]
   (boolean
    (and (not (body/recovery-pending? view :dusk-home)) (not (sh-sense/sleeping? p))
-        (sh/home-due-at? p view (u/self-pos {:primitives p}))
-        (not (or (sh-sense/buried? p) (sh-sense/shut-in-room? p))))))
+        (sh/home-wanted-at? p view (u/self-pos {:primitives p})))))

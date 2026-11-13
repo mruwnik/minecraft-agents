@@ -5,6 +5,7 @@
             [engine.job-api :as job-api]
             [engine.shelter-support :as st]
             [engine.memory :as mem]
+            [engine.scenario :as scenario]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [triggers.survival.dusk-home :as dh]))
@@ -146,3 +147,23 @@
   (is (true? (holds? 11000 [[:home 150 0]])))
   (settings/with-settings {:jobs.lib.shelter/home-due {:margin-s 0 :slack 0 :arrive 4}}
     #(is (false? (holds? 11000 [[:home 150 0]])))))
+
+(defn ^:async walk-out-at-dusk
+  "[x the body ends at, the walk's wait] of a go-to from x 0 to x 12 at dusk, the home at x 2, with the scenario's register."
+  [register]
+  (let [{:keys [eng p]} (st/setup {:time 12000 :floor [-30 -30 30 30]})]
+    (mem/write! (:store eng) :home {:pos {:x 2 :y 64 :z 0}} mem/place-policy)
+    (core/load-scenario! eng (scenario/parse register))
+    (let [id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [12 64 0]})) {})]
+      (await (st/tick-n eng 20))
+      [(:x (st/pos-of p)) (select-keys (core/waiting eng id) [:reason :wait])])))
+
+(deftest an-armed-dusk-home-holds-a-walk-that-ends-where-it-holds-until-nightfall
+  ;; the trigger would cut the walk 4 blocks from home and walk the body back: the work job and the trigger hand the body to and fro
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[x w] (await (walk-out-at-dusk "{:register [{:trigger :dusk-home}]}"))]
+          (is (< x 1) "armed, the body stays home")
+          (is (= {:reason :risky :wait :dusk} w)))
+        (is (> (first (await (walk-out-at-dusk "{:register []}"))) 10) "unarmed, the walk goes")))))

@@ -183,12 +183,12 @@
                      (breached-home? p view)
                      (seq (open-doors p view))))))))
 
-(defn night-armed?
-  "Whether the body's :night trigger entry is in the firing order (register/effective-register: registered, not muted,
-  the order bin/triggers shows): out of a shelter at night it fires and takes the body back in. False with no engine in c."
-  [c]
+(defn armed?
+  "Whether the body's trigger entry `id` is in the firing order (register/effective-register: registered, not muted,
+  the order bin/triggers shows): a walk to where it holds is cut by it. False with no engine in c."
+  [c id]
   (boolean (when-let [eng (some-> (:engine c) (#(when (:state %) %)))]
-             (some #(= :night (:id %)) (register/effective-register (base/state eng) (base/ttl-now eng))))))
+             (some #(= id (:id %)) (register/effective-register (base/state eng) (base/ttl-now eng))))))
 
 (defn leave-wanted?
   "Whether the dawn trigger holds (see triggers.survival.dawn): by day, shut in the body's own shelter (no
@@ -220,6 +220,14 @@
      (and home (pos? left-s)
           (let [d (u/dist pos home)]
             (and (< arrive d) (<= d sh-clock/home-limit) (<= left-s (+ margin-s (home-walk-s view pos)))))))))
+
+(defn home-wanted-at?
+  "Whether the dusk-home trigger holds for a body standing at pos: due home there (home-due-at?) and not sheltered there
+  (under ground, or shut in a closed room)."
+  [p view pos]
+  (let [cell (update-vals pos js/Math.floor)]
+    (and (home-due-at? p view pos)
+         (not (or (sh-sense/buried-at? p cell) (sh-sense/shut-in-room? p cell))))))
 
 (def in-ground? sh-beds/in-ground?)
 
