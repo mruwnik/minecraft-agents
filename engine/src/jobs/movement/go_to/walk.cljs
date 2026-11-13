@@ -35,6 +35,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.escape :as escape]
@@ -64,7 +65,8 @@
 
 (defn ^:async arrived!
   "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk.
-  A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, :why it (:surface, :nearest-level, :explicit), with :provisional true when that was a
+  A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, :why it (:column: a column's stand, the
+  walk took the cheapest within range of it across; :explicit), with :provisional true when that was a
   column's estimated y, :stand-in true when no ground of it was known. A y goal moved up or down its column
   (:why :explicit) adds :re-aimed true, :aimed-at the cell reached and a :text saying so, with whether the goal cell was never seen."
   [c]
@@ -78,8 +80,8 @@
                      moved? (assoc :re-aimed true :aimed-at (u/cell-vec aimed)
                                    :text (str "arrived at " (cell-str aimed) ", the ground of the column of " (cell-str asked) "; the goal cell "
                                               (if (sense/unknown? (:primitives c) (u/cell-vec asked)) "was never seen" "had nothing to stand on in range")))
-                     aimed (assoc :resolved aimed)
-                     (and aimed aimed-why) (assoc :why aimed-why)
+                     aimed (assoc :resolved (if (:column-goal c) (reach/standing-cell (:primitives c)) aimed))
+                     (and aimed aimed-why) (assoc :why (if (:column-goal c) :column aimed-why))
                      (= :guess column-open) (assoc :provisional true)
                      (= :stand-in column-open) (assoc :stand-in true)
                      (:in-water (ctx/mem c)) (assoc :in-water true)))))

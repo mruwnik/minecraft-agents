@@ -133,7 +133,7 @@
                 (->> [[1 0] [-1 0] [0 1] [0 -1]]
                      (map (fn [[dx dz]] {:x (+ x dx) :y y :z (+ z dz)}))
                      (remove (fn [cell] (some #(pass/in-column? % cell) cols)))
-                     (filter #(u/within? % goal range))
+                     (filter #(wplan/in-goal? c % goal range))
                      (sort-by #(u/dist % goal))))]
     (loop [[cell & more] cells]
       (when cell
@@ -245,7 +245,7 @@
                  (= :searching (:status result)) "searching"
                  (= :stair-cheaper (:status result)) "stair"
                  (and (:frontier result) (> (u/dist from to) 1)) "partial"
-                 :else (move-status (and (u/within? to pos range) (or (nil? see-cell) (aim/body-sees? c see-cell))) (u/dist from pos) (u/dist to pos)))]
+                 :else (move-status (and (wplan/in-goal? c to pos range) (or (nil? see-cell) (aim/body-sees? c see-cell))) (u/dist from pos) (u/dist to pos)))]
     (when-not (or (#{"searching" "stair"} status) (= :jumped (:status result)))
       (ctx/remember! c :moved (cond-> {:from from :to to :status status :target pos}
                                 (= :no-path (:status result)) (assoc :no-path true))

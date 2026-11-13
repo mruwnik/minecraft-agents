@@ -47,7 +47,7 @@
         (let [hill (merge flat (box 8 64 -3 12 64 3 "stone"))]
           (doseq [pos [[10 0] {:x 10 :z 0}]]
             (let [{:keys [out p]} (await (go! {:blocks hill} {:pos pos :range 0}))]
-              (is (= {:arrived true :resolved {:x 10 :y 65 :z 0} :why :surface} @out) (str (pr-str pos) " " (pr-str @out)))
+              (is (= {:arrived true :resolved {:x 10 :y 65 :z 0} :why :column} @out) (str (pr-str pos) " " (pr-str @out)))
               (is (= [10 65 0] (mapv #(js/Math.floor %) (at p))) (pr-str pos)))))))))
 
 (deftest range-three-arrives-within-three
@@ -112,7 +112,7 @@
       (fn ^:async t []
         ;; perception (radius 16): the column at x 30 is out of sight from the start
         (let [{:keys [out p]} (await (go! {:blocks flat :light [15 0]} {:pos [30 0] :range 0}))]
-          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :why :surface} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :why :column} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p)))))))))
 
 (deftest an-unseen-column-under-unknown-is-walked-toward-and-resolved-once-seen
@@ -123,7 +123,7 @@
         ;; the body's feet y (64, inside the mound) and is aimed again once the body sees it
         (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks mound :light [15 0]} {:pos [30 0] :range 0 :unknown true}))]
-          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0} :why :surface} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0} :why :column} @out) (pr-str @out))
           (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:to {:x 30 :y 64 :z 0} :provisional true} {:to {:x 30 :y 65 :z 0}}]
                  (mapv #(select-keys % [:to :provisional]) ((juxt first last) (events-of s :goal-resolved))))
@@ -185,10 +185,8 @@
         p (hiding tree (constantly false))]
     (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true)))))
 
-(deftest a-roof-over-a-column-is-not-its-surface-but-a-built-floor-is
-  (doseq [[why blocks y] [["a roof over the ground" (merge (box 10 66 0 10 66 0 "oak_planks") (box 10 67 0 10 67 0 "oak_slab")) 64]
-                          ["a plank floor under a roof" (merge (box 8 64 -1 12 64 1 "oak_planks") (box 8 68 -1 12 68 1 "oak_planks")) 65]
-                          ["a plank path" (box 8 64 0 12 64 0 "oak_planks") 65]
+(deftest a-built-floor-or-deck-is-a-stand-of-its-column
+  (doseq [[why blocks y] [["a plank path" (box 8 64 0 12 64 0 "oak_planks") 65]
                           ["farmland" (box 8 64 -1 12 64 1 "farmland") 65]
                           ["a stone-brick terrace" (box 6 64 -2 14 65 2 "stone_bricks") 66]
                           ["a dock over water" (merge (box 8 60 -1 12 60 1 "stone") (box 8 61 -1 12 63 1 "water") (box 8 64 -1 12 64 1 "oak_planks")) 65]
@@ -196,11 +194,43 @@
     (is (= {:pos {:x 10 :y y :z 0} :resolved true :why :surface} (column/aim (hiding (merge flat blocks) (constantly false)) {:x 10 :z 0} 4 64 true))
         why)))
 
-(deftest a-wall-under-an-eave-aims-at-the-ground-beside-it-not-its-top
-  (let [court (merge flat (box 10 64 0 10 64 0 "mossy_cobblestone") (box 10 65 0 10 65 0 "cobblestone_wall")
-                     (box 10 66 0 10 66 0 "lantern") (box 9 67 -1 11 67 1 "oak_slab"))]
-    (is (= {:pos {:x 10 :y 64 :z 0}} (column/aim (hiding court (constantly false)) {:x 10 :z 0} 4 80 true))
-        "the run-4 court wall: the eave and the wall top are no stand; the ground of the columns beside it, not the feet y")))
+(defn hut
+  "Cobblestone walls x 8..12 z -2..2 on the floor, rooms y 64..(63 + high), a plank roof over them, a doorway at x 8 z 0."
+  [high]
+  (merge flat (box 8 64 -2 12 (+ 64 high) 2 "cobblestone") (box 8 (+ 64 high) -2 12 (+ 64 high) 2 "oak_planks")
+         (box 9 64 -1 11 (+ 63 high) 1 "air") (box 8 64 0 8 65 0 "air")))
+
+(deftest a-column-goal-walks-to-its-cheapest-stand-not-its-highest
+  ;; every stand of the column is a goal: a roof or a cell under a deck that the walk cannot reach (or reaches the long
+  ;; way) loses to the floor through the door or the deck itself, whatever the room's height or what hangs under the roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[why blocks to] [["a roof over the ground" (merge flat (box 10 66 0 10 66 0 "oak_planks") (box 10 67 0 10 67 0 "oak_slab")) [10 64 0]]
+                                 ["a plank floor under a roof" (merge flat (box 8 64 -1 12 64 1 "oak_planks") (box 8 68 -1 12 68 1 "oak_planks")) [10 65 0]]
+                                 ["a hut 3 high" (hut 3) [10 64 0]]
+                                 ["a hall 4 high" (hut 4) [10 64 0]]
+                                 ["a chest under the roof" (merge (hut 3) (box 10 66 0 10 66 0 "chest")) [10 64 0]]
+                                 ["a deck over a 2-deep ditch" (merge (apply dissoc flat (for [x [9 10 11] z (range -3 4)] (str x ",63," z)))
+                                                                      (box 9 61 -3 11 61 3 "stone") (box 9 64 -1 11 64 1 "oak_planks"))
+                                  [10 65 0]]]]
+          (let [{:keys [out p] :as s} (await (go! {:blocks blocks} {:pos [10 0] :range 0}))]
+            (is (= {:arrived true :resolved (zipmap [:x :y :z] to) :why :column} @out) (str why " " (pr-str @out)))
+            (is (= to (mapv #(js/Math.floor %) (at p))) why)
+            (is (empty? (events-of s :go-to.escalated)) (str why ": no way made"))))))))
+
+(deftest a-column-goal-on-a-wall-under-an-eave-arrives-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [court (merge flat (box 10 64 -3 10 64 3 "mossy_cobblestone") (box 10 65 -3 10 65 3 "cobblestone_wall")
+                           (box 10 66 0 10 66 0 "lantern") (box 9 67 -3 11 67 3 "oak_slab"))
+              {:keys [out p] :as s} (await (go! {:blocks court} {:pos [10 0] :range 2}))
+              [x y z] (mapv #(js/Math.floor %) (at p))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= 64 y) "the run-4 court wall: on the ground beside it, not its eave")
+          (is (<= (js/Math.hypot (- x 10) z) 2) (pr-str (at p)))
+          (is (empty? (events-of s :go-to.escalated)) "no way made"))))))
 
 (deftest a-tree-column-with-its-ground-unseen-is-not-aimed-at-a-seen-tunnel-far-below
   (let [world (merge flat (box 0 10 -3 40 62 3 "stone") (box 10 16 0 10 17 0 "air")
@@ -226,7 +256,7 @@
         ;; seen); once seen, its ground under it (64) is said again, no longer a guess
         (let [floating (merge flat (box 30 70 0 30 70 0 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks floating :light [15 0]} {:pos [30 0] :range 0 :unknown false}))]
-          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :why :surface} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :why :column} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:to {:x 30 :y 64 :z 0} :provisional true} {:to {:x 30 :y 64 :z 0}}]
                  (mapv #(select-keys % [:to :provisional]) (events-of s :goal-resolved)))
@@ -465,7 +495,7 @@
         (doseq [[label y0 dir to] [["hill" 64 1 84] ["valley" 84 -1 64]]]
           (let [{:keys [out p]} (await (go! {:blocks (slope y0 dir) :light [15 0] :ray-deg 3 :sight true :exact-eye true :bodyHitbox true :self {:pos {:x 0 :y y0 :z 0}}}
                                             {:pos [60 0] :range 0 :unknown true}))]
-            (is (= {:arrived true :resolved {:x 60 :y to :z 0} :why :surface} @out) (str label " " (pr-str @out)))
+            (is (= {:arrived true :resolved {:x 60 :y to :z 0} :why :column} @out) (str label " " (pr-str @out)))
             (is (= [60 to 0] (mapv #(js/Math.floor %) (at p))) (str label " at " (at p)))))))))
 
 (deftest a-waypoint-is-the-seen-ground-on-the-line-nearest-the-column

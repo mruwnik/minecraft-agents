@@ -82,7 +82,7 @@
     doors are walls.")
 
 (a/defargs args
-  {:pos {:doc "target position [x y z] or {:x :y :z}; [x z] or {:x :z}: the surface of that column (highest seen stand open to the sky; a column seen only under cover: the stand nearest the feet)" :spec column/pos-or-column? :default nil}
+  {:pos {:doc "target position [x y z] or {:x :y :z}; [x z] or {:x :z}: any stand of that column (within :range of it across), the cheapest to reach" :spec column/pos-or-column? :default nil}
    :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
    :range {:doc "how close counts as there: arrive within this many cells of :pos (a sphere)" :spec (a/num-in 0 nil) :default 1}
    :see {:doc "true: a cell within :range counts as there only when the eye there sees the block at :pos (jobs.lib.aim: a clear line over seen cells to its centre or a face), as a body that digs, places or uses it needs; a [x z] column goal ignores it" :spec boolean? :default false}
@@ -230,7 +230,7 @@
   "pace/steps! over step!, goal aimed again each step (goal-pos), so a column seen on the way resolves; the approach
   record and :open go when the attempt ends (a cut keeps them)."
   [c goal]
-  (let [r (await (pace/steps! c (fn [] (step! c (goal-pos c goal)))))]
+  (let [r (await (pace/steps! c (fn [] (let [pos (goal-pos c goal)] (step! (aim/with-column c pos) pos)))))]
     (when (ctx/alive? c) (drop-record! c) (goal/clear! c) (ctx/update-mem! c dissoc :open :jump-at))
     r))
 
@@ -272,10 +272,11 @@
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))
-        c (cond-> (with-call c0) u (assoc :unknown (wworld/unknown-spec c0)))
-        refusal (args-refusal c)
-        goal (when-not refusal (:pos (aim/target c)))
-        pos (goal-pos c goal)]
+        c1 (cond-> (with-call c0) u (assoc :unknown (wworld/unknown-spec c0)))
+        refusal (args-refusal c1)
+        goal (when-not refusal (:pos (aim/target c1)))
+        pos (goal-pos c1 goal)
+        c (aim/with-column c1 pos)]
     (cond
       refusal (end/refuse! c refusal)
       (not (ways/way? c :walk)) (end/refuse! c {:reason :no-way :message "the call's :ways leave out :walk"})

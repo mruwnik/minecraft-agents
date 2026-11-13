@@ -149,3 +149,15 @@
       (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [{:data {:dim dim :floors [[2 68 0]]}}])]
         (is (= {:x 2 :y 69 :z 0} (surface/own-top c)) "a placed cobblestone step is ground, not a roof")
         (is (zero? (surface/climb-s c)) "own-top : a stair of its own ends under the open sky")))))
+
+(deftest a-stair-top-under-a-roof-is-no-surface
+  ;; the body's own step tops at feet 69; a roof over it, however high the room and whatever hangs under it, is cover
+  (doseq [[why over] [["a hut 3 high" (box 1 72 -1 3 72 1 "oak_planks")]
+                      ["a hall 4 high" (box 1 73 -1 3 73 1 "oak_planks")]
+                      ["a chest under the roof" (merge (box 1 72 -1 3 72 1 "oak_planks") (box 2 71 0 2 71 0 "chest"))]]]
+    (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                                        :blocks (merge (dissoc (box -3 63 -3 3 67 3 "stone") "0,64,0" "0,65,0")
+                                                                       (box 2 68 0 2 68 0 "cobblestone") over)})))
+          dim (.-dimension (.self p))]
+      (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [{:data {:dim dim :floors [[2 68 0]]}}])]
+        (is (nil? (surface/own-top {:primitives p})) why)))))

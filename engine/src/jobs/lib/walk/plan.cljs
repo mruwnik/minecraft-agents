@@ -59,15 +59,32 @@
         (recur)))
     (.result p)))
 
+(defn column-goal?
+  "Whether to ([x y z] or {:x :y :z}) lies in c's :column-goal [x z] (go-to's column goal resolved from seen cells): its
+  walks take any stand within range of that column across, at any y, so the cheapest stand of it is reached."
+  [c to]
+  (when-let [[cx cz] (:column-goal c)]
+    (if (map? to) (and (== cx (:x to)) (== cz (:z to))) (and (== cx (nth to 0)) (== cz (nth to 2))))))
+
+(defn in-goal?
+  "Whether the cell of a ({:x :y :z}) is within range of the goal pos ({:x :y :z}): across only for c's column goal
+  (column-goal?), else u/within?."
+  [c a pos range]
+  (if (column-goal? c pos)
+    (let [d (fn [k] (- (js/Math.floor (k a)) (js/Math.floor (k pos))))]
+      (<= (+ (* (d :x) (d :x)) (* (d :z) (d :z))) (* range range)))
+    (u/within? a pos range)))
+
 (defn plan-query
-  "The planner query from the body's cell (breath/start-y) to within range of the goal cell to."
+  "The planner query from the body's cell (breath/start-y) to within range of the goal cell to; for c's column goal
+  (column-goal?) to any stand within range of its column across."
   [c to range]
   (let [p (:primitives c)
         pos (.-pos (.self p))
         [gx gy gz] to]
     #js {:from #js {:x (js/Math.floor (.-x pos)) :y (breath/start-y p) :z (js/Math.floor (.-z pos))
                     :px (.-x pos) :py (.-y pos) :pz (.-z pos)}
-         :goal #js {:kind "near" :x gx :y gy :z gz :range range}}))
+         :goal #js {:kind (if (column-goal? c to) "column" "near") :x gx :y gy :z gz :range range}}))
 
 (defn plan-options
   "The planner options over pw with weight, limits, the search box (nil: the planner's default) and the body's work area

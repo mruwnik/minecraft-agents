@@ -28,9 +28,10 @@
       (when (and x y z) [x y z]))))
 
 (defn here?
-  "Whether the body is within range of pos, by its position or by the cell it stands on, and under :see sees pos's block."
+  "Whether the body is within range of pos (wplan/in-goal?: across for a column goal), by its position or by the cell it
+  stands on, and under :see sees pos's block."
   [c pos range]
-  (and (or (u/within? (u/self-pos c) pos range) (u/within? (reach/standing-cell (:primitives c)) pos range))
+  (and (or (wplan/in-goal? c (u/self-pos c) pos range) (wplan/in-goal? c (reach/standing-cell (:primitives c)) pos range))
        (if-let [cell (see-cell c)] (aim/body-sees? c cell) true)))
 
 (defn sight-end
@@ -252,6 +253,14 @@
         (ctx/update-mem! c assoc :said [pos provisional])
         (ctx/emit! c :goal-resolved :info (cond-> {:goal goal :to pos} provisional (assoc :provisional true) why (assoc :why why))))
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
+
+(defn with-column
+  "c with :column-goal [x z] of pos (wplan/column-goal?) when the goal is a column resolved from seen cells (mem
+  :aimed-why :surface or :nearest-level, goal-pos): its walks arrive at any stand within :range of it across."
+  [c pos]
+  (if (and pos (#{:surface :nearest-level} (:aimed-why (ctx/mem c))))
+    (assoc c :column-goal [(:x pos) (:z pos)])
+    (dissoc c :column-goal)))
 
 (defn goal-danger
   "dig-stands/stay-danger of the goal pos (the calmest cell it is dug from when it is solid) over the call's stay (:stay-s, else a click's) against what the

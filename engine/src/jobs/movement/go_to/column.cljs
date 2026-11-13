@@ -1,6 +1,7 @@
 (ns jobs.movement.go-to.column
-  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the surface of that column: its highest seen stand with
-  no seen solid over it (trees and roofs skipped: column-kinds/top; the unseen ground under a trunk is solid), why :surface; else (the column seen only under cover) the stand nearest the body's
+  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) seen there is walked to any stand within range of it across, the
+  cheapest (wplan/column-goal?); its aimed y, for the escalation and the quote's distance, is its highest seen stand with
+  no seen solid over it (trees skipped; the unseen ground under a trunk is solid), why :surface; else (the column seen only under cover) the stand nearest the body's
   feet, why :nearest-level; over the whole build height. A column with no ground seen aims provisionally at an
   estimate (estimate: the seen ground of the nearest column around it within estimate-reach of the feet, or the rim of a
   seen wall there whose top is unseen, else the feet y; seen open there down to an unseen cell: the lowest open cell over it, unseen-under), or, when the column is seen there
@@ -10,14 +11,14 @@
   seen cells, an unseen one from the world the plans read). A y cell seen open whose floor is not yet in view is aimed
   provisionally at the lowest seen open cell of its column (open-air-under), and aims again every step.
 
-  Rules of go-to: :pos [x z] or {:x :z} (no y) walks to the surface of that
-  column (a roof, eave or wall top is not its surface), else under cover the ground nearest the body's feet (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
+  Rules of go-to: :pos [x z] or {:x :z} (no y) walks to the cheapest stand within :range of that column across, at any
+  y (a floor under a roof through the door, a deck, the ground beside a wall) (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
   ground nearest it, at most the y-slack setting (4) blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker)."
   (:require [engine.args :as a]
-            [jobs.lib.column-kinds :refer [built-at kind free? roof-under top top-y surface-kind-at seen-kind-at]]
+            [jobs.lib.column-kinds :refer [kind free? top top-y surface-kind-at seen-kind-at]]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.movement.go-to.tuning :refer [off-line-cone off-line-radius]]))
@@ -82,12 +83,11 @@
         (if (undefined? v) (let [v (kind-at x y z)] (.set m k v) v) v)))))
 
 (defn pick
-  "[y why] of the stand of the column x z by the cells of kind-at: :surface, else :nearest-level to body-y; nil if none.
-  A stand on a roof (built?, top) is neither."
-  [kind-at built? x z body-y min-y]
-  (if-let [y (top kind-at x z min-y top-y built?)]
+  "[y why] of the stand of the column x z by the cells of kind-at: :surface, else :nearest-level to body-y; nil if none."
+  [kind-at x z body-y min-y]
+  (if-let [y (top kind-at x z min-y top-y)]
     [y :surface]
-    (when-let [y (ground kind-at x z body-y min-y top-y #(not (roof-under kind-at built? x (dec %) z min-y)))] [y :nearest-level])))
+    (when-let [y (ground kind-at x z body-y min-y top-y)] [y :nearest-level])))
 
 (defn leads-to?
   "Whether the column x z leads from a goal at y to the stand at g without passing a solid: up only from a goal cell
@@ -113,15 +113,14 @@
 (defn estimate
   "The y an unseen column x z is guessed to stand at: the surface (else the seen ground nearest the feet) of the nearest
   column around it, looked for in 8 directions out to approach-range (a column seen only as a wall, its top unseen: the
-  rim over it, the land behind it stands at least that high; a roof, by built?, is not ground); else body-y; within estimate-reach of the feet, as
+  rim over it, the land behind it stands at least that high); else body-y; within estimate-reach of the feet, as
   64 full-height columns read per aim cost 100s of ms."
-  ([kind-at x z body-y] (estimate kind-at x z body-y (constantly false)))
-  ([kind-at x z body-y built?]
-   (let [around (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz])
-         lo (- body-y estimate-reach) hi (+ body-y estimate-reach)
-         col (fn [[d dx dz]] [(+ x (* d dx)) (+ z (* d dz))])]
-     (or (some (fn [c] (let [[cx cz] (col c)] (or (top kind-at cx cz lo hi built?) (ground kind-at cx cz body-y lo hi #(not (roof-under kind-at built? cx (dec %) cz lo))) (rim kind-at cx cz lo hi)))) around)
-         body-y))))
+  [kind-at x z body-y]
+  (let [around (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz])
+        lo (- body-y estimate-reach) hi (+ body-y estimate-reach)
+        col (fn [[d dx dz]] [(+ x (* d dx)) (+ z (* d dz))])]
+    (or (some (fn [c] (let [[cx cz] (col c)] (or (top kind-at cx cz lo hi) (ground kind-at cx cz body-y lo hi) (rim kind-at cx cz lo hi)))) around)
+        body-y)))
 
 (defn unseen-under
   "The guess y of column x z at y: y when unseen, else, seen open down to an unseen cell (its ground not seen yet), the
@@ -176,11 +175,10 @@
   [p {:keys [x y z] :as goal} slack body-y raw?]
   (if (nil? y)
     (let [seen (cached (surface-kind-at p))
-          built? (built-at p)
           min-y (places/min-y p)]
-      (if-let [[g why] (pick seen built? x z body-y min-y)]
+      (if-let [[g why] (pick seen x z body-y min-y)]
         {:pos {:x x :y g :z z} :resolved true :why why}
-        (let [guess (estimate seen x z body-y built?)]
+        (let [guess (estimate seen x z body-y)]
           (if-let [g (unseen-under seen x z guess min-y)]
             {:pos {:x x :y g :z z} :resolved true :provisional true}
             {:pos {:x x :y guess :z z}}))))
