@@ -64,6 +64,7 @@
     an escalation, put-back or seal cleanup child is waiting on the world. A round that ran out of re-plans while each learned an unseen cell counts as progress (no try booked) only when a cell it learned lies a block nearer the goal than the body has been (a spent walk: also when it got a block nearer along its route); else it is a failed try, tried again while cost/try-again? :walk-round (never after a search that found no way, from the cell and over the memory it began on: the same search answers the same). Each fruitless round that plans again says so (info go-to.retrying: reason, try); each books a try, and a call whose :spend :tries (its own, or a caller's least) is used up
     gives up instead (a caller that re-aims itself passes {:tries 1}).
   - A body moved 8 or more blocks in one tick (a teleport, a pearl) ends the walk at once and starts the call again from where it stands: the walk's counters go, the closest approach stays (info go-to.jumped). Moved far again from the same place it counts as a send-back (below); a jump elsewhere clears them.
+  - Shut in by its own shelter blocks that the seal cleanup keeps for a known hostile: condition-failed {:reason :hostile-near}, a wait.
   - Gives up with the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :search-spent (:line :job-time); condition-failed
     for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's

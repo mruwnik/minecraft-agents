@@ -1,0 +1,28 @@
+;; Card 97b9c423 (run4 F7): a body in a pit under its own shelter lid (one dirt in the scaffold ledger), a zombie on the
+;; ground beside the lid that could drop in were it opened. The seal cleanup keeps the lid for the zombie and no other way
+;; out exists (bedrock), so go-to's give-up is a wait (:hostile-near) the dig waits out, not a stop :unreachable (old
+;; code: the dig stopped, and get-food skipped the bush as a failed way).
+;; Bedrock mass x 4..28, z 8..24, y 0..3 (top y 4); pit [16 1..2 16]; lid [16 3 16]; the block to dig [26 4 16].
+;; Should-fail (waits, never stops): lid-kept-for-a-zombie-waits. Should-succeed: lid-taken-back-with-no-hostile.
+{:defaults
+ {:tags [:go-to :access :hostile]
+  :time :any
+  :mobs :keep
+  :plot {:height 12 :light :lit}
+  :blocks [[:fill [4 0 8] [28 3 24] "bedrock"] [:fill [16 1 16] [16 2 16] "air"] [:set [16 3 16] "dirt"] [:set [26 4 16] "dirt"]]
+  :memory [{:kind :scaffold :policy {:cap 1 :ttl :forever}
+            :data {:entries [{:cell #at [16 3 16] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
+  :body {:at [16.5 1 16.5] :settle-s 2 :inventory [["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "lid-kept-for-a-zombie-waits"
+   :act [[:summon "zombie" [16.5 4 19.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 3]
+         [:job (jobs.blocks.dig {:worth 1200 :pos #at [26 4 16]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 60}]
+   :after [[:block [16 3 16] "dirt"] [:block [26 4 16] "dirt"]]}
+  {:name "lid-taken-back-with-no-hostile"
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [26 4 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 80 :of-job true}]
+   :after [[:block [26 4 16] "air"]]}]}

@@ -219,6 +219,31 @@
           (is (seq (calls p "dig")) "another wall is cut")
           (is (= ["dirt" "dirt"] (mapv #(block p %) [[3 64 1] [3 65 1]])) "the seal the zombie would come in by stays"))))))
 
+(deftest a-body-its-shelter-keeps-in-for-a-hostile-with-no-other-way-out-waits
+  ;; run 4 F7 (Brindle): shut in a pit whose seal was kept for a hostile, go-to gave up :unreachable, so get-food skipped
+  ;; the bush and ended still hungry; the hostile going opens the way, a wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seal [{:cell [3 64 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}
+                    {:cell [3 65 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}]
+              cell (fn [[x y z]] (str x "," y "," z))
+              vault (merge (apply dissoc (box -3 63 -3 3 66 3 "bedrock") (map cell (for [x (range -2 3) z (range -2 3) y [64 65]] [x y z])))
+                           (zipmap (map (comp cell :cell) seal) (repeat "dirt")))
+              {:keys [eng p]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks (merge (box -6 63 -6 12 63 6 "stone") vault)
+                                      :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11.5 :y 64 :z 5.5} :visible true}]})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                          (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1 :checks {:safe? '(always)}
+                                                                                       :settings {:jobs.lib.shelter.keep/at-night? false}})))]
+          (ledger/write! (:store eng) seal)
+          (core/submit! eng (tu/order '(recording-parent {})) {})
+          (await (tick-out! eng 1000))
+          (is (= [false :hostile-near] ((juxt :arrived :reason) @out)) (pr-str @out))
+          (is (= [:condition-failed :hostile-near] ((juxt :kind (comp :reason :cause)) (:ending (meta @out))))
+              "a wait a caller passes through jobs.lib.waits/waiting-out")
+          (is (= ["dirt" "dirt"] (mapv #(block p %) [[3 64 1] [3 65 1]])) "the seal the zombie would come in by stays"))))))
+
 (deftest leave-shelter-agrees-with-go-to-that-a-body-its-seal-keeps-in-is-not-out
   ;; Wicken #155: leave-shelter said "out of the shelter" while go-to gave up :seal-kept
   (async done

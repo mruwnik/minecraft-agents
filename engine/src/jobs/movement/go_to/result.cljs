@@ -10,7 +10,8 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.solid :as solid]
             [jobs.lib.spent :as spent]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.waits :as waits]))
 
 (defn dark-end?
   "True when a fruitless round with a :dark-best is given up as :unseen-floor-dark (go-to, its quote): :no-path for no reason,
@@ -36,12 +37,14 @@
 (defn ending
   "The ending of result, the call's result map: arrived is :done; a give-up (:reason :unreachable) is
   of the kind its :why maps to (why-kinds, else :nothing-possible) with the cause {:reason :unreachable :why ..} (and
-  :line for a limit); a refusal is :condition-failed (refusal-kinds aside) with its reason as the cause. The result
+  :line for a limit); a refusal is :condition-failed (refusal-kinds aside) with its reason as the cause, a map
+  {:reason :text} for a wait (jobs.lib.waits/wait-reasons) so the caller waits it out. The result
   less :status and :reason is the ending's data, so a caller reads the same keys."
   [c {:keys [status reason why] :as result}]
   (let [data (dissoc result :status :reason)]
     (cond
       (not= :stopped status) (ctx/end c :done nil data)
+      (waits/wait-reasons reason) (ctx/end c :condition-failed {:reason reason :text (:text result)} data)
       (not= :unreachable reason) (ctx/end c (refusal-kinds reason :condition-failed) reason data)
       :else (ctx/end c (why-kinds why :nothing-possible)
                      (cond-> {:reason :unreachable :why why} (why-lines why) (assoc :line (why-lines why)))
@@ -175,7 +178,20 @@
            (str "no path (" (some-> why name) ")")))
        (when waypoint-why (str "; a waypoint walk toward it failed: " (name waypoint-why)))))
 
+(defn shut-in-give-up?
+  "Whether give-up fields say the body is shut in (not a goal walled in)."
+  [{:keys [why shut-in escalation]}]
+  (boolean (or shut-in (= :start-enclosed why) (and escalation (not (:into escalation))))))
+
+(defn kept-shut?
+  "Whether the body gives up shut in while the seal cleanup keeps blocks of its own shelter for a known hostile
+  (mem :seal-kept): the way out opens once the hostile is gone."
+  [c fields]
+  (boolean (and (shut-in-give-up? fields) (seq (:seal-kept (ctx/mem c))))))
+
 (defn give-up!
+  "End the call not having arrived: :unreachable with result's why, or a :hostile-near wait (condition-failed) when the
+  body is shut in by its own shelter kept for a hostile (kept-shut?)."
   ([c pos result] (give-up! c pos result nil))
   ([c pos result extra]
    (let [{:keys [why] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
@@ -185,10 +201,12 @@
                   (= :goal-enclosed why) (merge (some->> (headroom/low-passage (:primitives c) (solid/cell (if (map? pos) pos (zipmap [:x :y :z] pos))))
                                                           (hash-map :low-passage))))
          fields (cond-> fields
-                  (or (:shut-in fields) (= :start-enclosed why) (and (:escalation fields) (not (:into (:escalation fields)))))
+                  (shut-in-give-up? fields)
                   (merge (some->> (escape/shut-in-blockers c (when pos (if (map? pos) pos (zipmap [:x :y :z] pos)))) (hash-map :blocked-by))))
-         text (give-up-words pos fields)]
-     (finish! c (merge {:status :stopped :arrived false :reason :unreachable :text text} fields)))))
+         text (give-up-words pos fields)
+         reason (if (kept-shut? c fields) :hostile-near :unreachable)
+         text (cond->> text (= :hostile-near reason) (str "waiting for the hostile to go: its own shelter, kept against it, shuts the body in; "))]
+     (finish! c (merge {:status :stopped :arrived false :reason reason :text text} fields)))))
 
 (defn refuse! [c {:keys [reason message]}]
   (finish! c {:status :stopped :arrived false :reason reason :text message}))
