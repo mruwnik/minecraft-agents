@@ -634,7 +634,7 @@
                    {:steps {} :worth worth :walk-s price
                     :text (str "farm tend: the walk to the field out of sight costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")}))
       :else
-      (let [e (await (child/call-walk* c :walk (assoc args :worth worth)))]
+      (let [e (await (ctx/call c :walk 'jobs.movement.go-to (assoc args :worth worth)))]
         (cond
           (= :continue e) (do (ctx/update-mem! c assoc :walking true) :continue)
           (= :continue (waits/waiting-out c e)) (do (ctx/update-mem! c assoc :walking false) :continue)
