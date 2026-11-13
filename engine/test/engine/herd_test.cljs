@@ -1440,6 +1440,51 @@
           (is (= :brought (:reason (done-event s))) (pr-str (dissoc (done-event s) :source :chain :t :seq)))
           (is (= #{1} (cows-in-pen s))))))))
 
+(deftest a-cut-that-takes-the-body-away-mid-trip-walks-back-and-brings-the-animal-left-there
+  ;; dusk-home cut a lure run at the gate and took the body home: the cow it had lured was booked lost from there and the
+  ;; run ended short, judged from the house
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)] :inventory [wheat] :blocks far-ground})) {:target 1})
+              k (atom 0)]
+          (track-range! s 20)
+          (.override (.-world (:p s)) "useOn"
+                     (fn [token a impl]
+                       (if (= 1 (swap! k inc))
+                         (do (core/do-now! (:eng s) (tu/order '(jobs.debug.notify {:text "cut"})))
+                             (swap! (fake/state (:p s)) assoc-in [:self :pos] [-30.5 64 3.5])
+                             (js/Promise.reject (core/cut-error)))
+                         (impl token a))))
+          (await (run-ticks s 900))
+          (is (= [{:led [] :inside false :gate-open false}]
+                 (mapv #(select-keys % [:led :inside :gate-open]) (events-of s :herd.restarted))))
+          (is (empty? (events-of s :herd.lure-lost)))
+          (is (= :brought (:reason (done-event s))) (pr-str (select-keys (done-event s) [:reason :given-up])))
+          (is (= #{1} (cows-in-pen s))))))))
+
+(deftest a-body-away-from-the-pen-that-sees-no-animal-walks-back-and-looks-before-it-ends
+  ;; the lured cow is lost far out; another stands by the pen, out of sight from where the first was given up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60})
+              moved (atom false)
+              arm! #(when (or @moved (<= (self-x s) -30))
+                      (when-not @moved
+                        (track-range! s 25)
+                        (swap! (fake/state (:p s)) update :entities conj (assoc (cow 2 6 10) :pos [6 64 10])))
+                      (reset! moved true)
+                      (set-x! s 1 -500))]
+          (doseq [act ["steer" "wait"]]
+            (.override (.-world (:p s)) act
+                       (fn [token a impl]
+                         (when (= "wait" act) (swap! (:clock s) + (or (.-ms a) 0)))
+                         (.then (impl token a) (fn [r] (arm!) r)))))
+          (await (run-ticks s 1500))
+          (is (= :brought (:reason (done-event s))) (pr-str (select-keys (done-event s) [:reason :given-up])))
+          (is (= #{2} (cows-in-pen s))))))))
+
 (deftest the-gate-toggle-keeps-the-food-in-hand
   (async done
     (tu/run-async done

@@ -62,6 +62,11 @@
 (defn box-centre [{:keys [min max]}]
   {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)})
 
+(defn away-from-pen?
+  "True when the body stands more than near-pen blocks from the pen's centre: what it sees there says nothing of the pen."
+  [c]
+  (> (u/dist (u/self-pos c) (box-centre (pen-box c))) (near-pen)))
+
 (defn view-radius
   "How far from the body animals are listed: the fetch radius, plus the way to the pen."
   [c]

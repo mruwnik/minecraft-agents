@@ -19,7 +19,7 @@
             [jobs.lib.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.lib.bait :as bait]
-            [jobs.animals.herd-run :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms stage transient-keys]]
+            [jobs.animals.herd-run :refer [adults after-shut! away-from-pen? pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms stage transient-keys]]
             [jobs.lib.pace :as pace]
             [jobs.animals.herd-survey :refer [pen-refusal survey!]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell line-up-from-stage! look-wait! max-leaves nearer-stage! on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
@@ -105,7 +105,10 @@
   jobs.time.noop pauses. A cut can leave the body unsafe (animal led, gate
   open, body in the pen); the next call restarts from what it sees: led with the body in the pen
   steps on from the nearest axis cell, led with the body outside goes back and lines up again, nobody led
-  with the body in the pen goes out, nobody led with the gate open walks back to it (doors opened and shut on the way) and shuts it.
+  with the body in the pen goes out, nobody led with the gate open, or with the body more than 16 blocks from the pen
+  mid-trip (a reflex took it home; the animal left there is not booked lost), walks back to it (doors opened and shut
+  on the way) and shuts it. A body more than 16 blocks from the pen that lists no animal to fetch walks back within 12
+  of it and looks round there before it searches or ends.
 
   Ends with result {:reason :inside n :target :brought [keys] :given-up {key reason}
   :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. An animal is booked brought once, however often it is led. Reasons:
@@ -345,8 +348,17 @@
         here (u/self-pos c)]
     (apply min-key #(u/flat-dist here (cell-middle (nth axis %))) (range gate-index (inc (min deepest (dec (count axis))))))))
 
+(def gathering "Phases that leave the pen to find an animal: a round starting in one away from the pen goes on as it is." #{:survey :leash :regather})
+
+(defn away-mid-trip?
+  "True when the body stands away from the pen (away-from-pen?) in a phase worked at the gate: a cut (a reflex took it
+  home) moved it, and an animal it lured or led was left behind there, not lost."
+  [c]
+  (let [m (ctx/mem c)]
+    (boolean (and (:gate m) (not (gathering (:phase m :survey))) (away-from-pen? c)))))
+
 (defn restart!
-  "The round starts unsafe: the last one was cut there (or the world changed). Go on from what the world shows, the
+  "The round starts unsafe (or away-mid-trip?): the last one was cut there (or the world changed). Go on from what the world shows, the
   leads taken from it and the walk and wait state, children included, dropped: a run that was ending ends (end!); an
   animal led with the body in the pen steps on from the nearest axis cell; led with the body outside goes back to
   out-1, shuts the gate and lines up again (the retry's way, its one retry not used up); nobody led with the body in
@@ -380,13 +392,13 @@
 
 (defn ^:async round
   "The whole run: steps until it ends (pace/steps!: the goal and can-run? are asked between steps). A round that starts
-  unsafe restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a pause, so a
+  unsafe or away-mid-trip? restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a pause, so a
   step that keeps answering at once never spins. The gate-stretch? steps run as one urgent section (ctx/atomic :gate),
   as a walk's door leg does: a dusk or hunger reflex waits for the shut, up to its cap."
   [c]
   (animals/reserve-bait! c (:mob (:args c)) 1)
   (ctx/update-mem! c update :origin #(or % (u/self-pos c)))
-  (when-not (free-to-leave? c) (restart! c))
+  (when (or (not (free-to-leave? c)) (away-mid-trip? c)) (restart! c))
   (let [herd-step (fn ^:async herd-step [want]
                     (let [before (ctx/mem c)
                           from (ctx/now c)

@@ -10,11 +10,12 @@
             [jobs.lib.near :as near]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
+            [jobs.lib.look :as look]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
             [jobs.animals.herd-pen :refer [unseen-cell! approach-cells approach-free? axis depth usable-gates free-floor? gate-diagnosis gate-look-range look-range max-approach-walks open-stage other-leaks precheck?]]
-            [jobs.animals.herd-run :refer [approach-range box-centre cell detail-text pen-box finish! in-pen-adults near-pen pen-opts read-pen]]))
+            [jobs.animals.herd-run :refer [approach-range away-from-pen? box-centre cell detail-text pen-box finish! in-pen-adults pen-opts read-pen]]))
 
 (defn box-gates
   "The fence gates the body has seen on the ring of cells just outside the box (at its floor level), as {:x :y :z}."
@@ -167,15 +168,22 @@
       (apply contract/later refuse (str "herd waits: the pen will not do, " (name refuse) (detail-text extra)) (mapcat identity extra))
       (contract/ok :pen "the pen will do, or is read at the pen"))))
 
+(defn ^:async to-pen!
+  "Walk within approach-range of the pen's centre: :continue, or the run ends :unreachable naming go-to's reason. On
+  arrival the run's looks round are forgotten (look/forget-survey!), so the next judge of the animals around looks from here."
+  [c]
+  (let [r (await (near/go-near! c (box-centre (pen-box c)) (approach-range) {:doors :never :ways #{:walk :clear-seal}}))]
+    (cond
+      (and (= :blocked r) (not (await (near/risky-wait! c r))))
+      (let [walk (:data (:near-walk (ctx/mem c)))]
+        (finish! c :unreachable {:why (:why walk) :walk (:text walk)}))
+      (= :there r) (do (look/forget-survey! c) :continue)
+      :else :continue)))
+
 (defn ^:async survey! [c]
-  (let [centre (box-centre (pen-box c))]
-    (if (> (u/dist (u/self-pos c) centre) (near-pen))
-      (let [r (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :clear-seal}}))]
-        (if (and (= :blocked r) (not (await (near/risky-wait! c r))))
-          (let [walk (:data (:near-walk (ctx/mem c)))]
-            (finish! c :unreachable {:why (:why walk) :walk (:text walk)}))
-          :continue))
-      (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]
-        (if (= :unloaded (:reason answer))
-          (await (check-unknown! c answer))
-          (await (survey-pen! c answer)))))))
+  (if (away-from-pen? c)
+    (await (to-pen! c))
+    (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]
+      (if (= :unloaded (:reason answer))
+        (await (check-unknown! c answer))
+        (await (survey-pen! c answer))))))

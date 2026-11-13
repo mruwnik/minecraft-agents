@@ -17,7 +17,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
-            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen set-phase! stage]]
+            [jobs.animals.herd-run :refer [animal-now away-from-pen? deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen set-phase! stage]]
+            [jobs.animals.herd-survey :refer [to-pen!]]
             [jobs.animals.herd-pen :refer [look-range unseen-cell! animal-pos nearer-stage! pinned-ms settle-at! step-in-step]]))
 
 
@@ -247,7 +248,9 @@
 
 (defn ^:async leash-next!
   "Bring one more animal to the body and start its trip, or end when the pen holds enough or none more can be had.
-  The first call settles the run's :method."
+  The first call settles the run's :method. A body away from the pen (a reflex took it home, a lure walked it out) that
+  lists no animal to fetch and has none remembered to look for walks back to the pen and looks round there before it
+  searches or ends."
   [c]
   (let [{:keys [target]} (:args c)]
     (cond
@@ -258,11 +261,13 @@
       (do (when-not (:method (ctx/mem c)) (ctx/update-mem! c assoc :method (resolve-method c)))
           (if-let [lost (await (look-back-target! c))]
             (await (look-back! c lost))
-            (if (search-due? c)
-              (await (search! c))
-              (if (await (book-trapped! c))
-                :continue
-                (if (lure? c) (await (lure-next! c)) (await (lead-next! c))))))))))
+            (if (and (away-from-pen? c) (empty? (lure-candidates c)))
+              (await (to-pen! c))
+              (if (search-due? c)
+                (await (search! c))
+                (if (await (book-trapped! c))
+                  :continue
+                  (if (lure? c) (await (lure-next! c)) (await (lead-next! c)))))))))))
 
 (defn prune-led!
   "Drop from :led the animals no longer on this body's lead, booking each (:lead-broke seen, :lost not seen);
