@@ -675,10 +675,11 @@
 
 (defn trample-s
   "Seconds a trampled farmland cell costs: the marginal tilling and replanting of one cell (a pass's fixed seconds are paid anyway)
-  and the wheat's regrowth (cost/sown-worth at the dry rate: the cell may hold none, so the low end)."
+  and the growth a ripe wheat loses (cost/sown-worth from ripe age less from stage 0, at the wet rate, the fastest: the cell may hold none or a young crop, so an upper bound on the harvests the replant regrows)."
   []
   (let [per-cell #(- (cost/field-step-s % 2) (cost/field-step-s % 1))]
-    (+ (per-cell :till) (per-cell :plant) (cost/sown-worth "wheat" (crops/stages-per-s false nil)))))
+    (+ (per-cell :till) (per-cell :plant) (let [rate (crops/stages-per-s true nil)]
+                                                  (- (cost/sown-worth "wheat" rate (get crops/ripe-age "wheat")) (cost/sown-worth "wheat" rate))))))
 
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past

@@ -78,10 +78,11 @@
 
 (defn sown-worth
   "Seconds sowing a cell with crop is worth, at rate (crops/stages-per-s): the hunger points each harvest gives less the seed
-  replanted (value/crop-points, value/food-points), at value/food-point-worth, times its harvests from stage 0. Never below 0: a cell not worth its seed is left bare."
-  [crop rate]
-  (* (value/food-point-worth) (harvests crop 0 rate)
-     (max 0 (- (value/crop-points crop) (value/food-points (crops/seed-of crop))))))
+  replanted (value/crop-points, value/food-points), at value/food-point-worth, times its harvests from stage `age` (default 0). Never below 0: a cell not worth its seed is left bare."
+  ([crop rate] (sown-worth crop rate 0))
+  ([crop rate age]
+  (* (value/food-point-worth) (harvests crop age rate)
+     (max 0 (- (value/crop-points crop) (value/food-points (crops/seed-of crop)))))))
 
 (defn step-s
   "Seconds step works over units units: its ::field-work line, 0 for no units."

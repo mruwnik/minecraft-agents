@@ -56,11 +56,12 @@
       (is (not (on-farmland? (get-in r [:path :steps]))) (pr-str from (pf/cells r))))))
 
 (deftest a-drop-past-a-post-is-refused-through-a-hazard
-  ;; the tight drop skips the collision check, not the hazards: a cobweb or fire in both end columns (the cell the body drops into) leaves no way off
-  ;; the strip (the farmland drop is unpriced here), where the open columns have one (the first test)
+  ;; the tight drop skips the collision check, not the hazards: a cobweb or fire in the body's height of both end columns (y67..68,
+  ;; the rows hazardFree reads above the post cell) leaves no way off the strip (the farmland drop is unpriced here), where the
+  ;; open columns have one (the first test); without the hazard check the drop would be planned through the post
   (doseq [hazard ["cobweb" "fire" "soul_fire" "powder_snow"]
           from froms]
-    (let [r (pf/plan (snapshot [[-367 66 -844 hazard] [-367 66 -839 hazard]]) {:from from :goal gate})]
+    (let [r (pf/plan (snapshot [[-367 68 -844 hazard] [-367 68 -839 hazard] [-368 68 -839 hazard]]) {:from from :goal gate})]
       (is (not= "found" (:status r)) (pr-str hazard from (pf/cells r))))))
 
 (deftest the-planner-drops-onto-farmland-only-at-a-price

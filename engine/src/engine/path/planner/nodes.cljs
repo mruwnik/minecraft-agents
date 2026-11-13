@@ -391,7 +391,7 @@
   (trampleChance [s y move parent-node]
     (if (== move MOVE-GAP)
       1
-      (js/Math.min 1 (js/Math.max 0 (- (aget (.-ys s) parent-node) y 0.9375 0.5)))))
+      (js/Math.min 1 (js/Math.max 0 (- (/ (.stand16 s parent-node) 16) y 0.9375 0.5)))))
 
   ;; the factor of its own seconds the caller's toll (options.tolls) adds to entering x,y,z, 0 for none
   (tollOf [s x y z]
