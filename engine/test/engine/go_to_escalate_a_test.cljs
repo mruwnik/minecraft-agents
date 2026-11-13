@@ -74,6 +74,15 @@
   (is (= {:step :stair :heading :east :steps 3}
          (escape-way/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 1}]})) [0 61 0] [10 64 0]))))
 
+(deftest escape-choose-makes-no-pillar-or-stair-that-ends-outside-the-work-area
+  (let [choose (fn [area n] (settings/with-settings {:jobs.lib.walk.world/area area}
+                              #(escape-way/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count n}]})) [0 61 0] [10 64 0])))
+        box-to (fn [x y] {:min [0 55 0] :max [x y 0]})]
+    (is (= :pillar (:step (choose (box-to 20 70) 2))) "inside the box: the pillar")
+    (is (not (#{:pillar :stair} (:step (choose (box-to 20 62) 2)))) "the pillar's top and the stair's end are over the box's roof")
+    (is (= :stair (:step (choose (box-to 20 70) 1))) "inside the box: the stair")
+    (is (not (#{:pillar :stair} (:step (choose (box-to 1 70) 1)))) "the stair's cuts run past the box's east side (every heading)")))
+
 (deftest escape-choose-pillars-beside-the-wall-of-a-wide-pit-it-may-not-dig
   (let [at-wall (fn [n] (tu/fake {:self {:pos {:x 2 :y 61 :z 0}} :blocks wide-pit :inventory [{:name "dirt" :count n}]}))]
     (is (= 0 (escape/pit-depth (ba {:blocks wide-pit}) [2 61 0])) "no level of a wide pit is walled on three sides")
