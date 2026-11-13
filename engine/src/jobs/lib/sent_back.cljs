@@ -37,9 +37,9 @@
         kind (place-kind p view pos)
         t (.-timeOfDay (.self p))]
     (when (and kind (not hostiles?) (or (sh-sense/dark-outside? p) (sh/home-due-at? p view from)))
-      (let [entry {:to (sh-sense/feet p) :place kind :at t}]
+      (let [entry {:to (sh-sense/feet p) :place kind :at t :text (str "sent back into " (name kind) " at " t "; walks out wait for dawn")}]
         (ctx/remember! c :sent-back entry (policy t))
-        (ctx/emit! c :walk.sent-back :info (assoc entry :text (str "the body was sent back into " (name kind) " at " t "; walks out of it wait for the morning")))
+        (ctx/emit! c :walk.sent-back :info entry)
         entry))))
 
 (defn in-place?

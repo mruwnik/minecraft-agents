@@ -310,6 +310,14 @@
           (await (tu/run-until-empty eng 40))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "a call that ended, not cut, walks out")
           (is (nil? (mem/latest (mem/view (:store eng)) :sent-back))))
+        (let [{:keys [eng]} (hut-with (assoc (night-hut {}) :light {} :light-default [15 15]) {'seeded (seeded-walker (assoc sent-back-seed :last-dist 14))})]
+          (core/submit! eng (tu/order '(seeded)) {})
+          (await (ticks eng 20))
+          (is (nil? (mem/latest (mem/view (:store eng)) :sent-back)) "a restart within the margin of the cut's distance (knockback, a reflex in place) writes no entry"))
+        (let [{:keys [eng]} (hut-with (assoc (night-hut {}) :light {} :light-default [15 15]) {'seeded (seeded-walker (assoc sent-back-seed :last-dist 15))})]
+          (core/submit! eng (tu/order '(seeded)) {})
+          (await (ticks eng 20))
+          (is (nil? (mem/latest (mem/view (:store eng)) :sent-back)) "a restart within the margin of the cut's distance (knockback, a reflex in place) writes no entry"))
         (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :time st/noon) {'seeded (seeded-walker sent-back-seed)})]
           (core/submit! eng (tu/order '(seeded)) {})
           (await (tu/run-until-empty eng 40))

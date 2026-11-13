@@ -222,6 +222,12 @@
 
 (base/on-warm-start! ::session new-session!)
 
+(defn sent-back-restart?
+  "Whether a call restarting at dist from goal, with memory m, is a send-back: the earlier call was left open in this
+  session for the same goal and the body is more than send-back-margin farther than the cut found it."
+  [m goal dist]
+  (and (= (session-id) (:open m)) (= goal (:goal m)) (> dist (+ (:last-dist m dist) (send-back-margin)))))
+
 (defn cut-state
   "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :last-dist
   :cut-walks :sent-backs}. A restart is a cut only when the earlier call was left open in this session, for the same goal.
@@ -234,7 +240,7 @@
         closest (min dist (if cut? (:closest m dist) dist))
         ref (if cut? (:ref m closest) closest)
         improved? (>= (- ref closest) (cut-progress))
-        sent-back? (and cut? (> dist (+ (:last-dist m dist) (send-back-margin))))
+        sent-back? (sent-back-restart? m goal dist)
         keep? (and cut? (not improved?))]
     {:goal goal :closest closest :ref (if improved? closest ref) :last-dist dist
      :cut-walks (cond keep? (inc (:cut-walks m 0)) cut? 1 :else 0)
@@ -249,7 +255,7 @@
 
 (defn note-restart!
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
-  was cut. The cut state; a cut that left the body farther from pos than the cut found it notes it (sent-back/note!)."
+  was cut. The cut state; a send-back (sent-back-restart?) notes it (sent-back/note!)."
   [c pos]
   (let [m (merge (ctx/mem c) (dissoc (get @approaches (:id c)) :call))
         dist (u/dist (u/self-pos c) pos)
@@ -257,7 +263,7 @@
     (fresh-record! c)
     (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
     (goal/note! c pos)
-    (when (and (pos? (:cut-walks state)) (:prev m) (> dist (:last-dist m dist)))
+    (when (and (:prev m) (sent-back-restart? m pos dist))
       (sent-back/note! c (:prev m) (boolean (seq (way-hostiles c pos)))))
     state))
 
