@@ -328,6 +328,17 @@
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :slept)))
           (is (= {:cap 10 :ttl (* 7 day-ms)} (mem/policy (mem/view (:store eng)) :slept))))))))
 
+(deftest sleep-walks-to-a-bed-whose-quoted-walk-is-shorter-than-a-steer
+  ;; a most of the planner's seconds alone puts a one-block walk's bound under the shortest steer a walk takes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :blocks {"3,64,0" "red_bed"}})]
+          (know-bed! eng {:x 3 :y 64 :z 0})
+          (core/submit! eng (tu/order '(jobs.survival.sleep {})) {})
+          (await (settings/with-settings {:jobs.movement.go-to.tuning/quote-most-factor 1} #(run-until-empty eng 6)))
+          (is (= ["steer" "sleep"] (mapv #(.-name %) (.-calls (.-world p)))) "walked, then slept"))))))
+
 (deftest sleep-records-the-spawn-bed-without-the-servers-chat-line
   (async done
     (tu/run-async done
