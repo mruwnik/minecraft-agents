@@ -33,15 +33,18 @@
   [c names n]
   (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) names (u/self-pos c) n))
 
+(defn job-time-left "Seconds of job time the call has left (##Inf: no limit)." [c]
+  (get-in (ctx/left c) [:spend :job-time] ##Inf))
+
 (defn job-time-binds?
   "Whether the call's job time left, not its worth, is what search-worth is capped by."
   [c]
-  (< (get-in (ctx/left c) [:spend :job-time] ##Inf) (ctx/worth c)))
+  (< (job-time-left c) (ctx/worth c)))
 
 (defn search-worth
   "Seconds a search for the call's need may spend: the call's worth (ctx/worth), within the job time it has left, less what a mine for it already spent without a find (::spent, gather/way-left)."
   [c]
-  (- (min (ctx/worth c) (get-in (ctx/left c) [:spend :job-time] ##Inf)) (::spent c 0)))
+  (- (min (ctx/worth c) (job-time-left c)) (::spent c 0)))
 
 (defn wanted-fields
   "{:item name} or {:any-of [..]} of the args, for reasons and results."

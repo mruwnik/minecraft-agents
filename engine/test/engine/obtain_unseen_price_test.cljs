@@ -10,6 +10,7 @@
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
+            [jobs.items.obtain.gather :as gather]
             [jobs.items.obtain.need :as need]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.price :as price]
@@ -346,3 +347,15 @@
     (is (base/job-time-binds? (assoc c :left (constantly {:spend {:job-time 515}}))) "515 s left under a worth of 5000 s")
     (is (not (base/job-time-binds? (assoc c :left (constantly {:spend {:job-time 9000}})))) "more time than the worth")
     (is (not (base/job-time-binds? c)) "no job time limit")))
+
+(deftest a-strip-on-stop-names-the-job-time-when-that-and-not-the-worth-makes-another-run-cost-too-much
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor [-40 -50 -45 50 45] :floor-block "stone" :self {:pos [0.5 -39 0.5]}}))
+        mem (atom {})
+        why (fn [job-s]
+              (with-redefs [ctx/mem (fn [_] @mem) ctx/update-mem! (fn [_ f & args] (apply swap! mem f args))
+                            gather/way-left (constantly {:cost ##Inf})]
+                (reset! mem {})
+                (gather/strip-on! {:primitives p :quote-call {:worth 5000} :left (constantly {:spend {:job-time job-s}})} {:key "raw_iron"} {:down 3} false)
+                (get-in @mem [:gather :why])))]
+    (is (re-find #"job time left \(515 s\)" (why 515)) "515 s left under a worth of 5000 s")
+    (is (re-find #"the call's worth$" (why 9000)) "ample time: the worth")))
