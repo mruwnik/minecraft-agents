@@ -404,14 +404,18 @@
 
 (defn split-summary
   "A wake's quiet summary split by whose events they are: the waited job's own items go to :wait :events, the rest to
-  :others, grouped by job id (a reflex's by :reflex)."
+  :others, grouped by job id, a reflex's fires by :reflex and body events (hurt, picked-up, notices) by :body; the exact
+  totals stay under :others :counts."
   [result id]
-  (let [{:keys [items more?]} (get-in result [:wait :summary])
+  (let [{:keys [items more? counts]} (get-in result [:wait :summary])
         own (filterv #(= id (:job %)) items)
-        others (group-by #(or (:job %) :reflex) (remove #(= id (:job %)) items))]
+        group-of #(or (:job %) (if (:reflex %) :reflex :body))
+        others (group-by group-of (remove #(= id (:job %)) items))]
     (cond-> (update result :wait dissoc :summary)
       (seq own) (assoc-in [:wait :events] own)
-      (seq others) (assoc :others (cond-> others more? (assoc :more? true))))))
+      (or (seq others) (seq counts)) (assoc :others (cond-> others
+                                                      more? (assoc :more? true)
+                                                      (seq counts) (assoc :counts counts))))))
 
 (defn wait-result
   "The submit answer with the wake that ended the wait under :wait. When the job had not ended by then: :follow, :note,

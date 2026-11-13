@@ -361,6 +361,7 @@
                                        :items [{:event :completed :job "j23"}
                                                {:event :fired :reflex :hostile-near}
                                                {:event :arrived :job "j7"}
+                                               {:event :hurt :amount 4}
                                                {:event :failed :job "j23"}]}}
         result (jobs/wait-result {:ok true :job {:id "j7" :status :queued}} "j7" wake
                                  {:status :queued :behind {:id "j23" :name "jobs.blocks.place"}})]
@@ -371,6 +372,8 @@
     (is (not (contains? (:wait result) :summary)))
     (is (= {"j23" [{:event :completed :job "j23"} {:event :failed :job "j23"}]
             :reflex [{:event :fired :reflex :hostile-near}]
+            :body [{:event :hurt :amount 4}]
+            :counts {:completed 1 :reflexes 1 :picked-up 1}
             :more? true}
            (:others result)))))
 
