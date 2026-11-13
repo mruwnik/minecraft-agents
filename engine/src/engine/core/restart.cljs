@@ -139,6 +139,24 @@
        nil
        (catch :default err (ex-message err))))
 
+(defn worth-problem
+  "Why register entry e's job could never fire for want of a :worth (an entry saved before every submit gave one), or nil."
+  [eng e]
+  (try (expr/fired-worth-problem (:jobs eng) (expr/parse (:jobs eng) (:job e)))
+       (catch :default _ nil)))
+
+(defn invalid-entry-notices
+  "Notices for the entries that parse but have no worth to fire at: they stay in the register, shown :invalid."
+  [eng]
+  (for [e (:register (state eng))
+        :let [problem (worth-problem eng e)]
+        :when problem
+        :let [id (:id e)
+              text (str "reflex " id " restored but it can never run: " problem)]]
+    (do (emit! eng {:source :system :kind :reflex-invalid :level :warn :reflex id :error problem :text text})
+        {:job-id (str "reflex:" (name id)) :reason :reflex-invalid :kind :reflex-invalid
+         :data {:reflex id :error problem} :message text})))
+
 (defn remove-entry [s id]
   (-> s
       (update :register #(filterv (fn [x] (not= id (:id x))) %))
@@ -152,8 +170,8 @@
   Each case is warned and returned as a notice {:job-id :reason :kind :message :data}
   for the caller to raise as a required attention request. Never silent."
   [eng]
-  (vec
-   (for [e (:register (state eng))
+  (into
+   (vec (for [e (:register (state eng))
          :let [problem (unresolved-entry eng e)]
          :when problem
          :let [id (:id e)
@@ -173,4 +191,5 @@
          (swap! (:state eng) remove-entry id)
          (emit! eng {:source :system :kind :dropped :level :warn :reflex id :error problem :text text})
          {:job-id (str "reflex:" (name id)) :reason :reflex-dropped :kind :reflex-dropped
-          :data {:reflex id :error problem} :message text})))))
+          :data {:reflex id :error problem} :message text}))))
+   (invalid-entry-notices eng)))

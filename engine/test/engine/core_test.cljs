@@ -1826,7 +1826,7 @@
 
 (def stale-registry
   "The registry after a job dropped its :old arg."
-  (assoc registry 'walk (assoc (tu/job walk-round) :args {:pos nil})))
+  (assoc registry 'walk (assoc (tu/job walk-round) :args {:pos nil} :worth-of (constantly 60))))
 
 (defn attention-reasons [eng]
   (set (map :reason (vals (:attention (core/state eng))))))
@@ -1853,6 +1853,15 @@
       (is (= [] (:register (core/state again))))
       (is (= #{:reflex-dropped} (attention-reasons again)))
       (is (some #(and (= :dropped (:kind %)) (re-find #"DROPPED" (:text %))) @seen)))))
+
+(deftest a-restored-register-entry-whose-job-has-no-worth-stays-and-the-agent-is-told
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/register-reflex! eng {:trigger :never :job '(count)})
+    (let [[again seen] (restore-with dir registry triggers)]
+      (is (= [:never] (mapv :id (:register (core/state again)))) "the entry is kept")
+      (is (= #{:reflex-invalid} (attention-reasons again)))
+      (is (some #(and (= :reflex-invalid (:kind %)) (re-find #"worth is required" (:text %))) @seen)))))
 
 (deftest a-restored-listed-job-with-a-stale-arg-runs-without-it-and-the-agent-is-told
   (let [dir (tu/tmp-dir)

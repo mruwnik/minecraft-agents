@@ -605,3 +605,9 @@
     (api/resume-scenario! eng day3 false)
     (is (= 1 (count (of-kind seen :system :trigger.refreshed))))
     (is (= {:marker 1} (get-in (core/state eng) [:reflex-state :bread-low])) "runtime state not reset")))
+
+(deftest the-triggers-view-flags-an-entry-whose-job-has-no-worth
+  (let [{:keys [eng]} (setup)]
+    (swap! (:state eng) update :register conj {:id :bare :trigger :high :job '(unpriced) :args {} :persistence :stop})
+    (is (re-find #"worth is required" (:invalid (some #(when (= :bare (:id %)) %) (:items (api/triggers-view eng))))))
+    (is (every? (comp nil? :invalid) (remove #(= :bare (:id %)) (:items (api/triggers-view eng)))))))

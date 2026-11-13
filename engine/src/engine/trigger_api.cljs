@@ -220,6 +220,7 @@
       (core/live? (:position changes) tt) (assoc :moved (select-keys (:position changes) [:value :until]))
       (and cooldown-until (> cooldown-until t)) (assoc :cooling-until cooldown-until)
       stopped? (assoc :stopped? true)
+      (and (:job e) (job-problem (:jobs eng) (:job e))) (assoc :invalid (job-problem (:jobs eng) (:job e)))
       (core/held-trigger eng id) (assoc :held (core/held-trigger eng id))
       (:since bo) (assoc :backing-off (select-keys bo [:since :until :fruitless :last])))))
 
