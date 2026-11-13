@@ -8,6 +8,7 @@
                         [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.hut-shelter-test :as hut]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.sky-perception :as sky]
             [engine.scenario :as scenario]
@@ -17,6 +18,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.movement.go-to.cut :as gcut]
             [jobs.movement.go-to.escalation :as escalation]
             [jobs.movement.go-to.reprice :as reprice]))
 
@@ -264,7 +266,7 @@
           (is (= :risky (:reason (waiting-of eng id))))
           (is (= 1 (count (st/calls p "place")))))))))
 
-(deftest a-queued-walk-with-an-acceptable-risk-goes-out-at-night-only-with-the-night-trigger-muted
+(deftest a-walk-with-an-acceptable-risk-goes-out-at-night-with-the-night-trigger-muted
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -274,26 +276,45 @@
           (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [15 64 0]})) {})
           (await (tu/run-until-empty eng 60))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the walk runs at night")
-          (is (<= (count (st/calls p "place")) 1) "no dig-in on the way"))
-        (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))
-              id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [15 64 0]})) {})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (await (ticks eng 20))
-          (is (= inside (st/pos-of p)) "armed, the trigger would cut the walk: it waits in the room")
-          (is (= [:risky :dawn] ((juxt :reason :wait) (waiting-of eng id)))))))))
+          (is (<= (count (st/calls p "place")) 1) "no dig-in on the way"))))))
 
-(deftest an-armed-night-trigger-holds-a-walk-out-of-the-hut-that-risks-nothing-until-dawn
+(def sent-back-seed
+  "The memory of a go-to to outside left open in this session after a cut found the body at x 11, 4 blocks from it."
+  {:open (gcut/session-id) :goal outside :closest 4 :ref 4 :last-dist 4 :prev {:x 11.5 :y 64 :z 0.5}})
+
+(defn seeded-walker
+  "walker-job whose go-to child starts with seed as its memory."
+  [seed]
+  {:round (fn ^:async seeded-walker [c]
+            (when (nil? (get-in (ctx/mem c) [:children :walk]))
+              (ctx/update-mem! c assoc-in [:children :walk] (merge {:args {:pos [15 64 0]} :children {}} seed)))
+            (let [r (await (child/call-walk* c :walk {:pos [15 64 0]}))]
+              (if (= :continue r) r (ctx/end c :done nil))))})
+
+(deftest a-walk-sent-back-into-the-hut-at-night-waits-for-the-morning
+  ;; a reflex cut the walk at x 11 and the body is back in its hut: walked again, it is cut again. The walk is lit and
+  ;; risks nothing, no trigger is read: the body learns it from its own cut
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (assoc (night-hut {}) :light {} :light-default [15 15]))
-              id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [15 64 0]})) {})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+        (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :light {} :light-default [15 15]) {'seeded (seeded-walker sent-back-seed)})
+              id (core/submit! eng (tu/order '(seeded)) {})]
           (await (ticks eng 20))
-          (let [w (waiting-of eng id)]
-            (is (= inside (st/pos-of p)) "the walk is lit and costs no hp; armed, the trigger would cut it")
-            (is (= 0 (:risk w)) "a risk of exactly 0")
-            (is (= [:risky :dawn] ((juxt :reason :wait) w)))))))))
+          (let [w (waiting-of eng id)
+                sent (:data (mem/latest (mem/view (:store eng)) :sent-back))]
+            (is (= inside (st/pos-of p)) "the body stays in its hut")
+            (is (= [:risky :dawn] ((juxt :reason :wait) w)))
+            (is (= {:place :room :to inside} (select-keys sent [:place :to])))))
+        (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :light {} :light-default [15 15]) {'seeded (seeded-walker (dissoc sent-back-seed :open))})]
+          (core/submit! eng (tu/order '(seeded)) {})
+          (await (tu/run-until-empty eng 40))
+          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "a call that ended, not cut, walks out")
+          (is (nil? (mem/latest (mem/view (:store eng)) :sent-back))))
+        (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :time st/noon) {'seeded (seeded-walker sent-back-seed)})]
+          (core/submit! eng (tu/order '(seeded)) {})
+          (await (tu/run-until-empty eng 40))
+          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "sent back by day, no home due: not for the night, it walks out")
+          (is (nil? (mem/latest (mem/view (:store eng)) :sent-back))))))))
 
 ;; ------------------------------------------------------------------ in-place jobs still run
 

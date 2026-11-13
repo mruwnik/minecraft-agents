@@ -2,13 +2,15 @@
   "The :dusk-home trigger: before night, a body whose bed or home is a walk away leaves for it in time."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [engine.job-api :as job-api]
             [engine.shelter-support :as st]
             [engine.memory :as mem]
-            [engine.scenario :as scenario]
             [engine.settings :as settings]
             [engine.hut-shelter-test :refer [hut-world]]
             [engine.test-util :as tu]
+            [jobs.movement.go-to.cut :as gcut]
             [triggers.survival.dusk-home :as dh]))
 
 (defn holds?
@@ -149,35 +151,43 @@
   (settings/with-settings {:jobs.lib.shelter/home-due {:margin-s 0 :slack 0 :arrive 4}}
     #(is (false? (holds? 11000 [[:home 150 0]])))))
 
+(defn sent-back-parent
+  "A parent whose go-to child to x 12 was left open in this session after a cut found the body at x 9 (seed: the go-to's
+  memory), the walk returned as it ends or waits."
+  [seed]
+  {:round (fn ^:async sent-back-round [c]
+            (when (nil? (get-in (ctx/mem c) [:children :walk]))
+              (ctx/update-mem! c assoc-in [:children :walk] (merge {:args {:pos [12 64 0]} :children {}} seed)))
+            (let [r (await (child/call-walk* c :walk {:pos [12 64 0]}))]
+              (if (= :continue r) r (ctx/end c :done nil))))})
+
 (defn ^:async walk-out-at-dusk
-  "[x the body ends at, the walk's wait] of a go-to from x 0 to x 12 at dusk, the home at x 2, with the scenario's register."
-  [register]
-  (let [{:keys [eng p]} (st/setup {:time 12000 :floor [-30 -30 30 30]})]
+  "[x the body ends at, the walk's wait, its seconds, the :sent-back entry] of a go-to from x 0 to x 12 at dusk, the
+  home at x 2, no trigger armed; seed?: the walk was cut at x 9 and the body is back home."
+  [seed?]
+  (let [{:keys [eng p]} (st/setup {:time 12000 :floor [-30 -30 30 30]})
+        seed {:open (gcut/session-id) :goal {:x 12 :y 64 :z 0} :closest 3 :ref 3 :last-dist 3 :prev {:x 9.5 :y 64 :z 0.5}}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'sent-back-parent (sent-back-parent (when seed? seed))))]
     (mem/write! (:store eng) :home {:pos {:x 2 :y 64 :z 0}} mem/place-policy)
-    (core/load-scenario! eng (scenario/parse register))
-    (let [id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [12 64 0]})) {})]
+    (let [id (core/submit! eng (tu/order '(sent-back-parent)) {})]
       (await (st/tick-n eng 20))
-      [(:x (st/pos-of p)) (select-keys (core/waiting eng id) [:reason :wait]) (:wait-s (core/waiting eng id))])))
+      [(:x (st/pos-of p)) (select-keys (core/waiting eng id) [:reason :wait]) (:wait-s (core/waiting eng id))
+       (:data (mem/latest (mem/view (:store eng)) :sent-back))])))
 
-(deftest an-armed-dusk-home-holds-a-walk-that-ends-where-it-holds-until-nightfall
-  ;; the trigger would cut the walk 4 blocks from home and walk the body back: the work job and the trigger hand the body to and fro
+(deftest a-walk-sent-back-home-at-dusk-waits-for-the-morning
+  ;; the dusk-home trigger cut the walk at x 9 and walked the body home: walked again, it is cut again, so the job and
+  ;; the trigger would hand the body to and fro; the walk learns it from its own cut, not from the trigger
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[x w] (await (walk-out-at-dusk "{:register [{:trigger :dusk-home}]}"))]
-          (is (< x 1) "armed, the body stays home")
-          (is (= {:reason :risky :wait :dusk} w)))
-        (is (> (first (await (walk-out-at-dusk "{:register []}"))) 10) "unarmed, the walk goes")))))
-
-(deftest with-the-night-trigger-armed-too-a-dusk-cut-walk-waits-for-dawn
-  ;; from nightfall the night trigger holds and cuts the walk again: the honest wait runs to dawn
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[x w wait-s] (await (walk-out-at-dusk "{:register [{:trigger :dusk-home} {:trigger :night}]}"))]
-          (is (< x 1))
+        (let [[x w wait-s sent] (await (walk-out-at-dusk true))]
+          (is (< x 1) "the body stays home")
           (is (= {:reason :risky :wait :dawn} w))
-          (is (> wait-s 500) "the night's 546 s come after the 27 s to nightfall"))))))
+          (is (> wait-s 500) "the night's 546 s come after the 27 s to nightfall")
+          (is (= {:place :home :to {:x 0 :y 64 :z 0}} (select-keys sent [:place :to]))))
+        (let [[x _ _ sent] (await (walk-out-at-dusk false))]
+          (is (> x 10) "never sent back, the walk goes")
+          (is (nil? sent)))))))
 
 (def bed-hut
   "hut-shelter-test's shut-door hut (room x 4..6, z -1..1) with a bed in its north-west corner."

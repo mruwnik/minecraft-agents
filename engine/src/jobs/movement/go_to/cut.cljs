@@ -8,6 +8,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.pen-entry :as pen-entry]
+            [jobs.lib.sent-back :as sent-back]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
@@ -240,22 +241,25 @@
      :sent-backs (cond-> (if keep? (:sent-backs m []) [])
                    sent-back? (conj (send-back (some-> (:prev m) cell-of) (- dist (:last-dist m dist)) (:trail m))))}))
 
-(defn note-restart!
-  "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
-  was cut. The cut state."
-  [c pos]
-  (let [walked (dissoc (get @approaches (:id c)) :call)
-        state (cut-state (merge (ctx/mem c) walked) pos (u/dist (u/self-pos c) pos))]
-    (fresh-record! c)
-    (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
-    (goal/note! c pos)
-    state))
-
 (defn way-hostiles
   "The hostiles the body knows of (seen, heard or remembered) within the hostile-near trigger's radius (ranged ones its
   ranged radius) of the way still ahead to pos, nearest the way first: what may send the body back again."
   [c pos]
   (danger-q/hostiles-near-way (:primitives c) pos (danger-q/hostile-radius) {:ranged-radius :fire-range}))
+
+(defn note-restart!
+  "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
+  was cut. The cut state; a cut that left the body farther from pos than the cut found it notes it (sent-back/note!)."
+  [c pos]
+  (let [m (merge (ctx/mem c) (dissoc (get @approaches (:id c)) :call))
+        dist (u/dist (u/self-pos c) pos)
+        state (cut-state m pos dist)]
+    (fresh-record! c)
+    (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
+    (goal/note! c pos)
+    (when (and (pos? (:cut-walks state)) (:prev m) (> dist (:last-dist m dist)))
+      (sent-back/note! c (:prev m) (boolean (seq (way-hostiles c pos)))))
+    state))
 
 (defn nearest-hostile
   "{:nearest-hostile name :nearest-hostile-at place} of the hostile nearest the way ahead to pos, else of the nearest

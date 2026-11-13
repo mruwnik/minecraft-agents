@@ -1,8 +1,9 @@
 ;; Run 4 F4 (card dca0eb9b). Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, glowstone in the roof, shut oak door at [15 0..1 18].
 ;; 1 sleep: the bed against the north wall (foot [16 0 13]); the body starts north of the hut. Should-succeed: it sleeps from inside
 ;;   the room (a stand that sees the bed), not from [16 0 11] behind the wall, 2 blocks from the bed.
-;; 2/3 a walk out of the closed hut at night: with the night trigger in the register the walk would be cut outside, so it waits
-;;   :risky (should-fail: no arrival); with the :night entry muted the same walk goes out (should-succeed).
+;; 2/3 a walk out of the closed hut at night: with the night trigger in the register the walk is cut outside once and the
+;;   body sent back; the walk learns it (walk.sent-back) and waits :risky for dawn (should-fail: no arrival, one firing);
+;;   with the :night entry muted the same walk goes out (should-succeed).
 ;; 4 wall-in: the body stands in a hole cut in the north wall at [15 0..1 12], a chest beside the hole outside. Should-succeed: no
 ;;   block goes into the room cells or the chest's cell.
 {:defaults
@@ -25,11 +26,13 @@
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 100]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 100}]
    :after [[:body-near [16.5 0 14] 2.5]]}
-  {:name "armed-night-trigger-holds-a-walk-out-of-the-hut"
+  {:name "armed-night-trigger-sends-a-walk-out-of-the-hut-back-once"
    :register [{:trigger :night}]
    :act [[:job (jobs.movement.go-to {:worth 3600 :pos #at [15 0 26]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 30}
-            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30}]
+   :expect [{:event {:source :job :kind :walk.sent-back} :within-s 60}
+            {:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 60}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60 :at-most 1}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 60}]
    :after [[:body-near [15.5 0 15.5] 3]]}
   {:name "muted-night-trigger-lets-the-walk-out-go"
    :register [{:trigger :night}]
