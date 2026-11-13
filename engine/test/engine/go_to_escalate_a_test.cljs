@@ -660,14 +660,34 @@
              "oak_fence" "spruce_fence_gate" "white_glazed_terracotta" "smooth_stone" "polished_andesite" nil]]
     (is (not (rules/natural? n)) (pr-str n))))
 
+(defn pour!
+  "Water flows into each cell under or, at the pool's level 63, beside water that a dig of p opens (the fake's own water
+  stays put)."
+  [p]
+  (.override (.-world p) "dig"
+             (fn ^:async f [token a impl]
+               (let [r (await (impl token a))
+                     wet? (fn [q] (= "water" (block p q)))]
+                 (loop [[q & more] [(mapv #(js/Math.floor (aget (.-pos a) %)) ["x" "y" "z"])]]
+                   (when q
+                     (let [[x y z] q
+                           in? (and (= "air" (block p q))
+                                    (or (wet? [x (inc y) z]) (and (= 63 y) (some wet? [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]]))))]
+                       (when in? (fake/set-block! p q "water"))
+                       (recur (if in? (conj (vec more) [x (dec y) z]) more)))))
+                 r)))
+  p)
+
 (defn ^:async walled-pocket-run!
   "go-to into the pocket [19 60..61 16] of blocks, from the stone's top at [16 64 16]: {:out :p :seen}. The body sees a
-  cell open to the air or water it stands in, and the faces round one; the pocket's air only once opened."
-  [blocks]
+  cell open to the air or water it stands in, and the faces round one; the pocket's air only once opened. With pour?,
+  water flows into what a dig opens (pour!)."
+  [blocks & [pour?]]
   (let [pocket #{[19 60 16] [19 61 16]}
         faces (fn [q] (map #(mapv + q %) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
         {:keys [eng p seen]} (setup {:self {:pos {:x 16.5 :y 64 :z 16.5}} :blocks blocks
                                      :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 4}]})
+        _ (when pour? (pour! p))
         open? (fn [q] (and (#{"air" "water"} (block p q)) (or (not (pocket q)) (some #(and (not (pocket %)) (= "air" (block p %))) (faces q)))))
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [19 60 16] :range 0 :unknown false})))]
@@ -694,17 +714,19 @@
 (deftest a-pocket-whose-only-way-is-under-a-pool-is-dug-to-through-the-pool-not-round-its-buried-walls
   ;; card f9ca065d: the bedrock box under the pool, its sides buried in the stone, has its one way in under the stone
   ;; path the body stands on. Every dig under the pool's level priced wet, however far, made the way through the pool dearer
-  ;; than guesses round the box, each a wrong one: 71 looks, 109 cells dug, and no way in
+  ;; than guesses round the box, each a wrong one: 71 looks, 109 cells dug, and no way in. The fall from the path into
+  ;; the shaft lands in the water its dig lets in: the path's end cell is not dug to stand in
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (walled-pocket-run! (merge (box 2 58 2 30 63 30 "stone") (box 14 58 11 24 62 21 "bedrock")
                                                                       (box 14 63 11 24 63 21 "water") (box 14 63 16 19 63 16 "stone")
-                                                                      {"19,60,16" "air" "19,61,16" "air" "19,62,16" "stone"})))]
+                                                                      {"19,60,16" "air" "19,61,16" "air" "19,62,16" "stone"})
+                                                               true))]
           (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation])))
           (is (= [19 60 16] (feet p)))
           (is (every? :ok? (events-of seen :go-to.guess-look)) "no guess round the box's buried walls")
-          (is (every? (fn [[x _ z]] (and (<= 14 x 24) (<= 11 z 21))) (dug-cells p)) "nothing dug outside the pool"))))))
+          (is (= #{[19 63 16] [19 62 16]} (dug-cells p)) "the shaft is dug from the stone path, not from its end cell dug beside the pool"))))))
 
 (def unseen-shaft
   "A 6-deep 1x1 shaft (feet y 58) in stone x -6..8, y 57..63; the goal on top 6 east."

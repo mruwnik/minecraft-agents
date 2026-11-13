@@ -769,3 +769,14 @@
         [s0 dig0 cells0] (try (set! cost/flood-origin-within? =) (run) (finally (set! cost/flood-origin-within? within)))]
     (is (= [s0 dig0] [s dig]))
     (is (< cells cells0) (str cells " cells, by equal origins " cells0))))
+
+(deftest a-fall-into-a-shaft-the-pool-pours-down-is-dug-from-the-path-beside-it
+  ;; a stone path into a pool ends over a shaft to a pocket 4 under the path: the shaft's dig lets the pool in, so the fall
+  ;; from the path lands in water, no dearer than one of 3; the path's end cell, dug to stand in, floods it all the same
+  (let [pool? (fn [[x y z]] (and (= y 5) (<= 14 x 24) (<= 11 z 21) (not (and (= z 16) (<= x 19)))))
+        w (fn [[x y z :as c]] (cond (pool? c) "water" (#{[19 2 16] [19 3 16]} c) "air" (>= y 6) "air" (= c [19 4 16]) "stone"
+                                    (= y 5) "stone" :else "bedrock"))
+        level (fn [[x y z]] (some->> [[x (inc y) z] [(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]] (filter #(= "water" (w %))) (map second) seq (apply max)))
+        flood {:level level :open (delay [5 0]) :dig (fn [under _] [1 under]) :step (fn [under] [0 under])}
+        r (dr/route w [17 6 16] [19 2 16] {:step-s 1 :fall-s (fn [d] (if (> d 3) 10 0)) :max-fall 6 :flood flood :max-nodes 100000})]
+    (is (= [[19 5 16] [19 4 16]] (:dig r)) (pr-str r))))

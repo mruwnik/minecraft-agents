@@ -549,15 +549,19 @@
                                 (and place-s (or dug? (and (.-open f) (not (.-fluid f)))))
                                 (when-let [pf (placeable nx my nz)]
                                   (try! nx ny nz :laid (base-s :laid) true (inc ny) ny (= :unseen pf))))
-                              ;; down by up to max-fall, through the cells it falls by, and level: n and its head
-                              (loop [dy 0 clear? (and (.-open ^js (at nx (inc my) nz)) (.-open ^js (at nx my nz)))]
+                              ;; down by up to max-fall, through the cells it falls by, and level: n and its head. Water
+                              ;; let into the column (inlet?: a cell of it with water beside or over) fills it to its
+                              ;; floor, so the fall lands in water: no hp, and its hole need not be open first
+                              (loop [dy 0 clear? (and (.-open ^js (at nx (inc my) nz)) (.-open ^js (at nx my nz)))
+                                     inlet? (boolean (and flood (or (level-at nx (inc my) nz) (level-at nx my nz))))]
                                 (when (<= dy max-fall)
                                   (let [ny (- my dy)
+                                        inlet? (or inlet? (boolean (and flood (level-at nx ny nz))))
                                         below-open? (.-open ^js (at nx (dec ny) nz))]
                                     (when (and (.-floor ^js (at nx (dec ny) nz)) (not (refused? ck nx (dec ny) nz)))
-                                      (try! nx ny nz :walk (+ (base-s :walk) (aget fall-prices dy)) false (if (zero? dy) (inc ny) (inc my)) ny false))
-                                    (when (or (< (inc dy) free-fall) (and clear? below-open?))
-                                      (recur (inc dy) (and clear? below-open?))))))
+                                      (try! nx ny nz :walk (+ (base-s :walk) (if inlet? 0 (aget fall-prices dy))) false (if (zero? dy) (inc ny) (inc my)) ny false))
+                                    (when (or (< (inc dy) free-fall) (and clear? below-open?) inlet?)
+                                      (recur (inc dy) (and clear? below-open?) inlet?)))))
                               (recur (+ i 2)))))))))
         start-key (key fx (from 1) fz)
         route-to (fn [ck]
