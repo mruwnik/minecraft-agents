@@ -183,4 +183,6 @@
    gap-share
    ;; options.unknown.changed (fn x y z: the chance a remembered cell changed since it was seen; nil: none did) and the hp
    ;; of risk a death weighs (options.unknown.deathHp, else lethal-s over riskWeight)
-   ^js unk-changed unk-death])
+   ^js unk-changed unk-death
+   ;; options.area with the start in it (nil: none): x0 y0 z0 x1 y1 z1 of the feet cells a plan never leaves (see outsideArea)
+   ^js area])

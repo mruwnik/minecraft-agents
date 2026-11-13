@@ -3,6 +3,10 @@
 ;; Box x 0..20 of a 40 long plot; the register entry is the recipe worlds/Leo/WORLD.md gives for the base.
 ;;   walk-out-is-cut-and-body-returns (should-succeed): a go-to toward x 30 leaves the box; the trigger fires, its go-to ends at x 10, the body is back inside.
 ;;   walk-inside-never-fires (should-succeed): the same trigger and a go-to to x 15: it never fires and the job arrives.
+;;   work-area-route-stays-inside (should-succeed): the box as the walk's work area (setting jobs.lib.walk.world/area); a wall
+;;     across z 8 with gaps at x 2 (inside) and x 22 (outside, the nearer): the walk takes x 2, the trigger never fires.
+;;   work-area-goal-outside-ends-at-once (should-fail): the same area, a goal at x 30: go-to ends nothing-possible
+;;     :outside-area without a step out, the trigger never fires.
 {:defaults
  {:tags [:movement :triggers] :time :any
   :plot {:height 10 :length 40 :width 16}
@@ -21,4 +25,17 @@
   {:name "walk-inside-never-fires"
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [15 0 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 5}]}
+  {:name "work-area-route-stays-inside"
+   :body {:at [16.5 0 4.5]}
+   :blocks [[:fill [0 0 8] [1 1 8] "stone"] [:fill [3 0 8] [21 1 8] "stone"] [:fill [23 0 8] [39 1 8] "stone"]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 12] :range 1 :ways #{:walk}
+                                     :settings {:jobs.lib.walk.world/area {:min #at [0 -2 0] :max #at [20 6 15]}}})]]
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 60 :until {:source :job :kind :completed :data {:arrived true}}}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [16.5 0 12.5] 2]]}
+  {:name "work-area-goal-outside-ends-at-once"
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 8] :range 1 :ways #{:walk :clear-seal}
+                                     :settings {:jobs.lib.walk.world/area {:min #at [0 -2 0] :max #at [20 6 15]}}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :outside-area}} :within-s 20 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 5}]}]}

@@ -166,15 +166,21 @@
 (defn toll-fn
   "(fn [x y z landing?]) the factor of its own seconds a step into feet cell x y z costs more under tolls (go-to :tolls,
   [{:x :y :z :factor :trample}], as the walk planner prices them: a :trample row only a step that lands, up or down),
-  ##Inf for a cell no route enters; 0 everywhere without tolls. more: a second table (threat tolls, cost.tolls/packed) summed on top."
-  ([tolls] (toll-fn tolls nil))
-  ([tolls more]
-  (if (and (empty? tolls) (empty? more))
-    (constantly 0)
-    (let [^js t (wworld/merged-tolls (when (seq tolls) (wworld/merged-tolls nil tolls)) more) ^js cells (.-cells t) ^js trample (.-trample t)]
-      (fn [x y z landing?]
-        (let [k (pbase/cell-key x y z)]
-          (+ (or (.get cells k) 0) (if landing? (or (.get trample k) 0) 0))))))))
+  ##Inf for a cell no route enters (also one outside the body's work area for a route from a cell inside it,
+  wworld/outside-area-fn); 0 everywhere without either. more: a second table (threat tolls, cost.tolls/packed) summed on top."
+  ([tolls] (toll-fn tolls nil nil))
+  ([tolls more] (toll-fn tolls more nil))
+  ([tolls more from]
+   (let [out? (when from (wworld/outside-area-fn from))
+         f (if (and (empty? tolls) (empty? more))
+             (constantly 0)
+             (let [^js t (wworld/merged-tolls (when (seq tolls) (wworld/merged-tolls nil tolls)) more) ^js cells (.-cells t) ^js trample (.-trample t)]
+               (fn [x y z landing?]
+                 (let [k (pbase/cell-key x y z)]
+                   (+ (or (.get cells k) 0) (if landing? (or (.get trample k) 0) 0))))))]
+     (if out?
+       (fn [x y z landing?] (if (out? x y z) ##Inf (f x y z landing?)))
+       f))))
 
 (defn search
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
@@ -260,7 +266,8 @@
         ;; a step whose feet, head or floor is unseen, as cost/unseen-route-s prices one
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
         way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
-        toll-f (toll-fn tolls threat-tolls)
+        toll-f (toll-fn tolls threat-tolls from)
+        area? (some? (wworld/outside-area-fn from))
         only-keys (when only (let [s (js/Set.)] (doseq [[x y z] only] (.add s (key x y z))) s))
         ;; the columns of only's cells: a step into any other is refused unread
         only-cols (when only (let [s (js/Set.)] (doseq [[x _ z] only] (.add s (key x fy z))) s))
@@ -490,7 +497,7 @@
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
                            absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (nth (cell-of ck) 1))) 0)
                            step (+ (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s wet-s)
-                           f (if (or tolls threat-tolls) (toll-f nx ny nz (not= ny (nth (cell-of ck) 1))) 0)
+                           f (if (or tolls threat-tolls area?) (toll-f nx ny nz (not= ny (nth (cell-of ck) 1))) 0)
                            nd (when-not (== ##Inf f) (+ (aget from-node 0) step (if (pos? f) (* f step) 0)))
                            sig (sig-of (aget from-node 9) (aget acc 2))
                            run (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 3)) (aget from-node 6) 0)) 0)]

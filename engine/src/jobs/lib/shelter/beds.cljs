@@ -62,10 +62,16 @@
   [p pos]
   (not (bed-occupied? p pos)))
 
+(def bed-reach
+  "Blocks from a bed within which sleep's walk ends."
+  2)
+
 (defn bed-permit
-  "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed that is bed-free?."
+  "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed that is bed-free? and that a walk from the
+  body's cell may end within bed-reach of (not outside its work area, wworld/goal-outside-area?)."
   [p]
-  (fn [pos] (bed-free? p pos)))
+  (let [{:keys [x y z]} (sh-sense/feet p)]
+    (fn [pos] (and (bed-free? p pos) (not (wworld/goal-outside-area? [x y z] pos bed-reach))))))
 
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within

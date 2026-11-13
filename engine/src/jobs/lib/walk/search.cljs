@@ -182,7 +182,7 @@
 
 (defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (wworld/body-cell c)]
-    (cond-> [[x y z] to range weight (policy-key policy) walls]
+    (cond-> [[x y z] to range weight (policy-key policy) walls (wworld/area)]
       pw (conj (wworld/danger-key pw) (wworld/avoid-key pw) (wworld/tolls-key pw) (wworld/unknown-key pw) (wworld/toll-inputs-key pw)))))
 
 (defn goal-unloaded?
@@ -310,10 +310,10 @@
   taken or a floor learned missing begins a new search priced with it (the walk's watch takes every mob sensed at the
   plan as known)."
   [who k quoted]
-  (let [same #(mapv (fn [i] (nth % i nil)) (if quoted (range 6) [0 1 2 3 4 5 6 9]))
+  (let [same #(mapv (fn [i] (nth % i nil)) (if quoted (range 7) [0 1 2 3 4 5 6 7 10]))
         want (same k)]
     (first (filter #(and (not (:within %)) (= want (same (:key %)))
-                         (or quoted (threats/toll-inputs-no-worse? (nth k 10 nil) (nth (:key %) 10 nil))))
+                         (or quoted (threats/toll-inputs-no-worse? (nth k 11 nil) (nth (:key %) 11 nil))))
                    (vals (get @searches who))))))
 
 (defn seed-from

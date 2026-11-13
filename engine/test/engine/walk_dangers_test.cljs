@@ -133,7 +133,7 @@
   "The toll inputs a walk's search key holds (part 10) over the costed world of a body with world spec (merged)."
   [world]
   (let [c (ready-test/ctx-of (merge {:floor [-5 -20 45 20]} world))]
-    (nth (wsearch/search-key c [40 64 0] 1 1 executor/policy nil (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? true})) 10)))
+    (nth (wsearch/search-key c [40 64 0] 1 1 executor/policy nil (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? true})) 11)))
 
 ;; the tolls of a sensed mob reach the search key only through its weight-free inputs: a walk's kept search must not go
 ;; on priced for a body that has since been hurt or disarmed

@@ -39,7 +39,38 @@
    ::dive-pause-s {:default 120 :doc "Seconds after a breathe reflex fired in which walks near the spot (::dive-pause-near) plan no dive (head under water) except to air: the walk that was cut would plan the same dive again." :spec (a/num-in 0 nil)}
    ::dive {:default true :doc "Whether walks may plan a dive (head under water); false plans none except to air, as after a breathe reflex (a walk to a block to dig has no business under a lake)." :spec boolean?}
    ::dive-pause-near {:default 30 :doc "Blocks from where a breathe reflex fired within which walks plan no dive for ::dive-pause-s." :spec (a/num-in 0 nil)}
+   ::area {:default false :doc "The body's work area {:min [x y z] :max [x y z]} (feet cells, max included): a walk that starts inside it plans no step out of it (the planner's options.area), so a goal with no way inside it is no way; from outside it walks plan freely. false: none." :spec (a/or-of false? (a/map-with {:min a/position? :max a/position?}))}
    ::gait {:default :auto :doc "How go-to walks when its :gait is nil: :auto, :walk or :sneak." :spec cost/gaits}})
+
+(defn area
+  "The ::area setting: the body's work area, false for none."
+  []
+  (settings/get settings ::area))
+
+(defn area-option
+  "The planner's options.area of the ::area setting, nil for none."
+  []
+  (when-let [{:keys [min max]} (area)]
+    (let [corner (fn [v] (let [{:keys [x y z]} (a/cell v)] #js [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))]
+      #js {:min (corner min) :max (corner max)})))
+
+(defn outside-area-fn
+  "(fn [x y z]) whether a feet cell lies outside the ::area for a route from cell from ([x y z]), as the planner's
+  options.area rules: nil with no area or with from outside it."
+  [[fx fy fz]]
+  (when-let [^js a (area-option)]
+    (let [[x0 y0 z0] (.-min a) [x1 y1 z1] (.-max a)
+          out? (fn [x y z] (or (< x x0) (< y y0) (< z z0) (> x x1) (> y y1) (> z z1)))]
+      (when-not (out? fx fy fz) out?))))
+
+(defn goal-outside-area?
+  "Whether a walk from cell from ([x y z]) can never end within range of goal ({:x :y :z}, :y nil for a column): from
+  inside the ::area, no cell of the area is within range of it (outside-area-fn)."
+  [from goal range]
+  (when-let [^js a (when (outside-area-fn from) (area-option))]
+    (let [gap (fn [i v] (if (nil? v) 0 (max 0 (- (aget (.-min a) i) v) (- v (aget (.-max a) i)))))
+          dx (gap 0 (js/Math.floor (:x goal))) dy (gap 1 (some-> (:y goal) js/Math.floor)) dz (gap 2 (js/Math.floor (:z goal)))]
+      (> (+ (* dx dx) (* dy dy) (* dz dz)) (* range range)))))
 
 (defn unknown-spec
   "go-to's :unknown as the mask spec of one go-to call (the planner's options.unknown less what path-world adds): the prices

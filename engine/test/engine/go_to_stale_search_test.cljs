@@ -115,7 +115,7 @@
 ;; a quote prices and is not walked, so it goes on whatever its dangers and mask; a walk's search goes on only over the
 ;; same dangers and mask (a floor learned missing must not be walked on a plan that thought it there)
 (deftest which-unfinished-search-goes-on
-  (let [key-with (fn [dangers tolls mask inputs] [[2 64 2] [45 64 45] 0 1 :policy nil dangers nil tolls mask inputs])
+  (let [key-with (fn [dangers tolls mask inputs] [[2 64 2] [45 64 45] 0 1 :policy nil false dangers nil tolls mask inputs])
         creeper ["creeper" {:x 4 :y 64 :z 2} nil]
         kept (key-with nil 2 [0 0 2] [{creeper 1} 18 {} nil])]
     (reset! wsearch/searches {:who {kept {:key kept}}})

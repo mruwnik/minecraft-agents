@@ -53,6 +53,8 @@
      cell into the to cell costs those seconds more, the same way; a to cell-key of -1 prices every move of that kind out of
      the cell that has no entry of its own (a step the walker failed at, jobs.lib.walk.edges).
      tolls.trample (optional): the same kind of Map, but its factor applies only to a move that lands (jump, drop, gap jump, water exit), not a level step.
+   - options.area {min max} (#js [x y z] each, max included): a search whose start cell is inside the box enters no feet
+     cell outside it, the goal cell too (the body's work area, jobs.lib.walk.world ::area); from a start outside it nothing is refused.
    - options.damageBudget (Infinity): the most hp of certain damage a path may take (falls over 3 blocks, plants that hurt on
      touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
      is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.
@@ -268,6 +270,14 @@
        (/ (+ (js/Math.max (or-else (.-peekS unknown) 0) (or-else (.-aimS unknown) 0)) (js/Math.max 0 (or-else (.-lightCost unknown) 0)))
           (js/Math.min (unchecked-get costs "walkS") (unchecked-get costs "sprintS"))))))
 
+;; options.area as x0 y0 z0 x1 y1 z1 when from is inside it, nil otherwise: a start outside is a body out of its area,
+;; and every way back in starts outside
+(defn- area-of [^js area ^js from]
+  (when (some? area)
+    (let [^js lo (.-min area) ^js hi (.-max area) x (.-x from) y (.-y from) z (.-z from)]
+      (when (and (<= (aget lo 0) x (aget hi 0)) (<= (aget lo 1) y (aget hi 1)) (<= (aget lo 2) z (aget hi 2)))
+        (js/Int32Array. #js [(aget lo 0) (aget lo 1) (aget lo 2) (aget hi 0) (aget hi 1) (aget hi 2)])))))
+
 (defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
         ^js from (.-from query)
@@ -443,7 +453,9 @@
      (base/gap-miss-share (option options "gapMissJumps" base/GAP-MISS-JUMPS))
      ;; unk-changed unk-death
      (when unk (.-changed unknown))
-     (if (and unk (some? (.-deathHp unknown))) (.-deathHp unknown) (if (pos? rw) (/ lethal-s rw) 0)))))
+     (if (and unk (some? (.-deathHp unknown))) (.-deathHp unknown) (if (pos? rw) (/ lethal-s rw) 0))
+     ;; area
+     (area-of (.-area options) from))))
 
 ;; the body's box reaches this far from its centre in x and z: the client physics' width, which decides what holds it up
 (def HITBOX-HALF constants/body-half-width)

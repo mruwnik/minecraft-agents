@@ -575,7 +575,7 @@
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
         max-fall (get (merge prices route-opts) :max-fall)
-        toll-f (dig-route/toll-fn (:tolls route-opts) (:threat-tolls route-opts))
+        toll-f (dig-route/toll-fn (:tolls route-opts) (:threat-tolls route-opts) from)
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig, and the digs and steps inside water it lets in (dig-route/flood-s). A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of reading its feet and head cells (:read-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth

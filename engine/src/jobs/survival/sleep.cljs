@@ -16,6 +16,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -24,7 +25,7 @@
 (def doc
   "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed, else the live :spawn-bed, at any distance (go-to prices the walk).
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
-  (an unexpired entry with the same position, written from the cell the body is in now), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
+  (an unexpired entry with the same position, written from the cell the body is in now), else :bed-unreachable {:pos}; nor, from inside the body's work area (jobs.lib.walk.world ::area), out of its reach, else :bed-outside-area {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open (unknown, :look, while the body has not looked round this run: the round looks once, then decides). A body already asleep is done.
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
@@ -97,7 +98,8 @@
     {:reason :bed-open :pos bed :text "the bed is open (not shut in a spawn-free roofed room)"}))
 
 (defn bed-status
-  "Ok when asleep already or with a bed to sleep in, else later :no-bed, :bed-unreachable (given up on) or :bed-open; :look
+  "Ok when asleep already or with a bed to sleep in, else later :no-bed, :bed-unreachable (given up on), :bed-outside-area
+  (no walk from inside the body's work area ends by it, wworld/goal-outside-area?) or :bed-open; :look
   :bed-open while the room beside the bed is unlooked (the round's look decides)."
   [c]
   (let [bed (bed-of c)
@@ -106,6 +108,8 @@
       (sh-sense/sleeping? (:primitives c)) (contract/ok :asleep "asleep")
       (nil? bed) (contract/later :no-bed "no bed given or remembered within the bed radius")
       (unreachable-bed? c bed) (contract/later :bed-unreachable "the bed was given up on as unreachable" :pos bed)
+      (let [{:keys [x y z]} (sh-sense/feet (:primitives c))] (wworld/goal-outside-area? [x y z] bed sh-beds/bed-reach))
+      (contract/later :bed-outside-area "the bed is outside the body's work area" :pos bed)
       open (contract/later :bed-open (:text open) :pos bed)
       (near-bed-unlooked? c bed) (contract/look :bed-open "the room beside the bed is not looked at yet" :pos bed)
       :else (contract/ok :bed "a bed" :pos bed))))
@@ -254,7 +258,7 @@
         taken? #(not (sh-beds/bed-free? p bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
         sealed? (boolean (or (sh-inside/sheltered-in c) (own-seal-near? c)))
-        quote-args {:pos bed :range 2 :ways (if sealed? seal-ways walk-ways)}
+        quote-args {:pos bed :range sh-beds/bed-reach :ways (if sealed? seal-ways walk-ways)}
         t0 (ctx/now c)
         q (when-not (taken?) (await (ctx/quote c 'jobs.movement.go-to quote-args)))
         route (:route q)

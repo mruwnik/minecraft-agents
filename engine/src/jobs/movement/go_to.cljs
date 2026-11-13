@@ -47,7 +47,8 @@
   - Ends at once, before any walk, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
     or :bad-args (a given :floor :health over 20, a :spend :job-time under 0.1); condition-failed :unknown-place (no
-    recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way.
+    recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way; one from inside the body's work area
+    (jobs.lib.walk.world ::area, which no walk from inside it leaves) to a goal with no cell of the area within :range, :outside-area.
   - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round the body shut in by them, or round a
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :dig-route (a route dug through the walls), :stair (a stair up, its own stair cut again) and :dig-out (out of
@@ -277,6 +278,8 @@
     (cond
       refusal (end/refuse! c refusal)
       (not (ways/way? c :walk)) (end/refuse! c {:reason :no-way :message "the call's :ways leave out :walk"})
+      (and goal (wworld/goal-outside-area? (end/feet-cell c) goal (:range (:args c) 1)))
+      (end/refuse! c {:reason :outside-area :message (str "the goal " (pr-str (mapv goal [:x :y :z])) " is outside the body's work area (setting " ::wworld/area ")")})
       :else
       (or (await (step-off! c)) (await (walk-attempt! c goal pos))))))
 

@@ -475,7 +475,7 @@ names (`:library`, `jobs.lib.cond`), never evaluated; only library names and lit
   (`"inventory bread 9 >= 8"`, reason the value's name). `(since :kind)`: seconds since memory last recorded an
   unexpired entry of that kind.
 - Statuses: `(daytime) (mounted) (in-water) (hostile-near r)` (a real danger) `(burning) (suffocating) (night-unsafe)
-  (wearing "item") (outside-box [x y z] [x y z])`; `outside-box` takes two literal corner vectors (max cell included) and holds when the body's cell is beyond them in any axis, the base of a stay-in-area trigger (the entry's job a `go-to` back inside; an ad hoc entry is `:danger` level); each has an ok and a fail reason (`(mounted)`: `:mounted` / `:not-aboard`).
+  (wearing "item") (outside-box [x y z] [x y z])`; `outside-box` takes two literal corner vectors (max cell included) and holds when the body's cell is beyond them in any axis, the base of a trigger that walks a body found outside its work area (Zones and claims) back in (the entry's job a `go-to` back inside; an ad hoc entry is `:danger` level); each has an ok and a fail reason (`(mounted)`: `:mounted` / `:not-aboard`).
 - `(and ...)`: any `:never`, else the first `:later`, else the first `:look`, else `:ok`. `(or ...)`: the first `:ok`,
   else `:look`, `:later`, `:never`. Both ask every part. `(not a)` swaps `:ok` and a definite `:later`/`:never`, keeping
   a's text and reason. `(because :reason "text"? a)` renames a failing reason.
@@ -662,6 +662,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
 - Survival jobs (`breathe`, `extinguish`, `shut-in`, the crop dig of `get-food`) prefer a permitted option and break
   another's block only as a last resort (warn `<job>.trespass-last-resort`); `get-food` takes another's crops only with the caller's `:ignore-zones?` plus real hunger, else its no-food text names what it left. They never take from a foreign container. A
   missing zone list never blocks a survival job.
+- **Work area**: the body setting `jobs.lib.walk.world/area` `{:min [x y z] :max [x y z]}` keeps it in a box: from inside it, walks and dig routes plan no cell outside (the planner's `options.area`), go-to to a goal out of reach of it ends nothing-possible `:outside-area`, beds out of reach of it are not chosen (sleep: later `:bed-outside-area`). From outside it nothing is refused.
 - A plan's footprint is the body's own when its `:metadata :by` equals the body's username (case-insensitive).
 - The farmland under a plan's crop cell is no cell of the plan (never a `:plan-cells` permission), but `jobs.lib.access/zone-input` adds it to `:footprints` (`world/soil-footprints`), so walks, stairs and cleanup never dig it.
 - `access.stair` and `gather.mine` never dig a base block (chest, bed, furnace, table, door, sign: `rules/base-block?`), anyone's.

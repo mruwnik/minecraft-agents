@@ -271,6 +271,7 @@
         (do (set! (.-lethal-seen s) true) nil)
         ;; an infinite toll is a cell no plan enters, the goal cell too
         (and (some? (.-tolls s)) (== ##Inf (.tollOf s x y z))) nil
+        (and (some? (.-area s)) ^boolean (.outsideArea s x y z)) nil
         ;; a seen mob fills its cell: no plan walks through it
         (and (pos? (.-n-dangers s)) ^boolean (.dangerBlocks s x y z)) nil
         :else
@@ -380,6 +381,11 @@
   ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it does not)
   (tramples [s x y z move]
     (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget (.-tbl-farmland s) (.stateAt ^js (.-snapshot s) x y z)) 1)))
+
+  ;; whether x,y,z lies outside options.area (a search started inside it)
+  (outsideArea [s x y z]
+    (let [^js a (.-area s)]
+      (or (< x (aget a 0)) (< y (aget a 1)) (< z (aget a 2)) (> x (aget a 3)) (> y (aget a 4)) (> z (aget a 5)))))
 
   ;; the factor of its own seconds the caller's toll (options.tolls) adds to entering x,y,z, 0 for none
   (tollOf [s x y z]

@@ -84,3 +84,29 @@
     (is (lands-on-toll? plain :exit tolled) "no tolls: the way leaves the water onto the bank toward the goal")
     (is (= "found" (:status bent)))
     (is (not (lands-on-toll? bent :exit tolled)) "an exit onto tolled cells is paid, so the way leaves the water elsewhere")))
+
+;; options.area: a wall across x 20 with a gap at z 0 (outside an area of z 5..40) and one at z 30 (inside it)
+(def gapped (pf/world {:fill [[20 64 -2 20 66 -1 "stone"] [20 64 1 20 66 29 "stone"] [20 64 31 20 66 40 "stone"]]}))
+(def area {:area {:min [-2 60 5] :max [40 70 40]}})
+
+(defn in-area? [r] (every? (fn [[_ _ z]] (>= z 5)) (pf/cells r)))
+
+(deftest a-route-from-inside-the-area-never-leaves-it
+  (let [from {:x 0 :y 64 :z 10}
+        plain (pf/run gapped (pf/near 38 64 10) {} from)
+        kept (pf/run gapped (pf/near 38 64 10) area from)]
+    (is (not (in-area? plain)) "without the area the near gap, outside it, is the way")
+    (is (= "found" (:status kept)))
+    (is (in-area? kept) "with it the way goes through the far gap")))
+
+(deftest a-goal-only-reached-by-leaving-the-area-has-no-route
+  (let [shut (pf/world {:fill [[20 64 -2 20 66 -1 "stone"] [20 64 1 20 66 40 "stone"]]})
+        from {:x 0 :y 64 :z 10}]
+    (is (= "found" (:status (pf/run shut (pf/near 38 64 10) {} from))))
+    (is (not= "found" (:status (pf/run shut (pf/near 38 64 10) area from))))
+    (is (not= "found" (:status (pf/run gapped (pf/near 10 64 0) area from))) "a goal outside the area")))
+
+(deftest a-route-from-outside-the-area-is-free
+  (let [r (pf/run gapped (pf/near 38 64 0) area {:x 0 :y 64 :z 0})]
+    (is (= "found" (:status r)))
+    (is (not (in-area? r)))))
