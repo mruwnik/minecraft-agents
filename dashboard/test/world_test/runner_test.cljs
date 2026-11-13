@@ -13,7 +13,7 @@
   (let [argv (vec (r/body-argv {:body "B" :world "w"} "/tmp/s.edn"))
         script (.indexOf argv "out/body-release.cjs")]
     (is (= ["--max-old-space-size=256" "--heap-growing-percent=100" "--max-semi-space-size=8" "--no-sparkplug"] (subvec argv 0 script)))
-    (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--warm" "--fresh"]
+    (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--warm"]
            (vec (drop (inc script) argv))))))
 
 (deftest a-case-that-needs-the-night-skip-holds-the-presence-lock-alone
@@ -25,8 +25,8 @@
 (deftest a-cold-launch-leaves-out-warm
   (is (not-any? #{"--warm"} (r/body-argv {:body "B" :world "w" :cold-bodies true} "/tmp/s.edn"))))
 
-(deftest a-restoring-launch-keeps-engine-edn-by-leaving-out-fresh
-  (is (not-any? #{"--fresh"} (r/body-argv {:body "B" :world "w"} "/tmp/s.edn" true))))
+(deftest a-launch-never-passes-fresh-which-would-delete-the-seeded-memory
+  (is (not-any? #{"--fresh"} (r/body-argv {:body "B" :world "w"} "/tmp/s.edn"))))
 
 (deftest a-start-waits-for-either-started-or-restored
   (are [kind] (x/matches? r/started-event {:source :system :kind kind})

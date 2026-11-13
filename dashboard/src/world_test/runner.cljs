@@ -559,19 +559,17 @@
                  (fs/rmSync (run-dir opts) #js {:recursive true :force true}))))))
 
 (defn body-args
-  "The body's own argv (after the bundle). --warm keeps the process between cases (see park-body!). --fresh drops
-  engine.edn (the queue and register), unless restore?."
-  [opts scenario restore?]
+  "The body's own argv (after the bundle). --warm keeps the process between cases (see park-body!). Never --fresh: it
+  would delete the memory.edn start-body! seeds; start-body! removes engine.edn itself unless restoring."
+  [opts scenario]
   (concat ["--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
-          (when-not (:cold-bodies opts) ["--warm"])
-          (when-not restore? ["--fresh"])))
+          (when-not (:cold-bodies opts) ["--warm"])))
 
 (defn body-argv
   "node argv for a body (V8 flags: build/body-v8-flags)."
-  ([opts scenario] (body-argv opts scenario false))
-  ([opts scenario restore?]
-   (into-array (concat (conj build/body-v8-flags "out/body-release.cjs")
-                       (body-args opts scenario restore?)))))
+  [opts scenario]
+  (into-array (concat (conj build/body-v8-flags "out/body-release.cjs")
+                      (body-args opts scenario))))
 
 (defn await-online!
   "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it (the start check polls the rest)."
@@ -623,11 +621,16 @@
   (atom #{}))
 
 (defn start-body!
-  "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
-  engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
-  memory-data when given (the case's :memory seed; the body reads the file as it starts). restore?: starts without
-  --fresh, so the body restores its engine.edn."
+  "Starts the body with a scenario holding register; resolves once it logged :system :started. Its engine.edn and
+  results.edn are deleted first (a body started with --fresh would delete memory.edn too), unless restore?, so the body
+  restores its engine.edn. The body's own engine/memory.edn is deleted next unless keep-memory?, then written from
+  memory-data when given (the case's :memory seed; the body reads the file as it starts)."
   [opts register keep-memory? memory-data restore?]
+  (when-not restore?
+    (doseq [name ["engine.edn" "results.edn"]
+            :let [file (path/join (body-dir opts) "engine" name)]
+            :when (fs/existsSync file)]
+      (fs/unlinkSync file)))
   (when-not keep-memory?
     (clear-stale-plans! opts)
     (clear-body-notes! opts)
@@ -649,10 +652,10 @@
     (let [parked (get @bodies (:body opts))
           child (if (and (contains? @parked-bodies (:body opts)) (nil? (.-exitCode parked)))
                   (do (swap! parked-bodies disj (:body opts))
-                      (.write (.-stdin parked) (str (js/JSON.stringify (clj->js {:op "start" :args (body-args opts scenario restore?)})) "\n"))
+                      (.write (.-stdin parked) (str (js/JSON.stringify (clj->js {:op "start" :args (body-args opts scenario)})) "\n"))
                       parked)
                   (let [fd (fs/openSync out "a")
-                        child (cp/spawn "node" (body-argv opts scenario restore?)
+                        child (cp/spawn "node" (body-argv opts scenario)
                                         #js {:cwd (repo-path "engine") :stdio #js ["pipe" fd fd "pipe"]
                                              :env (body-env opts)})]
                     (.on (.-stdin child) "error" (fn [_] nil))
