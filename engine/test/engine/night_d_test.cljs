@@ -57,7 +57,7 @@
           (let [log (await (with-child-log #(tu/run-until-empty eng 80)))]
             (is (= 1 (count (filter #(= :flee (first %)) log))) "one walk, never the same target twice")
             (let [args (nth (first (filter #(= :flee (first %)) log)) 2)]
-              (is (= {:place :home :range 0 :floor {:health 0}} (dissoc args :worth)))
+              (is (= {:place :home :range 0 :floor {:health 0}} (dissoc args :worth :spend)))
               (is (pos? (:worth args)) "the flee walk is worth what the next way costs more, not the night's 0: go-to's unseen-floor turn-back would end it")))
           (is (= 1 (count (st/emitted seen :shelter.flee_failed))))
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
@@ -87,6 +87,24 @@
           (is (<= 2 (count flees)) "walked again after the cut")
           (is (apply = (map #(nth % 2) flees)) "the same target"))))))
 
+(deftest a-flee-walk-that-spends-its-price-nearer-the-target-is-priced-again-one-no-nearer-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[moved? fails] [[true 0] [false 1]]]
+          (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))
+                n (atom 0)
+                log (await (with-child-log #(tu/run-until-empty eng 80)
+                             (fn [_ k _ _] (when (and (= :flee k) (= 1 (swap! n inc)))
+                                             (when moved? (st/teleport! p 6 64 0))
+                                             {:kind :limit-reached :cause {:reason :unreachable :why :search-spent :line :job-time}}))))
+                flees (filter #(= :flee (first %)) log)]
+            (is (and (seq flees) (every? #(pos? (get-in (nth % 2) [:spend :job-time])) flees)) "each walk spends at most the flee's price")
+            (is (= fails (count (st/emitted seen :shelter.flee_failed))))
+            (is (= (if moved? 1 0) (count (st/emitted seen :shelter.flee_leg))))
+            (is (= (if moved? [:roofed-place] []) (mapv :target (st/emitted seen :shelter.fled)))
+                (if moved? "walked on to the same target from where the leg ended" "the target is not walked to again tonight"))))))))
+
 (deftest with-nothing-to-dig-here-the-night-flees-to-seen-ground-the-carried-tools-dig
   (async done
     (tu/run-async done
@@ -111,6 +129,7 @@
         (let [[log seen calls] (await (flee-with (fn [_] {:uses {:job-time [0 7 0]}})))]
           (is (seq (filter #(= :flee (first %)) log)))
           (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the quote's price is reported")
+          (is (= [7] (map #(get-in (nth % 2) [:spend :job-time]) (filter #(= :flee (first %)) log))) "the walk spends at most that price")
           (is (every? #(or (:place %) (:pos %)) calls) "each candidate is quoted as the flight would walk it")
           (is (and (seq calls) (every? #(nil? (:worth %)) calls)) "each candidate is quoted at the night's worth, inherited: the flight's own worth is derived from the quote"))))))
 
@@ -407,7 +426,7 @@
           (await (tu/run-until-empty eng 160))
           (let [fled (st/emitted seen :shelter.fled)]
             (is (= [:ground] (mapv :target fled)))
-            (is (<= 27 (:x (:pos (first fled)))) "the solid patch, not the nearer ground over water")))))))
+            (is (<= 27 (:x (:goal (first fled)))) "the solid patch, not the nearer ground over water")))))))
 
 ;; ------------------------------------------------------------------ a bed not yet looked at
 (deftest a-bed-in-the-room-not-yet-looked-at-is-slept-in-not-replaced-by-the-carried-bed

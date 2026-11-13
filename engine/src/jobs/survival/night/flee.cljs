@@ -13,6 +13,7 @@
             [jobs.lib.expiry :as expiry]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
+            [jobs.lib.price :as price]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.seal :as seal]
             [jobs.lib.sense :as sense]
@@ -213,26 +214,39 @@
                                        :searching))))))
 
 (defn ^:async flee!
-  "Walk (go-to :flee) to target t, a flee-target; :again. Resumes after a cut (:fleeing). A walk that ends writes the
-  target into :flee-failed (never the same twice), counts a flee and, arrived or not, emits shelter.fled or
-  shelter.flee_failed; the body moved, so the niche may be tried again."
+  "Walk (go-to :flee) to target t, a flee-target; :again. Resumes after a cut (:fleeing). The walk spends at most t's
+  :cost, the price the flee was bought at (Q55): one that spends it a block or more nearer the target than it began
+  is a leg (shelter.flee_leg), priced again from where the body stands like any pass, the target still untried; one
+  that ends otherwise writes the target into :flee-failed (never the same twice), counts a flee and, arrived or not,
+  emits shelter.fled or shelter.flee_failed. Either way the body moved, so a dig-in and the niche may be tried again."
   [c t]
   (hold/busy! c)
-  (ctx/update-mem! c assoc :fleeing t)
-  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (cond-> (assoc (flee-args t) :floor cost-health/spend-down) (:worth t) (assoc :worth (:worth t)))))]
+  (let [t (cond-> t (nil? (:leg-from t)) (assoc :leg-from (u/dist (u/self-pos c) (:pos t))))
+        _ (ctx/update-mem! c assoc :fleeing t)
+        w (await (ctx/call c :flee 'jobs.movement.go-to (cond-> (assoc (flee-args t) :floor cost-health/spend-down)
+                                                           (number? (:cost t)) (assoc :spend {:job-time (max 0.1 (:cost t))})
+                                                           (:worth t) (assoc :worth (:worth t)))))]
     (if (= :continue w)
       :again
-      (let [arrived (:arrived (:data w))]
-        (ctx/update-mem! c #(-> % (dissoc :fleeing :niche :no-site :shut-ins) (update :flees (fnil inc 0)) (update :flee-failed (fnil conj []) (:pos t))))
-        (when (and arrived (= :cave (:kind t))) (ctx/update-mem! c assoc :enclose (:pos t)))
-        (if arrived
-          (ctx/emit! c :shelter.fled :info (assoc (set/rename-keys (select-keys t [:kind :pos :name :distance :cost :needed]) {:kind :target})
-                                                  :text (str "could not shelter here; moved somewhere safer (" (name (:kind t)) ")")))
-          (let [stranded? (= :stranded (contract/cause-key w))]
-            (ctx/emit! c :shelter.flee_failed :info (assoc (set/rename-keys (select-keys t [:kind :pos :name]) {:kind :target})
-                                                           :stranded stranded?
-                                                           :text (if stranded?
-                                                                   "could not shelter here; the walk to somewhere safer costs more than staying, so the body stays and seals in again"
-                                                                   "could not shelter here and could not reach somewhere safer")))))
+      (let [arrived (:arrived (:data w))
+            left (u/dist (u/self-pos c) (:pos t))
+            leg? (and (not arrived) (= :job-time (get-in w [:cause :line])) (< left (dec (:leg-from t))))
+            moved #(dissoc % :fleeing :niche :no-site :shut-ins)
+            shown #(set/rename-keys (select-keys t (into [:kind :pos :name] %)) {:kind :target :pos :goal})]
+        (cond
+          leg? (do (ctx/update-mem! c moved)
+                   (ctx/emit! c :shelter.flee_leg :info (assoc (shown [:cost]) :left left
+                                                               :text (str "the walk somewhere safer spent its price (" (price/round1 (:cost t)) " s) "
+                                                                          (price/round1 (- (:leg-from t) left)) " blocks nearer; priced again from here"))))
+          :else
+          (do (ctx/update-mem! c #(-> % moved (update :flees (fnil inc 0)) (update :flee-failed (fnil conj []) (:pos t))))
+              (when (and arrived (= :cave (:kind t))) (ctx/update-mem! c assoc :enclose (:pos t)))
+              (if arrived
+                (ctx/emit! c :shelter.fled :info (assoc (shown [:distance :cost :needed])
+                                                        :text (str "could not shelter here; moved somewhere safer (" (name (:kind t)) ")")))
+                (let [stranded? (= :stranded (contract/cause-key w))]
+                  (ctx/emit! c :shelter.flee_failed :info (assoc (shown []) :stranded stranded?
+                                                                 :text (if stranded?
+                                                                         "could not shelter here; the walk to somewhere safer costs more than staying, so the body stays and seals in again"
+                                                                         "could not shelter here and could not reach somewhere safer")))))))
         :again))))
-
