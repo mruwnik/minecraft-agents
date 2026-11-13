@@ -102,6 +102,9 @@
 
 ;; Wake verdicts: nil goes on waiting
 
+(deftest a-rest-after-a-failed-round-wakes
+  (is (= :needs-you (:wake (progress/wake-verdict {:wake :idle :jobs [{:job "j14" :name "repeat" :waiting {:reason :resting :after :leaky}}]} "j14")))))
+
 (def night-idle {:wake :idle :jobs [{:job "j14" :name "obtain" :waiting {:reason :night-sheltered}}
                                     {:job "r3" :name "night" :holding {:reason :night}}]})
 
@@ -117,6 +120,7 @@
                                     {:job "j9" :name "pen"}]}
                 {:wake :idle :jobs [{:job "j9" :name "noop" :idle-ok true}
                                     {:job "j14" :name "smelt" :waiting :cooking}]}
+                {:wake :idle :jobs [{:job "j14" :name "repeat" :waiting {:reason :resting :after :already}}]}
                 {:wake :idle :jobs [{:job "j1060" :name "obtain" :waiting {:reason :reflex-holds :reflex :get-food :job "j1061"}}
                                     {:job "j1061" :name "get-food"}]}
                 {:wake :idle :jobs [{:job "j1" :name "noop" :idle-ok true}
