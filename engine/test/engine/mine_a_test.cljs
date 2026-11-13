@@ -17,6 +17,7 @@
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.expr :as expr]
+            [jobs.lib.cost :as cost]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -752,3 +753,18 @@
             (is (zero? (lk/known-light-at (:p s) 3 65 0)) "still no light of any kind over the sand")
             (is (empty? (events-of s :near.risky-stay)) (pr-str age-ms))))))))
 
+
+;; the only stone is within reach beside a creeper's fresh death and the call's worth (a root obtain's for one cobblestone) is below
+;; the stay: the dig is refused and the target skipped as risky (dig-for :risky -> targets/skip-risky!), so the call ends :none
+(deftest a-lone-target-whose-stay-costs-more-than-its-worth-is-skipped-as-risky
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[s _] (spy-go-to (start {:world {:blocks (merge floor {"3,64,0" "stone"}) :inventory [{:name "wooden_pickaxe" :count 1} {:name "torch" :count 10}]}}))
+              _ (swap! (fake/state (:p s)) assoc :worldSpawn [0 64 0])]
+          (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "creeper" :death-t (- @(:clock s) 500)} core/deaths-policy)
+          (core/submit! (:eng s) (tu/order (spec {:block "stone" :count 1 :ways #{:seen}}) (cost/items-find-worth {"cobblestone" 1})) {})
+          (await (run-ticks s 5))
+          (is (= 1 (count (events-of s :near.risky-stay))) "the stay by the death was refused")
+          (is (empty? (dug-cells s)) "and the stone not dug")
+          (is (= :none (:reason (first (events-of s :stopped))))))))))
