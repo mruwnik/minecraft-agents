@@ -64,6 +64,19 @@
            (is (= [0 64 0] (e/feet p)) "no walk")))
        (done)))))
 
+(deftest a-solid-target-is-priced-at-the-open-cells-it-is-dug-from
+  (async done
+    ((fn ^:async t []
+       (doseq [[opts answer] [[{:stay-s 600 :worth 1} :blocked] [{:stay-s 600 :worth 2000} :there]]]
+         (let [{:keys [eng clock]} (e/setup {:blocks (merge (floor -2 -3 12 3) {"2,64,0" "iron_ore" "3,64,0" "stone" "2,65,0" "stone" "2,64,1" "stone" "2,64,-1" "stone"}) :seeing-all true :light-default [0 0]})
+               out (atom :not-done)
+               eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe (probe out (atom nil) {:x 2 :y 64 :z 0} 3 opts)))]
+           (mem/write! (:store eng) :deaths {:pos {:x 1 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
+           (core/submit! eng (tu/order '(near-probe)) {})
+           (await (e/tick-out! eng 1000))
+           (is (= answer @out) (pr-str opts))))
+       (done)))))
+
 (deftest a-refused-stay-is-waited-out-and-a-bad-position-after-it-is-not-read-as-one
   (async done
     ((fn ^:async t []

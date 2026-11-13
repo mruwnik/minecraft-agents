@@ -6,11 +6,11 @@
             [engine.memory :as mem]
             [engine.sight :as sight]
             [jobs.lib.aim :as aim]
+            [jobs.lib.dig-stands :as dig-stands]
             [jobs.lib.breath :as breath]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
-            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
@@ -254,10 +254,10 @@
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
 (defn goal-danger
-  "threats/stay-danger of the goal pos over the call's stay (:stay-s, else a click's) against what the
+  "dig-stands/stay-danger of the goal pos (the calmest cell it is dug from when it is solid) over the call's stay (:stay-s, else a click's) against what the
   goal is worth (ctx/worth)."
   [c pos]
-  (threats/stay-danger c pos (:stay-s (:args c)) (ctx/worth c)))
+  (dig-stands/stay-danger c pos (:stay-s (:args c)) (ctx/worth c)))
 
 (defn pre-aim!
   "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,

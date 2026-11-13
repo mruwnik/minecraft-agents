@@ -8,6 +8,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.aim :as aim]
+            [jobs.lib.dig-stands :as dig-stands]
             [jobs.lib.click :as click]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -305,7 +306,7 @@
   "go-near!'s answer for a body already within range of cell: :there, or :blocked when the stay there (stay-s, nil: a
   click's) costs more than worth (threats/stay-danger, as go-to prices its goal's; last-walk then reads :why :goal-dangerous)."
   [c cell stay-s worth]
-  (if-let [risky (threats/stay-danger c cell stay-s worth)]
+  (if-let [risky (dig-stands/stay-danger c cell stay-s worth)]
     (let [goal (mapv #(js/Math.floor (% cell)) [:x :y :z])
           text (str "working at " (str/join "," goal) " from here risks " (price/round1 (:risk risky)) " s, over the " (price/round1 (:worth risky)) " s it is worth")]
       (ctx/emit! c :near.risky-stay :info (assoc risky :reason :risky :pos goal :text text))

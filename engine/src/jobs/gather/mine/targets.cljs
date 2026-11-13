@@ -22,6 +22,7 @@
             [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.reach :as reach-lib]
             [jobs.lib.look :as look :refer [cell-of headings]]
+            [jobs.lib.dig-stands :refer [around face-names fires stand-cells]]
             [jobs.lib.world :as known]
             [jobs.gather.mine-stay :as stay]))
 
@@ -82,28 +83,6 @@
   "How many more than were carried at the start the call's :count asks for."
   [c]
   (max 0 (- (:count (:args c)) (had c))))
-
-(defn around [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-
-(defn face-names
-  "The names of the 6 faces of cell pos, as the body knows them: the last seen block, nil for a cell never seen. The cells
-  it stands in are felt, and lava directly on top shows as drips, so those read the world. The cell open (a cell a cut is about to
-  dig), when given, reads as air."
-  [c pos open]
-  (let [p (:primitives c)
-        feet (cell-of (u/self-pos c))
-        own? #(or (= % feet) (= % (update feet :y inc)))]
-    (map (fn [f]
-           (let [cell (around pos f)
-                 seen (look/seen-block p cell)]
-             (cond
-               (= cell open) "air"
-               (own? cell) (u/seen-name p cell)
-               (and (= [0 1 0] f) (= "lava" (u/seen-name p cell))) "lava"
-               (not (:unknown seen)) (:name seen))))
-         rules/neighbour-deltas)))
-
-(def fires #{"fire" "soul_fire"})
 
 (defn classify
   "How the cell of a block would be dug: :ok, :wet (only water stops it), :buried (no seen open face: air, or a block
@@ -443,15 +422,6 @@
   "The own zone, or with stair? the building, whose box grown by m holds the cell [x y z], else nil."
   [c m cell stair?]
   (first (filter #(zones/in-box? cell (grown % m)) (concat (own-zones c) (when stair? (buildings c cell))))))
-
-(defn stand-cells
-  "The seen open cells beside pos, where the body can stand to dig it (pos itself when none is seen open): a solid block is
-  never in a threat's field, the cells it is dug from are."
-  [c pos]
-  (let [version (game/version-of (:primitives c))
-        open? #(and % (not (bs/fluids %)) (not (fires %)) (rules/empty-shape? version %))
-        stands (vec (for [[f n] (map vector rules/neighbour-deltas (face-names c pos nil)) :when (open? n)] (around pos f)))]
-    (if (seq stands) stands [pos])))
 
 (defn stay-loss-fn
   "A fn of a target pos: seconds the dig's stay there (work-s) costs (threats/danger-near-fn's :stay-loss) at the calmest

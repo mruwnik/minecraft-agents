@@ -1349,6 +1349,15 @@
           (is (str/includes? (:text @(:out s)) "zombie") (:text @(:out s)))
           (is (= [0 64 0] (at (:p s))) "the body did not walk"))))))
 
+(deftest goal-danger-end-prices-the-open-cells-beside-a-solid-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (with-redefs [threats/sensed-mobs (constantly [(assoc goal-zombie :pos {:x 9 :y 64 :z 0})])]
+                  (await (go! {:blocks (merge flat {"10,64,0" "iron_ore" "11,64,0" "stone" "10,65,0" "stone" "10,64,1" "stone" "10,64,-1" "stone"}) :light [15 15] :seen :all} {:pos [10 64 0] :range 2 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
+          (is (= :goal-dangerous (:why @(:out s))) (pr-str @(:out s)))
+          (is (= [0 64 0] (at (:p s))) "the body did not walk"))))))
+
 (deftest goal-danger-wait-is-the-default-and-walks-on-with-an-info
   (async done
     (tu/run-async done
