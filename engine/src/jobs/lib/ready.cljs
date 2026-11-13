@@ -429,6 +429,7 @@
         s (when (and q (not (::quoting c)) (not= "AsyncFunction" (.. q -constructor -name)))
             (check-cache/cached c ::own-price
                                 #(let [r (q (assoc c ::quoting true))]
+                                   (when (instance? js/Promise r) (.catch r (fn [_]))) ; a sync fn returning one: never awaited, a rejection must not go unhandled
                                    (when (and (map? r) (not (contract/ending? r))) (walk-pick/quoted-s c r)))))]
     (if (and (number? s) (js/isFinite s)) s (price/stay-s c))))
 

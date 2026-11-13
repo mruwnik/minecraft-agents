@@ -599,6 +599,16 @@
         "an async quote-of is not asked: the job's stay (a click) stands in")
     (is (zero? @asked) "nor run")))
 
+(deftest a-sync-quote-of-returning-a-promise-has-it-caught
+  ;; Would fail on old code: the dropped promise never had .catch called, so a rejection went unhandled.
+  (let [caught (atom 0)
+        p (doto (js/Promise. (fn [_ _]))
+            (aset "catch" (fn [_] (swap! caught inc))))
+        c (-> (with-entry (merge at-origin {:entities [zombie]}) {})
+              (assoc :worth (constantly small-worth) :def {:quote-of (fn [_] p)}))]
+    (is (= :ok (first (ready/threatened c))) "the job's stay (a click) stands in")
+    (is (= 1 @caught))))
+
 (deftest hostile-cost-prices-the-mobs-it-is-given-not-every-mob-sensed
   ;; Would fail on 3a7851aaa: :answered read every known threat (stay-inputs), so both calls priced both zombies.
   (let [far (assoc zombie :id 8 :pos {:x -3 :y 64 :z 0})
