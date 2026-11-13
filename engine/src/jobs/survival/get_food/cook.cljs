@@ -150,7 +150,7 @@
               :else (do (furnace/forget-cooking! c pos) nil))))))))
 
 (defn ^:async cook!
-  "Smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
+  "Smelt the first raw food carried, at most extra's :count of it (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
   wait yields the round (once the furnace holds the load, the world must move on before the next look; the child is not called while it waits, since an ending would wipe its load). A smelt that waits on the world before
   its load is in (the dark outside, a hostile) is no furnace within reach now: the raw food is eaten instead. :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
   ([c] (await (cook! c nil)))
@@ -161,8 +161,9 @@
   (let [cooking
         (or (:cooking (ctx/mem c))
             (let [{:keys [name count]} (first (raw-carried c))
+                  n (min count (:count extra count))
                   furnace (or cooker (nearest-cooker c))]
-              {:item name :args (cond-> (merge {:item name :count count :worth (cook-worth c [{:name name :count count}])} extra)
+              {:item name :args (cond-> (merge extra {:item name :count n :worth (cook-worth c [{:name name :count n}])})
                                   furnace (assoc :furnace furnace))}))
         args (:args cooking)
         _ (ctx/update-mem! c assoc :cooking cooking)]

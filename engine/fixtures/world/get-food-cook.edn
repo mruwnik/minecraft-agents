@@ -3,7 +3,7 @@
 ;; Hunger is drained by RCON (food 8 after 5 s, near 0 after 8 s) and damage sets hp 15, so the body is hungry; the mobs are NoAI.
 ;; Should-succeed: a cook cut after its load is collected by the next get-food; raw chicken beside a seen furnace is smelted first by the hungry reflex; a carried furnace is put down
 ;; and 2 raw chops cooked; food near 0 with a furnace in sight still cooks; the night hold in a closed hut cooks beef at a furnace
-;; inside and then eats it; reserved bait carrots are eaten by neither the hungry reflex nor the night hold.
+;; inside and then eats it; baked potatoes carried are eaten, the raw ones beside a furnace not baked; reserved bait carrots are eaten by neither the hungry reflex nor the night hold.
 ;; Should-fail: a creeper in sight rushes the body: the raw beef is eaten, no cooking; shut in at night with the furnace out in the
 ;; open, the reflex eats raw mutton at once and stays put; with carrots reserved as bait the
 ;; hungry body keeps all of them.
@@ -128,4 +128,15 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 70}]
-   :after [[:item "carrot" [:<= 12]]]}]}
+   :after [[:item "carrot" [:<= 12]]]}
+  ;; b29c5bad: baked potatoes carried feed the hungry reflex at once; the raw potatoes beside a furnace are not baked first
+  {:name "hungry-reflex-eats-carried-baked-potatoes-before-baking-raw-ones"
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
+   :blocks [[:set [8 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["potato" 48] ["baked_potato" 29] ["coal" 8]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 50}
+            {:no-event {:source :action :kind :started :data {:name "furnace"}} :for-s 50}]
+   :after [[:item "potato" 48] [:item "baked_potato" [:<= 28]]]}]}

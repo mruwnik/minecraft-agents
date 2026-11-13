@@ -37,6 +37,7 @@
   {:item {:doc "the food to eat; the best carried when nil" :spec a/item? :default nil}
    :until {:doc "keep eating while food is below this (of 20)" :spec (a/num-in 0 nil) :default 18}
    :max-bites {:doc "eat at most this many bites; unlimited when nil" :spec (a/int-in 1 nil) :default nil}
+   :skip {:doc "names an unnamed meal leaves alone (get-food leaves the raw food it may cook)" :spec (a/set-of a/item?) :default #{}}
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}
    :get-food? {:doc "with no edible food carried and the body hungry, get some with jobs.survival.get-food first; false: end :no-food at once (reflexes that only eat what is carried)" :spec boolean? :default true}})
 
@@ -102,10 +103,10 @@
           inventory)))
 
 (defn carried-best [c]
-  (let [{:keys [item allow-bad]} (:args c)
+  (let [{:keys [item allow-bad skip]} (:args c)
         self (.self (:primitives c))
         inventory (if item (u/inventory (:primitives c)) (spare-seeds (u/inventory (:primitives c)) (.-food self) (seeds-owed c)))]
-    (best-food inventory allow-bad item (.-health self) (partial meal/precious-worth? self) (reserve/spared (ctx/view c) self))))
+    (best-food inventory allow-bad item (.-health self) (partial meal/precious-worth? self) (into (reserve/spared (ctx/view c) self) skip))))
 
 (defn refusal
   "The cause when the :item is not eaten at all (not a food, or harmful without :allow-bad), else nil."

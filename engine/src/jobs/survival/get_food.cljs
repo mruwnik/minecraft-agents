@@ -36,8 +36,8 @@
   :bake  No food carried but 3 or more wheat: bake bread (the craft job, enough loaves for the hunger, within 32 blocks of
          a table). A failed bake is not retried in this job.
   :cook  Raw food carried (chicken, beef ...) with a furnace or smoker seen or remembered (the :furnace place) within cook's ::cook-far-radius (64), or no furnace but enough raw food
-         to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
-         the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus cook's ::cook-margin-hp. Not while the night
+         to pay for making one (jobs.lib.cost/cook-worth?): first eat the carried food that needs no cooking, then cook (the smelt job, which fetches a furnace and fuel, waiting out the cook in
+         the round) only the units the points still wanted need (sources/wanted-points), then eat it. Done before eating raw unless a danger is sensed or food is 0 and health would not outlast the cook plus cook's ::cook-margin-hp. Not while the night
          handler holds. A failed cook is not retried in this job (jobs.survival.get-food.cook).
   :source  The newest :food-source entry {:pos :kind} whose walk pays (sources/walk-reach: cost.food/walk-reach of the points still wanted), else its home food (jobs.lib.home-food/sources, the list a trip's food is counted from) worth its walk for the points still wanted (cost.food/worth-fetching?), cheapest a point first, reached by go-to:
          :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
@@ -333,6 +333,23 @@
   [c last-resort?]
   (sources/dig-ripe! c (merge crops/food-ripe-age crops/wild-food) (u/self-pos c) (crop-radius c) last-resort?))
 
+(defn eat-until
+  "The food a meal eats up to: 18, or 20 below the :health line."
+  [c]
+  (if (< (.-health (.self (:primitives c))) (:health (:args c))) 20 foods/top-up-food))
+
+(defn cook-count
+  "Units of the first raw food carried to cook: enough cooked points for the points still wanted
+  (sources/wanted-points); never the whole stack for one meal."
+  [c]
+  (let [raw (:name (first (cook/raw-carried c)))]
+    (max 1 (js/Math.ceil (/ (sources/wanted-points c) (max 1 (foods/points (foods/cooked-of raw))))))))
+
+(defn ^:async cook!
+  "cook/cook! of cook-count units."
+  [c]
+  (await (cook/cook! c nil {:count (cook-count c)})))
+
 (defn ^:async next-way!
   "The first allowed way with something to do: :again (try eating, then the ways, again), :continue (yield), or nil when
   none is left."
@@ -341,7 +358,7 @@
     (when (and (foods/fragile? (.self (:primitives c))) (not (sh-inside/sheltered-in c)))
       (await (look/survey-until! c :near (constantly nil))))
     (or (when (and (ctx/way? c :bake) (can-bake? c)) (await (bake! c)))
-        (when (and (ctx/way? c :cook) (cook/can-cook? c)) (await (cook/cook! c)))
+        (when (and (ctx/way? c :cook) (cook/can-cook? c)) (await (cook! c)))
         (when source (await (use-source! c source)))
         (when (ctx/way? c :collect) (await (collect-drops! c (drop-radius))))
         (when (ctx/way? c :hunt) (await (hunt! c false)))
@@ -533,13 +550,20 @@
       (if (= :continue e) :continue (when (> (food-level c) before) :again)))))
 
 (defn ^:async eat-carried!
-  "Eat what is carried (the eat job) up to 18, or 20 below the :health line: :continue when the eat job is still
-  going after the call cap, else nil."
+  "Eat what is carried (the eat job) up to eat-until: :continue when the eat job is still going after the call cap, else nil."
   [c]
   (when (eats? c)
-    (let [low? (< (.-health (.self (:primitives c))) (:health (:args c)))
-          e (await (child/run!* c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food) :get-food? false}))]
+    (let [e (await (child/run!* c :eat 'jobs.survival.eat {:until (eat-until c) :get-food? false}))]
       (when (= :continue e) :continue))))
+
+(defn ^:async eat-ready!
+  "With raw food carried that the :cook way may cook, eat the carried food that needs no cooking first (the eat job,
+  the cook kinds left alone): what is ready is good enough (Q147) and a cook takes minutes. :continue while it eats, else nil."
+  [c]
+  (when (and (eats? c) (ctx/way? c :cook) (seq (cook/raw-carried c)))
+    (let [e (await (child/run!* c :eat-ready 'jobs.survival.eat {:until (eat-until c) :skip (cook/cook-kinds) :get-food? false}))]
+      (when (= :continue e) :continue))))
+
 
 
 (defn stop!
@@ -575,8 +599,11 @@
   [c]
   (ctx/update-mem! c dissoc :too-dangerous)
   (loop [n 0]
-    (let [cooked (when (and (ctx/way? c :cook) (cook/cook-first? c)) (await (cook/cook! c)))
-          eaten (if (or (= :continue cooked) (= :again cooked)) cooked (await (eat-carried! c)))
+    (let [ready (await (eat-ready! c))
+          cooked (when (and (not= :continue ready) (ctx/way? c :cook) (wants-food? c) (cook/cook-first? c)) (await (cook! c)))
+          eaten (cond (= :continue ready) ready
+                      (or (= :continue cooked) (= :again cooked)) cooked
+                      :else (await (eat-carried! c)))
           way (when-not (or (= :continue eaten) (= :again cooked))
                 (cond
                   (not (wants-food? c)) ::fed

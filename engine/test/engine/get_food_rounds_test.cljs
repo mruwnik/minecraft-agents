@@ -1138,8 +1138,21 @@
           (core/submit! eng (tu/order (list 'jobs.survival.get-food {:carry 0})) {})
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
-          (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked")
+          (is (= 2 (reduce + (map #(.-count %) (filter #(= "beef" (.-name %)) (.-inventory (.self p))))))
+              "food 5 wants 13 points: 2 steaks are cooked, not the whole stack")
           (is (> (food p) 5)))))))
+
+(deftest carried-ready-food-is-eaten-before-raw-food-is-cooked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 6}
+                                      :inventory [{:name "potato" :count 48} {:name "baked_potato" :count 29} {:name "coal" :count 8}]})]
+          (core/submit! eng (tu/order (list 'jobs.survival.get-food {:carry 0})) {})
+          (await (run-until-idle! eng p 40))
+          (is (= [] (calls p "furnace")) "the baked potatoes carried feed the meal: no cook")
+          (is (>= (food p) 18))
+          (is (= 48 (reduce + (map #(.-count %) (filter #(= "potato" (.-name %)) (.-inventory (.self p))))))))))))
 
 (deftest raw-beef-is-eaten-at-once-when-starvation-is-ticking
   (async done
