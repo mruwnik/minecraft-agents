@@ -30,10 +30,11 @@
 (def kit [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}])
 
 (defn sensing
-  "Fake primitives for spec wrapped by perception, as a body runs them."
+  "Fake primitives for spec wrapped by perception, as a body runs them (a fixed ray jitter: a random one gave a different
+  set of seen cells, and so of looks, from run to run)."
   [spec]
   (let [p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory kit} spec))
-        per (perception/create (fake-raw/create p) {:now (constantly 1000000)})]
+        per (perception/create (fake-raw/create p) {:now (constantly 1000000) :rand (constantly 0.5)})]
     (perception/wrap p per)))
 
 (defn setup
