@@ -20,6 +20,7 @@
             [jobs.lib.cost :as cost]
             [jobs.items.craft :as craft]
             [jobs.lib.reserve :as reserve]
+            [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
             [jobs.lib.sources :as sources]
             [jobs.lib.recipes :as recipes]))
@@ -211,3 +212,18 @@
             need (table/gather-needs {item 1})]
       (is (nil? (expr/problem registry/jobs (list (:job need) (:args need))))
           (str item " via " (:job need))))))
+
+(deftest a-gather-child-gets-ignore-zones-exactly-when-its-job-declares-it
+  (let [c {:args {:ignore-zones? true}}
+        jobs (into #{'jobs.animals.shear 'jobs.gather.cast-obsidian 'jobs.farm.grow 'jobs.farm.compost}
+                   (map :job (mapcat #(table/gather-needs {% 1}) ["log" "cobblestone" "bone_meal" "wheat" "beef" "cod" "oak_sapling" "water_bucket"])))]
+    (doseq [job jobs
+            :let [declared? (contains? (:args (get registry/jobs job)) :ignore-zones?)]]
+      (is (= declared? (seen/zone-aware? job)) (str job))
+      (is (= declared? (boolean (get-in (seen/with-block c {:job job :key "x" :count 1}) [:args :ignore-zones?]))) (str job)))
+    (is (every? seen/zone-aware? '[jobs.animals.shear jobs.farm.grow jobs.farm.compost jobs.gather.cast-obsidian jobs.gather.mine]))
+    (is (not-any? seen/zone-aware? '[jobs.food.fish jobs.combat.hunt]))))
+
+(deftest the-lead-walk-and-its-price-take-the-calls-ignore-zones
+  (is (true? (:ignore-zones? (seen/lead-args {:args {:ignore-zones? true}} [1 64 1]))))
+  (is (not (contains? (seen/lead-args {:args {}} [1 64 1]) :ignore-zones?))))

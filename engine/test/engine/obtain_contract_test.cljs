@@ -395,6 +395,15 @@
               _ (await (ending-of s 'jobs.items.obtain {:any-of ["wheat"] :count 1 :explore false :ways #{:chest} :ignore-zones? true} 30))]
           (is (seq (f/events-of s :obtain.chest))))))))
 
+(deftest ignore-zones-reaches-the-withdraw-child-of-a-chest-in-another-players-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[ignore? takes?] [[true true] [false false]]]
+          (let [s (f/start (f/world {f/chest-at [{:name "dirt" :count 5}]}) [(assoc f/foreign-zone :allow #{:look})])
+                _ (await (ending-of s 'jobs.items.obtain {:item "dirt" :count 1 :explore false :ways #{:chest} :ignore-zones? ignore?} 60))]
+            (is (= takes? (boolean (seq (f/transfers s)))) (str ":ignore-zones? " ignore?))))))))
+
 (deftest a-bucket-is-filled-only-at-a-water-source-not-at-flowing-water
   (async done
     (tu/run-async done

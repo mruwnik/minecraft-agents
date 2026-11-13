@@ -1,6 +1,7 @@
 (ns jobs.items.obtain.seen
   "A gather need against the body: the blocks and sheep seen for it, and the need made ready to run."
-  (:require [engine.ctx :as ctx]
+  (:require [cljs.spec.alpha :as s]
+            [engine.ctx :as ctx]
             [jobs.items.obtain.base :refer [search-worth seen-radius]]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
@@ -21,15 +22,16 @@
   [c mob]
   (or (:worth (:args c)) (max (cost/animal-worth mob) (search-worth c))))
 
-(defn lead-args "The go-to args of the walk to within 6 blocks of cell [x y z]." [cell]
-  {:pos (zipmap [:x :y :z] cell) :range 6 :ways #{:walk} :spend {:tries 1}})
+(defn lead-args "The go-to args of the walk to within 6 blocks of cell [x y z], under the call's :ignore-zones?." [c cell]
+  (cond-> {:pos (zipmap [:x :y :z] cell) :range 6 :ways #{:walk} :spend {:tries 1}}
+    (:ignore-zones? (:args c)) (assoc :ignore-zones? true)))
 
 (defn animal-cell [animal] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos animal)))))
 
 (defn approach-bound
   "Seconds no more than the walk to within reach of animal costs: a trip and walk-pick's bound of its lead walk."
   [c animal]
-  (+ (cost/trip) (pick/walk-s (u/self-pos c) (lead-args (animal-cell animal)))))
+  (+ (cost/trip) (pick/walk-s (u/self-pos c) (lead-args c (animal-cell animal)))))
 
 (defn animals-worth-hunting
   "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip may pay: hunt-worth
@@ -140,15 +142,17 @@
       (assoc-in need [:args :block] name)
       need)))
 
-(def zone-aware-jobs "The gather children that take :ignore-zones?."
-  '#{jobs.forestry.harvest-wood jobs.gather.mine jobs.gather.get-seeds jobs.farm.harvest jobs.items.use})
+(defn zone-aware?
+  "Whether job (a symbol) declares the :ignore-zones? arg."
+  [job]
+  (boolean (s/get-spec (keyword (str job ".args") "ignore-zones?"))))
 
 (defn with-block
   "with-block*, the :ignore-zones? of the call passed on to a child that takes it."
   [c need]
   (let [need (with-block* c need)]
     (cond-> need
-      (and (:ignore-zones? (:args c)) (zone-aware-jobs (:job need))) (assoc-in [:args :ignore-zones?] true))))
+      (and (:ignore-zones? (:args c)) (zone-aware? (:job need))) (assoc-in [:args :ignore-zones?] true))))
 
 (defn with-count
   "The need with the items to carry in all (the :count of harvest-wood, fish, get-seeds, hunt and mine) in its args: those carried and those it lacks."

@@ -135,7 +135,7 @@
         out (volatile! nil)
         animals (animals-of c need)
         best (:pick (await (pick/best! c animals {:bound #(approach-bound c %)
-                                                  :args (comp lead-args cell)
+                                                  :args (comp #(lead-args c %) cell)
                                                   :price (fn [x q]
                                                            (let [s (+ (cost/trip) (pick/quoted-s c q))
                                                                  ev (pick/ev-worth worth q)]
@@ -155,7 +155,7 @@
   of where it was found. :continue while it walks, else :again."
   [c]
   (let [{:keys [pos]} (get-in (ctx/mem c) [:gather :lead])
-        r (await (child/call-walk* c :lead-walk (lead-args pos)))]
+        r (await (child/call-walk* c :lead-walk (lead-args c pos)))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c update :gather dissoc :lead) :again))))
