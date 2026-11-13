@@ -444,13 +444,23 @@
   [c m cell stair?]
   (first (filter #(zones/in-box? cell (grown % m)) (concat (own-zones c) (when stair? (buildings c cell))))))
 
+(defn stand-cells
+  "The seen open cells beside pos, where the body can stand to dig it (pos itself when none is seen open): a solid block is
+  never in a threat's field, the cells it is dug from are."
+  [c pos]
+  (let [version (game/version-of (:primitives c))
+        open? #(and % (not (bs/fluids %)) (not (fires %)) (rules/empty-shape? version %))
+        stands (vec (for [[f n] (map vector rules/neighbour-deltas (face-names c pos nil)) :when (open? n)] (around pos f)))]
+    (if (seq stands) stands [pos])))
+
 (defn stay-loss-fn
-  "A fn of a target pos: seconds the dig's stay there (work-s) costs (threats/danger-near-fn's :stay-loss), 0 outside
-  every known threat's field."
+  "A fn of a target pos: seconds the dig's stay there (work-s) costs (threats/danger-near-fn's :stay-loss) at the calmest
+  cell it can be dug from (stand-cells), 0 outside every known threat's field."
   [c]
   (let [near (threats/danger-near-fn c)
-        s (work-s c)]
-    (fn [pos] (if-let [{:keys [stay-loss]} (near (cell-of pos))] (stay-loss s) 0))))
+        s (work-s c)
+        at (fn [cell] (if-let [{:keys [stay-loss]} (near cell)] (stay-loss s) 0))]
+    (fn [pos] (transduce (map #(at (cell-of %))) min ##Inf (stand-cells c pos)))))
 
 (defn ^:async calmest!
   "t, the target of group walked to soonest, unless the dig's stay there costs (stay-loss-fn): then the one of t and the

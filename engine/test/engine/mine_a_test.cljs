@@ -768,3 +768,15 @@
           (is (= 1 (count (events-of s :near.risky-stay))) "the stay by the death was refused")
           (is (empty? (dug-cells s)) "and the stone not dug")
           (is (= :none (:reason (first (events-of s :stopped))))))))))
+
+;; the zombie died on the cell beside the near sand (a solid block is in no threat's field: the cell it is dug from is), in the dark
+(deftest a-target-dug-from-beside-a-recent-death-is-dug-last
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start-shaded {"6,64,0" "sand" "-12,64,0" "sand"})
+              now @(:clock s)]
+          (mem/write! (:store (:eng s)) :deaths {:pos {:x 5.5 :y 64 :z 0.5} :cause "zombie" :death-t (- now 4000)} core/deaths-policy)
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+          (await (run-ticks s 30))
+          (is (= [-12 64 0] (first (dug-cells s)))))))))

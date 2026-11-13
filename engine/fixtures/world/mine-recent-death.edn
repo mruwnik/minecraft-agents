@@ -1,19 +1,20 @@
-;; A body that died lately remembers where (memory :deaths) and prices the dig's stay there by its killer, who may be back.
-;; Lit plot, no clock. A spot seen lit since the death is cleared (death-spot/seen-clear?), and any block light above 0 counts as lit, so the death happens in a sealed 1x2 stone pocket at [10 0 6..7] the body never sees into: it stays uncleared. The iron ore [12 0 6] stands against its east wall, seen from the lit side. The body dies at [10.5 0 6.5] (a NoAI zombie hit), respawns at [16 0 6], east of the pocket, in sight of the ore and is given a pickaxe. Each mine is a hand order (:worth 1200).
-;; Should-succeed: a second ore at [24 0 6], further off and 13 blocks from the death, is mined instead of the near one, which stays: its walk costs less than the stay by the death (targets/calmest!).
-;; Should-succeed: with no other ore the death-side ore is mined: a zombie death is a quick heal if the mob leaves (Q144), so the stay costs far less than a hand order's worth.
-;; Should-succeed: a body that died of a fall at the ore mines it (no mob to price).
+;; A body that died lately remembers where (memory :deaths) and prices the dig's stay by its killer, who may be back: the stay is priced where the body would stand to dig, the open cell beside the ore.
+;; Lit plot, no clock. A spot seen lit since the death is cleared (death-spot/seen-clear?), so the death happens at the end of a 1x2 dead-end corridor of stone [13 0 7..8] the body never sees into (the stone [14 0 7..8] hides it): it stays uncleared.
+;; The corridor opens onto [13 0 6], the one open face of the iron ore [12 0 6] (stone round the rest), so a zombie there is two steps from where the ore is dug. The body dies at [13.5 0 8.5] (a NoAI zombie hit), respawns at [16 0 6], in sight of the ore and is given a pickaxe. Each mine is a hand order (:worth 1200).
+;; Should-succeed: a second ore at [24 0 6], further off and calm, is mined instead of the near one, which stays: its walk costs less than the stay by the death (targets/calmest!).
+;; Should-succeed: with no other ore the near ore is mined: a zombie death is a quick heal if the mob leaves (Q144), so the stay costs far less than a hand order's worth.
+;; Should-succeed: a body that died of a fall by the ore mines it (no mob to price).
 {:defaults
  {:tags [:mine :death :jobs] :time :any
   :plot {:light :lit :height 12 :floor "dirt" :length 48 :width 48}
   :mobs :keep
-  :blocks [[:fill [9 0 5] [11 2 8] "stone"] [:fill [10 0 6] [10 1 7] "air"]]
-  :body {:at [10.5 0 6.5] :spawnpoint [16 0 6] :inventory []}
+  :blocks [[:fill [11 0 5] [14 2 9] "stone"] [:fill [13 0 6] [14 1 6] "air"] [:fill [13 0 7] [13 1 8] "air"]]
+  :body {:at [13.5 0 8.5] :spawnpoint [16 0 6] :inventory []}
   :limit-s 240}
  :cases
  [{:name "other-ore-is-mined-not-the-one-where-it-died"
    :blocks [[:set [12 0 6] "iron_ore"] [:set [24 0 6] "iron_ore"]]
-   :act [[:summon "zombie" [10.5 0 7.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+   :act [[:summon "zombie" [13.5 0 7.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:rcon "damage $BODY 100 minecraft:mob_attack by @e[type=zombie,tag=wt,$BOX,limit=1]"]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
          [:await {:source :body :kind :respawned} 30]
@@ -24,7 +25,7 @@
    :after [[:item "raw_iron" 1] [:block [12 0 6] "iron_ore"] [:not-block [24 0 6] "iron_ore"]]}
   {:name "only-ore-where-it-died-is-mined-at-a-hand-orders-worth"
    :blocks [[:set [12 0 6] "iron_ore"]]
-   :act [[:summon "zombie" [10.5 0 7.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+   :act [[:summon "zombie" [13.5 0 7.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:rcon "damage $BODY 100 minecraft:mob_attack by @e[type=zombie,tag=wt,$BOX,limit=1]"]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
          [:await {:source :body :kind :respawned} 30]
