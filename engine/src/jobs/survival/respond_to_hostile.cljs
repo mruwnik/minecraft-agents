@@ -397,6 +397,7 @@
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
         ;; the flee price's searches and the first flight step's are one search
         _ (room-lib/new-step! c)
+        _ (room-lib/home-room! c (cover/home-pos c) (options/close-radius))
         felt (walk-felt c)
         target (when-not (some combat/enderman? near) (first (hostile/fought near)))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))

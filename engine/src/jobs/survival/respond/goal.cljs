@@ -99,12 +99,13 @@
   (:no-way: not planned whole, :past-hostile, :hostile-nearer), unplanned (default :no-way) when e is nil;
   :home-safer: home (closed-home) lies elsewhere (farther than same-place from it). A plan the meter cut (:unjudged) is
   unknown, no reason against the goal: the leg's own checks (off!) end the walk that loses ground; with blast? (a creeper
-  within blast reach) it is: those checks come after the leg, the fuse before."
-  [goal e {:keys [home beaten? unplanned blast?] :or {unplanned :no-way}}]
+  within blast reach) or in-home? (the body stands in its home's room, room-lib/home-room) it is: those checks come
+  after the leg, the fuse or the blows outside the door before."
+  [goal e {:keys [home beaten? unplanned blast? in-home?] :or {unplanned :no-way}}]
   (let [why (if e (search/safe-why e) unplanned)]
     (cond
       beaten? :hostile-nearer
-      (not (contains? (if blast? #{nil} #{nil :unjudged}) why)) why
+      (not (contains? (if (or blast? in-home?) #{nil} #{nil :unjudged}) why)) why
       (and home (> (u/dist home goal) (same-place))) :home-safer)))
 
 (declare under-floor? margin fire-price choose-opts)
@@ -136,6 +137,7 @@
               :else (verdict goal (search/named ends goal)
                              {:home (closed-home {:home home :room room}) :unplanned (unplanned-why ends)
                               :blast? (boolean (some #(flight/blaster? (:primitives c) %) threats))
+                              :in-home? (room-lib/home-room c)
                               :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
 (defn block-at-fn

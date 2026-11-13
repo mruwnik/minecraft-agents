@@ -25,6 +25,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.respond.cover :as cover]
+            [jobs.survival.respond.goal :as respond.goal]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond-choose :as choose]
             [jobs.lib.util :as u]
@@ -769,6 +770,34 @@
           (is (true? (get-in (ctx/mem c) [:refuge-rooms (rooms/cell-key home)])) "kept closed for the flight")
           (is (= [] (:rooms late)) "three cells left: its room's flood is cut")
           (is (some #(= {:at [5 64 0] :own? true :why :unjudged} %) (:dropped late)) (str "and the home says so: " (:dropped late))))))))
+
+(deftest a-body-a-step-inside-its-open-door-stands-in-its-home-room-one-outside-does-not
+  ;; Fenwick j363 (run4 F24): one step inside the open door, the cut search left home and goal unjudged and the body walked out
+  (are [pos in?] (= in? (let [{:keys [eng]} (setup (hut pos open-door []))
+                              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+                              _ (.setOwner (:primitives eng) "tx")]
+                          (rooms/home-room! c home (cornered/close-radius))))
+    {:x 5.5 :y 64 :z 1.5} true
+    {:x 4.5 :y 64 :z -0.5} true
+    {:x 5.5 :y 64 :z 5.5} false
+    {:x 15.5 :y 64 :z 0.5} false))
+
+(deftest a-goal-a-cut-search-left-unjudged-is-no-leg-out-of-the-home-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 1.5} open-door []))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              _ (ctx/update-mem! c assoc :goal [5 64 12])
+              threats [(seen-zombie 5.5 -6.5)]
+              judge! (fn ^:async j [] (rooms/spent! c (cost/search-budget-s) :test) (await (respond.goal/judge! c threats [home] home nil nil nil)))
+              unasked (await (judge!))
+              _ (rooms/new-step! c)
+              in? (rooms/home-room! c home (cornered/close-radius))
+              inside (await (judge!))]
+          (is (true? in?))
+          (is (= [nil :unjudged] (mapv :why [unasked inside])) (str "a cut plan is no reason against the goal, but in the home room it is: " (mapv #(select-keys % [:goal :why]) [unasked inside]))))))))
 
 (deftest the-flee-prices-home-judgement-serves-the-flights-first-step-from-the-same-cell
   ;; Fenwick j363/j381 (run4 F24): the price's survey kept nothing, so the step after it floods and walk-searches home again on the meter they share

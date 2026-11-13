@@ -472,6 +472,38 @@
     (boolean (when (and home (true? (closed? c home)))
                (some->> (reach-room/room p home) (inside? p))))))
 
+(declare home-room)
+
+(defn home-room!
+  "Whether the body stands in the closed room of home ({:x :y :z} or nil): the room round its feet within r blocks across
+  (reach-room/room-near, part of the step's one search) holds the home cell; nil when not known (no home, a cut flood).
+  Kept for the feet cell while the world-key stays the same (memory :home-room, read by home-room); a cut flood leaves
+  the answer from the same cell before it."
+  [c home r]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        k (cell-key feet)
+        wk (world-key p)
+        kept (:home-room (ctx/mem c))]
+    (cond
+      (nil? home) (do (ctx/update-mem! c dissoc :home-room) nil)
+      (= [k wk] [(:cell kept) (:key kept)]) (:in? kept)
+      :else (let [m (step-meter c)
+                  room (binding [reach/*search* m] (reach-room/room-near p feet r))
+                  _ (spent-meter! c m :home-room)
+                  cut? (pos? @(:cuts m))
+                  in? (when-not cut? (boolean (some-> room :cells (contains? (mapv home [:x :y :z])))))]
+              (cond
+                (not cut?) (ctx/update-mem! c assoc :home-room {:cell k :key wk :in? in?})
+                (not= k (:cell kept)) (ctx/update-mem! c dissoc :home-room))
+              (if cut? (home-room c) in?)))))
+
+(defn home-room
+  "home-room!'s answer for where the body stands now, nil when it was not asked there."
+  [c]
+  (let [{:keys [cell in?]} (:home-room (ctx/mem c))]
+    (when (= cell (cell-key (sh-sense/feet (:primitives c)))) in?)))
+
 (defn way-in
   "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach.room/walk-steps to the room
   cell inside it): {:cell :inside :steps}, nil when it finds none. Its searches run under reach/*search*, a fresh

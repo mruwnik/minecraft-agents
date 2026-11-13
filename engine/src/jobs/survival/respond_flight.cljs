@@ -142,6 +142,8 @@
   (let [p (:primitives c)
         threats (flight/look! c)
         threat (first threats)
+        ;; first of the step's searches, a hut's few cells: a goal leg out of the home needs a judged plan (respond.goal/verdict)
+        _ (room-lib/home-room! c (cover/home-pos c) (cornered/close-radius))
         hit? (or (cornered/hit-on-the-run! c) (pick/beaten? c) (pick/shot-on-the-run? c) (pick/bare-boxed-in? c (cornered/near-hostiles c)))
         door (when threat (respond.doors/door-for c threats))
         covered? (cover/cover-fn p threats (flight/fire-spots c))
