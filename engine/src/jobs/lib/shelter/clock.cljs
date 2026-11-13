@@ -31,15 +31,14 @@
 (defn ticks->s [n] (/ (settings/ticks->ms n) 1000))
 
 (defn night-left-quote
-  "The :uses :job-time quote of the night left, from the body's self: [0 mean most] seconds at the live game rate (##Inf
-  most while the server's tick is frozen); zero by day."
-  [c]
-  (let [self (.self (:primitives c))
-        t (.-timeOfDay self)]
-    (if (.-isDay self)
-      {:uses {:job-time [0 0 0]}}
-      {:uses {:job-time [0 (ticks->s (max 0 (- day-tick t)))
-                     (if (settings/frozen?) ##Inf (ticks->s (max 0 (- night-end-tick t))))]}})))
+  "The :uses :job-time quote of the night left, from the body's self (or at time of day t, day? whether self().isDay
+  counts it as day): [0 mean most] seconds at the live game rate (##Inf most while the server's tick is frozen); zero by day."
+  ([c] (let [self (.self (:primitives c))] (night-left-quote (.-isDay self) (.-timeOfDay self))))
+  ([day? t]
+   (if day?
+     {:uses {:job-time [0 0 0]}}
+     {:uses {:job-time [0 (ticks->s (max 0 (- day-tick t)))
+                        (if (settings/frozen?) ##Inf (ticks->s (max 0 (- night-end-tick t))))]}})))
 
 (def morning-margin-ms
   "Extra time away, so a body that logged out until morning comes back after the night has ended."

@@ -431,7 +431,8 @@
   every recheck-ms. While an armed trigger (sh/armed?) would cut the walk, walking now never arrives, so a wait holds
   (the calling job's budget decides whether it is worth it): the night trigger a walk out of the shelter it counts the body
   safe in (sh-inside/walk-leaves-shelter?), the cheapest affordable wait, else until dawn; the dusk-home trigger a walk
-  to where it holds (dusk-cut?), until nightfall ends it (sh-clock/dusk-tick). Ok :acceptable while walking now is affordable; ok :cheaper-than-staying while it costs no more hp than
+  to where it holds (dusk-cut?), until nightfall ends it (sh-clock/dusk-tick), or with the night trigger armed too (it holds
+  from nightfall) until dawn (the night left at sh-clock/dusk-tick). Ok :acceptable while walking now is affordable; ok :cheaper-than-staying while it costs no more hp than
   staying put; later :risky while only a wait is affordable; never :stranded when staying costs and the body cannot heal
   (seal in or go to a nearer refuge), else never :risky. Ok :unplanned with no plan: go-to's round
   prices its plan before it walks a step of it (jobs.movement.go-to.reprice)."
@@ -453,7 +454,10 @@
                      (dusk-cut? c (peek (:cells in))) :dusk-home)
            cut? (some? cut)
            dusk-s (when (= :dusk-home cut) (sh-clock/ticks->s (max 0 (- sh-clock/dusk-tick (.-timeOfDay self)))))
-           best (cond dusk-s {:wait :dusk :secs dusk-s :s (+ dusk-s walk-s)}
+           best (cond dusk-s (let [night-s (when (sh/armed? c :night) (second (get-in (sh-clock/night-left-quote false sh-clock/dusk-tick) [:uses :job-time])))]
+                              (if night-s
+                                {:wait :dawn :secs (+ dusk-s night-s) :s (+ dusk-s night-s walk-s)}
+                                {:wait :dusk :secs dusk-s :s (+ dusk-s walk-s)}))
                       (or cut? (pos? hp)) (cheapest-affordable c (mapv rested (wait-ways c goal plan in stay-in))))
            now-s (if cut? (+ walk-s walk-s (:s best 0) (:rest-s best 0)) walk-s)
            now? (and (not cut?) (bought? c est (.-health self) (.-food self) worth))

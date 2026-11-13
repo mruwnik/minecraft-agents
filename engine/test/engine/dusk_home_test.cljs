@@ -156,7 +156,7 @@
     (core/load-scenario! eng (scenario/parse register))
     (let [id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [12 64 0]})) {})]
       (await (st/tick-n eng 20))
-      [(:x (st/pos-of p)) (select-keys (core/waiting eng id) [:reason :wait])])))
+      [(:x (st/pos-of p)) (select-keys (core/waiting eng id) [:reason :wait]) (:wait-s (core/waiting eng id))])))
 
 (deftest an-armed-dusk-home-holds-a-walk-that-ends-where-it-holds-until-nightfall
   ;; the trigger would cut the walk 4 blocks from home and walk the body back: the work job and the trigger hand the body to and fro
@@ -167,3 +167,13 @@
           (is (< x 1) "armed, the body stays home")
           (is (= {:reason :risky :wait :dusk} w)))
         (is (> (first (await (walk-out-at-dusk "{:register []}"))) 10) "unarmed, the walk goes")))))
+
+(deftest with-the-night-trigger-armed-too-a-dusk-cut-walk-waits-for-dawn
+  ;; from nightfall the night trigger holds and cuts the walk again: the honest wait runs to dawn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[x w wait-s] (await (walk-out-at-dusk "{:register [{:trigger :dusk-home} {:trigger :night}]}"))]
+          (is (< x 1))
+          (is (= {:reason :risky :wait :dawn} w))
+          (is (> wait-s 500) "the night's 546 s come after the 27 s to nightfall"))))))
