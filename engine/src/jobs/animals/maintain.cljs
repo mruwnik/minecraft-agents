@@ -126,7 +126,7 @@
 
 (defn missing-barrier
   "The plan's fence, gate and wall cells beside the box (one column out) that the body has seen as something its plan
-  does not want there, or as a gate standing open that no job holds open (jobs.lib.pen-gate), as [x y z]; a cell never
+  does not want there, or as a gate standing open that no job holds open or gave up on (jobs.lib.pen-gate), as [x y z]; a cell never
   seen is no gap."
   [c]
   (let [{:keys [plan]} (:args c)
@@ -135,7 +135,9 @@
         beside? (fn [[x _ z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
         p (:primitives c)
         view (ctx/view c)
-        held (into (pg/opened-cells view) (pg/held-cells view (* 1000 (:held-s pg/defaults))))]
+        held (into (pg/opened-cells view)
+                   (concat (pg/held-cells view (* 1000 (:held-s pg/defaults)))
+                           (pg/quiet-cells view (* 1000 (:quiet-s pg/defaults)))))]
     (vec (for [{:keys [pos want]} cells
                :when (and (pen-read/barrier? want) (beside? pos))
                :let [seen (u/sensed p (u/cell-pos pos))]

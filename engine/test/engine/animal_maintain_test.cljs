@@ -381,7 +381,14 @@
                                        {"pen" plan} [])
               result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
           (is (= {:closed? true :reason nil} (get-in result [:steps :mend])) (pr-str result))
-          (is (= "false" (str (some-> (.blockAt p #js {:x 3 :y 64 :z 2}) .-properties .-open))) "a plan gate seen open, held by no job, is mended shut"))))))
+          (is (= "false" (str (some-> (.blockAt p #js {:x 3 :y 64 :z 2}) .-properties .-open))) "a plan gate seen open, held by no job, is mended shut"))
+        (let [plan (assoc-in ring-pen-plan [:parts 2 :herd :target] 1)
+              {:keys [eng]} (b/start (assoc (pb/spec pb/kit pb/built-pen) :states {"3,64,2" {:open true :facing "north"}}
+                                            :entities [(cow 1 3.5 3.5)])
+                                     {"pen" plan} [])
+              _ (mem/write! (:store eng) :gate-gave-up {:cell [3 64 2] :reason :unreachable})
+              result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
+          (is (= :sound (get-in result [:ending :cause :skipped :mend])) "a gate the shut job gave up on is no gap"))))))
 
 (deftest the-check-declines-when-the-only-drops-lie-outside-the-box
   (is (declines? {:box box :target 4} (conj four-cows (drop-at 90 "leather" 9)))))
