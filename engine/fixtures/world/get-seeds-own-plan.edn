@@ -1,9 +1,10 @@
 ;; Card 5e09e8d7: gather.get-seeds cuts short grass that lies inside a plan the body made itself; a plan another body made refuses it.
-;; Six short-grass cells in a row, x 17..22 at z 16, all cells of one plan (want short_grass); the count asked is more than they can give, so every cell is cut.
+;; Six short-grass cells in a row on a grass floor (the default floor is not one the grass stands on), x 17..22 at z 16, all cells of one plan (want short_grass); the count asked is more than they can give, so every cell is cut.
 ;; Should-succeed: own plan, every cell is cut and the job ends :none (not :refused). Should-fail: another body's plan, the job ends :refused and the grass stays.
 {:defaults
  {:tags [:gather :farm :jobs :zones]
   :time :any
+  :plot {:floor "grass_block"}
   :blocks [[:fill [17 0 16] [22 0 16] "short_grass"]]
   :body {:at [16.5 0 14.5] :effects [["resistance" 600 4]] :inventory []}
   :limit-s 150}
