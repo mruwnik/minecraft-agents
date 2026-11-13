@@ -19,7 +19,9 @@
    :blocks [[:set [14 0 16] "water"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [14 0 16] :item "water" :before "air" :job "j1" :purpose :pour :state :placed}]}}]
    :act [[:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 40 :of-job true}]
+   ;; the scooped source on open floor leaves flowing water that drains over seconds (and refills the cell meanwhile): read the cell after the drain
+   :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 25}]
    :after [[:block [14 0 16] "air"] [:item "water_bucket" 1]]}
   {:name "pour-4-away-in-a-pit-is-scooped-in-place"
    :blocks [[:set [14 -1 16] "water"]]

@@ -28,4 +28,5 @@
    :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [16 9 16]})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :unsafe-floor}} :within-s 80 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:dug [:any]}}}]
-   :after [[:item "cobblestone" 0] [:body-far [16.5 9.0 16.5] 0.8]]}]}
+   ;; no item count: a drop that slides to the body beside the rim is its own pickup, not a walk into the hole
+   :after [[:body-far [16.5 9.0 16.5] 0.8]]}]}
