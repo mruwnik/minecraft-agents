@@ -2,6 +2,8 @@
 ;; The furnace stands at [20 0 14], a crafting table at [20 0 16]; the body at [16.5 0 16.5] carries its stock.
 ;; Should-succeed: bread from the wheat left free (4 carried, 1 held); iron smelted on the coal left free (2 carried, 1 held).
 ;; Should-fail: all the coal held leaves the smelt with no fuel; all the wheat held leaves bread short (stopped :need).
+;; Card e49dd636 (run4 F21): obtain plans its chain over the units the register leaves free, so 3 held of 6 carried wheat
+;; make it withdraw the 3 booked in the chest at [20 0 14] for 2 bread; the old plan counted all 6 and the craft ended short.
 {:defaults
  {:tags [:items :reserve :craft :smelt :jobs]
   :time :any
@@ -44,4 +46,14 @@
          [:await {:source :job :kind :completed} 20]
          [:job (jobs.items.craft {:worth 1200 :item "bread" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.craft"}} :within-s 60 :of-job true}]
-   :after [[:item "bread" 1] [:item "wheat" 1]]}]}
+   :after [[:item "bread" 1] [:item "wheat" 1]]}
+  {:name "obtain-bread-withdraws-the-wheat-the-bait-holds"
+   :blocks [[:set [20 0 16] "crafting_table"] [:set [20 0 14] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:wheat\",count:3}]}"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [20 0 14] :items {"wheat" 3}}}]
+   :body {:inventory [["wheat" 6]]}
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-bait" :item "wheat" :count 3 :strength 0.8 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.items.obtain {:worth 1200 :item "bread" :count 2 :explore false})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 100 :of-job true}]
+   :after [[:item "bread" 2] [:item "wheat" 3]]
+   :limit-s 120}]}
