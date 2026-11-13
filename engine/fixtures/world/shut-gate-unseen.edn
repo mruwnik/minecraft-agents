@@ -1,7 +1,7 @@
 ;; jobs.maintenance.shut :plan with a gate the body has not seen (cards 2339e024, df1fd137): it walks there, looks, and shuts it if open; a gate
 ;; it still cannot read is left (:unseen), never ended :done with 0 shut. Plot 32 square: the body at [16.5 0 28.5] faces south, the planned gate
 ;; at [16 0 4] is behind it.
-;; Should-succeed: the open gate behind the body is shut by a plan run. Should-fail: a gate walled into a stone box is left (stopped :left, 0 shut).
+;; Should-succeed: the open gate behind the body is shut by a plan run, also from inside a fenced yard with its gate shut. Should-fail: a gate walled into a stone box is left (stopped :left, 0 shut).
 {:defaults
  {:tags [:animals :pen-gate]
   :time :any
@@ -16,6 +16,15 @@
    :act [[:job (jobs.maintenance.shut {:worth 1200 :openings :gates :plan "$plan:pen"})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 80 :of-job true}]
    :after [[:block [16 0 4] "oak_fence_gate[open=false]"]]}
+  {:name "from-inside-a-shut-yard-the-gate-is-reached-and-shut"
+   ;; card 1bab8517: the walk opens the yard's own gate, passes and shuts it (one that opens nothing gave up :unreachable)
+   :blocks [[:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]
+            [:fill [14 0 26] [18 0 26] "oak_fence"] [:fill [14 0 30] [18 0 30] "oak_fence"]
+            [:fill [14 0 27] [14 0 29] "oak_fence"] [:fill [18 0 27] [18 0 29] "oak_fence"]
+            [:set [16 0 26] "oak_fence_gate[facing=north,open=false]"]]
+   :act [[:job (jobs.maintenance.shut {:worth 1200 :openings :gates :plan "$plan:pen"})]]
+   :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 80 :of-job true}]
+   :after [[:block [16 0 4] "oak_fence_gate[open=false]"] [:block [16 0 26] "oak_fence_gate[open=false]"]]}
   {:name "gate-behind-a-wall-is-left-unseen"
    :blocks [[:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]
             [:fill [10 0 8] [22 4 8] "stone"] [:fill [10 0 2] [22 4 2] "stone"] [:fill [10 0 3] [10 4 7] "stone"] [:fill [22 0 3] [22 4 7] "stone"]

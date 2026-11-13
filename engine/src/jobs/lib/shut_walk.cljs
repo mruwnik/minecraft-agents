@@ -3,7 +3,8 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.child :as child]))
+            [jobs.lib.child :as child]
+            [jobs.lib.pen-entry :as pen-entry]))
 
 (a/defargs settings
   {::tries {:default 3 :doc "Failed clicks on one opening before it is given up or left." :spec (a/int-in 1 nil)}
@@ -12,9 +13,13 @@
 (defn tries [] (settings/get settings ::tries))
 
 (defn ^:async walk!
-  "nil when the body stands within reach of pos and sees it (the click refuses a block the eye has no line to), else why not: :continue (the walk goes on or waits) or :unreachable."
+  "nil when the body stands within reach of pos and sees it (the click refuses a block the eye has no line to), else why not: :continue (the walk goes on or waits) or :unreachable.
+  The walk opens, passes and shuts doors and gates on the way (a body in its shut house goes out to the gate), the
+  gates of pens holding animals priced at the herd's loss (pen-entry/gate-tolls!)."
   [c pos ways]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :see true :doors :never :ways ways}))
+  (let [tolls (await (pen-entry/gate-tolls! c))
+        e (await (child/call-walk* c :walk (cond-> {:pos pos :range (reach) :see true :doors :shut :ways ways}
+                                              (seq tolls) (assoc :tolls tolls))))
         res (:data e)]
     (ctx/update-mem! c dissoc :blocker)
     (cond

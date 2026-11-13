@@ -5,6 +5,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-world :as pen-world]
             [jobs.lib.pen-blocks :as pb]
@@ -71,6 +72,11 @@
   at once per run and body cell, unloaded cells never). Call it from a round."
   [c]
   (await (sense/decide! c ::pens #(pens c) {:retry? #(or (empty? %) (:unseen? (meta %))) :price (sense/fails-to c)})))
+
+(defn ^:async gate-tolls!
+  "go-to :tolls for the gates of the pens! near the body: crossing one costs what the herd may lose through it (tolls/gate-tolls)."
+  [c]
+  (vec (mapcat #(tolls/gate-tolls (:gates %) (:mobs %)) (await (pens! c)))))
 
 (defn open-gates-near
   "The seen open fence gates {:x :y :z} within ::open-radius of here along x and z (lazily): the cheap test before any

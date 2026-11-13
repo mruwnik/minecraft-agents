@@ -281,6 +281,24 @@
           (is (= 1 (:shut (first (events-of s :completed)))))
           (is (empty? (events-of s :shut.gave-up))))))))
 
+(def yard
+  "A fence ring east of the pen with its own shut gate in its west wall, in no plan: a body in it gets out only through that gate."
+  (merge (into {} (for [x (range 10 15) z (range 0 5) :when (or (#{10 14} x) (#{0 4} z))] [(str x ",64," z) "oak_fence"]))
+         {"10,64,2" "oak_fence_gate"}))
+
+(deftest from-inside-a-shut-yard-the-job-opens-its-way-out-shuts-it-behind-and-shuts-the-gate
+  ;; dusk-home had taken the body into its house: a walk that opens nothing gave the pen gate up "unreachable"
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job (pen-world true 12.5 2.5 {:blocks (merge ground ring yard {"2,64,0" "oak_fence_gate"})
+                                                          :states {"2,64,0" {:open true} "10,64,2" {:open false :facing "west"}}})
+                                {"pen-a" pen-a} {} 60))]
+          (is (empty? (events-of s :shut.gave-up)))
+          (is (not (gate-open? (:p s) 2 64 0)) "the pen gate is shut")
+          (is (not (gate-open? (:p s) 10 64 2)) "the yard gate the walk opened is shut again")
+          (is (< (.. (:p s) self -pos -x) 10) "the body went out of the yard"))))))
+
 (deftest a-gate-already-shut-is-done-at-once-without-a-click
   (async done
     (tu/run-async done

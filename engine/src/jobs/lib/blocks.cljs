@@ -312,8 +312,7 @@
   listed cells in a zone is no leave for the walk's escalations to cut its walls), and the gates of the pens holding
   animals priced at the herd's loss (cost/gate-tolls), after a look at the cells of those not yet seen."
   [c pos see? & [range]]
-  (let [gates (mapcat #(cost/gate-tolls (:gates %) (:mobs %)) (await (pen-entry/pens! c)))
-        tolls (into (vec gates) (map #(assoc % :factor ##Inf)) (when (:for-plan (:args c)) (low-floor-cells c pos)))]
+  (let [tolls (into (await (pen-entry/gate-tolls! c)) (map #(assoc % :factor ##Inf)) (when (:for-plan (:args c)) (low-floor-cells c pos)))]
     (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c)}
       (seq tolls) (assoc :tolls tolls))))
 
