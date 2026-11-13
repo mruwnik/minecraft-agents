@@ -39,7 +39,8 @@
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
   what is carried. A death keeps the job listed unless it was submitted with --drop-on-death.
-  Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]} only with every item (:least :all); a spent :spend ends limit-reached. Every other ending has
+  Needs (condition): :items, else impossible :bad-args. Before food, a sword or any piece (and again each bill round), the furnace material
+  short is priced as the bill's obtain would price it (dear): one refused :not-worth at the kit's worth ends the kit condition-failed with that cause. Ends done with {:have [..] :made [..]} only with every item (:least :all); a spent :spend ends limit-reached. Every other ending has
   :have, :made, the next :item, a :why, a :text and :next (jobs.lib.next-call: the obtain child's, a get-food for :no-food, then the kit again):
   - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit, :time ..; :item is then the one it stopped at);
   - nothing-possible {:reason :wear-failed}.
@@ -91,7 +92,7 @@
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop :bill-tries :bill-round :bill-material :later-fails :food-later-fails) (assoc :since now)))
+  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :priced :stop :bill-tries :bill-round :bill-material :later-fails :food-later-fails) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -276,6 +277,18 @@
   (let [self (.self (:primitives c))]
     (foods/hungry? (.-food self) (.-health self) nil)))
 
+(defn dear
+  "The stop (stop-of) of the first furnace material of short ({material n} beyond the carried) whose obtain the bill would
+  call refuses :not-worth at the kit's worth now (need/item-status; a :look, the same price judged after a look round,
+  counts too: the kit would get its food before that look), item that material; else nil."
+  [c short]
+  (some (fn [[mat n]]
+          (let [[kind _ data :as s] (need/item-status c mat n {:slot :bill :explore (:explore (:args c))} nil)]
+            (when (and (#{:later :look} kind) (= :not-worth (:reason data)))
+              (let [cause (contract/status-cause s)]
+                (assoc (stop-of :condition-failed cause (:text cause)) :item mat)))))
+        short))
+
 (defn ^:async run-food!
   "One get-food child round: :continue, nil when the body is fed or not hungry, or {:kind :reason :cause :why} when it could not be fed."
   [c]
@@ -387,7 +400,7 @@
         tries' (if gained? 1 (inc tries))]
     (ctx/emit! c :kit.retry :warn {:cause (:reason r) :why (:why r) :tries tries'
                                    :text (str "gathering ended without enough (" (:why r) "): trying again, round " (inc tries'))})
-    (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill :fed)
+    (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill :fed :priced)
                                    (assoc :bill-tries tries' :bill-material (material-of (game/version-of (:primitives c)) (:items (:args c)) (state c)))
                                    (update :bill-round (fnil inc 0)))))
     :continue))
@@ -427,6 +440,12 @@
           (:stop (ctx/mem c)) (finish! c items have (:stop (ctx/mem c)))
 
           (empty? todo) (finish! c items have nil)
+
+          (not (:priced (ctx/mem c)))
+          (do (ctx/update-mem! c assoc :priced true)
+              (if-let [r (dear c (bill/furnace-short version todo (:carried st)))]
+                (stop-after-wear! c r)
+                :again))
 
           (and (:food a) (not (:hurt-fed (ctx/mem c))) (food-first? c))
           (let [r (await (run-food! c))]
