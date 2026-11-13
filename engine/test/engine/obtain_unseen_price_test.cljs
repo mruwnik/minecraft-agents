@@ -195,7 +195,7 @@
         c0 {:primitives p :view (constantly view) :args (merge {:count 1 :ways #{:craft :gather :search} :explore true :ignore-zones? true} args)}
         c (if (:worth args) (rooted c0 (:worth args)) (rooted c0))]
     (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])]
-      {:price (price/search-s c (or (:any-of args) [(:item args)]) 1) :not-worth (obtain/not-worth c)})))
+      {:price (price/search-s c (or (:any-of args) [(:item args)]) (:count (:args c))) :not-worth (obtain/not-worth c)})))
 
 (defn buried-search
   "buried-call for item, carrying a stone pickaxe."
@@ -207,6 +207,12 @@
         log (:price (buried-search "oak_log"))]
     (is (< 0 ore (cost/worth-to nil ["raw_iron"] nil)) "an unseen ore is tunnelled to: its expected search spend, under what one usually costs, no stair up")
     (is (< (cost/worth-to nil ["oak_log"] nil) log) "a tree is climbed toward before any search: the stair is in its price")))
+
+(deftest ores-found-in-one-vein-share-its-search
+  (let [inv [{:name "stone_pickaxe" :count 1}]
+        one (:price (buried-call {:item "raw_iron"} inv))
+        eight (:price (buried-call {:item "raw_iron" :count 8} inv))]
+    (is (< one eight (* 8 one)) "eight ores are about two veins' searches, not eight")))
 
 (deftest a-buried-bodys-ore-search-wanted-for-35-s-starts-where-a-stair-priced-in-would-refuse
   (is (nil? (:not-worth (buried-search "raw_iron" 35))) "search about 20–26 s; the stair up adds over 20 s more (the log's price less its usual cost)"))
