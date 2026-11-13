@@ -1,5 +1,6 @@
 (ns jobs.animals.maintain
-  (:require [jobs.lib.price :as price]
+  (:require [clojure.string :as str]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [engine.args :as a]
@@ -54,10 +55,10 @@
 
   Done (:already before the start) when the box needs no look, no step would run and the herd is at :target. It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box), nor without a :mob and a :plan (:no-mob). Otherwise it
   waits, so the job is cheap under repeat: :nothing-to-do with the census {:adults :babies :target} and
-  {:skipped {step reason}}.
+  {:skipped {step reason}}, or the first lack among the skips (:no-food, :no-shears, :too-few-adults) instead.
 
   Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
-  summary}}; condition-failed :nothing-to-do with the same data when every step was skipped and the herd is below :target (a look at the box found nothing to do). Summaries: mend {:closed? :reason}, herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  summary}}; condition-failed with the same data when every step was skipped and the herd is below :target: the first lack among the skips (:no-food, :no-shears, :too-few-adults, the text naming each), else :nothing-to-do. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box (raised or lowered with the ground when the plan has :surface true), and :mob and :target from its :herd
@@ -261,6 +262,17 @@
     :deposit (decide-deposit args facts)
     {:skip :todo}))
 
+(def lack-reasons
+  "Skips for something the pen lacks that no step was let fetch or bring: not a pen with nothing to do."
+  #{:no-food :no-shears :too-few-adults})
+
+(defn lacks
+  "The lack-reasons among the skip reasons of the {step reason} map, in step order."
+  [skipped]
+  (into [] (comp (keep skipped) (filter lack-reasons) (distinct)) steps))
+
+(defn lack-text [lacks] (str "the pen lacks: " (str/join ", " (map name lacks))))
+
 (defn look-due?
   "Whether the body lists fewer animals of the kind in the box than the target and has not looked there yet (walking to
   the box first when outside it; a walled pen shows a few through a gap): the server lists animals only near the body, sound gives a direction, not a place, and animals behind
@@ -296,9 +308,11 @@
             decisions (into {} (map (juxt identity #(decide % args f))) steps)]
         (if (some :call (vals decisions))
           (contract/ok :step "a step would run")
-          (contract/later :nothing-to-do "nothing to do at the pen"
-                          :adults (:adults f) :babies (:babies f) :target target
-                          :skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)))))))
+          (let [skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)
+                missing (lacks skipped)]
+            (contract/later (or (first missing) :nothing-to-do) (if (seq missing) (lack-text missing) "nothing to do at the pen")
+                            :adults (:adults f) :babies (:babies f) :target target
+                            :skipped skipped)))))))
 
 (defn can-run?
   "Later :plan-trouble while the plan is missing or unreadable (it may be saved or fixed later); never when it has no such
@@ -394,7 +408,7 @@
 
 (defn finish!
   "End the pass, counting the pen with census!: done (a steps.stopped warn for each step that ended short of done) unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
-  fewer adults than it was to bring ends with the herd's own kind and cause; every step skipped below :target ends condition-failed :nothing-to-do, so a repeat rests instead of passing again at once."
+  fewer adults than it was to bring ends with the herd's own kind and cause; every step skipped below :target ends condition-failed (its first lack, else :nothing-to-do), so a repeat rests instead of passing again at once."
   [c report]
   (let [{:keys [mob target]} (:args c)
         {:keys [adults babies]} (census! c)
@@ -406,8 +420,9 @@
       (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
       (ctx/end c :nothing-possible :failed-steps out)
       (and (every? :skipped (vals report)) (< (+ adults babies) target))
-      (ctx/end c :condition-failed :nothing-to-do
-               (assoc out :text (str "maintain: nothing to do at the pen, " adults " adults, " babies " babies of " target)))
+      (let [missing (lacks (update-vals report :skipped))]
+        (ctx/end c :condition-failed (or (first missing) :nothing-to-do)
+                 (assoc out :text (str "maintain: " (if (seq missing) (lack-text missing) "nothing to do at the pen") ", " adults " adults, " babies " babies of " target))))
       :else
       (do (steps/warn-stopped! c "animal maintain" report :ended)
           (ctx/end c :done nil (assoc out :text (str "maintain done: " adults " adults, " babies " babies")))))))

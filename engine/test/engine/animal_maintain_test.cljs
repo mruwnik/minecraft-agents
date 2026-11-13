@@ -130,6 +130,16 @@
           (is (= {:skipped :no-food} (get-in (done-event s) [:steps :breed])))
           (is (true? (finished? s))))))))
 
+(deftest a-pass-that-lacks-food-it-may-not-fetch-says-so-not-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 4 :ways #{:carried}} {:entities [(cow 1 2) (cow 2 3)]} 12))]
+          (is (= {:skipped :no-food} (get-in (done-event s) [:steps :breed])))
+          (is (= :stopped (:kind (done-event s))))
+          (is (= :no-food (or (:cause (done-event s)) (get-in (done-event s) [:data :cause]))))
+          (is (re-find #"lacks: no-food" (str (:text (done-event s)))) (pr-str (done-event s))))))))
+
 (defn cooling-pen
   "Three cows in the box, two remembered fed within the breeding cooldown, target 4: no step can run."
   [spec]
