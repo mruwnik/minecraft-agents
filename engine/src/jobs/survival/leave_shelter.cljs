@@ -210,7 +210,7 @@
       (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup
                                {:of :all :purpose shelter-purposes :near {:pos (u/self-pos c) :radius ledger/seal-clear-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
         (if (and (not= :continue r) (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open])) (escape/enclosed? p nil :solid))
-          (ctx/end c :nothing-possible :seal-kept {:text "still shut in by its own blocks, kept while a known hostile is near; giving the body back"})
+          (ctx/end c :condition-failed {:reason :hostile-near :text "still shut in by its own blocks, kept while a known hostile is near; giving the body back"} {:seal-kept true})
           :again))
       (or (:dig-out (ctx/mem c)) shelter)
       (let [r (await (dig-leave/leave! c (when fragile {:order (map :heading (exits c))})))]

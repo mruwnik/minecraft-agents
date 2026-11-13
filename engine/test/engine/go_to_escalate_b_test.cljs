@@ -29,6 +29,7 @@
             [jobs.lib.walk.search :as wsearch]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.result :as result]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
@@ -244,6 +245,21 @@
               "a wait a caller passes through jobs.lib.waits/waiting-out")
           (is (= ["dirt" "dirt"] (mapv #(block p %) [[3 64 1] [3 65 1]])) "the seal the zombie would come in by stays"))))))
 
+(deftest only-kept-cells-that-wall-the-body-in-make-a-shut-in-give-up-a-wait
+  ;; review of 2800334fe: a kept cell that does not wall the body's room (one kept before the body moved on) opens
+  ;; nothing when the hostile goes, so a body shut in by bedrock gives up :unreachable
+  (let [cell (fn [[x y z]] (str x "," y "," z))
+        vault (apply dissoc (merge (box -6 63 -6 12 63 6 "stone") (box -3 63 -3 3 70 3 "bedrock"))
+                     (map cell (concat (for [x (range -2 3) z (range -2 3) y [64 65]] [x y z]) (for [y (range 66 69)] [0 y 0]))))
+        c {:primitives (tu/fake {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks vault}) :args {}}
+        kept-shut? (fn [kept] (with-redefs [ctx/mem (constantly {:seal-kept kept})] (result/kept-shut? c {:shut-in true})))]
+    (are [kept shut?] (= shut? (kept-shut? kept))
+      #{[3 64 1] [3 65 1]} true
+      #{[0 69 0]} true
+      #{[2 66 0]} true
+      #{[8 64 1] [8 65 1]} false
+      #{} false)))
+
 (deftest leave-shelter-agrees-with-go-to-that-a-body-its-seal-keeps-in-is-not-out
   ;; Wicken #155: leave-shelter said "out of the shelter" while go-to gave up :seal-kept
   (async done
@@ -259,7 +275,9 @@
           (ledger/write! (:store eng) seal)
           (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (tick-out! eng 400))
-          (is (re-find #"seal-kept" (pr-str @out)) (pr-str @out))
+          (is (= [:condition-failed :hostile-near] ((juxt :kind (comp :reason :cause)) (:ending (meta @out))))
+              "a wait (jobs.lib.waits/wait-reasons), not a failed way")
+          (is (:seal-kept @out) (pr-str @out))
           (is (empty? (events-of seen :dig-in.left)) "never says it is out")
           (is (empty? (calls p "dig")) "the seal is kept for the hostile"))))))
 

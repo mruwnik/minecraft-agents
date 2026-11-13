@@ -184,10 +184,11 @@
   (boolean (or shut-in (= :start-enclosed why) (and escalation (not (:into escalation))))))
 
 (defn kept-shut?
-  "Whether the body gives up shut in while the seal cleanup keeps blocks of its own shelter for a known hostile
-  (mem :seal-kept): the way out opens once the hostile is gone."
+  "Whether the body gives up shut in by blocks of its own shelter that the seal cleanup keeps for a known hostile
+  (mem :seal-kept, walling the body's room): the way out opens once the hostile is gone."
   [c fields]
-  (boolean (and (shut-in-give-up? fields) (seq (:seal-kept (ctx/mem c))))))
+  (let [kept (:seal-kept (ctx/mem c))]
+    (boolean (and (shut-in-give-up? fields) (seq kept) (escape/walls-room? c (set kept))))))
 
 (defn give-up!
   "End the call not having arrived: :unreachable with result's why, or a :hostile-near wait (condition-failed) when the

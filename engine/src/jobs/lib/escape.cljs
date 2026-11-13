@@ -209,15 +209,34 @@
              (enclosed? p doors :ground) true
              :else (enclosed? p doors unseen))))))
 
+(defn walkable-room
+  "The body's kind-at (unseen cells guessed as go-to does) and the feet cells of the room it can walk to from where it stands."
+  [c]
+  (let [p (:primitives c)
+        kind-at (reach/world-kinds p reach-room/body-kind-of (wworld/unseen-kind p (when-not (false? (:unknown (:args c))) (or (:unknown c) #js {}))))
+        {:keys [x y z]} (reach/standing-cell p kind-at)]
+    {:kind-at kind-at
+     :cells (:cells (reach-room/flood-visit (fn [cx cy cz] (reach/forward kind-at cx cy cz)) [x y z] 256))}))
+
+(defn walls-room?
+  "Whether any of cells (a set of [x y z]) bounds the body's walkable room: beside a room cell's feet or head, or the
+  first solid cell over its head within max-depth (a shaft's lid)."
+  [c cells]
+  (let [{:keys [kind-at] room :cells} (walkable-room c)
+        lid (fn [x y z] (some #(when-not (reach/passable? kind-at x % z) [x % z]) (range (+ y 2) (+ y 2 (max-depth)))))]
+    (boolean
+      (some (fn [cell]
+              (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)]
+                (or (contains? cells (lid x y z))
+                    (some (fn [[dx dz]] (or (contains? cells [(+ x dx) y (+ z dz)]) (contains? cells [(+ x dx) (inc y) (+ z dz)]))) cardinals))))
+            room))))
+
 (defn shut-in-blockers
   "The solid cells [[x y z]] that keep the best step up out of the body's walkable room from being a step: of every wall
   cell beside the room with a floor-high top, the one needing the fewest cells cleared (the headroom over the room cell, the
   step's feet and head cells), nearest goal ({:x :y :z}) on a tie. Nil when no step is that close."
   [c goal]
-  (let [p (:primitives c)
-        kind-at (reach/world-kinds p reach-room/body-kind-of (wworld/unseen-kind p (when-not (false? (:unknown (:args c))) (or (:unknown c) #js {}))))
-        {:keys [x y z]} (reach/standing-cell p kind-at)
-        {:keys [cells]} (reach-room/flood-visit (fn [cx cy cz] (reach/forward kind-at cx cy cz)) [x y z] 256)
+  (let [{:keys [kind-at cells]} (walkable-room c)
         solid-at? (fn [[cx cy cz]] (not (reach/passable? kind-at cx cy cz)))
         cell-map (fn [[cx cy cz]] {:x cx :y cy :z cz})
         candidates (for [cell cells
