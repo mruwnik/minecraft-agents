@@ -1,5 +1,6 @@
 (ns jobs.apiary.guard
   (:require [jobs.lib.price :as price]
+            [engine.game :as game]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [engine.contract :as contract]
@@ -332,8 +333,7 @@
 
 (def carpets
   "Every carpet that can cover a fire: any colour does, moss burns."
-  (mapv #(str % "_carpet") ["white" "light_gray" "gray" "black" "brown" "red" "orange" "yellow" "lime" "green" "cyan" "light_blue"
-                            "blue" "purple" "magenta" "pink"]))
+  (mapv #(str % "_carpet") game/dye-colors))
 
 (defn lacks-of
   "The things the fires left lack, one per kind: [[slot fetch-fn-args]] as {:slot :what :names}."
