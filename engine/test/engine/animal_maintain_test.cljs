@@ -580,3 +580,15 @@
           (core/submit! (:eng s) (tu/order (spec {:target 4})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 20 700))
           (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s)))))))))
+
+(deftest a-pass-that-ends-at-a-far-chest-reports-the-pen-it-counted-in-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 20 :y 64 :z 0}} :inventory carried :entities four-cows :containers {"50,64,0" []}} 50)]
+          (track-range! s 14)
+          (core/submit! eng (tu/order (spec {:target 4 :chest {:x 50 :y 64 :z 0}})) {})
+          (await (tu/run-ticks eng clock 60 700))
+          (is (= [{:x 50 :y 64 :z 0}] (filterv #(= 50 (:x %)) (tu/walked-to eng))) "the pass looked at the pen first, then went to the chest")
+          (is (< 40 (.-x (.-pos (.self (:p s))))) "the deposit took the body out of listing range of the pen")
+          (is (= {:kind :completed :adults 4 :babies 0} (select-keys (done-event s) [:kind :adults :babies]))))))))

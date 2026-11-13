@@ -9,7 +9,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
-            [jobs.lib.danger :as danger]
+            [jobs.lib.hunting :as hunting]
             [jobs.lib.escort :as escort]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]
@@ -19,7 +19,6 @@
 (a/defargs settings
   {::near-pen {:default 16 :doc "Blocks from the pen within which the body counts as near it." :spec (a/int-in 0 nil)}
    ::approach-range {:default 12 :doc "Blocks from the animal at which the body starts to approach." :spec (a/int-in 0 nil)}
-   ::listed-range {:default 32 :doc "Blocks from the pen within which, with the whole pen in sight, an animal known in it that is not listed is gone (dead or out); farther the server lists no animals there." :spec (a/int-in 0 nil)}
    ::follow-range {:default 10 :doc "Blocks within which an animal follows the food in the body's hand." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 500 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-out-ms {:default 8000 :doc "How long the body waits for the animal to rest at a position outside the gate." :spec (a/int-in 0 nil)}
@@ -152,17 +151,9 @@
     (condition-reasons reason) :condition-failed
     :else :nothing-possible))
 
-(defn pen-in-sight?
-  "Whether the body has a clear sight of every feet cell of the pen (danger/in-sight?: walls and unlit cells hide); no
-  cells read is no sight."
-  [c answer]
-  (let [sight (danger/sight-lookup (:primitives c))
-        here (u/self-pos c)]
-    (boolean (and (seq (:inside answer)) (every? #(danger/in-sight? sight here %) (:inside answer))))))
-
 (defn pen-keys
   "The keys of the adults in the pen: those on its cells as sensed, plus those known in it (in at the start or brought)
-  that the sensing does not show while the body cannot see the whole pen (farther than ::listed-range, or a cell hidden):
+  that the sensing does not show while the body cannot see the whole pen (hunting/pen-seen?):
   only an animal not listed where the body sees every cell is dead or out."
   [c answer]
   (let [m (ctx/mem c)
@@ -170,8 +161,7 @@
         unlisted (remove #(or (sensed %) (animals/find-by-key (:primitives c) (:mob (:args c)) (escort/watch-radius) %))
                          (distinct (concat (:in-pen-start m) (:brought m))))
         blind? (and (seq unlisted)
-                    (or (> (u/dist (u/self-pos c) (box-centre (pen-box c))) (settings/get settings ::listed-range))
-                        (not (pen-in-sight? c answer))))]
+                    (not (hunting/pen-seen? c (pen-box c) (:inside answer))))]
     (cond-> sensed blind? (into unlisted))))
 
 (defn pen-count-text

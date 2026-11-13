@@ -348,31 +348,47 @@
     :collect (select-keys r [:collected])
     :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
 
+(defn census!
+  "{:adults n :babies n} of the pen: the live census while the body sees the whole box (hunting/pen-seen?; kept in the pass's
+  memory), else the last one the pass took in sight, with the herd step's :inside as the adults once it ran (a body at
+  the chest or shut in the house lists none), else the live one."
+  [c]
+  (let [{:keys [adults babies]} (hunting/census c)
+        live {:adults (count adults) :babies (count babies)}
+        here (u/self-pos c)
+        inside (:inside (pen-read/read (:primitives c) {:box (pen-read/arg-box c) :near [(js/Math.floor (:x here)) (js/Math.floor (:y here)) (js/Math.floor (:z here))]}))]
+    (if (hunting/pen-seen? c (pen-read/arg-box c) inside)
+      (do (ctx/update-mem! c assoc :census live) live)
+      (let [m (ctx/mem c)
+            herd-inside (:inside (:herd (:report m)))]
+        (cond-> (or (:census m) live) herd-inside (assoc :adults herd-inside))))))
+
 (defn finish!
-  "End the pass: done (a steps.stopped warn for each step that ended short of done) unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
+  "End the pass, counting the pen with census!: done (a steps.stopped warn for each step that ended short of done) unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
   fewer adults than it was to bring ends with the herd's own kind and cause; every step skipped below :target ends condition-failed :nothing-to-do, so a repeat rests instead of passing again at once."
   [c report]
   (let [{:keys [mob target]} (:args c)
-        {:keys [adults babies]} (hunting/census c)
-        out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
+        {:keys [adults babies]} (census! c)
+        out {:mob mob :target target :adults adults :babies babies :steps report}]
     (cond
-      (and (:ended (:herd report)) (< (count adults) (min 2 target)))
+      (and (:ended (:herd report)) (< adults (min 2 target)))
       (let [{:keys [ended cause]} (:herd report)]
-        (ctx/end c ended cause (assoc out :text (str "maintain stopped: herd ended " (name ended) " " (name cause) (pen-patch/leak-text (:herd report)) ", " (count adults) " adults, " (count babies) " babies"))))
+        (ctx/end c ended cause (assoc out :text (str "maintain stopped: herd ended " (name ended) " " (name cause) (pen-patch/leak-text (:herd report)) ", " adults " adults, " babies " babies"))))
       (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
       (ctx/end c :nothing-possible :failed-steps out)
-      (and (every? :skipped (vals report)) (< (+ (count adults) (count babies)) target))
+      (and (every? :skipped (vals report)) (< (+ adults babies) target))
       (ctx/end c :condition-failed :nothing-to-do
-               (assoc out :text (str "maintain: nothing to do at the pen, " (count adults) " adults, " (count babies) " babies of " target)))
+               (assoc out :text (str "maintain: nothing to do at the pen, " adults " adults, " babies " babies of " target)))
       :else
       (do (steps/warn-stopped! c "animal maintain" report :ended)
-          (ctx/end c :done nil (assoc out :text (str "maintain done: " (count adults) " adults, " (count babies) " babies")))))))
+          (ctx/end c :done nil (assoc out :text (str "maintain done: " adults " adults, " babies " babies")))))))
 
 (defn ^:async step-steps
   "One step: finish, or one call of the next step's child. :again after it ended (a failed child is booked with its kind and cause), :yield while it waits on the world (a child that ended condition-failed for a waits/wait-reasons reason, such as :dark, is called again then, not booked as failed), :done at the end."
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {}))
+  (census! c)
   (let [{:keys [call] :as p} (steps/next-plan decide jobs c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call

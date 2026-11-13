@@ -7,6 +7,7 @@
             [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
+            [jobs.lib.danger :as danger]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
@@ -58,7 +59,8 @@
 
 (a/defargs settings
   {::max-skips {:default 3 :doc "Animals skipped in a row before the hunt or cull gives up." :spec (a/int-in 0 nil)}
-   ::collect-radius {:default 8 :doc "Blocks around the last kill in which its drops are collected." :spec (a/num-in 0 nil)}})
+   ::collect-radius {:default 8 :doc "Blocks around the last kill in which its drops are collected." :spec (a/num-in 0 nil)}
+   ::listed-range {:default 32 :doc "Blocks from a pen within which, with the whole pen in sight, an animal known in it that is not listed is gone (dead or out); farther the server lists no animals there." :spec (a/int-in 0 nil)}})
 
 (defn note-target!
   "Remember the passive target as last seen (:animal, :entity id, :uuid, :cell, :by job and the rule that allowed the kill, from (rule-fn c entity)),
@@ -184,3 +186,14 @@
   [c]
   (let [{babies true adults false} (group-by #(true? (.-baby %)) (herd c))]
     {:adults (vec adults) :babies (vec babies)}))
+
+(defn pen-seen?
+  "Whether the body sees the whole pen: within ::listed-range of the middle of box and a clear sight of every feet cell
+  of its inside (danger/in-sight?: walls and unlit cells hide); no cells is no sight. Only there is an animal known in the pen and not listed gone."
+  [c {:keys [min max]} inside]
+  (let [sight (danger/sight-lookup (:primitives c))
+        here (u/self-pos c)
+        mid {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)}]
+    (boolean (and (seq inside)
+                  (<= (u/dist here mid) (settings/get settings ::listed-range))
+                  (every? #(danger/in-sight? sight here %) inside)))))
