@@ -50,6 +50,7 @@
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
             [jobs.lib.look :as lib-look]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.price :as price]
             [jobs.lib.threats :as threats]
             [jobs.lib.ready :as ready]
@@ -574,6 +575,16 @@
                 (is (pos? (:hp (walk-risk/stay-estimate night (assoc (in night dig-night-s) :live [])))) "premise: mobs spawn there by night")
                 (doseq [stay [(risk/work-s :click) dig-night-s]]
                   (is (= [:answered (go-to-stay night stay)] ((juxt :answer :danger) (cost night stay))) (str stay " s by night: go-to's price, its spawns too")))))))
+
+(deftest a-hostile-wait-ends-once-the-call-has-waited-longer-than-the-danger-costs
+  ;; Would fail on old code: hostile-status read no time spent, so the :later :hostile-near never ended while the mob stayed.
+  (let [c (-> (with-entry (merge at-origin {:entities [zombie]}) {}) (assoc :worth (constantly small-worth) ::price/stay-s dig-night-s))
+        danger (:danger (ready/hostile-cost c (danger/hostile-dangers (:primitives c) (ctx/view c) {:ignore-heard? true})))
+        after (fn [paused] (let [s (ready/threatened (check-cache/fresh (assoc c :spent (constantly {:job-time 30 :wall-time (+ 30 paused)}))))]
+                             [(first s) (:reason (nth s 2))]))]
+    (is (= [:later :hostile-near] (after 0)) "just begun: wait")
+    (is (= [:later :hostile-near] (after (* 0.9 danger))) "waited less than the danger costs: wait on")
+    (is (= [:never :hostile-near] (after (* 1.1 danger))) "waited longer than the danger costs: the wait ends")))
 
 (deftest hostile-cost-prices-the-mobs-it-is-given-not-every-mob-sensed
   ;; Would fail on 3a7851aaa: :answered read every known threat (stay-inputs), so both calls priced both zombies.

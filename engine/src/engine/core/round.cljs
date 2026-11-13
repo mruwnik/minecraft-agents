@@ -153,6 +153,9 @@
      :left #(let [n (mark eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
                                      (contract/left state (first n) (elapsed n (get (:t0s base) (count s)))))))
+     :spent #(let [state (:contract (mem/job-mem (mem/view store) root slots))
+                   n (mark eng)]
+               (when (:call state) (contract/used state (first n) (elapsed n (get (:t0s base) (count slots))))))
      :book-try (fn [job reason] (check!) (when (seq slots) (tally/count-try! eng root (pop slots) job reason)))
      :book-time (fn [ms] (check!) (tally/add-time-chain! eng root slots ms))
      :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)

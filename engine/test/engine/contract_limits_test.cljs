@@ -161,6 +161,22 @@
           (is (= {:kind :limit-reached :cause {:line :wall-time :spend 10}} (stopped seen)))
           (is (= {:job-time 0 :wall-time 11} (get-in (first (job-ev seen :limit_reached)) [:data :report :uses]))))))))
 
+(def spends
+  {:can-run? (fn [c] (swap! world update :spent (fnil conj []) (ctx/spent c)) (contract/ok :free "free"))
+   :round (fn [_] (swap! clock + 2000) :continue)})
+
+(deftest a-check-reads-what-its-call-has-spent-rounds-and-pauses-apart
+  ;; Would fail before ctx/spent (card 3f1f4b40): no ctx fn told a check the time its call had spent.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'spends spends})]
+          (core/submit! eng (tu/order '(spends)) {})
+          (await (core/tick! eng))
+          (swap! clock + 5000)
+          (await (core/tick! eng))
+          (is (= [nil {:job-time 2 :wall-time 7}] (:spent @world)) "nil before the start; then 2 s of rounds within 7 s since it started"))))))
+
 (defn after-a-suspend
   "setup with a monotonic clock, after a host suspend of an hour that the TTL clock has seen."
   [jobs]

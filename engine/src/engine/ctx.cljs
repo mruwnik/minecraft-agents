@@ -45,6 +45,12 @@
   [ctx]
   ((:left ctx)))
 
+(defn spent
+  "What the current call has spent so far (engine.contract/used of its own frame): :job-time the s its rounds ran,
+  :wall-time the s since it started, waits and yields included; nil before it starts or with no engine behind the ctx."
+  [ctx]
+  (when-let [f (:spent ctx)] (f)))
+
 (defn book-try!
   "Book a try of this job's own (job sym, why keyword) on every frame above its own: their :tries spend line, for a job
   that retries by itself (its own frame holds only its children's endings, so its own :tries line is the job's to read). Throws a cut error if this round was cut; a check cannot book."

@@ -436,15 +436,30 @@
           [answer danger] (if (<= stand answered) [:stand stand] [:answered answered])]
       {:cost (+ s danger) :answer answer :danger danger})))
 
+(defn waited-s
+  "Seconds the call has spent paused so far (ctx/spent: its wall time less the time its rounds ran), 0 before it starts."
+  [c]
+  (let [{:keys [wall-time job-time]} (ctx/spent c)]
+    (max 0 (- (or wall-time 0) (or job-time 0)))))
+
 (defn hostile-status
   "ok `ok-reason` while the call's worth affords hostile-cost (Q157: the worth less the job's own seconds and the
-  cheapest answer to the danger), else later :hostile-near, priced again after walk-risk/recheck-ms. what: the text naming the dangers."
+  cheapest answer to the danger), else later :hostile-near, priced again after walk-risk/recheck-ms, until the call has
+  waited (waited-s) longer than that cheapest answer costs: then never :hostile-near (Q165, rent or buy). what: the
+  text naming the dangers."
   [c ok-reason what {:keys [cost answer danger]}]
   (let [worth (ctx/worth c)
+        waited (waited-s c)
         priced (str what ": " (price/round1 cost) " s, the stay of " (price/round1 (price/stay-s c)) " s and "
                     (price/round1 danger) " s " (if (= :stand answer) "doing nothing about it" "answering it when it comes"))]
-    (if (cost/affords? cost worth)
+    (cond
+      (cost/affords? cost worth)
       (contract/ok ok-reason (str priced ", within the call's worth " (price/round1 worth) " s"))
+      (> waited danger)
+      (contract/never :hostile-near (str priced ", more than the call's worth " (price/round1 worth) " s, and "
+                                         (price/round1 waited) " s waited already cost more than the danger")
+                      :cost cost :answer answer :worth worth :waited waited)
+      :else
       (contract/later :hostile-near (str priced ", more than the call's worth " (price/round1 worth) " s: deal with it first")
                       :cost cost :answer answer :worth worth :recheck-after-ms walk-risk/recheck-ms))))
 
