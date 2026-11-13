@@ -11,6 +11,7 @@
             [jobs.lib.cost :as cost]
             [engine.ctx :as ctx]
             [jobs.lib.need :as need]
+            [jobs.lib.near :as near]
             [jobs.lib.util :as u]
             [jobs.lib.child :as child]
             [jobs.lib.pen-read :as pen-read]
@@ -65,7 +66,7 @@
     animals given up on and animals already fetched twice and still outside are skipped.
   - Approach the cell 4 out from the gate (the first of out-4 .. out-2 that is no fence-gate cell and lies in no other closed fenced pen, else out-1) and wait until the animal rests (up to 8 s). A walk (or lure) that cannot reach it tries the cell one nearer, down to out-1, for the rest of the run, before ending :unreachable.
   An adult standing in a closed pocket of ground that does not hold that cell (a pit) is given up :no-exit before it is lured; walls of the pit never seen are walked to and looked at first, and a wall still unknown is no verdict.
-  - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate).
+  - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate); adults outside the gate crowd nothing.
   - Line up on the cells 3, 2 and 1 out (each waits up to 8 s for the animal to rest), open the gate
     (jobs.access.toggle), then step through the gate and 5 cells in. Each of those stops waits up to 6 s.
   - An animal still too far behind is pinned. The body steps back one cell and tries again, twice. Then it
@@ -84,7 +85,9 @@
     herd.escaped, counted in :escaped).
 
   While the gate is open a :gate-held memory entry {:cell [x y z]} is kept fresh, so the pen-gate trigger
-  leaves it alone. It is dropped after each shut.
+  leaves it alone. It is dropped after each shut. From the open to the shut the run is one urgent section: a dusk or
+  hunger reflex waits for the shut, up to its cap. A shut that fails is tried again while another try is worth its price
+  at the call's worth or, when more, what the adults in the pen would lose through the gate left open (cost/gap-loss).
 
   Lead watching: an animal seen off this body's lead is given up on (:lead-broke), one not seen at all too
   (:lost); a lured animal seen beyond follow-range while the gate stands open is kept (the pinned steps go back for it). With nobody led, the open gate is shut, leads within 8 blocks are picked up
@@ -102,7 +105,7 @@
   jobs.time.noop pauses. A cut can leave the body unsafe (animal led, gate
   open, body in the pen); the next call restarts from what it sees: led with the body in the pen
   steps on from the nearest axis cell, led with the body outside goes back and lines up again, nobody led
-  with the body in the pen goes out, nobody led with the gate open shuts it.
+  with the body in the pen goes out, nobody led with the gate open walks back to it (doors opened and shut on the way) and shuts it.
 
   Ends with result {:reason :inside n :target :brought [keys] :given-up {key reason}
   :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. An animal is booked brought once, however often it is led. Reasons:
@@ -287,6 +290,12 @@
       :give-up-unleash (await (release-step! c #(released! c :exit-out)))
       :let-go (await (release-step! c #(do (ctx/update-mem! c dissoc :release-tried :releasing :unleash-failed)
                                           (set-phase! c :shut-gate))))
+      ;; a restart away from the open gate walks back to it first, opening and shutting doors on the way (the toggle's
+      ;; own walk opens nothing: from a shut house it never reaches the gate)
+      :shut-return (let [r (await (near/go-near! c (u/cell-pos (axis-cell out-1)) 0 {:ways #{:walk :clear-seal}}))]
+                     (if (or (await (near/risky-wait! c r)) (= :partial r))
+                       :continue
+                       (set-phase! c :shut-gate)))
       ;; a run ending with the body on the pen side goes out first (the exit's own way, then the census ends it)
       :shut-gate (cond
                    (not (gate-open? c)) (do (child/progress! c :shut-gate) (after-shut! c))
@@ -341,7 +350,7 @@
   leads taken from it and the walk and wait state, children included, dropped: a run that was ending ends (end!); an
   animal led with the body in the pen steps on from the nearest axis cell; led with the body outside goes back to
   out-1, shuts the gate and lines up again (the retry's way, its one retry not used up); nobody led with the body in
-  the pen goes out (:exit); else the open gate is shut (:shut-gate)."
+  the pen goes out (:exit); else the body walks back to out-1 (:shut-return) and shuts the open gate (:shut-gate)."
   [c]
   (let [m (ctx/mem c)
         led (led-by-me c)
@@ -358,23 +367,42 @@
                                                    :deepest-tried false})
       (seq led) (set-phase! c :retry-back {:backs 0 :deepest-tried false})
       inside? (set-phase! c :exit {:stepped-back false})
-      :else (set-phase! c :shut-gate))))
+      :else (set-phase! c :shut-return))))
+
+(def opening-phases "Phases whose step opens the gate." #{:open :exit-open})
+
+(defn gate-stretch?
+  "True from the step that opens the gate until it is seen shut, the run going on: the stretch a cut would leave the pen
+  open behind the body."
+  [c]
+  (let [m (ctx/mem c)]
+    (boolean (and (:gate m) (not (:finished m)) (or (opening-phases (:phase m)) (gate-open? c))))))
 
 (defn ^:async round
   "The whole run: steps until it ends (pace/steps!: the goal and can-run? are asked between steps). A round that starts
   unsafe restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a pause, so a
-  step that keeps answering at once never spins."
+  step that keeps answering at once never spins. The gate-stretch? steps run as one urgent section (ctx/atomic :gate),
+  as a walk's door leg does: a dusk or hunger reflex waits for the shut, up to its cap."
   [c]
   (animals/reserve-bait! c (:mob (:args c)) 1)
   (ctx/update-mem! c update :origin #(or % (u/self-pos c)))
   (when-not (free-to-leave? c) (restart! c))
-  (await (pace/steps! c (fn ^:async herd-step []
-                          (let [before (ctx/mem c)
-                                from (ctx/now c)
-                                r (await (step-once! c))]
-                            (when (and (= :continue r) (= before (ctx/mem c)) (< (- (ctx/now c) from) (pace-ms)))
-                              (await (pause! c :herd-step-waits)))
-                            (if (= :continue r) :again r))))))
+  (let [herd-step (fn ^:async herd-step [want]
+                    (let [before (ctx/mem c)
+                          from (ctx/now c)
+                          r (await (step-once! c))]
+                      (when (and (= :continue r) (= before (ctx/mem c)) (< (- (ctx/now c) from) (pace-ms)))
+                        (await (pause! c :herd-step-waits)))
+                      (cond
+                        (not= :continue r) r
+                        (not= want (gate-stretch? c)) :switch
+                        :else :again)))
+        steps-while (fn [want] (pace/steps! c #(herd-step want)))]
+    (loop []
+      (let [r (if (gate-stretch? c)
+                (await (ctx/atomic c :urgent :gate #(steps-while true)))
+                (await (steps-while false)))]
+        (if (= :switch r) (recur) r)))))
 
 (defn ^:async cleanup
   "A run that ended by itself is left as it is. Cut by the limit, a cancel or a parent's end: an animal still on this body's lead is let go and an open gate

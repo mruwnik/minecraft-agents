@@ -409,9 +409,14 @@
     (- now from)))
 
 (defn crowded-near?
-  "True when an adult of :mob stands within r (flat) of the middle of cell."
-  [c cell r]
-  (boolean (some #(<= (u/flat-dist (u/pos-of (.-pos %)) (cell-middle cell)) r) (adults c))))
+  "True when an adult of :mob on the pen side of the gate (or on its cell) stands within r (flat) of the middle of cell:
+  one outside cannot walk out through the gate, so it crowds nothing."
+  [c near r]
+  (let [g (gate-cell c)
+        in (cell (:inside-cell (ctx/mem c)))]
+    (boolean (some #(let [pos (u/pos-of (.-pos %))]
+                      (and (not (outside-gate? g in pos)) (<= (u/flat-dist pos (cell-middle near)) r)))
+                   (adults c)))))
 
 (defn on-gate?
   "True when an adult of :mob overlaps the gate cell."

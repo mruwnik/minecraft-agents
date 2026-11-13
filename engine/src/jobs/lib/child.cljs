@@ -87,13 +87,17 @@
 (defn exhausted?
   "Whether another round of slot's child after its fruitless ones in a row is not worth its price: never before one;
   else not cost/try-again? of kind (default :child-round) at the call's worth, the round priced at the seconds the
-  last fruitless one took, else (none, or one that ended at once) at the kind's."
+  last fruitless one took, else (none, or one that ended at once) at the kind's. worth replaces the call's for a round
+  that serves something else than the call's goal."
   ([c slot] (exhausted? c slot :child-round))
-  ([c slot kind]
+  ([c slot kind] (exhausted? c slot kind nil))
+  ([c slot kind worth]
    (let [n (fruitless c slot)
          s (get-in (ctx/mem c) [:fruitless-s slot])]
      (and (pos? n)
-          (not (cost/try-again? c kind (cond-> {:fails n} (and (number? s) (pos? s)) (assoc :try-s s))))))))
+          (not (cost/try-again? c kind (cond-> {:fails n}
+                                         (and (number? s) (pos? s)) (assoc :try-s s)
+                                         worth (assoc :worth worth))))))))
 
 (defn give-up
   "The ending of a caller whose slot's child is exhausted: nothing-possible with cause reason and data, the child's last

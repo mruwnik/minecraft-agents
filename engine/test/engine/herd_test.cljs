@@ -2,6 +2,7 @@
   "jobs.animals.herd against the fake world: a 5x5 pen (fence ring x 10..16, z 0..6) with a gate in its west wall."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.core.activity :as activity]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -349,6 +350,31 @@
           (is (= 2 (count (events-of s :herd.crowded-gate))) "once before the way in, once before the way out")
           (is (not (gate-open? s))))))))
 
+(deftest a-cow-outside-the-gate-crowds-nothing
+  ;; it cannot walk out: waiting for it held every trip at a gate the strays bunched at (on the way out, the cow
+  ;; just let go near the gate still holds the body)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3) (cow 8 9.1 3.5 {:pin true})]} 500))]
+          (is (= :brought (:reason (done-event s))))
+          (is (empty? (filter #(= :out (:where %)) (events-of s :herd.crowded-gate)))))))))
+
+(deftest every-gate-click-runs-in-an-urgent-section
+  ;; a dusk or hunger reflex waits for the shut instead of cutting the run with the pen open behind the body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})
+              levels (atom [])]
+          (.override (.-world (:p s)) "useOn" (fn [token args impl]
+                                                (swap! levels conj (activity/section-level (:eng s) token))
+                                                (impl token args)))
+          (await (run-ticks s 400))
+          (is (= :brought (:reason (done-event s))))
+          (is (<= 4 (count @levels)) "open and shut on the way in and on the way out")
+          (is (every? #{:urgent} @levels) (pr-str @levels)))))))
+
 (defn restartable
   "A herd run whose engine can be shut down and made again over the same files: the setup map with :make."
   [w args]
@@ -379,6 +405,35 @@
             (is (not (gate-open? s)))
             (is (< (self-x s) 10))
             (is (empty? (on-lead s)))))))))
+
+(def yard
+  "A fence ring west of the pen with its own shut gate: a body standing in it gets out only by opening that gate."
+  (merge (into {} (for [x (range -6 -1) z (range 1 6) :when (or (#{-6 -2} x) (#{1 5} z))] [(str x ",64," z) "oak_fence"]))
+         {"-2,64,3" "oak_fence_gate"}))
+
+(deftest a-restart-shut-in-away-from-the-open-gate-walks-back-through-its-own-door-and-shuts-it
+  ;; dusk-home took the body into its house with the pen open: the toggle's walk opens nothing, so from there it never
+  ;; reached the gate and the run ended with the pen open all night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng make p] :as s} (restartable {:entities [(cow 1 4 3)] :blocks yard
+                                                       :states {"-2,64,3" {:open false :facing "east"}}}
+                                                      {:target 1})
+              stopped (atom false)]
+          (on-step-when! s #(and (not @stopped) (>= (self-x s) 12))
+                         (fn [] (reset! stopped true) (core/shutdown! eng)))
+          (await (run-until s (fn [_] @stopped) 200))
+          (is (gate-open? s) "cut with the gate open")
+          (update-entity! s 1 assoc :leashed false :leashed-to-me false :pos [13 64 3])
+          (swap! (fake/state p) assoc-in [:self :pos] [-3.5 64 3.5])
+          (let [again (make)]
+            (await (run-ticks (assoc s :eng again) 300))
+            (is (empty? (:list (core/state again))))
+            (is (= [{:led [] :inside false :gate-open true}]
+                   (mapv #(select-keys % [:led :inside :gate-open]) (events-of s :herd.restarted))))
+            (is (not (gate-open? s)) "the pen gate is shut")
+            (is (empty? (events-of s :herd.gate-open)))))))))
 
 (deftest a-run-ended-by-the-engines-limit-with-the-gate-open-and-an-animal-led-has-its-cleanup-let-it-go-and-shut-the-gate
   (async done

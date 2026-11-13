@@ -8,6 +8,7 @@
             [jobs.lib.bait :as bait]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
             [jobs.lib.escort :as escort]
             [jobs.lib.pen :as pen]
@@ -239,17 +240,23 @@
   [before after]
   (max 0 (- before after)))
 
+(defn shut-worth
+  "What another try at the shut is worth: the call's worth, or more, what the adults in the pen would lose through the
+  gate left open until a pass mends it (cost/gap-loss, one gap), whatever the run still wants to bring."
+  [c]
+  (max (ctx/worth c) (cost/gap-loss (:mob (:args c)) (count (pen-keys c (read-pen c))) 1)))
+
 (defn shut-failed!
   "The gate cannot be shut: an animal still led is let go first (phase :let-go, the ending :shut-failed unless one is
   set: :gate-stuck if the gate stays open, judged by the count once it shuts after all), then the shut is tried again
-  from :shut-gate while another is worth its price (child/exhausted?); then the next failure leaves the gate to the pen-gate trigger with one warn
+  from :shut-gate while another is worth its price at shut-worth (child/exhausted?); then the next failure leaves the gate to the pen-gate trigger with one warn
   herd.gate-open naming it, and the run ends."
   [c]
   (let [m (ctx/mem c)
         [x y z] (gate-cell c)]
     (cond
       (seq (led-now c)) (set-phase! c :let-go {:ending (or (:ending m) :shut-failed)})
-      (not (child/exhausted? c :shut-gate)) (do (child/fruitless! c :shut-gate) (set-phase! c :shut-gate))
+      (not (child/exhausted? c :shut-gate :child-round (shut-worth c))) (do (child/fruitless! c :shut-gate) (set-phase! c :shut-gate))
       :else (do (ctx/emit! c :herd.gate-open :warn {:gate (:gate m)
                                                     :text (str "the gate at " x " " y " " z " could not be shut and stays open")})
                 (finish! c (if (= :shut-failed (:ending m)) :gate-stuck (:ending m)))))))
