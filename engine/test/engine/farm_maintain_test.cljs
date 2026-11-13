@@ -86,14 +86,14 @@
           (is (= {:skipped :no-surplus-seed} (ft/step s :compost)))
           (is (= {"wheat" 1} (ft/chest-items s)) "two wheat stay as bait"))))))
 
-(deftest reserve-sows-the-field-twice-over-one-seed-at-a-time
+(deftest reserve-sows-the-field-once-over-one-seed-at-a-time
   (are [expected beds inventory] (= expected (stock/box-reserve beds inventory))
     {} 0 [(ft/item "wheat_seeds" 9)]
-    {"wheat_seeds" 4} 2 [(ft/item "wheat_seeds" 9)]
-    {"wheat_seeds" 3} 2 [(ft/item "wheat_seeds" 3)]
-    {"wheat_seeds" 2 "carrot" 2} 2 [(ft/item "wheat_seeds" 9) (ft/item "carrot" 9)]
-    {"wheat_seeds" 2 "carrot" 1 "potato" 1} 2 [(ft/item "wheat_seeds" 9) (ft/item "carrot" 1) (ft/item "potato" 5)]
-    {"wheat_seeds" 5 "carrot" 1} 3 [(ft/item "wheat_seeds" 5) (ft/item "carrot" 1)]
+    {"wheat_seeds" 2} 2 [(ft/item "wheat_seeds" 9)]
+    {"wheat_seeds" 2} 2 [(ft/item "wheat_seeds" 3)]
+    {"wheat_seeds" 1 "carrot" 1} 2 [(ft/item "wheat_seeds" 9) (ft/item "carrot" 9)]
+    {"wheat_seeds" 1 "carrot" 1} 2 [(ft/item "wheat_seeds" 9) (ft/item "carrot" 1) (ft/item "potato" 5)]
+    {"wheat_seeds" 2 "carrot" 1} 3 [(ft/item "wheat_seeds" 5) (ft/item "carrot" 1)]
     {"wheat_seeds" 3} 5 [(ft/item "wheat_seeds" 1) (ft/item "wheat_seeds" 2)]
     {} 4 [(ft/item "bread" 5) (ft/item "melon_seeds" 3)]))
 

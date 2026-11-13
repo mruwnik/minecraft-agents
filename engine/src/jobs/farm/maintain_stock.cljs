@@ -26,10 +26,10 @@
   (merge-with max sow (zipmap crops/waste-seeds (repeat (seed-backup))) {"wheat" (bait-wheat)} held keep))
 
 (defn box-reserve
-  "{seed count} to keep: twice the beds in all, taken one at a time from each carried seed that has more than is reserved already."
+  "{seed count} to keep: one replant, the beds in all, taken one at a time from each carried seed that has more than is reserved already."
   [beds inventory]
   (let [have (storage/carried-totals inventory)]
-    (loop [budget (* 2 beds) res {}]
+    (loop [budget beds res {}]
       (let [open (filterv #(> (get have % 0) (get res % 0)) crops/field-seeds)]
         (if (or (zero? budget) (empty? open))
           res
