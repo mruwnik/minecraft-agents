@@ -1,6 +1,7 @@
 (ns jobs.lib.crops
   (:require [engine.constants :as constants]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [jobs.lib.util :as u]))
 
 (defn seen-crops
   "The crops of the given names the body has seen within radius, still standing, nearest first, as {:name :pos :age}
@@ -32,9 +33,45 @@
   "The growth stage at which each crop block can be harvested for food. Wheat is left out: only the :field way cuts it, in a field of its own."
   (dissoc ripe-age "wheat"))
 
+(def fruit-items
+  "Per fruit block: the stems that bear it beside them, the item its block drops and whether that is eaten. A fruit has no
+  growth stage: beside a stem of its kind it is ripe, and cutting it leaves the stem to bear again."
+  {"melon" {:stems #{"melon_stem" "attached_melon_stem"} :drop "melon_slice" :food? true}
+   "pumpkin" {:stems #{"pumpkin_stem" "attached_pumpkin_stem"} :drop "pumpkin"}})
+
+(def fruits (vec (keys fruit-items)))
+
+(def fruit-drops (mapv :drop (vals fruit-items)))
+
+(def stem-fruit "The fruit each stem block bears." (into {} (for [[f {:keys [stems]}] fruit-items s stems] [s f])))
+
+(defn beside [{:keys [x y z]}] (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] {:x (+ x dx) :y y :z (+ z dz)}))
+
+(defn borne?
+  "Whether p shows a fruit block at pos with a stem of its kind beside it."
+  [p pos]
+  (boolean (when-let [stems (:stems (fruit-items (u/seen-name p pos)))]
+             (some #(stems (u/seen-name p %)) (beside pos)))))
+
+(defn fruits-beside
+  "The cells beside a stem at pos that p shows holding its fruit."
+  [p pos]
+  (let [fruit (stem-fruit (u/seen-name p pos))]
+    (filterv #(and fruit (= fruit (u/seen-name p %))) (beside pos))))
+
+(def ripe-names "The blocks a harvest cuts when ripe: the field crops and the fruits." (into (vec (keys ripe-age)) fruits))
+
+(defn ripe?
+  "Whether a seen crop {:name :pos :age} is ripe: a field crop at its ripe age, a fruit beside its stem."
+  [p {:keys [name pos age]}]
+  (if (fruit-items name)
+    (borne? p pos)
+    (boolean (some-> age (>= (ripe-age name))))))
+
 (def wild-food
-  "Blocks dug for food besides the crops (a melon has no growth stage: it is always ripe)."
-  (merge (select-keys constants/crop-ripe-age ["sweet_berry_bush"]) {"melon" 0}))
+  "Blocks dug for food besides the crops: berries, and the fruits that are eaten (wherever they grow)."
+  (merge (select-keys constants/crop-ripe-age ["sweet_berry_bush"])
+         (into {} (for [[f {:keys [food?]}] fruit-items :when food?] [f 0]))))
 
 (def field-items
   "Per field crop: the seed that sows it and the items its harvest drops (the one place these lists live)."
@@ -60,8 +97,8 @@
 (def waste-seeds "Every seed: the field crops' and the others." (into (filterv #(.endsWith % "_seeds") field-seeds) other-seeds))
 
 (def farm-goods
-  "Seeds, crops, melon, pumpkin, hay, cocoa and baked potatoes: what a farm yields and may be put in a chest."
-  (vec (distinct (concat waste-seeds produce-items ["melon_slice" "melon" "pumpkin" "hay_block" "cocoa_beans" "baked_potato"]))))
+  "Seeds, crops, fruit, hay, cocoa and baked potatoes: what a farm yields and may be put in a chest."
+  (vec (distinct (concat waste-seeds produce-items fruits fruit-drops ["hay_block" "cocoa_beans" "baked_potato"]))))
 
 (defn seed-item?
   "Whether an item name is a seed or a seed-like crop item (carrot, potato) a body keeps to sow."

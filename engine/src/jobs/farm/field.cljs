@@ -18,10 +18,11 @@
         (:cells answer)))
 
 (defn ripe-at?
-  "Whether p shows crop ripe at pos (nil, an unloaded cell, is not)."
+  "Whether p shows crop ripe at pos (nil, an unloaded cell, is not): a field crop at its ripe age, a fruit beside its stem."
   [p pos crop]
   (let [b (u/seen-block p pos)]
-    (boolean (and b (ripe-age crop) (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
+    (boolean (and b (= crop (.-name b)) (or (ripe-age crop) (crops/fruit-items crop))
+                  (crops/ripe? p {:name crop :pos pos :age (.-age b)})))))
 
 (defn unwatched?
   "Whether a planned crop cell (cells {pos crop}) is remembered, not in view, and not known ripe: it may have ripened
@@ -74,14 +75,14 @@
     [center (+ 2 (js/Math.ceil (reduce max 0 (map #(u/dist center %) ps))))]))
 
 (defn ripe-crops
-  "Ripe crop cells of a wanted crop in the box or circle :area of args, else within :radius of center, not in skipped, nearest to the body first."
+  "Ripe crop cells (fruit beside its stem included) of a wanted crop in the box or circle :area of args, else within :radius of center, not in skipped, nearest to the body first."
   [p args center skipped]
-  (let [crops (or (:crops args) (keys ripe-age))
+  (let [crops (or (:crops args) crops/ripe-names)
         skipped (set skipped)
         here (u/pos-of (.-pos (.self p)))
         radius (+ (:radius args) (u/dist here center))]
     (->> (crops/seen-crops p crops radius 4096)
-         (filter #(some-> (:age %) (>= (ripe-age (:name %)))))
+         (filter #(crops/ripe? p %))
          (map :pos)
          (filter #(if-let [area (:area args)] (fa/contains-pos? area %) (<= (u/dist % center) (:radius args))))
          (remove skipped))))

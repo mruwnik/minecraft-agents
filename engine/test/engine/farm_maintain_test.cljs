@@ -105,6 +105,16 @@
     {"carrot" 2} {"bread" 4 "carrot" 9} {}
     {"wheat" 2 "wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} {} {"pumpkin_seeds" 70}))
 
+(deftest baked-potatoes-above-the-food-reserve-are-stored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:chest ft/chest}
+                                 (ft/world (ft/farm "wheat" 3 [[2 2]] [[2 2]])
+                                        {:inventory [(ft/item "baked_potato" 20)] :containers {"10,64,0" []}}) 40))]
+          (is (= {"baked_potato" 8} (ft/chest-items s)) "12 baked potatoes are the 60 points of the reserve")
+          (is (= {"baked_potato" 12} (ft/inv s))))))))
+
 (deftest crops-are-stored-down-to-the-food-reserve
   (async done
     (tu/run-async done
@@ -199,12 +209,19 @@
          (stalks/cut-cells (:p (fp/setup (stalk-world "sugar_cane" 1 3) {} []))
                            {{:x 2 :y 64 :z 2} "sugar_cane" {:x 3 :y 64 :z 2} "sugar_cane"}))))
 
-(deftest a-stem-cell-gets-its-fruit-cut-and-the-stem-left
-  (let [p (:p (fp/setup {:blocks {(fp/k 2 64 2) "melon_stem" (fp/k 3 64 2) "melon" (fp/k 2 64 3) "pumpkin"
-                                  (fp/k 1 64 2) "attached_melon_stem"}} {} []))]
-    (is (= [[3 64 2]] (stalks/fruit-cuts p {{:x 2 :y 64 :z 2} "melon"})))
-    (is (= {{:x 2 :y 64 :z 2} "melon" {:x 5 :y 64 :z 5} "pumpkin"}
-           (stalks/stem-cells {:cells [{:pos [2 64 2] :want {:crop "melon_stem"}} {:pos [5 64 5] :want "pumpkin_stem"}]} nil)))))
+(deftest a-box-farm-cuts-its-ripe-fruit-and-leaves-the-stems
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} (ft/world (ft/farm "wheat" 3 [[2 2] [3 2]] [[2 2] [3 2]])
+                                              {:blocks {(ft/k 2 64 4) "attached_melon_stem" (ft/k 3 64 4) "melon"
+                                                        (ft/k 4 64 3) "pumpkin_stem" (ft/k 4 64 4) "pumpkin"
+                                                        (ft/k 3 64 3) "melon"}
+                                               :drops {"melon" ["melon_slice"]}})
+                                 40))]
+          (is (= #{[3 4] [4 4]} (ft/dug s)) "the fruit beside a stem of its kind; the melon beside a pumpkin stem stands")
+          (is (= ["attached_melon_stem" "pumpkin_stem"] [(ft/block-at s 2 64 4) (ft/block-at s 4 64 3)]) "the stems stay")
+          (is (= {"melon_slice" 1 "pumpkin" 1} (select-keys (ft/inv s) ["melon_slice" "pumpkin"]))))))))
 
 (deftest the-cut-step-digs-above-the-stalk-base-only-when-there-is-something-to-cut
   (are [skip cut] (= skip (:skip (maintain/decide :cut {:area {:plan "p"}} {:cut cut})))
@@ -224,6 +241,19 @@
           (is (= #{[3 65 2]} (fp/dug s)) "only the block above the base of the tall stalk")
           (is (= "sugar_cane" (fp/block-at s 3 64 2)) "the base stays")
           (is (true? (fp/finished? s))))))))
+
+(deftest a-stem-plan-gets-its-fruit-cut-and-the-stems-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plans {"melons" (stalk-plan "melons" {:crop "melon_stem"})}
+              s (fp/setup {:blocks {(fp/k 2 63 2) "farmland" (fp/k 3 63 2) "farmland"
+                                    (fp/k 2 64 2) "attached_melon_stem" (fp/k 3 64 2) "melon_stem" (fp/k 2 64 3) "melon"}}
+                          plans [])]
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain {:area {:plan "melons"} :ignore-zones? true})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (= #{[2 64 3]} (fp/dug s)))
+          (is (= ["attached_melon_stem" "melon_stem"] [(fp/block-at s 2 64 2) (fp/block-at s 3 64 2)])))))))
 
 (deftest a-bamboo-plan-is-cut-above-the-base
   (async done

@@ -23,9 +23,6 @@
     (is ((:seeds reserve/tags) seed) seed))
   (is (every? (set crops/farm-goods) (concat crops/waste-seeds crops/produce-items))))
 
-(deftest cooked-potatoes-are-farm-goods-banked-above-the-food-reserve
-  (is (some #{"baked_potato"} crops/farm-goods)))
-
 (deftest only-seeds-are-seeds
   (are [item expected] (= expected ((:seeds reserve/tags) item))
     "carrot" true "potato" true "melon_seeds" true "torchflower_seeds" true

@@ -31,7 +31,8 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Cut the ripe crops of the :area and replant them, then collect the drops. The area is a box (only crops inside it are cut), a circle {:pos :radius}
+  "Cut the ripe crops of the :area and replant them, then collect the drops. A melon or pumpkin beside its stem is ripe: it
+  is cut and the stem stays (in box and circle areas; a plan's fruit is cut by farm.maintain). The area is a box (only crops inside it are cut), a circle {:pos :radius}
   (a sphere) or nil: a circle of radius 12 round the body's position when the job first runs (kept in memory). With {:plan id}
   (optionally :part) the plan's crop cells are the field instead, read again every step: a cell is cut only when ripe and
   holding the crop the plan wants, a planned bare cell is sown unless :replant-bare is false (food seeds only above the food
@@ -57,14 +58,14 @@
   {:area {:doc "the field: a box {:min :max} (corners inclusive, the ground layer is the lowest y and the crops one above it are inside; only crops inside it are cut), a circle {:pos :radius} (a sphere) or {:plan id :part name} (the plan's crop cells); nil: a circle of radius 12 round the body's position when the job first runs" :spec fa/spec :default nil}
    :replant {:doc "replant what was cut" :spec boolean? :default true}
    :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :spec boolean? :default true}
-   :crops {:doc "field crop names to cut (wheat, carrots, potatoes, beetroots; others are refused as bad args); all of them when nil" :spec (a/coll-of a/name?) :default nil}
+   :crops {:doc "crop names to cut (wheat, carrots, potatoes, beetroots, melon, pumpkin; others are refused as bad args); all of them when nil" :spec (a/coll-of a/name?) :default nil}
    :ignore-zones? :shared})
 
 (def ripe-age crops/ripe-age)
 
 (def seed-of crops/seed-of)
 
-(def collect-items crops/produce-items)
+(def collect-items (into crops/produce-items crops/fruit-drops))
 
 ;; ------------------------------------------------------------------ pure helpers
 
@@ -210,7 +211,7 @@
   "Whether any crop of a wanted name within :radius of the centre has been seen, ripe or not (box mode)."
   [c]
   (let [{:keys [crops]} (:args c)]
-    (boolean (seq (crops/seen-crops (:primitives c) (or crops (keys ripe-age)) (+ (radius-of c) (u/dist (u/self-pos c) (center-of c))) 1)))))
+    (boolean (seq (crops/seen-crops (:primitives c) (or crops crops/ripe-names) (+ (radius-of c) (u/dist (u/self-pos c) (center-of c))) 1)))))
 
 (defn blind?
   "No crop seen yet (box mode), or planned crops remembered but not in view and none known ripe, and no look from this
@@ -263,8 +264,8 @@
 
 (def bad-args
   (cond/and (checks/args-fit "harvest :area must be a box, circle or plan" #(contains? #{nil :box :circle :plan} (fa/kind (fa/of %))))
-            (checks/args-fit (str "harvest :crops must be field crops " (str/join ", " (sort (keys ripe-age))) " (sugar cane and bamboo are cut by farm.maintain from a plan)")
-                             #(every? ripe-age (:crops (:args %))))))
+            (checks/args-fit (str "harvest :crops must be " (str/join ", " (sort crops/ripe-names)) " (sugar cane and bamboo are cut by farm.maintain from a plan)")
+                             #(every? (set crops/ripe-names) (:crops (:args %))))))
 
 (def can-start? (cond/and bad-args can-run? (checks/refusing :work "something to harvest" problem)))
 
@@ -307,13 +308,21 @@
     (cond
       (:plan-cells c) [(:plan-cells c) false]
       lo [(into {} (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] [{:x x :y crop-y :z z} nil])) false]
-      :else (let [ripe (into {} (map (fn [pos] [pos (u/seen-name p pos)])) (when (cutting? c) (ripe-of c nil)))]
-              [(if (seq ripe) ripe {(center-of c) nil}) true]))))
+      :else (let [ripe (when (cutting? c) (ripe-of c nil))]
+              [(if (seq ripe) (into {} (keep (fn [pos] (let [n (u/seen-name p pos)] (when (ripe-age n) [pos n])))) ripe) {(center-of c) nil}) true]))))
+
+(defn fruit-worth
+  "Seconds the ripe fruit the call may cut is worth: the goal-value of the blocks, as farm.maintain's cut step prices them."
+  [c]
+  (let [names (filter crops/fruit-items (map #(u/seen-name (:primitives c) %) (when (and (not (:plan-cells c)) (cutting? c)) (ripe-of c nil))))]
+    (if (empty? names)
+      0
+      (:value (cost/goal-value (mapv (fn [[name n]] {:name name :count n}) (frequencies names)))))))
 
 (defn worth-of
   "Seconds a root harvest is worth: the crops of its field read as farm.tend's pass is (cw/harvest-worth: each ripe crop it
-  may cut at cost/crop-worth, with its replanting when :replant, a cell never seen at the measured prior) and each planned
-  bare cell it sows, at cost/sown-worth."
+  may cut at cost/crop-worth, with its replanting when :replant, a cell never seen at the measured prior), each planned
+  bare cell it sows, at cost/sown-worth, and its ripe fruit (fruit-worth)."
   [c]
   (let [c (with-field c (planned c))
         p (:primitives c)
@@ -322,7 +331,8 @@
         ws (cw/waters c (map #(update % :y dec) (concat (keys cells) (map first sown))))
         rows (map (fn [[pos crop]] [pos crop (if fixed? (when crop [crop 1]) (cw/ripe-now p ws pos crop))]) cells)]
     (+ (:worth (cw/harvest-worth p ws rows (:replant (:args c))))
-       (reduce + 0 (map (fn [[pos crop]] (cost/sown-worth crop (cw/growth-rate p ws pos))) sown)))))
+       (reduce + 0 (map (fn [[pos crop]] (cost/sown-worth crop (cw/growth-rate p ws pos))) sown))
+       (fruit-worth c))))
 
 (defn quote-of [c]
   (let [c (with-field c (planned c))

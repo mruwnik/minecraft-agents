@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.farm.field :as fld]
             [jobs.farm.maintain-stock :as stock]
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-box :as box]
@@ -35,12 +36,13 @@
     fills some of its crop cells; a body clears its own field.
   - :cut (jobs.blocks.clear-cells): the plan has sugar cane or bamboo cells (a part wanting the stalk) and a stalk stands
     on the base block of one; the stalk block above the base is dug and the rest of the stalk comes down with it, the base
-    is never dug. A melon or pumpkin block beside a plan's stem cell is dug too (the stem stays).
+    is never dug. A ripe fruit (a melon or pumpkin beside its stem, jobs.lib.crops) in the area or beside a plan's stem
+    cell is dug too; the stem stays.
   - :tend (jobs.farm.tend over the :area, with :till :irrigate :fertilize): harvest, irrigate, till, plant and fertilize as
     its conditions hold. It always runs; a field with nothing to do books it declined.
   - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
   - :deposit (jobs.storage.deposit with :items :farm-goods): a :chest is given and farm goods (seeds, crops, melon,
-    pumpkin, hay, cocoa, baked potatoes) are carried above the keep (the food reserve is part of it). Tools, bread and other non-crop food are never stored.
+    pumpkin, hay, cocoa, baked potatoes) are carried above the keep. Tools, bread and other non-crop food are never stored.
   The keep, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or untilled ground cells of
   a box, or twice the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
   register holds (jobs.lib.reserve: the food reserve, best food first; agent entries) and the :carry entry. Harvested
@@ -94,20 +96,26 @@
       (stalks/base-cells answer part)
       {})))
 
-(defn stem-fruits
-  "{pos fruit} of the plan's melon and pumpkin stem cells ({} without :plan or when it cannot be read)."
+(defn fruit-cuts
+  "[[x y z]] of the ripe fruit the cut step would dig: beside the plan's stem cells, else seen in the box or circle area."
   [c]
-  (let [{:keys [plan part]} (:area (:args c))
-        answer (some->> plan (known/plan c))]
-    (if (and answer (not (:broken answer)))
-      (stalks/stem-cells answer part)
-      {})))
+  (let [p (:primitives c)
+        area (fa/of c)
+        [center radius] (fa/sphere area)]
+    (cond
+      (fa/plan c) (let [answer (known/plan c (fa/plan c))]
+                    (if (and answer (not (:broken answer)))
+                      (vec (distinct (mapcat #(crops/fruits-beside p %) (stalks/stem-cells answer (fa/part c)))))
+                      []))
+      center (fld/ripe-crops p {:crops crops/fruits :radius radius :area area} center [])
+      :else [])))
 
 (defn stalk-cuts
-  "[[x y z]] of the stalk blocks above the base and the fruit blocks beside a stem that the cut step would dig."
+  "[[x y z]] of the stalk blocks above the base and the ripe fruit that the cut step would dig."
   [c]
   (into (stalks/cut-cells (:primitives c) (stalk-bases c))
-        (stalks/fruit-cuts (:primitives c) (stem-fruits c))))
+        (map (juxt :x :y :z))
+        (fruit-cuts c)))
 
 (defn facts
   "{:keep :waste :stored :blocked :cut}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig, the stalk blocks to cut."

@@ -126,15 +126,18 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:world {:blocks (merge (field "carrots" 7 [1 2] [2]) (field "wheat" 3 [3 4] [2]))
+        (let [{:keys [eng p]} (start {:world {:blocks (merge (field "carrots" 7 [1 2] [2]) (field "wheat" 3 [3 4] [2])
+                                                             {"6,64,2" "attached_melon_stem" "7,64,2" "melon" "9,64,2" "pumpkin"})
                                               :ages (merge (ages 7 [1 2] [2]) (ages 3 [3 4] [2]))
-                                              :drops wheat-drops}})
+                                              :drops (assoc wheat-drops "melon" ["melon_slice"])}})
               result (await (child-outcome eng job {} 200))
               dug (set (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-z pos)]) (calls p "dig")))]
-          (is (= #{[1 2] [2 2]} dug))
-          (is (= {:cut 2 :replanted 2 :bare [] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))
+          (is (= #{[1 2] [2 2] [7 2]} dug) "the melon beside its stem is ripe; the pumpkin with no stem is not")
+          (is (= {:cut 3 :replanted 2 :bare [] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))
           (is (= [3 3] [(age-at p 3 64 2) (age-at p 4 64 2)]))
-          (is (= [0 0] [(age-at p 1 64 2) (age-at p 2 64 2)])))))))
+          (is (= [0 0] [(age-at p 1 64 2) (age-at p 2 64 2)]))
+          (is (= "attached_melon_stem" (block-at p 6 64 2)) "the stem stays")
+          (is (= 1 (get (inv p) "melon_slice")) "the slice is collected"))))))
 
 (deftest the-debt-is-written-before-each-dig
   (async done
