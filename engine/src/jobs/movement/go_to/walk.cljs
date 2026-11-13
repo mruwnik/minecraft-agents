@@ -14,7 +14,7 @@
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up (or escalate, below), and so
     does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off) or on magma (:goal-on-magma), at once; a
     walled-in goal it does not escalate into is first walked up to (the cell nearest it the body can reach, once a call, when
-    that walk fits the time left; info go-to.wall-walk).
+    that walk fits the time left, looking round first when it has seen no nearer cell; info go-to.wall-walk).
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
     is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
     a frontier walk, or at a re-plan or cut of a walk short of the goal (drive/follow!'s :walk-spent?), once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
@@ -375,30 +375,37 @@
 
 (def wall-walk-slack "Blocks farther from the goal than the nearest cell that a wall walk still takes, for a shorter walk." 1.5)
 
+(defn survey-pays?
+  "Whether a look round (look/round-size aims at cost/walk-unknown-prices :aim-s each) fits budget-s."
+  [c]
+  (cost/affords? (* (look/round-size) (:aim-s (cost/walk-unknown-prices))) (budget-s c)))
+
 (defn ^:async walk-to-wall!
   "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: until a walk gets no block nearer (mem :wall-walked; the flood stops at room-cells, so its nearest cell may be only the nearest it reached),
   walk to a cell near it the body can reach (escalation/nearest-stand: the shortest walk within wall-walk-slack of the nearest) when the nearest cell is at least a block nearer than the feet (and the one chosen nearer at all) and
-  the walk there (jobs.lib.cost/walk-cost) fits budget-s. True when it walked."
+  the walk there (jobs.lib.cost/walk-cost) fits budget-s. The flood reads only seen cells: a body that finds no nearer cell
+  looks round first (look/survey-ground!, when survey-pays?), as a player does before deciding there is none. True when it walked."
   [c pos tries result opts]
-  (let [p (:primitives c)
-        feet (end/feet-cell c)
-        goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        near (delay (choose/nearest-stand p goal wall-walk-slack))
-        nearest (delay (choose/nearest-stand p goal))
-        to (fn [a b] (u/dist (zipmap [:x :y :z] a) (zipmap [:x :y :z] b)))]
-    (when (and (#{:goal-enclosed :goal-cut-off} (:reason result))
-               (not (:wall-walked (ctx/mem c)))
-               (not (choose/escalate? c tries result))
-               (<= (to @nearest goal) (dec (to feet goal)))
-               (< (to @near goal) (to feet goal))
-               (<= (:cost (cost/walk-cost {:distance (to feet @near)})) (budget-s c)))
-      (ctx/emit! c :go-to.wall-walk :info {:at @near :why (:reason result)
-                                           :text (str "the goal is walled in: walking to " @near ", the nearest cell to it")})
-      (let [walk (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) (zipmap [:x :y :z] @near) 0 (dissoc opts :progress)))]
-        ;; a walk cut short or a block nearer is tried again; one that got nowhere is not; a jumped one is no walk
-        (when-not (or (= "partial" (:status walk)) (jumped? c) (<= (to (end/feet-cell c) goal) (dec (to feet goal))))
-          (ctx/update-mem! c assoc :wall-walked true))
-        true))))
+  (when (and (#{:goal-enclosed :goal-cut-off} (:reason result))
+             (not (:wall-walked (ctx/mem c)))
+             (not (choose/escalate? c tries result)))
+    (let [p (:primitives c)
+          feet (end/feet-cell c)
+          goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+          to (fn [a b] (u/dist (zipmap [:x :y :z] a) (zipmap [:x :y :z] b)))
+          flood-nearer? #(<= (to (choose/nearest-stand p goal) goal) (dec (to feet goal)))
+          nearer? (or (flood-nearer?) (and (survey-pays? c) (await (look/survey-ground! c)) (flood-nearer?)))
+          near (when nearer? (choose/nearest-stand p goal wall-walk-slack))]
+      (when (and nearer?
+                 (< (to near goal) (to feet goal))
+                 (<= (:cost (cost/walk-cost {:distance (to feet near)})) (budget-s c)))
+        (ctx/emit! c :go-to.wall-walk :info {:at near :why (:reason result)
+                                             :text (str "the goal is walled in: walking to " near ", the nearest cell to it")})
+        (let [walk (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) (zipmap [:x :y :z] near) 0 (dissoc opts :progress)))]
+          ;; a walk cut short or a block nearer is tried again; one that got nowhere is not; a jumped one is no walk
+          (when-not (or (= "partial" (:status walk)) (jumped? c) (<= (to (end/feet-cell c) goal) (dec (to feet goal))))
+            (ctx/update-mem! c assoc :wall-walked true))
+          true)))))
 
 (defn search-spent?
   "Whether the call's :spend :job-time is gone."
