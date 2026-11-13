@@ -47,6 +47,6 @@
   (count (filter #(or (= "farmland" (:name %)) (gr/untilled? %)) ground)))
 
 (defn plan-reserve
-  "{seed count}: twice the planned cells ({pos crop}) of each crop."
+  "{seed count}: one replant, the planned cells ({pos crop}) of each crop."
   [cells]
-  (into {} (for [[crop n] (frequencies (vals cells))] [(crops/seed-of crop) (* 2 n)])))
+  (into {} (for [[crop n] (frequencies (vals cells))] [(crops/seed-of crop) n])))

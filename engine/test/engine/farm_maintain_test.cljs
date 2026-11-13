@@ -115,6 +115,16 @@
           (is (= {"baked_potato" 8} (ft/chest-items s)) "12 baked potatoes are the 60 points of the reserve")
           (is (= {"baked_potato" 12} (ft/inv s))))))))
 
+(deftest bread-above-the-food-reserve-is-stored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:chest ft/chest}
+                                 (ft/world (ft/farm "wheat" 3 [[2 2]] [[2 2]])
+                                        {:inventory [(ft/item "bread" 20)] :containers {"10,64,0" []}}) 40))]
+          (is (= {"bread" 8} (ft/chest-items s)) "12 bread are the 60 points of the reserve")
+          (is (= {"bread" 12} (ft/inv s))))))))
+
 (deftest crops-are-stored-down-to-the-food-reserve
   (async done
     (tu/run-async done
@@ -161,8 +171,8 @@
 (deftest tidy-gets-the-plan-and-its-part
   (is (= {:plan "p" :part "wheat"} (:args (:call (maintain/decide :tidy {:area {:plan "p" :part "wheat"}} {:blocked 2}))))))
 
-(deftest a-plan-reserves-twice-its-cells-per-crop
-  (is (= {"wheat_seeds" 4 "carrot" 2}
+(deftest a-plan-reserves-one-replant-of-its-cells-per-crop
+  (is (= {"wheat_seeds" 2 "carrot" 1}
          (stock/plan-reserve {{:x 0 :y 64 :z 0} "wheat" {:x 1 :y 64 :z 0} "wheat" {:x 2 :y 64 :z 0} "carrots"}))))
 
 (deftest a-step-counts-as-ran-only-with-an-entry-that-was-not-skipped-or-stopped
