@@ -255,8 +255,6 @@
 
 ;; Wakes
 
-(defn routine-job? [job] (or (:holding job) (and (:waiting job) (routine-wait? (:waiting job)))))
-
 (defn waking-job?
   "Whether an idle row is one the agent must clear: a failure or a wait the engine does not end itself."
   [job]
