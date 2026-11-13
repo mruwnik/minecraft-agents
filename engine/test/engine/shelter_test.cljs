@@ -562,6 +562,17 @@
           (await (run-until-empty eng 6))
           (is (= 1 (count (calls p "sleep")))))))))
 
+(deftest a-body-beside-the-bed-lies-in-it-despite-an-unreachable-entry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :self {:pos [5.5 64 0.5]} :blocks {"6,64,0" "red_bed"}})]
+          (mem/write! (:store eng) :bed-unreachable {:pos {:x 6 :y 64 :z 0}} {:cap 5 :ttl 600000})
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (core/submit! eng (tu/order '(jobs.survival.sleep {})) {})
+          (await (run-until-empty eng 6))
+          (is (= 1 (count (calls p "sleep")))))))))
+
 ;; ----------------------------------------------------------------- log-out
 
 (deftest log-out-goes-offline-till-morning

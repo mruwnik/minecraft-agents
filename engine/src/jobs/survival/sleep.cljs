@@ -24,7 +24,7 @@
 (def doc
   "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed, else the live :spawn-bed, at any distance (go-to prices the walk).
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
-  (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
+  (an unexpired entry with the same position, the body not within 3 blocks of it), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open (unknown, :look, while the body has not looked round this run: the round looks once, then decides). A body already asleep is done.
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
@@ -56,9 +56,10 @@
 (def unreachable-policy {:cap 5 :ttl 600000})
 
 (defn unreachable-bed?
-  "Whether an unexpired :bed-unreachable entry names bed."
+  "Whether an unexpired :bed-unreachable entry names bed and the body is not beside it (an arrival outweighs the old verdict)."
   [c bed]
-  (boolean (some #(= bed (:pos (:data %))) (ctx/entries c :bed-unreachable))))
+  (and (< 3 (u/dist (u/self-pos c) bed))
+       (boolean (some #(= bed (:pos (:data %))) (ctx/entries c :bed-unreachable)))))
 
 (defn bed-of
   "The bed to sleep in: the :bed argument (nil when it is not a position), else the remembered :bed (so a gone one is
@@ -166,9 +167,9 @@
        (when-let [r (some-> (:reason route) name)] (str " (" (str/replace r "-" " ") ")"))))
 
 (defn no-way-quote?
-  "Whether go-to's quoted route says no walk reaches the bed (found false, for one of no-way-reasons)."
+  "Whether go-to's quoted route says no walk reaches the bed (found false, for one of no-way-reasons; a partial that spent its node budget is not known yet, no proof)."
   [route]
-  (and (false? (:found route)) (not (:unseen-floors route)) (contains? no-way-reasons (some-> (:reason route) keyword))))
+  (and (false? (:found route)) (not (:unseen-floors route)) (not (:budget route)) (contains? no-way-reasons (some-> (:reason route) keyword))))
 
 (defn late-walk?
   "Whether the time spent quoting and walking (spent-ms) passed the first quote's upper bound (hi, s; nil: none) while the latest quote's route (nil: no quote) still has no whole way."
