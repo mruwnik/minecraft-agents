@@ -199,11 +199,18 @@
          (stalks/cut-cells (:p (fp/setup (stalk-world "sugar_cane" 1 3) {} []))
                            {{:x 2 :y 64 :z 2} "sugar_cane" {:x 3 :y 64 :z 2} "sugar_cane"}))))
 
+(deftest a-stem-cell-gets-its-fruit-cut-and-the-stem-left
+  (let [p (:p (fp/setup {:blocks {(fp/k 2 64 2) "melon_stem" (fp/k 3 64 2) "melon" (fp/k 2 64 3) "pumpkin"
+                                  (fp/k 1 64 2) "attached_melon_stem"}} {} []))]
+    (is (= [[3 64 2]] (stalks/fruit-cuts p {{:x 2 :y 64 :z 2} "melon"})))
+    (is (= {{:x 2 :y 64 :z 2} "melon" {:x 5 :y 64 :z 5} "pumpkin"}
+           (stalks/stem-cells {:cells [{:pos [2 64 2] :want {:crop "melon_stem"}} {:pos [5 64 5] :want "pumpkin_stem"}]} nil)))))
+
 (deftest the-cut-step-digs-above-the-stalk-base-only-when-there-is-something-to-cut
   (are [skip cut] (= skip (:skip (maintain/decide :cut {:area {:plan "p"}} {:cut cut})))
-    :no-stalks []
+    :nothing-to-cut []
     nil [[3 65 2]])
-  (is (= {:area {:cells [[3 65 2]]} :only ["bamboo" "sugar_cane"] :for-plan "p"}
+  (is (= {:area {:cells [[3 65 2]]} :only ["bamboo" "melon" "pumpkin" "sugar_cane"] :for-plan "p"}
          (update (:args (:call (maintain/decide :cut {:area {:plan "p"}} {:cut [[3 65 2]]}))) :only sort))))
 
 (deftest a-sugar-cane-plan-is-cut-above-the-base

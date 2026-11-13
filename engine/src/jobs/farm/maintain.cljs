@@ -35,17 +35,17 @@
     fills some of its crop cells; a body clears its own field.
   - :cut (jobs.blocks.clear-cells): the plan has sugar cane or bamboo cells (a part wanting the stalk) and a stalk stands
     on the base block of one; the stalk block above the base is dug and the rest of the stalk comes down with it, the base
-    is never dug.
+    is never dug. A melon or pumpkin block beside a plan's stem cell is dug too (the stem stays).
   - :tend (jobs.farm.tend over the :area, with :till :irrigate :fertilize): harvest, irrigate, till, plant and fertilize as
     its conditions hold. It always runs; a field with nothing to do books it declined.
   - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
   - :deposit (jobs.storage.deposit with :items :farm-goods): a :chest is given and farm goods (seeds, crops, melon,
-    pumpkin, hay, cocoa) are carried above the keep. Tools, bread and other non-crop food are never stored.
+    pumpkin, hay, cocoa, baked potatoes) are carried above the keep (the food reserve is part of it). Tools, bread and other non-crop food are never stored.
   The keep, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or untilled ground cells of
   a box, or twice the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
   register holds (jobs.lib.reserve: the food reserve, best food first; agent entries) and the :carry entry. Harvested
   crops above it are stored; seed above it is composted.
-  Skipped steps are booked {:skipped reason}: :nothing-blocked, :no-stalks, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
+  Skipped steps are booked {:skipped reason}: :nothing-blocked, :nothing-to-cut, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
   :declined when the child declined.
   It starts when tend would run or a stock step has something to do. Done once a step ran and tend has nothing
   to do and nothing is left to compost or store; a farm in order before the first pass waits :nothing-to-do. Ends :done with {:steps {step summary}} when a step ran to its end,
@@ -94,10 +94,20 @@
       (stalks/base-cells answer part)
       {})))
 
-(defn stalk-cuts
-  "[[x y z]] of the stalk blocks above the base that the cut step would dig."
+(defn stem-fruits
+  "{pos fruit} of the plan's melon and pumpkin stem cells ({} without :plan or when it cannot be read)."
   [c]
-  (stalks/cut-cells (:primitives c) (stalk-bases c)))
+  (let [{:keys [plan part]} (:area (:args c))
+        answer (some->> plan (known/plan c))]
+    (if (and answer (not (:broken answer)))
+      (stalks/stem-cells answer part)
+      {})))
+
+(defn stalk-cuts
+  "[[x y z]] of the stalk blocks above the base and the fruit blocks beside a stem that the cut step would dig."
+  [c]
+  (into (stalks/cut-cells (:primitives c) (stalk-bases c))
+        (stalks/fruit-cuts (:primitives c) (stem-fruits c))))
 
 (defn facts
   "{:keep :waste :stored :blocked :cut}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig, the stalk blocks to cut."
@@ -120,8 +130,8 @@
             {:call {:slot :tidy :args (cond-> {:plan (:plan area)} (:part area) (assoc :part (:part area)) ignore-zones? (assoc :ignore-zones? true))}}
             {:skip :nothing-blocked})
     :cut (if (empty? cut)
-           {:skip :no-stalks}
-           {:call {:slot :cut :args (cond-> {:area {:cells (vec (take 400 cut))} :only (vec stalks/names) :for-plan (:plan area)}
+           {:skip :nothing-to-cut}
+           {:call {:slot :cut :args (cond-> {:area {:cells (vec (take 400 cut))} :only stalks/cut-names :for-plan (:plan area)}
                                       ignore-zones? (assoc :ignore-zones? true))}})
     :tend {:call {:slot :tend :args (cond-> {:area area :till till :irrigate irrigate :fertilize fertilize}
                                       ignore-zones? (assoc :ignore-zones? true))}}
