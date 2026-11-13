@@ -1,7 +1,7 @@
 (ns jobs.lib.reserve
   "The body's register of reserved items: body memory kind :reserve, entries {:id :item|:tag :count|:all :strength 0..1
   :by \"agent\"|job instance id :why :until ms|nil :not #{chooser..} the choosers it does not bind}. Writing an id replaces its entry. An entry counts while :until has
-  not passed; a job's entries are stamped ledger ::ttl-s ahead, renewed by its set-job-entries! and by rows (keep-alive!), and
+  not passed (a job's entry with none is an orphan); a job's entries are stamped ledger ::ttl-s ahead, renewed by its set-job-entries! and by rows (keep-alive!), and
   dropped by release! in its cleanup, so a job that dies leaves them only until the ttl. It covers carried units only.
   (entries view) the live entries. (rows c chooser) [{:name :count :strength}] of the carried units reserved, strongest
   first: the register plus the built-in rules (the food reserve, jobs.lib.home-food/carry-points, precious food, one carried bed while no home bed is placed (not for the :night chooser: that bed is the camp bed), a chooser's

@@ -58,7 +58,8 @@
     {:until 1000} false
     {:by "agent"} true
     {:by "gone-job" :until 2000} true
-    {:by "gone-job" :until 900} false))
+    {:by "gone-job" :until 900} false
+    {:by "j2265"} false))
 
 (defn writer
   "A ctx for job j1 over a register in an atom; t the clock in ms."
