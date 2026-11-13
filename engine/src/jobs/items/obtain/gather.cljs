@@ -7,7 +7,7 @@
             [jobs.items.obtain.base :refer [explore-opts job-time-binds? job-time-left search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [callable? climbs-first? gather-viable? pickaxe-first? seen-refusal tree? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan gathered-s raw-needs search-way]]
-            [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
+            [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source spared-why with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
@@ -36,12 +36,6 @@
 
 (defn release-crafting-items! [c]
   (ctx/forget-where! c reserve/kind #(= (:id c) (:by %))))
-
-(defn spared-why
-  "The text of a hunt ending that left animals alone (its :spared-by, a count per rule: pen, keep ..), else nil."
-  [res]
-  (when-let [by (not-empty (:spared-by res))]
-    (str "left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))
 
 (defn gather-failed!
   "A gather run that brought nothing (a mine that ended :wet or :flooded leaves its ore's column out of the next sight). Trees seen but unreachable (:no-tree) with :explore on send the body to look

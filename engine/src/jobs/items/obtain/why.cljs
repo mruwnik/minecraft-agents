@@ -4,7 +4,7 @@
             [engine.game :as game]
             [jobs.items.obtain.base :refer [explore-opts gathers? makes? seen-radius way?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
-            [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
+            [jobs.items.obtain.seen :refer [seen-blocks-of seen-of spared-in-sight spared-why]]
             [jobs.items.obtain.table :refer [animal? gather-needs material-blocks]]
             [jobs.lib.sources :refer [source-opts]]
             [jobs.lib.recipes :as recipes]
@@ -48,7 +48,7 @@
         label (fn [{:keys [key seen sheep mob] :as need}]
                 (cond
                   sheep (str key " (from " sheep " sheep in sight)")
-                  mob (str key " (from a " mob " in sight)")
+                  mob (str key " (from a " mob (if-let [by (spared-in-sight c need)] (str "; those in sight " (spared-why {:spared-by by})) " in sight") ")")
                   (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")")
                   :else (str key (when-let [o (other-logs-seen c need)]
                                    (str " (only " (clojure.string/join "/" o) " seen: another species)")))))]

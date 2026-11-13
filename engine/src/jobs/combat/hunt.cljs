@@ -114,7 +114,7 @@
   the pair rule is :keep's."
   [c]
   (let [pens (atom [])]
-    (into {} (keep #(some->> (spare/why -1 (.-name %) 0 (spare/penned? c pens %) false) (vector (.-id %)))) (present c))))
+    (into {} (keep #(some->> (spare/spared c pens %) (vector (.-id %)))) (present c))))
 
 (defn candidates
   "The present animals of the :color not skipped and not spared, nearest first."

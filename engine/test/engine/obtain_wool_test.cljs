@@ -269,8 +269,8 @@
             (is (empty? (attacked (await (scenario {:item "string" :count 1} world 40)))) (pr-str (dissoc world :entities)))))))))
 
 (deftest a-hunt-that-spared-animals-says-which-rule-spared-them
-  (is (= "left alone: 3 pen" (gather/spared-why {:spared-by {:pen 3}})))
-  (is (nil? (gather/spared-why {:killed 0}))))
+  (is (= "left alone: 3 pen" (seen/spared-why {:spared-by {:pen 3}})))
+  (is (nil? (seen/spared-why {:killed 0}))))
 
 (deftest leather-from-a-penned-cow-is-not-hunted
   (async done

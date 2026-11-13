@@ -148,3 +148,8 @@
   "Whether an adult animal stands in a zone or plan of the body's own or in a closed enclosure (see enclosed?)."
   [c pens e]
   (or (access/in-own-area? c (u/pos-of (.-pos e))) (enclosed? c pens e)))
+
+(defn spared
+  "The rule a hunt leaves the adult animal e alone by whatever its count (why: :off-limits or :pen), else nil; pens as in enclosed?."
+  [c pens e]
+  (why -1 (.-name e) 0 (penned? c pens e) false))

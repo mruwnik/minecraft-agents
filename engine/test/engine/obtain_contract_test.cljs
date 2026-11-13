@@ -388,6 +388,19 @@
           (is (not= :done (:kind e)))
           (is (= ['jobs.items.obtain] via) "a booking found stale is tried once, then the gather goes on without it"))))))
 
+(deftest a-smelt-input-booked-in-a-chest-is-taken-from-it-not-hunted-from-a-spared-cow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (f/world {f/chest-at [{:name "beef" :count 2}]})
+                                :entities [{:id 7 :name "cow" :kind "passive" :pos {:x 1 :y 64 :z 2} :health 20 :drops [{:name "beef" :count 1}]}])
+                         [f/own-zone])
+              _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [-2 64 3] :items {"beef" 2}} stock/stock-policy)
+              _ (await (ending-of s 'jobs.items.obtain {:item "cooked_beef" :count 2 :explore false} 30))]
+          (is (= 'jobs.items.obtain (first (map :via (f/events-of s :obtain.gathering))))
+              "the cow nearer than the chest stands in the body's own zone: the hunt would spare it, so it is no source")
+          (is (empty? (f/chest-items s f/chest-at)) "the beef is taken from the chest"))))))
+
 (deftest the-walk-to-a-remembered-chest-says-when-it-was-last-seen
   (async done
     (tu/run-async done

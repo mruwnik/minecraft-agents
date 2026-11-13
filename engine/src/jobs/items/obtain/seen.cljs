@@ -15,7 +15,8 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
-            [jobs.lib.walk-pick :as pick]))
+            [jobs.lib.walk-pick :as pick]
+            [clojure.string]))
 
 (defn hunt-worth
   "Seconds an animal of mob is worth the call: the :worth it is given, else the larger of the animal's meat and the call's search-worth."
@@ -107,11 +108,27 @@
   (first (filter #(some-> (:age %) (>= (crops/ripe-age (:crop need)))) (standing-crops c need))))
 
 (defn animals-of
-  "The animals in sight a hunt or shear of an animal need may go for, nearest first: sheep of its colour in range, or adults of its mob worth the trip."
+  "The animals in sight a hunt or shear of an animal need may go for, nearest first: sheep of its colour in range, or adults
+  of its mob worth the trip that the hunt would not leave alone (jobs.lib.animal-spare/spared)."
   [c need]
   (if (:sheep need)
     (filter #(= (:sheep need) (.-color %)) (sheep-in-range c))
-    (animals-worth-hunting c (:mob need) #(not (true? (.-baby %))))))
+    (let [pens (atom [])]
+      (animals-worth-hunting c (:mob need) #(not (or (true? (.-baby %)) (spare/spared c pens %)))))))
+
+(defn spared-why
+  "The text of a hunt ending that left animals alone (its :spared-by, a count per rule: pen, keep ..), else nil."
+  [res]
+  (when-let [by (not-empty (:spared-by res))]
+    (str "left alone: " (clojure.string/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))
+
+(defn spared-in-sight
+  "{rule n} of the adults of an animal need's mob in sight that the hunt leaves alone (animal-spare/spared), else nil."
+  [c need]
+  (when-let [mob (:mob need)]
+    (let [pens (atom [])]
+      (not-empty (frequencies (keep #(when-not (true? (.-baby %)) (spare/spared c pens %))
+                                    (animals/herd (:primitives c) mob (seen-radius))))))))
 
 (defn seen-of
   "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range; a growable crop need with none seen is sourced by growing it ({:grow true}); a need taken from a chest (obtain.plan/by-chest) its chest ({:pos}); else nil."
