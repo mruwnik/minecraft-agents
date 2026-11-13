@@ -12,6 +12,7 @@
  :cases
  [{:name "close-zombie-among-seven-gates-gets-a-flight-choice-at-once"
    :plot {:length 64}
+   :body {:inventory [["cobblestone" 20] ["iron_ingot" 6]]}
    :blocks [[:set [6 0 6] "oak_fence_gate[facing=south]"] [:set [10 0 6] "oak_fence_gate[facing=south]"] [:set [22 0 6] "oak_fence_gate[facing=south]"]
             [:set [26 0 6] "oak_fence_gate[facing=south]"] [:set [6 0 26] "oak_fence_gate[facing=south]"] [:set [10 0 26] "oak_fence_gate[facing=south]"]
             [:set [26 0 26] "oak_fence_gate[facing=south]"]]
