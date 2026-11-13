@@ -9,13 +9,22 @@
  :cases
  [{:name "part-cut-tree-trigger-fells-the-hanging-trunk"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
    :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 5]]]}
+  {:name "part-cut-tree-trigger-leaves-a-hanging-trunk-the-body-did-not-cut"
+   :register [{:trigger :part-cut-tree}]
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 40}]
+   :after [[:block [16 6 16] "oak_log"]]
+   :limit-s 60}
   {:name "part-cut-tree-trigger-fells-a-trunk-hanging-three-blocks-up"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [16 0 16] [16 11 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 4 16] [16 6 16] "oak_log"] [:fill [14 6 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 6 16] [16 6 16] "oak_log"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
@@ -24,6 +33,7 @@
   ;; Card a48235d8: standing trees 4 and 5 blocks from a hanging trunk, canopies joined to its crown, must not make it read as standing.
   {:name "part-cut-tree-trigger-fells-a-hanging-trunk-between-standing-trees"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [10 0 12] [23 11 20] "air"]
             [:fill [16 4 16] [16 6 16] "oak_log"] [:fill [14 6 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 6 16] [16 6 16] "oak_log"]
             [:fill [21 0 16] [21 8 16] "oak_log"] [:fill [19 7 14] [23 9 18] "oak_leaves[persistent=true]"] [:fill [21 7 16] [21 8 16] "oak_log"]
@@ -41,6 +51,7 @@
    :limit-s 55}
   {:name "part-cut-tree-trigger-waits-for-a-cow-lure"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :body {:inventory [["iron_axe" 1] ["wheat" 4]]}
    :act [[:summon "cow" [13.5 0 21.5]]
          [:job (jobs.animals.lure-to {:worth 1200 :mob "cow" :pos #xyz [12 0 6]})]
@@ -57,6 +68,7 @@
   {:name "part-cut-tree-does-not-walk-a-sheltered-body-out-at-night"
    :time :night-exclusive :time-why :dawn-decision
    :register [{:trigger :night}
+   :memory [{:kind :forestry/part-cut :data {:column #at [19 22]} :policy {:cap 20 :ttl :forever}}]
               {:trigger :part-cut-tree}]
    :blocks [[:fill [12 0 20] [16 3 24] "stone" :hollow] [:fill [13 0 21] [15 2 23] "air"]
             [:fill [16 1 22] [16 3 22] "glass"]
@@ -71,6 +83,7 @@
   {:name "part-cut-tree-trigger-waits-in-the-dark"
    :plot {:height 24 :floor "grass_block" :light :dark}
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
@@ -104,6 +117,7 @@
   ;; stump for the base (not over air) and never fired.
   {:name "part-cut-tree-trigger-fells-a-trunk-cut-above-its-stump"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:set [16 0 16] "oak_log"] [:fill [16 2 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
@@ -113,7 +127,7 @@
   ;; on it, and fell-tree :part-cut? does not pick it again. Same trunk as part-cut-tree-trigger-fells-the-hanging-trunk, which fires without the entry.
   {:name "part-cut-tree-trigger-leaves-a-column-fell-tree-gave-up-on"
    :register [{:trigger :part-cut-tree}]
-   :memory [{:kind :forestry/tree-unreachable :data {:column #at [16 16]} :policy {:cap 20 :ttl 600000}}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}} {:kind :forestry/tree-unreachable :data {:column #at [16 16]} :policy {:cap 20 :ttl 600000}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
@@ -122,7 +136,7 @@
   ;; The only tree is a column it gave up on: no tree is left to fell, so fell-tree waits :no-tree (a later start, never ends) and digs nothing.
   {:name "fell-tree-part-cut-leaves-a-column-it-gave-up-on-lately"
    :register []
-   :memory [{:kind :forestry/tree-unreachable :data {:column #at [16 16]} :policy {:cap 20 :ttl 600000}}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}} {:kind :forestry/tree-unreachable :data {:column #at [16 16]} :policy {:cap 20 :ttl 600000}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :act [[:job (jobs.forestry.fell-tree {:worth 1200 :part-cut? true :radius 24})]]
@@ -132,6 +146,7 @@
    :limit-s 70}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 0 16] [16 5 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 5 16] "oak_log"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
@@ -139,6 +154,7 @@
    :limit-s 40}
   {:name "part-cut-tree-trigger-leaves-a-trunk-in-another-players-zone"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :zones [{:name "apiary" :min [15 0 15] :max [17 12 17] :owner "Other" :allow #{}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
@@ -148,7 +164,7 @@
   ;; The trigger is a bounded chore: a trunk far from the remembered home, or a body already carrying a stack of logs, is left.
   {:name "part-cut-tree-trigger-leaves-a-trunk-far-from-home"
    :register [{:trigger :part-cut-tree}]
-   :memory [{:kind :home :data {:pos #xyz [300 0 16]}}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}} {:kind :home :data {:pos #xyz [300 0 16]}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
@@ -156,6 +172,7 @@
    :limit-s 40}
   {:name "part-cut-tree-trigger-leaves-a-trunk-while-a-stack-of-logs-is-carried"
    :register [{:trigger :part-cut-tree}]
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :body {:inventory [["iron_axe" 1] ["oak_log" 64]]}
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]

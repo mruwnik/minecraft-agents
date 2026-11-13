@@ -44,51 +44,17 @@
     (aset p "seenBlockAt" (fn [pos] (if (hid? pos) #js {:unknown true :pos pos} (block-at pos))))
     p))
 
-(defn trunks [blocks] (mapv :base (part-cut/part-cut-trees (ray-sight (:p (lt/setup {:blocks blocks}))) 12 nil)))
+(defn trunks
+  ([blocks] (trunks blocks #{[6 0]}))
+  ([blocks owed] (mapv :base (part-cut/part-cut-trees (ray-sight (:p (lt/setup {:blocks blocks}))) owed 12 nil))))
 
-(deftest only-a-raised-trunk-not-joined-to-a-standing-tree-is-part-cut
+(deftest only-an-owed-raised-trunk-is-part-cut
   (is (= [{:x 6 :y 65 :z 0}] (trunks (merge (fm/ground [[6 0]]) (part-cut 6)))))
-  (is (= #{[6 63 0]} (set (filter #(true? (.-unknown (.seenBlockAt (ray-sight (:p (lt/setup {:blocks (merge (fm/ground [[6 0] [7 0]]) (branched 7 66))}))) (clj->js (zipmap [:x :y :z] %)))))
-                                  [[6 63 0] [6 64 0] [5 63 0] [7 63 0] [7 65 0]])))
-      "ray sight leaves only the ground under the trunk's foot unseen")
-  (is (= [] (trunks (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 4)))) "a tree on the ground")
-  (is (= [] (trunks wall)) "a log wall has no leaves")
-  (is (= [] (trunks (merge (fm/ground [[6 0] [7 0]]) (branched 7 67)))) "a branch of a living acacia")
-  (is (= [] (trunks (merge (fm/ground [[6 0] [7 0]]) (branched 7 66)))) "a side branch of a living fancy oak"))
-
-(defn hiding
-  "p seeing every block except those in cells (a set of [x y z]), which stay unseen."
-  [p cells]
-  (let [blocks (.-seenBlocks p) block-at (.-seenBlockAt p)
-        hid? #(contains? cells (mapv (fn [k] (js/Math.floor (aget % k))) ["x" "y" "z"]))]
-    (aset p "seenBlocks" (fn [q] (.filter (blocks q) #(not (hid? (.-pos %))))))
-    (aset p "seenBlockAt" (fn [pos] (if (hid? pos) #js {:unknown true :pos pos} (block-at pos))))
-    p))
-
-(deftest a-standing-neighbour-whose-canopy-joins-a-part-cut-trunk-s-leaves-is-no-standing-trunk-under-it
-  (is (= [{:x 6 :y 65 :z 0}]
-         (trunks (merge (fm/ground [[6 0] [14 0]]) {(fm/k 15 63 0) "air"} (part-cut 6) (lt/tree 14 0 "oak" 4)
-                        (into {} (for [x (range 7 14)] [(fm/k x 68 0) "oak_leaves"])))))
-      "the neighbour's foot is seen from the ledge beside it; its leaves join through a run of leaves past leaf-decay reach"))
-
-(deftest a-standing-neighbour-s-own-leaves-close-by-are-no-crown-of-a-part-cut-trunk
-  (doseq [nx [10 11]]
-    (is (= [{:x 6 :y 65 :z 0}]
-           (trunks (merge (fm/ground [[6 0] [nx 0]]) {(fm/k (inc nx) 63 0) "air"} (part-cut 6) (lt/tree nx 0 "oak" 4))))
-        "leaves beside the neighbour's trunk are nearer its logs than the hanging ones")))
-
-(defn trunks-hiding [blocks cells] (mapv :base (part-cut/part-cut-trees (hiding (:p (lt/setup {:blocks blocks})) cells) 12 nil)))
-
-(deftest a-branch-beside-a-trunk-hidden-in-the-leaves-is-no-part-cut-trunk
-  (is (= [] (trunks-hiding (merge (fm/ground [[6 0] [7 0]]) (branched 7 66)) #{[6 65 0] [6 66 0] [6 67 0]}))
-      "the trunk's seen foot goes on up into unseen cells beside the branch")
-  (is (= [{:x 6 :y 65 :z 0}] (trunks-hiding (merge (fm/ground [[6 0]]) (part-cut 6)) #{[6 68 0] [7 66 0] [7 65 0]}))
-      "unseen cells in a hanging crown over no seen log join it to nothing")
-  (is (= [] (trunks-hiding (merge (fm/ground [[6 0] [7 0] [8 0]]) (branched 7 66) {(fm/k 8 66 0) "oak_log"})
-                           #{[6 65 0] [6 66 0] [6 67 0] [7 66 0]}))
-      "a branch of two logs, its inner log and the trunk over the seen foot unseen: the trunk rises under the same crown")
-  (is (= [] (trunks-hiding (merge (fm/ground [[6 0]]) (part-cut 6)) #{[6 63 0]}))
-      "a trunk over air with the ground under it unseen: no seen evidence of a cut"))
+  (is (= [] (trunks (merge (fm/ground [[6 0]]) (part-cut 6)) #{})) "a hanging trunk the body did not cut: a stump left by others")
+  (is (= [] (trunks (merge (fm/ground [[6 0]]) (part-cut 6)) #{[9 9]})) "another column is owed")
+  (is (= [] (trunks (merge (fm/ground [[6 0] [7 0]]) (branched 7 66)))) "a branch of a living oak: its trunk column is not hanging")
+  (is (= [] (trunks (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 4)))) "an owed column grown whole again")
+  (is (= [] (trunks wall)) "a log wall has no leaves"))
 
 (deftest the-ground-under-a-raised-log-is-the-first-seen-solid-block
   (let [p (:p (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))}))]
@@ -101,10 +67,13 @@
     (is (= {:x 6 :y 64 :z 0} (fell-tree/walk-target p (trees 6))) "the hanging trunk: the ground under it")
     (is (= (:base (trees 9)) (fell-tree/walk-target p (trees 9))) "a standing trunk: its own base")))
 
+(defn owe! [eng] (mem/write! (:store eng) trees/part-cut-kind {:column [6 0]} trees/part-cut-policy))
+
 (defn ^:async fell
-  "Run fell-tree :part-cut? over the zones in a world of spec; {:p :eng :out}."
+  "Run fell-tree :part-cut? over the zones in a world of spec, column [6 0] owed; {:p :eng :out}."
   [spec zones args]
   (let [{:keys [eng p]} (update (lt/setup (assoc spec :zones zones)) :p ray-sight)]
+    (owe! eng)
     {:eng eng :p p :out (await (tu/child-outcome eng 'jobs.forestry.fell-tree (merge {:part-cut? true :radius 12 :ways #{:carried}} args) 150))}))
 
 (deftest fell-tree-part-cut-fells-the-hanging-trunk-and-owes-the-sapling-on-the-ground
@@ -114,7 +83,27 @@
         (let [{:keys [p eng]} (await (fell {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))} [] {}))]
           (is (= #{65 66 67} (into #{} (map second) (fm/digs p))) "the three floating logs go")
           (is (<= 3 (get (lt/inv p) "oak_log" 0)) "its own logs are picked up")
-          (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts eng)) "the debt is the ground cell, not the hanging log"))))))
+          (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts eng)) "the debt is the ground cell, not the hanging log")
+          (is (empty? (mem/entries (mem/view (:store eng)) trees/part-cut-kind)) "a finished tree is no longer owed"))))))
+
+(deftest fell-tree-does-not-fell-a-hanging-trunk-it-did-not-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))})]
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried}} 150))
+          (is (= [] (fm/digs p))))))))
+
+(deftest fell-tree-leaving-a-tree-half-cut-owes-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 9))
+                                         :zones [{:name "vault" :min [5 68 -1] :max [7 80 1] :allow #{:place}}]})
+              out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 12 :ways #{:carried}} 600))]
+          (is (not= :done (:status out)) "the felling ended without the tree down")
+          (is (seq (fm/digs p)) "some logs were cut")
+          (is (= [{:column [6 0]}] (map :data (mem/entries (mem/view (:store eng)) trees/part-cut-kind)))))))))
 
 (def stumped
   "An oak of 5 logs at x 6 cut at its second log: the stump on the ground, three logs over the gap, leaves on top."
@@ -144,6 +133,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))})]
+          (owe! eng)
           (mem/write! (:store eng) trees/unreachable-kind {:column [6 0]} trees/unreachable-policy)
           (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried}} 150))
           (is (= [] (fm/digs p))))))))
@@ -161,7 +151,7 @@
 
 (defn view [entries & [now]]
   (let [s (mem/open (tu/tmp-dir) {:now (constantly (or now 1000000))})]
-    (doseq [[kind data] entries] (mem/write! s kind data {:cap 8 :ttl :forever}))
+    (doseq [[kind data] (cons [trees/part-cut-kind {:column [6 0]}] entries)] (mem/write! s kind data {:cap 8 :ttl :forever}))
     (mem/view s)))
 
 (defn holds [t blocks & [entries inventory zones unloaded]]
@@ -171,7 +161,13 @@
 (deftest the-part-cut-tree-trigger-holds-for-a-hanging-trunk-only
   (is (true? (holds pct/part-cut-tree (merge (fm/ground [[6 0]]) (part-cut 6)))))
   (is (false? (holds pct/part-cut-tree (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 4)))))
-  (is (false? (holds pct/part-cut-tree wall))))
+  (is (false? (holds pct/part-cut-tree wall)))
+  (let [w (ew/of-data {} {} [])
+        owed? #(pct/part-cut-tree (ray-sight (:p (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))}))) (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000000)})]
+                                      (when % (mem/write! s trees/part-cut-kind {:column [6 0]} trees/part-cut-policy))
+                                      (mem/view s)) {} w nil)]
+    (is (true? (owed? true)))
+    (is (false? (owed? false)) "a hanging trunk the body did not cut never holds it")))
 
 (deftest the-part-cut-tree-trigger-waits-out-the-dark
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
@@ -215,6 +211,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))})]
+          (owe! eng)
           (mem/write! (:store eng) trees/need-kind {:column :any :any-of ["dirt"] :count 5 :trees []} trees/need-policy)
           (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried}} 150))
           (is (empty? (mem/entries (mem/view (:store eng)) trees/need-kind))))))))

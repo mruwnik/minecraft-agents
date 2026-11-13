@@ -140,6 +140,17 @@
   [memory]
   (into #{} (map (comp :column :data)) (mem/entries memory unreachable-kind)))
 
+(def part-cut-kind
+  "Entries {:column [x z]}, one per column, a fell-tree ending leaves when it cut logs of a tree and did not finish it: the work the body owes. The part-cut-tree trigger fells only these."
+  :forestry/part-cut)
+
+(def part-cut-policy {:cap 20 :ttl :forever})
+
+(defn part-cut-owed
+  "The set of [x z] columns of memory (a view or the body's) a fell-tree left half-cut."
+  [memory]
+  (into #{} (map (comp vec :column :data)) (mem/entries memory part-cut-kind)))
+
 (def need-kind
   "Entries {:column [x z] or :any, :any-of [names] :count n, :trees [[x z]..] (with :any: the part-cut columns in sight)}, one per column, a fell-tree ending :need writes: the part-cut-tree trigger leaves the column alone until the body carries what the need named."
   :forestry/tree-need)

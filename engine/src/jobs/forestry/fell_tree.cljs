@@ -70,7 +70,7 @@
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :replant? {:doc "write a :forestry/replant debt per trunk cell felled; false when the tree is only in the way (clearing a site: a player would not plant there)" :spec boolean? :default true}
    :leafless? {:doc "when no tree with leaves is in range, fell leafless log columns (a stump, a log pile, a village's frame)" :spec boolean? :default false}
-   :part-cut? {:doc "fell only part-cut trunks (jobs.lib.part-cut: a log of its column over air seen cut to the ground, joined to no standing tree)" :spec boolean? :default false}
+   :part-cut? {:doc "fell only the trunks a fell-tree left half-cut (jobs.lib.part-cut: owed column, a log over seen air)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (def ways (conj need/fetch-ways :pillar))
@@ -139,8 +139,9 @@
   (let [p (:primitives c)
         given-up (when (:part-cut? (:args c)) (into #{} (map (comp :column :data)) (ctx/entries c trees/unreachable-kind)))
         excluded (-> (unreachable-set (ctx/mem c)) (into (map vec) (:avoid (:args c))) (into given-up))
-        seen (delay (part-cut/seen-around p radius))
-        wanted? (fn [t] (or (not (:part-cut? (:args c))) (part-cut/part-cut? p seen t)))]
+        owed (trees/part-cut-owed (ctx/view c))
+        logs (delay (into #{} (map :pos) (trees/scan-logs p radius nil)))
+        wanted? (fn [t] (or (not (:part-cut? (:args c))) (part-cut/part-cut? p owed @logs t)))]
     (if-let [at (:at (:args c))]
       (when-let [t (tree-at p at)]
         (when-not (or (excluded [(:x at) (:z at)]) (not (log/log-allowed? c (:base t))) (not (wanted? t))) [t]))
@@ -416,8 +417,12 @@
       (ctx/forget-where! c trees/need-kind #(= col (:column %)))
       (ctx/remember! c trees/need-kind
                      (cond-> {:column col :any-of (vec items) :count (:count cause 1)}
-                       (= :any col) (assoc :trees (mapv (comp (juxt :x :z) :column) (part-cut/part-cut-trees (:primitives c) default-radius nil))))
-                     trees/need-policy)))
+                       (= :any col) (assoc :trees (mapv (comp (juxt :x :z) :column) (part-cut/part-cut-trees (:primitives c) (trees/part-cut-owed (ctx/view c)) default-radius nil))))
+                     trees/need-policy))
+    (when-let [{:keys [x z]} (:column (ctx/mem c))]
+      (if (= :done (:kind e))
+        (ctx/forget-where! c trees/part-cut-kind #(= [x z] (vec (:column %))))
+        (log/owe-part-cut! c))))
   (await (pillar/cleanup c e)))
 
 (def target [:at])
@@ -498,6 +503,6 @@
         {:keys [radius species at part-cut? leafless?]} (:args c)
         radius (or radius default-radius)
         t (cond at (tree-at p at)
-                part-cut? (first (part-cut/part-cut-trees p radius species))
+                part-cut? (first (part-cut/part-cut-trees p (trees/part-cut-owed (ctx/view c)) radius species))
                 :else (tree-near p radius species #{} leafless?))]
     (if t (cost/tree-worth (:species t) (count (log/tree-logs c radius t))) 0)))

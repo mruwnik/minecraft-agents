@@ -90,6 +90,7 @@
             {:no-event {:source :job :kind :fell-tree.declined} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [8 0 12] "birch_log"] [:not-block [24 0 12] "oak_log"] [:item "oak_log" [:>= 4]]]}
   {:name "part-cut-fells-a-hanging-trunk-and-owes-the-sapling"
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
@@ -97,6 +98,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 5]]]}
   {:name "part-cut-leaves-a-log-wall-with-no-leaves"
+   :memory [{:kind :forestry/part-cut :data {:column #at [16 16]} :policy {:cap 20 :ttl :forever}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [14 1 16] [18 5 16] "oak_log"]]
    :act [[:job (jobs.forestry.fell-tree {:worth 1200 :part-cut? true :radius 12})]]

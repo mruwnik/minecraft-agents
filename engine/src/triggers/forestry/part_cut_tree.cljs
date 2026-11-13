@@ -1,6 +1,6 @@
 (ns triggers.forestry.part-cut-tree
-  "The part-cut-tree trigger: a trunk in sight whose lowest log hangs over air, because the logs under it were cut
-  (jobs.lib.part-cut). Its job, jobs.forestry.fell-tree with :part-cut? true, fells the nearest such trunk with the
+  "The part-cut-tree trigger: a trunk in sight that a fell-tree of the body left half-cut (trees/part-cut-owed) and whose
+  lowest log hangs over air (jobs.lib.part-cut). A tree cut by anyone else is never its work. Its job, jobs.forestry.fell-tree with :part-cut? true, fells the nearest such trunk with the
   logs the body carries (no fetch trip), collects the logs and writes the replant debt on the ground under it.
   A trunk whose base cell a zone or claim of another player refuses is not a part-cut tree to finish: it does not hold
   the trigger, nor one whose column fell-tree lately gave up on (:tree-unreachable, 10 min), nor one it ended needing items the body lacks. A finished chore, not a
@@ -53,7 +53,7 @@
         {:keys [body at seen]} @last-read]
     (if (and (identical? body p) (< (- now at) (* 1000 (settings/get settings ::recheck-s))))
       seen
-      (let [trunks (part-cut/part-cut-trees p default-radius nil)
+      (let [trunks (part-cut/part-cut-trees p (trees/part-cut-owed view) default-radius nil)
             col #(vector (:x (:column %)) (:z (:column %)))
             seen (let [lacking (needing view (u/inventory p) (map col trunks))
                        given-up (into (recently-unreachable view) lacking) home (sh/home-target view)]
