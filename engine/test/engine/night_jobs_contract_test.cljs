@@ -13,6 +13,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.child :as child]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.sleep :as sleep]))
 
@@ -148,6 +149,24 @@
       (fn ^:async t []
         (let [e (await (call! (spawn-world {:blocks {"6,90,0" "red_bed"}}) 'jobs.survival.sleep {:bed {:x 6 :y 90 :z 0}} (constantly nil)))]
           (is (= [:nothing-possible :bed-unreachable] (ending-of e))))))))
+
+(deftest a-walk-that-did-not-arrive-over-a-quote-that-spent-its-node-budget-yields-and-gives-no-bed-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom 0)
+              answer #(js/Promise.resolve (if (odd? (swap! asked inc))
+                                          {:uses {:job-time [0 10 100]} :route {:found true}}
+                                          {:route {:found false :reason :budget}}))
+              quote (fn ([_ _ _] (answer)) ([_ _ _ _] (answer)))
+              eng-a (atom nil)
+              e (with-redefs [ctx/quote quote
+                              child/call-walk* (fn [_ _ _] (js/Promise.resolve {:kind :nothing-possible :data {:text "gave up walking"}}))]
+                  (await (call! (spawn-world {:blocks {"6,64,0" "red_bed"}}) 'jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}} #(reset! eng-a %))))]
+          (is (< 2 @asked) "the rounds went on (each asks the quote, then asks again after the walk)")
+          (is (= :not-done e) "the parent never got an ending: every round yielded :continue")
+          (is (empty? (mem/entries (mem/view (:store @eng-a)) :bed-unreachable)) "no give-up entry")
+          (is (empty? (filterv #(= :bed_unreachable (:kind %)) @@seen-events))))))))
 
 (defn ^:async dug-in-call!
   "Run job with args from a body dug in at night in its own cobble shell, a bed 6 blocks east; its ending."
