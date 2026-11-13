@@ -9,7 +9,7 @@
   - A free body whose walk ends :one-way at a drop it refuses (escalate-choose/refused-drop?), or any body whose walk ends :damage-budget (escalate-choose/damage-refused?; a shut-in one weighs the cheapest climb against the dig), digs toward the goal as for an out-of-sight goal (dig-toward: dig-way, or a leg toward a far goal), not stopping when the stair's last cell brings the goal into sight. A search that ran out of land (:exhausted), or a walk whose felt-for floors ran out (:unseen-floors), with the goal below the body by more than a fall the walk takes within its damage budget (escalate-choose/drop-stranded?) digs down the same way, goal seen or not, when a dig route exists.
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs), makes a way instead of giving up, one child job
-    each (jobs.lib.escape.way/choose, over the ways the call allows), after one that started no nearer the goal than one before (escalation/count-escalation) only while worth its price (escalation/worth-another?; a dig route that ends nearer is taken past it): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
+    each (jobs.lib.escape.way/choose, over the ways the call allows), after one that started no nearer the goal than one before (escalation/count-escalation) only while worth its price (escalation/worth-another?; a dig route that ends nearer is taken past it; a dig route that digs a block this call's pillar placed makes pillars no way for the rest of the call, escalation/pillar-undone!): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
     through a wall toward the goal, the fewest cells dug down or across to it (to a stand within :range, under :see one that sees it), escalation/dig-way, for a shut-in body (a leg of it toward a goal farther than one: dig-toward) weighed by its whole way (way-total) against a stair or pillar out or, with neither, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way), none dearer than the call's worth, nor than a stair or pillar from the feet, and with neither of those a leg of it (escalate-choose/dig-leg); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape-way/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape-way/priced-spot); where no way is chosen on a cell the give-up's walk did not start from, it walks again before it gives up. Each emits go-to.escalated {:step :why :n}, with :weighed [{:step :s}..] when it chose by price between a stair or pillar and a dig (:bound for a dig search that found none under it). Once
@@ -712,6 +712,18 @@
       (ctx/update-mem! c assoc :wait-seen key)
       (when (and key (= key before)) w))))
 
+(defn note-pillar!
+  "Keep the cells pillar ending r placed (its :cells) in memory :pillar-cells: a dig of one undoes this call's pillar."
+  [c r]
+  (ctx/update-mem! c update :pillar-cells (fnil into #{}) (map vec (:cells (:data r)))))
+
+(defn pillar-undone!
+  "A dig route dug cell, a block this call's pillar placed: the body is back where the pillar started, so pillaring is
+  no way this call (memory :skipped-steps :pillar), after a go-to.pillar-undone info."
+  [c cell]
+  (ctx/emit! c :go-to.pillar-undone :info {:cell cell :text (str "the dig route dug the pillar block placed at " cell " this walk: no more pillars this walk")})
+  (ctx/update-mem! c #(-> % (update :skipped-steps (fnil conj #{}) :pillar) (update :pillar-cells disj (vec cell)))))
+
 (defn ^:async escalation-child-round!
   "One call of the escalation child (ctx/call): the whole pillar or stair. After it, every planned cell now dug
   is in the ledger (note-holes!). A child that ends other than done gives up, with its cause, unless it got part of the way."
@@ -727,6 +739,7 @@
       (forget-dug-own! c dug)
       (when-not (:own e) (note-holes! c dug)))
     (when (not= :continue r) (note-guesses! c e r))
+    (when (and (= :pillar step) (not= :continue r)) (note-pillar! c r))
     (if-let [w (still-wait c r)]
       (do (ctx/update-mem! c #(-> % (update :children dissoc :escalation) (dissoc :wait-seen)))
           (await (escalation-failed! c pos {:step step :reason (:reason w) :text (str "waited on, nothing changing: " (:text w))})))
@@ -775,7 +788,8 @@
           (when (= :dug o)
             (forget-dug-own! c [dug])
             (note-holes! c [dug])
-            (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)])))
+            (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)]))
+            (when (contains? (:pillar-cells (ctx/mem c)) (vec cell)) (pillar-undone! c cell)))
           (when (and guess (not looked)) (note-guess! c cell class (not= :not-diggable o)))
           (if (and guess (= :not-diggable o)) :replan o))))))
 

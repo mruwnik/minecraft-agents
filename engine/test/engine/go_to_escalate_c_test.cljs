@@ -1146,6 +1146,23 @@
           (is (= ["stone" "stone"] [(tu/true-block-name p 1 65 0) (tu/true-block-name p 1 64 0)]) "nothing more of the route is dug")
           (is (nil? (:escalation (ctx/mem c))) "the climb is searched again from what the body sees now"))))))
 
+(deftest a-dig-route-that-digs-this-call-s-pillar-block-rules-the-pillar-out
+  ;; run4 F14b: a pillar out of a pocket, then a dig route in whose first cell is that pillar block, ten times over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (gt/setup {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                            :blocks (assoc (box -1 61 -1 1 62 1 "stone") "0,63,0" "cobblestone")})
+              p (:primitives eng)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+          (.setOwner p "tx")
+          (esc/note-pillar! c {:kind :done :data {:status :done :cells [[0 63 0]] :built 1 :height 1}})
+          (ctx/update-mem! c assoc :escalation {:step :dig-route :cells [{:cell [0 63 0] :block "cobblestone" :guess false}]})
+          (with-redefs [b/dig-cell-ending! (fn [_ _ _] (swap! (fake/state p) assoc-in [:blocks "0,63,0"] "air") (js/Promise.resolve {:kind :done :data {:dug true}}))]
+            (is (= :again (await (esc/dig-route-round! c [0 50 0])))))
+          (is (contains? (choose/skips c) :pillar) "the next way is not a pillar")
+          (is (= [[0 63 0]] (map :cell (events-of seen :go-to.pillar-undone)))))))))
+
 (deftest a-climb-s-next-stair-over-a-guessed-floor-seen-to-be-air-is-not-started-and-the-ways-are-chosen-again
   (let [{:keys [eng seen]} (gt/setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (assoc (box -1 62 -1 4 63 1 "stone") "2,63,0" "air")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
