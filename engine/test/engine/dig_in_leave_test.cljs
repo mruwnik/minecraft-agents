@@ -533,4 +533,11 @@
           (is (= [:done :out] ((juxt :status :reason) @out)))
           (is (not= :east (:heading @out)) "the stair goes through the ground, not the wall toward the goal")
           (is (= ["spruce_planks" "spruce_planks"] (mapv #(block-at p %) [[1 64 0] [1 65 0]])) "the wall stands")
-          (is (<= 64 (second (feet p))) "out of the pit"))))))
+          (is (<= 64 (second (feet p))) "out of the pit"))
+        ;; a shaft with no :start climbs step by step: the whole stair is priced, so a floor two steps out counts too
+        (let [{:keys [eng p out] :as s} (setup {:blocks (assoc (shaft) "2,63,0" "spruce_planks") :self {:pos {:x 0.5 :y 60 :z 0.5}} :inventory dirt-kit})]
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 60 :z 0} :state :built} {:cap 10 :ttl 1200000})
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (not= :east (:heading @out)) "the stair does not head for the plank floor on the way to the goal")
+          (is (= "spruce_planks" (block-at p [2 63 0])) "the floor stands"))))))

@@ -353,25 +353,39 @@
       (and reason (not= :budget reason) (= :no-path (some-> (:status result) keyword))) reason
       :else :no-progress)))
 
+(defn ^:async clear-seals!
+  "The seal cleanups in mem :seal-clearing ({:near :purpose :slot} each, :kept the cells kept so far), one
+  jobs.access.cleanup child each in turn: :continue while one waits on the world (step-round! resumes it), else :again
+  with every cleanup's kept cells in mem :seal-kept."
+  [c]
+  (loop []
+    (let [{[{:keys [near purpose slot]} & more] :todo kept :kept} (:seal-clearing (ctx/mem c))]
+      (if-not near
+        (do (ctx/update-mem! c #(-> % (assoc :seal-kept (or kept #{})) (dissoc :seal-clearing))) :again)
+        (let [r (await (ctx/call c slot 'jobs.access.cleanup {:of :all :near near :purpose purpose :checks {:fit? '(always)}}))]
+          (if (= :continue r)
+            :continue
+            (do (ctx/update-mem! c update :seal-clearing
+                                 #(-> % (assoc :todo (vec more))
+                                      (update :kept (fnil into #{}) (keep (fn [o] (when (#{:hostile-near :danger} (:reason o)) (:cell o)))) (get-in r [:data :open]))))
+                (recur))))))))
+
 (defn ^:async clear-goal-seal!
   "A goal the walk could not reach (ledger/seal-blocked-whys)
   with blocks of the body's own ledger (not a pillar it climbed) within ledger/seal-clear-radius of the goal (a dig-in's seal beside a gate, a plug in a stair
   mouth) and of its feet (a retreat's or a pit's seal that shuts the body in, once the hostile is gone): a jobs.access.cleanup
-  child for each of the two that has some takes them back: :again, so the walk is planned again. The cells the cleanup left for a known hostile (held
+  child for each of the two that has some takes them back (clear-seals!), so the walk is planned again. The cells the cleanups left for a known hostile (held
   :hostile-near or :danger: the shelter keeps the hostile out) are kept (mem :seal-kept): no escalation of the call cuts
   them (own-builds/may-dig-fn), so the way out it prices goes another side."
   [c pos result]
   (when (and (ways/way? c :clear-seal) (ledger/seal-blocked-whys (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
     (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius ledger/seal-clear-radius})
           entries (into [] (remove #(= :pillar (:purpose %))) (ledger/entries c))
-          nears (filterv #(seq (ledger/near-of entries %)) [(at [(:x pos) (:y pos) (:z pos)]) (at (end/feet-cell c))])]
-      (when (seq nears)
-        (ctx/update-mem! c assoc :seal-cleared true)
-        (loop [[near & more] nears slots [:seal-cleanup :seal-cleanup-feet] kept #{}]
-          (if-not near
-            (do (ctx/update-mem! c assoc :seal-kept kept) :again)
-            (let [r (await (ctx/call c (first slots) 'jobs.access.cleanup {:of :all :near near :purpose (into #{} (map :purpose) (ledger/near-of entries near)) :checks {:fit? '(always)}}))]
-              (recur (when-not (= :continue r) more) (rest slots) (into kept (keep #(when (#{:hostile-near :danger} (:reason %)) (:cell %))) (get-in r [:data :open]))))))))))
+          todo (into [] (keep (fn [[near slot]] (when-let [es (seq (ledger/near-of entries near))] {:near near :slot slot :purpose (into #{} (map :purpose) es)})))
+                     [[(at [(:x pos) (:y pos) (:z pos)]) :seal-cleanup] [(at (end/feet-cell c)) :seal-cleanup-feet]])]
+      (when (seq todo)
+        (ctx/update-mem! c assoc :seal-cleared true :seal-clearing {:todo todo :kept #{}})
+        (await (clear-seals! c))))))
 
 (def budget-s choose/time-left-s)
 

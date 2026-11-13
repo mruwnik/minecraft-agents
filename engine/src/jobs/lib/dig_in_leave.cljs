@@ -52,20 +52,28 @@
       (vec (sort-by (fn [h] (let [[hx hz] (headings h)] (- (+ (* hx dx) (* hz dz)))))
                     [:north :east :south :west])))))
 
+(defn stair-cuts
+  "The cells a stair :up along heading h from feet [x y z] cuts, each once: steps steps, or with steps nil until a step's
+  feet has no (solid? cell) the stair does not cut within sh-sense/roof-height over it (as climb! stops), at most max-climb."
+  [solid? feet h steps]
+  (loop [f feet n 1 cut #{}]
+    (let [{nf :next cells :cut} (shape/step-cells f :up h)
+          cut (into cut cells)
+          out? (fn [] (not-any? #(and (not (cut %)) (solid? %)) (map #(shape/add nf [0 % 0]) (range 1 (inc (sh-sense/roof-height))))))]
+      (if (or (= n (or steps max-climb)) (and (nil? steps) (out?)))
+        cut
+        (recur nf (inc n) cut)))))
+
 (defn stair-order
-  "The four headings, the cheapest stair first: each prices the cells a stair :up along it cuts from feet, steps steps
-  (cost/cut-fn: a cell's dig and what it destroys, so a built block costs its put-back and natural ground nothing past its dig;
-  an unseen cell is access/hidden-guess); at one price, heading-order of toward."
+  "The four headings, the cheapest stair first: each prices the cells its whole stair :up from feet cuts (stair-cuts:
+  steps steps, nil until out from under the roof) with cost/cut-fn (a cell's dig and what it destroys, so a built block
+  costs its put-back and natural ground nothing past its dig; an unseen cell is access/hidden-guess); at one price,
+  heading-order of toward."
   [p feet toward steps]
   (let [cut-s (cost/cut-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
         block-at (access/sensed-at p access/hidden-guess)
-        price (fn [h]
-                (->> (iterate #(shape/add % (shape/delta :up h)) [(:x feet) (:y feet) (:z feet)])
-                     (take steps)
-                     (mapcat #(:cut (shape/step-cells % :up h)))
-                     distinct
-                     (map #(cut-s (block-at %) %))
-                     (reduce + 0)))]
+        solid? (fn [[x y z]] (sh-sense/solid-at? p {:x x :y y :z z}))
+        price (fn [h] (reduce + 0 (map #(cut-s (block-at %) %) (stair-cuts solid? [(:x feet) (:y feet) (:z feet)] h steps))))]
     (vec (sort-by price (heading-order feet toward)))))
 
 (defn exit-attempts
@@ -312,12 +320,12 @@
   :start one step at a time until nothing solid is within sh-sense/roof-height above, at most max-climb steps. A
   stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a slot), and it digs on with a worn last pickaxe (a way out),
   instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped. The headings go
-  in order, else the cheapest stair (stair-order, to the :start height or one step) first, at one price the one nearest toward."
+  in order, else the cheapest whole stair (stair-order, to the :start height or out from under the roof) first, at one price the one nearest toward."
   ([c entry toward] (climb! c entry toward nil))
   ([c {:keys [start]} toward order]
   (let [{:keys [i tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
         feet (sh-sense/feet (:primitives c))
-        order (or (:order (leave-mem c)) order (stair-order (:primitives c) feet toward (if start (max 1 (- (:y start) (:y feet))) 1)))
+        order (or (:order (leave-mem c)) order (stair-order (:primitives c) feet toward (when start (max 1 (- (:y start) (:y feet))))))
         _ (update-leave! c assoc :order order)
         attempt (get (exit-attempts order) i)]
     (cond
