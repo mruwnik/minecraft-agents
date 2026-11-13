@@ -22,7 +22,7 @@
   (if-not (and (= :reflex (:source e)) (= :ended (:kind e)))
     e
     (assoc e :source :job
-             :kind (case (:outcome e) :done :completed :failed :failed (:cut :dropped :cancelled) :cancelled :stopped))))
+             :kind (case (get-in e [:data :outcome]) :done :completed :failed :failed (:cut :dropped :cancelled) :cancelled :stopped))))
 
 (defn belongs? [id e]
   (and (= :job (:source e))

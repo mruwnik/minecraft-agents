@@ -21,11 +21,12 @@
            (:events result)))))
 
 (deftest a-reflex-jobs-ended-event-is-its-terminal
-  (let [ended {:seq 3 :generation-id "g" :source :reflex :kind :ended :outcome :done
-               :context {:job-id "j7" :reflex-id :night} :data {:kind :done}}
+  (let [ended {:seq 533752 :generation-id "g" :source :reflex :level :info :kind :ended
+               :context {:job-id "j7" :reflex-id :night} :message "night → jobs.survival.sleep: done"
+               :data {:pos {:x -367 :y 63 :z -806} :kind :done :report {:uses {:tries 1}} :outcome :done :how :cleared}}
         events [(event 1 "j7" :round_started {}) ended]]
     (is (= {:status :completed :finished? true} (select-keys (results/project "j7" "g" events false) [:status :finished?])))
-    (is (= :stopped (:status (results/project "j7" "g" [(assoc ended :outcome :declined)] false))))))
+    (is (= :stopped (:status (results/project "j7" "g" [(assoc-in ended [:data :outcome] :declined)] false))))))
 
 (deftest the-terminal-events-data-is-the-jobs-result
   (let [events [(event 1 "j4" :queued {}) (event 2 "j4" :completed {:status :completed :scope :seen :blocks [{:name "iron_ore"}]})]]

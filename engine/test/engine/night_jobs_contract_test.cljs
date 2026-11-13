@@ -21,9 +21,9 @@
 
 (defn ^:async call!
   "Run job with args as a ctx/call child of a recording parent over fake body p; prep gets the engine first. Its ending."
-  [p job args prep]
-  (let [clock (atom 1000000)
-        [seen sink] (tu/legacy-capture-sink)
+  ([p job args prep] (call! p job args prep (atom 1000000)))
+  ([p job args prep clock]
+  (let [[seen sink] (tu/legacy-capture-sink)
         _ (reset! seen-events seen)
         out (atom :not-done)
         parent {:round (fn ^:async recording-round [c]
@@ -36,7 +36,7 @@
     (prep eng)
     (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (tu/run-until-empty eng 40))
-    @out))
+    @out)))
 
 (defn ending-of [e] [(:kind e) (contract/cause-key e)])
 
@@ -167,6 +167,19 @@
           (is (= :not-done e) "the parent never got an ending: every round yielded :continue")
           (is (empty? (mem/entries (mem/view (:store @eng-a)) :bed-unreachable)) "no give-up entry")
           (is (empty? (filterv #(= :bed_unreachable (:kind %)) @@seen-events))))))))
+
+(deftest a-budget-cut-re-quote-with-no-first-bound-ends-on-the-jobs-own-time-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              answer #(js/Promise.resolve {:route {:found false :reason :budget}})
+              quote (fn ([_ _ _] (answer)) ([_ _ _ _] (answer)))
+              e (with-redefs [ctx/quote quote
+                              child/call-walk* (fn [_ _ _] (swap! clock + 400000) (js/Promise.resolve {:kind :nothing-possible :data {:text "gave up walking"}}))]
+                  (await (call! (spawn-world {:blocks {"6,64,0" "red_bed"}}) 'jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}} (constantly nil) clock)))]
+          (is (not= :not-done e) "the loop ended")
+          (is (= [:limit-reached :job-time] (ending-of e))))))))
 
 (defn ^:async dug-in-call!
   "Run job with args from a body dug in at night in its own cobble shell, a bed 6 blocks east; its ending."
