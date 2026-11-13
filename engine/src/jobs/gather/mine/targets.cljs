@@ -22,7 +22,7 @@
             [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.reach :as reach-lib]
             [jobs.lib.look :as look :refer [cell-of headings]]
-            [jobs.lib.dig-stands :refer [around face-names fires stand-cells]]
+            [jobs.lib.dig-stands :as dig-stands :refer [around face-names]]
             [jobs.lib.world :as known]
             [jobs.gather.mine-stay :as stay]))
 
@@ -93,8 +93,7 @@
   ([c wet pos] (classify c wet pos nil))
   ([c wet pos open]
    (let [names (face-names c pos open)
-         version (game/version-of (:primitives c))
-         open? #(and % (not (bs/fluids %)) (not (fires %)) (rules/empty-shape? version %))]
+         open? #(dig-stands/open-name? c %)]
      (cond
        (not-any? open? names) :buried
        (some #{"lava"} names) :no
@@ -423,20 +422,11 @@
   [c m cell stair?]
   (first (filter #(zones/in-box? cell (grown % m)) (concat (own-zones c) (when stair? (buildings c cell))))))
 
-(defn stay-loss-fn
-  "A fn of a target pos: seconds the dig's stay there (work-s) costs (threats/danger-near-fn's :stay-loss) at the calmest
-  cell it can be dug from (stand-cells), 0 outside every known threat's field."
-  [c]
-  (let [near (threats/danger-near-fn c)
-        s (work-s c)
-        at (fn [cell] (if-let [{:keys [stay-loss]} (near cell)] (stay-loss s) 0))]
-    (fn [pos] (transduce (map #(at (cell-of %))) min ##Inf (stand-cells c pos)))))
-
 (defn ^:async calmest!
-  "t, the target of group walked to soonest, unless the dig's stay there costs (stay-loss-fn): then the one of t and the
+  "t, the target of group walked to soonest, unless the dig's stay there costs (dig-stands/stay-loss-fn): then the one of t and the
   targets whose stay costs less that walk-pick/pick-walk! finds cheapest, the walk and the stay together."
   [c t group]
-  (let [loss (stay-loss-fn c)
+  (let [loss (dig-stands/stay-loss-fn c (work-s c))
         lt (loss t)
         calmer (filterv #(< (loss %) lt) group)]
     (if (empty? calmer)

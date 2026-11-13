@@ -54,3 +54,11 @@
   (let [danger (threats/stay-danger-fn c)
         ds (map #(danger % stay-s worth) (stands-of c pos))]
     (when (every? some? ds) (apply min-key :risk ds))))
+
+(defn stay-loss-fn
+  "(fn [pos]) seconds a stay of stay-s at the calmest of stands-of pos costs (threats/danger-near-fn's :stay-loss), 0 outside
+  every known threat's field."
+  [c stay-s]
+  (let [near (threats/danger-near-fn c)
+        at (fn [cell] (if-let [{:keys [stay-loss]} (near cell)] (stay-loss stay-s) 0))]
+    (fn [pos] (transduce (map #(at (cell-of %))) min ##Inf (stands-of c pos)))))
