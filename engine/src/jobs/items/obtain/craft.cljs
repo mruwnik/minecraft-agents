@@ -46,7 +46,7 @@
   [c step]
   (ctx/update-mem! c assoc-in [:craft :step] step)
   (let [e (waits/waiting-out c (await (ctx/call c :smelt 'jobs.items.smelt
-                           (cond-> {:item (:item step) :count (:count step) :ways (child-ways c) :explore (boolean (:explore (:args c)))}
+                           (cond-> {:item (:item step) :count (:count step) :ways (child-ways c) :explore (boolean (:explore (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                              (= "charcoal" (:item step)) (assoc :fuel (wood-fuel c))))))]
     (if (= :continue e)
       :continue

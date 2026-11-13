@@ -386,6 +386,15 @@
                 _ (await (ending-of s 'jobs.items.obtain {:any-of ["wheat"] :count 1 :explore false :ways #{:chest}} 30))]
             (is (= looks? (boolean (seq (f/events-of s :obtain.chest)))) owner)))))))
 
+(deftest ignore-zones-lets-obtain-look-into-a-chest-in-another-players-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (update (f/bare []) :blocks assoc "4,64,0" "chest")
+                         [(assoc f/own-zone :min [-20 60 -20] :max [-10 70 -10]) {:name "hut" :min [2 60 -2] :max [8 70 2] :owner "Miles"}])
+              _ (await (ending-of s 'jobs.items.obtain {:any-of ["wheat"] :count 1 :explore false :ways #{:chest} :ignore-zones? true} 30))]
+          (is (seq (f/events-of s :obtain.chest))))))))
+
 (deftest a-bucket-is-filled-only-at-a-water-source-not-at-flowing-water
   (async done
     (tu/run-async done

@@ -30,5 +30,5 @@
   "The recipes/plan options of the gather and smelt sources: ore drops and hand-dug items (sand for glass) count as gathered, and every furnace product
   (jobs.lib.game-facts/smelt-inputs) is also made by a smelt step."
   []
-  {:raw (conj (into ore-drops (concat (keys hand-dug) fish-items (keys mob-drops) (keys crop-blocks))) "obsidian" "bone_meal")
+  {:raw (conj (into ore-drops (concat (keys hand-dug) fish-items (keys mob-drops) (keys crop-blocks))) "obsidian" "bone_meal" "bamboo")
    :smelts facts/smelt-inputs})

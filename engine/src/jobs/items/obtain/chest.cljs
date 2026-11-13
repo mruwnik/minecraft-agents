@@ -70,7 +70,8 @@
   (let [name (holds items names)
         need (- (:target (:start (ctx/mem c))) have)
         e (waits/waiting-out c (await (ctx/call c :take 'jobs.storage.withdraw
-                           {:chest pos :items {name (+ (storage/carried (u/inventory (:primitives c)) name) need)}})))]
+                           {:chest pos :items {name (+ (storage/carried (u/inventory (:primitives c)) name) need)}
+                            :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c update :done-chests (fnil conj #{}) (stock/cell-of pos))

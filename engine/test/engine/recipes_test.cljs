@@ -3,6 +3,8 @@
   (:require [cljs.test :refer [deftest is]]
             [clojure.string :as str]
             [jobs.lib.recipes :as recipes]
+            [jobs.lib.game-facts :as facts]
+            [jobs.lib.sources :as sources]
             [engine.game :as game]))
 
 (defn plan [have item n & [opts]] (recipes/plan game/default-version have item n (or opts {})))
@@ -20,6 +22,11 @@
 (deftest sticks-and-planks-carried-need-only-the-table-and-pickaxe
   (is (= [[:craft "oak_planks" 4] [:craft "crafting_table" 1] [:craft "wooden_pickaxe" 1]]
          (shape (plan {"oak_log" 1 "oak_planks" 3 "stick" 2} "wooden_pickaxe" 1)))))
+
+(deftest sticks-are-made-from-bamboo-when-the-logs-are-not-gathered
+  (let [opts (assoc (sources/source-opts) :gather? true :ungathered (set facts/log-names))]
+    (is (= {"bamboo" 8} (:gather (plan {} "stick" 4 opts))))
+    (is (not (contains? (:gather (plan {} "stick" 4 (dissoc opts :ungathered))) "bamboo")) "logs gather less, so stay the default")))
 
 (deftest another-wood-works-too
   (is (= "birch_planks" (:item (first (:steps (plan {"birch_log" 3} "stick" 1)))))))

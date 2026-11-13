@@ -115,7 +115,7 @@
     (or (:sheep need) (:mob need)) (first (animals-of c need))
     :else (first (seen-blocks-of c need false))))
 
-(defn with-block
+(defn with-block*
   "The need with the nearest seen water as the :pos a bucket is filled at, :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, craftable from 2 iron ingots or in a booked chest, else hunts."
   [c need]
   (cond
@@ -139,6 +139,16 @@
     (if-let [name (when (or (:ore? need) (= "dirt" (:key need))) (:name (seen-of c need)))]
       (assoc-in need [:args :block] name)
       need)))
+
+(def zone-aware-jobs "The gather children that take :ignore-zones?."
+  '#{jobs.forestry.harvest-wood jobs.gather.mine jobs.gather.get-seeds jobs.farm.harvest jobs.items.use})
+
+(defn with-block
+  "with-block*, the :ignore-zones? of the call passed on to a child that takes it."
+  [c need]
+  (let [need (with-block* c need)]
+    (cond-> need
+      (and (:ignore-zones? (:args c)) (zone-aware-jobs (:job need))) (assoc-in [:args :ignore-zones?] true))))
 
 (defn with-count
   "The need with the items to carry in all (the :count of harvest-wood, fish, get-seeds, hunt and mine) in its args: those carried and those it lacks."

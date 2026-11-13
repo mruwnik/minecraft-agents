@@ -61,6 +61,7 @@
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for and a climb out of the rock never starts through (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
    :sky {:doc "the sky's darkening (0-15) the start check's price judges the light of its walks by (jobs.lib.walk-risk/estimate :sky); nil: as now" :spec (a/num-in 0 15) :default nil}
+   :ignore-zones? :shared
    :explore {:doc "false drops the :search way (the search, priced by what the need is worth, for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 
 (a/defargs settings
