@@ -37,7 +37,7 @@
   the logs and leaves left, up to the fence tops, with a jobs.blocks.clear-cells child (:only), so no leaf staircase
   leads over the fence; trees not seen yet are left to the check.
   Then a jobs.access.cleanup child takes up the body's own scaffold-ledger blocks in and around the box (a night shelter's cheap blocks stay after dawn; an animal steps from one onto a fence).
-  Phase 1 runs jobs.build.from-plan on the :part, or with none on each part holding fence, wall or gate cells in turn (a house or field of the same plan is not built or fetched for; the pen's cells are those parts' only). Its args :accept and :worth pass through, and its rules
+  Phase 1 runs jobs.build.from-plan on the :part, or with none on each part holding fence, wall or gate cells in turn, then on each part that only keeps clear inside the fence's box (a block left in the pen is dug) (a house or field of the same plan is not built or fetched for). Its args :accept and :worth pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a fence stacked on a gate is dug off, then a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak. A plan gate the check
@@ -134,10 +134,15 @@
          (when part (str " in part " part (if (seq holders) (str "; parts with some: " (str/join ", " holders) ", or build the pen without :part") ""))))))
 
 (defn barrier-parts-only
-  "The cells of the parts that hold a fence, wall or gate cell: with no :part the pen is built from those, not from a house or field of the same plan."
+  "The cells of the parts that hold a fence, wall or gate cell, and of the parts that only keep clear inside their box (the pen's
+  inside: a block left there is a step onto the fence): with no :part the pen is built from those, not from a house or field of the same plan."
   [cells]
-  (let [parts (into #{} (comp (filter #(pen-read/barrier? (:want %))) (map :part)) cells)]
-    (filterv #(contains? parts (:part %)) cells)))
+  (let [parts (into #{} (comp (filter #(pen-read/barrier? (:want %))) (map :part)) cells)
+        {:keys [min max] :as box} (pen-read/barrier-box cells)
+        inside? (fn [[x _ z]] (and box (<= (:x min) x (:x max)) (<= (:z min) z (:z max))))
+        inner (into #{} (keep (fn [[part cs]] (when (every? #(and (= :clear (:want %)) (inside? (:pos %))) cs) part)))
+                    (group-by :part (remove #(contains? parts (:part %)) cells)))]
+    (filterv #(or (contains? parts (:part %)) (contains? inner (:part %))) cells)))
 
 (defn planned
   "{:cells judged :pen cells} for the plan in the args, or {:trouble text}: :cells the ones to build (the :part's),
@@ -147,7 +152,8 @@
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
         answer (plan/surfaced c (known/plan c plan))
-        judge #(plan/judged p answer % (set (keys (storage/carried-totals (u/inventory p)))) nil)
+        carried (set (keys (storage/carried-totals (u/inventory p))))
+        judge #(plan/prepared (plan/judged p answer % carried nil) carried {} (plan/own-kept c))
         cells (when (and answer (not (:broken answer)))
                 (cond-> (judge part)
                   (nil? part) barrier-parts-only))
@@ -471,7 +477,7 @@
 (defn roofing-fence
   "The first seen fence or wall in the cell above a gate of cells that the plan does not ask for (an open gate there is a doorway one block high), not yet in unroofed, as [x y z]."
   [c cells unroofed]
-  (let [wanted (set (map :pos cells))]
+  (let [wanted (into #{} (comp (remove #(= :clear (:want %))) (map :pos)) cells)]
     (first (for [{[x y z] :pos :keys [want]} cells
                  :when (gate? want)
                  :let [above [x (inc y) z]]

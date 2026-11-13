@@ -1,6 +1,7 @@
 (ns engine.forest-maintain-test
   "jobs.forestry.maintain (a forest plan's tree cells) and fell-tree's :at, against the fake world."
-  (:require [engine.child-ends :as ce]
+  (:require [clojure.string :as str]
+            [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [engine.settings :as settings]
             [engine.core :as core]
@@ -258,11 +259,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [blocks [{"3,64,0" "birch_sapling"} (lt/tree 3 0 "birch" 4) {"3,64,0" "stone"}]]
+        (doseq [[blocks found] [[{"3,64,0" "birch_sapling"} "birch_sapling"] [(lt/tree 3 0 "birch" 4) "birch_log"] [{"3,64,0" "stone"} "stone"]]]
           (let [{:keys [p seen eng]} (await (run {:blocks (merge (ground [[3 0]]) blocks) :inventory [(item "oak_sapling" 3)]}
                                                  {"forest" oak-cell} {:plan "forest"} 12))]
             (is (= [[] [] [] [:cells-foreign] true] [(digs p) (places p) (warns seen :forest.foreign) (vec (waiting-reasons seen)) (listed? eng)])
-                (pr-str blocks))))))))
+                (pr-str blocks))
+            (is (some #(str/includes? (str (:text %)) (str found " at [3 64 0] (wants a oak tree)")) (h/events-of seen :waiting))
+                (pr-str (h/events-of seen :waiting)))))))))
 
 (deftest the-check-reads-the-cells-once-per-window
   (async done

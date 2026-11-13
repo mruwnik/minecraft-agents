@@ -81,7 +81,11 @@
 
 (deftest the-cells-of-a-pen-without-a-part-are-those-of-the-parts-holding-a-barrier
   (is (= [:fence :gate] (mapv :part (pen/barrier-parts-only [{:part :house :want "white_bed"} {:part :fence :want "oak_fence"}
-                                                              {:part :gate :want {:block "oak_fence_gate"}} {:part :field :want {:crop "wheat"}}])))))
+                                                              {:part :gate :want {:block "oak_fence_gate"}} {:part :field :want {:crop "wheat"}}]))))
+  (is (= [:fence :fence :inside] (mapv :part (pen/barrier-parts-only [{:part :fence :pos [2 64 2] :want "oak_fence"} {:part :fence :pos [4 64 4] :want "oak_fence"}
+                                                                      {:part :inside :pos [3 65 3] :want :clear} {:part :yard :pos [3 64 3] :want :clear}
+                                                                      {:part :yard :pos [6 64 3] :want :clear}])))
+      "a part that only keeps clear inside the fence's box is the pen's inside; one reaching out of it is not"))
 
 (deftest a-pen-built-without-a-part-leaves-the-rest-of-the-plan-alone
   (async done
@@ -190,6 +194,17 @@
           (is (= 1 (:patched result)) "the patch fence is counted apart from the plan's placed cells")
           (is (re-find #"placed 7, patched 1" (str (:text result) (get-in e [:data :text]))) (pr-str e))
           (is (= "oak_fence" (h/block-at p 3 64 4))))))))
+
+;; run4 F42: a plug mound left in the pen is a step onto the fence tops; the plan wants the inside clear, so it is dug.
+(deftest a-block-left-inside-a-pen-its-plan-wants-clear-is-dug-not-fenced-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (ring-plan) :parts conj {:id "cows" :box [[3 64 3] [3 65 3]] :want "air"})
+              [result _ p] (await (build! (spec kit (assoc built-pen "3,64,3" "dirt")) {"pen" plan} {}))]
+          (is (true? (:closed? result)) (pr-str result))
+          (is (= "air" (h/block-at p 3 64 3)))
+          (is (nil? (:patched result)) "no fence piled on the fence"))))))
 
 ;; A leaf block beside the fence is an animal's step onto its top: the leaves go, no fence is piled on the fence.
 (deftest leaves-an-animal-steps-from-onto-a-fence-are-cleared-not-fenced-over

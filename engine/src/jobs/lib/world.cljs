@@ -75,3 +75,8 @@
   "(f) kept under key k until the plans or claims change (jobs.lib.world-files/memo): derived plan data a job asks per call."
   [ctx k f]
   (world/memo (:world (:engine ctx)) k f))
+
+(defn clear-cells
+  "The cells plan id wants clear (a :want of air, such as a pen's inside): a block there is in the plan's way, not part of it."
+  [ctx id]
+  (memo ctx [:clear-cells id] #(into #{} (comp (filter (comp #{:clear} :want)) (map (comp vec :pos))) (:cells (plan ctx id)))))

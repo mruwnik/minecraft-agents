@@ -33,7 +33,8 @@
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
   - :mend (jobs.build.pen over the whole :plan, only with :plan): a fence, gate or wall cell of the plan beside the box
-    was seen as something else (blown away), so the plan's fence is built again, at the pass's worth (with a :mob). Only cells the body has seen count; a gap
+    was seen as something else (blown away), or the box read herd judges by names a leak a patch mends (:gap, :climb,
+    :perch-in), so the plan's fence is built again, at the pass's worth (with a :mob). Only cells the body has seen count; a gap
     that stays rests the pen.
   - :herd (jobs.animals.herd, :target less the babies at most; never with adults plus babies at :target): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
     adults of the kind are listed outside the box (in no enclosure, on ground the zones let it take from) whose cost/animal-worth beats the
@@ -171,30 +172,37 @@
                            (< (:cost (cost/walk-cost {:distance (+ (u/dist here pos) (u/dist pos mid))})) worth)))
                    out))))
 
+(defn box-read
+  "The pen check over the box (pen-read/read), as herd reads it."
+  [c]
+  (let [here (u/self-pos c)]
+    (pen-read/read (:primitives c) {:box (pen-read/arg-box c) :near [(js/Math.floor (:x here)) (js/Math.floor (:y here)) (js/Math.floor (:z here))]})))
+
 (defn pen-census
   "{:adults n :babies n :in-sight? b} of the pen: the live census while the body sees the whole box (hunting/pen-seen?),
   else the last one the pass took in sight, with the herd step's :inside as the adults once it ran (a body at the chest
-  or shut in the house lists none), else the live one."
-  [c]
+  or shut in the house lists none), else the live one. read: the box-read."
+  ([c] (pen-census c (box-read c)))
+  ([c read]
   (let [{:keys [adults babies]} (hunting/census c)
         live {:adults (count adults) :babies (count babies)}
-        here (u/self-pos c)
-        inside (:inside (pen-read/read (:primitives c) {:box (pen-read/arg-box c) :near [(js/Math.floor (:x here)) (js/Math.floor (:y here)) (js/Math.floor (:z here))]}))]
+        inside (:inside read)]
     (if (hunting/pen-seen? c (pen-read/arg-box c) inside)
       (assoc live :in-sight? true)
       (let [m (ctx/mem c)
             herd-inside (:inside (:herd (:report m)))]
-        (cond-> (assoc (or (:census m) live) :in-sight? false) herd-inside (assoc :adults herd-inside))))))
+        (cond-> (assoc (or (:census m) live) :in-sight? false) herd-inside (assoc :adults herd-inside)))))))
 
 (defn facts
   "What the decisions are made from: the pen's count from pen-census, the rest read live; :strays only while the box
   holds fewer than :target."
   [c]
   (let [{:keys [adults]} (hunting/census c)
-        counted (pen-census c)
+        read (box-read c)
+        counted (pen-census c read)
         inventory (u/inventory (:primitives c))
         stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))]
-    {:gaps (missing-barrier c)
+    {:gaps (vec (distinct (into (missing-barrier c) (when (:plan (:args c)) (pen-patch/patch-cells (:leaks read))))))
      :adults (:adults counted)
      :strays (if (and (:mob (:args c)) (< (+ (:adults counted) (:babies counted)) (:target (:args c)))) (strays c) 0)
      :ready (max 0 (- (:adults counted) (count (filter (comp (animals/cooling c) animals/key-of) adults))))

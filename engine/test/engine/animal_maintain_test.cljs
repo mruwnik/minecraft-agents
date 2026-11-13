@@ -448,6 +448,17 @@
               result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
           (is (= :sound (get-in result [:ending :cause :skipped :mend])) "a gate the shut job gave up on is no gap"))))))
 
+;; run4 F42: every fence stood, so mend said sound while herd's read of the box found climbs over the fence from a mound
+(deftest a-block-in-the-pen-an-animal-climbs-the-fence-from-is-mended-as-herd-reads-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update-in ring-pen-plan [:parts 2] assoc :box [[3 64 3] [3 65 3]] :herd {:mob "cow" :target 2})
+              {:keys [eng p]} (b/start (pb/spec pb/kit (assoc pb/built-pen "3,64,3" "dirt")) {"pen" plan} [])
+              result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
+          (is (= {:closed? true :reason nil} (get-in result [:steps :mend])) (pr-str result))
+          (is (= "air" (some-> (.blockAt p #js {:x 3 :y 64 :z 3}) .-name)) "the mound is dug"))))))
+
 (deftest the-check-declines-when-the-only-drops-lie-outside-the-box
   (is (declines? {:box box :target 4} (conj four-cows (drop-at 90 "leather" 9)))))
 

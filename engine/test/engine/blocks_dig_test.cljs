@@ -793,11 +793,17 @@
     (tu/run-async done
       (fn ^:async t []
         (let [own (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Fake")}})
-              working (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Fake")}})]
+              working (setup {:self body :blocks {"2,64,0" "dirt"} :plans {"hut" (shape/with-author hut "Fake")}})
+              ;; run4 F42: restore-broken put a pen's plug mound back after every dig
+              pen (setup {:self body :blocks {"2,64,0" "dirt"}
+                          :plans {"pen" (shape/with-author {:id "pen" :parts [{:id "cows" :box [[1 64 -1] [3 65 1]] :want "air"}]} "Fake")}})]
           (await (tu/child-outcome (:eng own) job {:pos [2 64 0]} 10))
           (await (tu/child-outcome (:eng working) job {:pos [2 64 0] :for-plan "hut"} 10))
+          (await (tu/child-outcome (:eng pen) job {:pos [2 64 0]} 10))
           (is (= [{:cell [2 64 0] :was "dirt" :plan "hut" :mend true}] (tidy-cells (:eng own))))
-          (is (empty? (tidy-cells (:eng working)))))))))
+          (is (empty? (tidy-cells (:eng working))))
+          (is (= [[2 64 0]] (mapv #(let [v (.-pos (.-args %))] [(.-x v) (.-y v) (.-z v)]) (calls (:p pen) "dig"))) "the block is dug")
+          (is (empty? (tidy-cells (:eng pen))) "a block in a cell the own plan wants clear is no break to put back"))))))
 
 (deftest a-dig-for-one-plan-notes-a-cell-of-the-bodys-other-plan
   (async done

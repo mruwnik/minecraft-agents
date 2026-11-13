@@ -182,15 +182,10 @@
             :ledger (ledger/cells l)}]
     #(ledger/walk-blocker in %)))
 
-(defn clear-cells
-  "The cells plan id wants clear (a :want of air, such as a pen's inside)."
-  [c id]
-  (known/memo c [:clear-cells id] #(into #{} (comp (filter (comp #{:clear} :want)) (map (comp vec :pos))) (:cells (known/plan c id)))))
-
 (defn build-footprints
   "footprints less the cells of cells whose plan wants them clear: a block there is in the plan's way, not part of it."
   [c footprints cells]
-  (reduce (fn [fp cell] (if-let [id (get fp cell)] (cond-> fp (contains? (clear-cells c id) cell) (dissoc cell)) fp)) footprints cells))
+  (reduce (fn [fp cell] (if-let [id (get fp cell)] (cond-> fp (contains? (known/clear-cells c id) cell) (dissoc cell)) fp)) footprints cells))
 
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."

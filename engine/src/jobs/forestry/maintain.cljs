@@ -1,5 +1,6 @@
 (ns jobs.forestry.maintain
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [clojure.string :as str]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
             [jobs.lib.price :as price]
@@ -204,7 +205,10 @@
         have (if (fetching? c) (constantly true) (u/carried-names (:primitives c)))
         short (filter (fn [[_ [_ species]]] (not (have (forestry/sapling-of species)))) (:bare kinds))]
     (cond
-      (seq (:foreign kinds)) {:reason :cells-foreign :cells (cells :foreign)}
+      (seq (:foreign kinds)) {:reason :cells-foreign :cells (cells :foreign)
+                              :text (str "planned tree cells hold other blocks: "
+                                         (str/join ", " (for [[pos [_ species]] (sort-by (comp cell-vec key) (:foreign kinds))]
+                                                          (str (u/seen-name (:primitives c) pos) " at " (pr-str (cell-vec pos)) " (wants a " species " tree)"))))}
       (or (seq (:no-ground kinds)) (seq (:cramped kinds))) {:reason :cells-unplantable :cells (cells :no-ground :cramped)}
       (seq short) {:reason :no-sapling :cells (vec (sort (map (comp cell-vec key) short)))})))
 

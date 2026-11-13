@@ -116,11 +116,11 @@
 
 (defn own-pending
   "pending's entry for a :dig at pos in a plan this body made, a :mend (the body breaking its own build puts it back),
-  else nil; the plan the job works (:for-plan) is its own work, not a break. Reads the block, so call it before the act."
+  else nil; the plan the job works (:for-plan) is its own work, not a break, and so is a dig in a cell the plan wants clear. Reads the block, so call it before the act."
   [c pos]
   (let [cell (access/cell pos)]
     (when-let [id (get (access/own-plans c) (get (known/footprints c) cell))]
-      (when-not (= id (:for-plan (:args c)))
+      (when-not (or (= id (:for-plan (:args c))) (contains? (known/clear-cells c id) cell))
         {:cell cell :action :dig :was (u/seen-name (:primitives c) pos) :plan id :mend true}))))
 
 (defn put-back-items

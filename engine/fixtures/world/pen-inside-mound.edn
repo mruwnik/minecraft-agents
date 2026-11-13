@@ -1,0 +1,31 @@
+;; Card 3ae224c0 (run4 F42): a plug mound left inside a pen whose plan wants the inside clear. From its top an animal steps onto
+;; the fence tops, so the pen leaks (:climb). build.pen digs the mound (the plan's clear part inside the fence's box) instead of
+;; piling fences on the fence; a hand dig of a mound block is plan work, so restore-broken does not put it back.
+;; Should-succeed: both cases. Should-fail (old code): the mound stays and fences are piled on the east fence; the dug block is placed again.
+{:defaults
+ {:tags [:build :pen :tidy] :time :any
+  :plot {:height 8 :floor "stone" :light :lit}
+  :blocks [[:fill [10 0 10] [14 0 10] "oak_fence"] [:fill [10 0 14] [14 0 14] "oak_fence"] [:fill [10 0 11] [10 0 13] "oak_fence"]
+           [:set [14 0 11] "oak_fence"] [:set [14 0 12] "oak_fence_gate"] [:set [14 0 13] "oak_fence"]
+           [:set [12 0 12] "dirt"] [:set [13 0 12] "dirt"] [:set [13 1 12] "dirt"]]
+  :plans [{:id "ring" :metadata {:by "$body"}
+           :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                   {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                   {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                   {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                   {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                   {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}
+                   {:id "inside" :box [#at [11 0 11] #at [13 1 13]] :want "air"}]}]
+  :body {:at [16.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 8] ["dirt" 4] ["iron_shovel" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "a-mound-inside-the-ring-is-dug-not-fenced-over"
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.build.pen"}} :within-s 120 :of-job true}]
+   :after [[:not-block [12 0 12] "dirt"] [:not-block [13 0 12] "dirt"] [:not-block [13 1 12] "dirt"]
+           [:not-block [14 1 11] "oak_fence"] [:not-block [14 1 13] "oak_fence"]]}
+  {:name "a-hand-dig-of-the-mound-is-not-put-back"
+   :act [[:job (jobs.blocks.dig {:pos #at [13 1 12] :worth 120})]
+         [:await {:source :job :kind :completed :data {:name "jobs.blocks.dig"}} 60]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :for-s 30}]
+   :after [[:not-block [13 1 12] "dirt"]]}]}
