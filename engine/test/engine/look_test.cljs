@@ -396,12 +396,15 @@
     (is (not (contains? heard :pos)))
     (is (= {:direction :east :band :near} (select-keys heard [:direction :band])))))
 
-(deftest seen-objs-hides-what-sits-behind-a-wall-but-not-players-or-hostiles
+(deftest seen-objs-hides-what-sits-behind-a-wall-but-not-players-or-known-hostiles
   (let [p (mob-stub [{:id 1 :name "cow" :kind "passive" :pos [0 64 3] :visible true}
                      {:id 2 :name "cow" :kind "passive" :pos [0 64 4] :visible false}
                      {:id 3 :name "zombie" :kind "hostile" :pos [0 64 5] :visible false}
-                     {:id 4 :name "Bob" :kind "player" :pos [0 64 6] :visible false}] [])]
-    (is (= [1 3 4] (map #(.-id %) (look/seen-objs p {:radius 10}))))
+                     {:id 4 :name "Bob" :kind "player" :pos [0 64 6] :visible false}
+                     {:id 5 :name "spider" :kind "hostile" :pos [0 60 5] :visible false}]
+                    [{:id 3 :name "zombie" :kind "hostile" :distance 5 :visible false :heard true}])]
+    (is (= [1 3 4] (map #(.-id %) (look/seen-objs p {:radius 10})))
+        "a hostile behind a wall never seen or heard (a spider in a cave below) is not listed")
     (is (= [1] (map #(.-id %) (look/seen-objs p {:radius 10 :max 1}))) "max counts after the hiding")))
 
 

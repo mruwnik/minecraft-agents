@@ -421,13 +421,19 @@
       (vec (filter shown? raw)))))
 
 (defn seen-objs
-  "seen-entities as the JS entities of entities(): players and hostiles always (hostile
-  sight is perception's known mobs, see seen-entities), every other kind only when not hidden behind a wall (visible
+  "seen-entities as the JS entities of entities(): players always, hostiles the perception knows of (seen or heard,
+  knownMobs; all when p has no mob memory), every other kind only when not hidden behind a wall (visible
   false). :max caps after the hiding (entities() gets a huge cap, else its default 32 cuts before the hiding)."
   [p opts]
-  (->> (array-seq (.entities p (clj->js (assoc opts :max 1000000))))
-       (remove #(and (not (#{"player" "hostile"} (.-kind %))) (false? (.-visible %))))
-       (take (or (:max opts) 64))))
+  (let [raw (array-seq (.entities p (clj->js (assoc opts :max 1000000))))
+        known (when (and (fn? (aget p "knownMobs")) (some #(= "hostile" (.-kind %)) raw))
+                (set (map #(.-id %) (array-seq (.knownMobs p)))))]
+    (->> raw
+         (remove #(case (.-kind %)
+                    "player" false
+                    "hostile" (and known (not (contains? known (.-id %))))
+                    (false? (.-visible %))))
+         (take (or (:max opts) 64)))))
 
 (defn heard-entities
   "The passive mobs the body hears but cannot see, nearest first, as cljs maps {:id :name :kind :distance :direction
