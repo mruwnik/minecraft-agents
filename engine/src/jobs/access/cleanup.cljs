@@ -82,7 +82,7 @@
 
   Ready: safe? is jobs.lib.ready/safe-at-build here (:hostile-near; a dark cell within the spawn-free radius is no wait); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
   :unarmed: no weapon carried). Both are the :checks defaults, so a caller or trigger overrides them (:checks {:fit? '(always)}).
-  With :of :orphans, scaffold out of dig reach that jobs.lib.ledger/walk-blocker refuses (far below, near a death, roofed, submerged) is not walked to (held :walk-blocked). A walk leg also stops while such a threat or flight
+  With :of :orphans, scaffold out of dig reach that jobs.lib.ledger/walk-blocker refuses (far below, near a death, roofed, submerged), judged from where the run started, is not walked to (held :walk-blocked). A walk leg also stops while such a threat or flight
   holds (:danger).
 
   A shelter's block (purpose :shelter or :retreat-plug) also stays (held :danger) while the field of a known threat holds its cell or one beside it: taking it back would open a wall onto that mob, however far the body has gone. It stays while a known hostile could reach the body or shoot it were that block open (:hostile-near; a block on the side away from the hostile is taken back, so the body can leave that way) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
@@ -174,10 +174,11 @@
     (fn [cell] (or (seen cell) (items cell) (when (pillar-bases cell) "stone")))))
 
 (defn walk-blocker-of
-  "Orphaned scaffold out of dig reach is walked to only where the scaffold-left trigger would offer it (ledger/walk-blocker): far below, near a death, roofed."
+  "Orphaned scaffold out of dig reach is walked to only where the scaffold-left trigger would offer it (ledger/walk-blocker): far below, near a death, roofed.
+  Judged from the feet the run started on (:from), as the trigger judged it: a leg that climbs would turn the goal far below, one that descends would let deeper scaffold in."
   [c l]
   (let [p (:primitives c)
-        in {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
+        in {:feet (or (:from (ctx/mem c)) (reach/standing-vec p)) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
             :died-near? (ledger/died-near-of c) :block-at (access/sensed-at p "air")
             :ledger (ledger/cells l)}]
     #(ledger/walk-blocker in %)))
@@ -486,5 +487,5 @@
     (if (and (not (:started (ctx/mem c))) (empty? (offered-now c))
              (not (and (await (look/survey! c)) (seq (offered-now c)))))
       (ctx/end c :done nil nil)
-      (do (ctx/update-mem! c assoc :started true)
+      (do (ctx/update-mem! c assoc :started true :from (reach/standing-vec (:primitives c)))
           (await (pace/steps! c #(work! c zones)))))))

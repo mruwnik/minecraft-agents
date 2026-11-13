@@ -1021,6 +1021,29 @@
               {:keys [calls]} (await (walk-run {:status :done :arrived true} [cell] (merge (pillar-blocks []) stair-up)))]
           (is (seq calls) "a walk climbs the stair: go-to is asked"))))))
 
+(deftest a-leg-that-climbs-does-not-turn-the-goal-far-below
+  ;; Tamsin H20 (card 01522fea): fired three below a pillar top, the first leg climbed to the surface and the run stopped far-below
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cell [9 61 0]
+              legs (atom [[6.5 66 0.5] [8.5 62 0.5]])
+              calls (atom [])
+              go-to {:target [] :ways #{:walk}
+                     :round (fn [c]
+                              (swap! calls conj (:args c))
+                              (when-let [pos (first @legs)] (fake/swap-self! (:primitives c) assoc :pos pos))
+                              (swap! legs rest)
+                              (ctx/end c :done nil {:arrived true}))}
+              {:keys [eng out] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :entries [(entry cell)] :jobs {'jobs.movement.go-to go-to}
+                                              :blocks (-> (pillar-blocks [cell]) (dissoc (cell-key [9 63 0]) (cell-key [8 63 0]))
+                                                          (assoc (cell-key [6 65 0]) "stone" (cell-key [8 61 0]) "stone"))})]
+          (core/submit! eng (tu/order '(recording-parent {})) {})
+          (await (ticks s eng 60))
+          (is (< 1 (count @calls)) "from the surface it walks on to the block it set out for")
+          (is (= [] (:open @out)))
+          (is (= [cell] (map :cell (:removed @out)))))))))
+
 (deftest a-transient-go-to-failure-is-retried-until-give-up
   (async done
     (tu/run-async done
