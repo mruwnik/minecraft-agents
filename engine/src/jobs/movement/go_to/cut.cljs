@@ -222,11 +222,18 @@
 
 (base/on-warm-start! ::session new-session!)
 
+(defn cut-restart-farther?
+  "Whether a call restarting at dist from goal, with memory m, was left open in this session for the same goal (its walk
+  was cut) and restarts more than margin farther than the cut found the body."
+  [m goal dist margin]
+  (and (= (session-id) (:open m)) (= goal (:goal m)) (> dist (+ (:last-dist m dist) margin))))
+
 (defn sent-back-restart?
-  "Whether a call restarting at dist from goal, with memory m, is a send-back: the earlier call was left open in this
-  session for the same goal and the body is more than send-back-margin farther than the cut found it."
+  "Whether the restart is a send-back for the :sent-back entry: a cut walk restarting farther than the cut found the body
+  by more than half a block (float noise; a hut door sends the body back only a block or two). No cut, or none farther
+  (a meal or a fight in place), is not one."
   [m goal dist]
-  (and (= (session-id) (:open m)) (= goal (:goal m)) (> dist (+ (:last-dist m dist) (send-back-margin)))))
+  (cut-restart-farther? m goal dist 0.5))
 
 (defn cut-state
   "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :last-dist
@@ -240,7 +247,7 @@
         closest (min dist (if cut? (:closest m dist) dist))
         ref (if cut? (:ref m closest) closest)
         improved? (>= (- ref closest) (cut-progress))
-        sent-back? (sent-back-restart? m goal dist)
+        sent-back? (cut-restart-farther? m goal dist (send-back-margin))
         keep? (and cut? (not improved?))]
     {:goal goal :closest closest :ref (if improved? closest ref) :last-dist dist
      :cut-walks (cond keep? (inc (:cut-walks m 0)) cut? 1 :else 0)
@@ -255,7 +262,7 @@
 
 (defn note-restart!
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
-  was cut. The cut state; a send-back (sent-back-restart?) notes it (sent-back/note!)."
+  was cut. The cut state; a restart for which sent-back-restart? holds notes it (sent-back/note!)."
   [c pos]
   (let [m (merge (ctx/mem c) (dissoc (get @approaches (:id c)) :call))
         dist (u/dist (u/self-pos c) pos)
