@@ -15,6 +15,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
+            [plan.shape :as shape]
             [jobs.lib.dig-in-leave :as dig-leave]))
 
 (def night 14000)
@@ -540,4 +541,12 @@
           (await (leave-at-dawn! s))
           (is (= [:done :out] ((juxt :status :reason) @out)))
           (is (not= :east (:heading @out)) "the stair does not head for the plank floor on the way to the goal")
-          (is (= "spruce_planks" (block-at p [2 63 0])) "the floor stands"))))))
+          (is (= "spruce_planks" (block-at p [2 63 0])) "the floor stands"))
+        ;; dirt is natural to cost/cut-fn: only the body's own plan (own-cut-fn) tells its build from the ground
+        (let [hut (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0] [1 65 0]] :want "dirt"}]} "Fake")
+              {:keys [p out] :as s} (setup {:blocks (assoc (ground) "1,64,0" "dirt" "1,65,0" "dirt") :zones [] :plans {"hut" hut}})]
+          (await (dig-in! s))
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (not= :east (:heading @out)) "the stair goes round the own dirt wall")
+          (is (= ["dirt" "dirt"] (mapv #(block-at p %) [[1 64 0] [1 65 0]])) "the wall stands"))))))

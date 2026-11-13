@@ -12,6 +12,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.own-builds :as own-builds]
             [jobs.lib.danger :as danger]
             [jobs.lib.reach :as reach]
             [jobs.lib.spawn-light :as spawn-light]
@@ -66,15 +67,18 @@
 
 (defn stair-order
   "The four headings, the cheapest stair first: each prices the cells its whole stair :up from feet cuts (stair-cuts:
-  steps steps, nil until out from under the roof) with cost/cut-fn (a cell's dig and what it destroys, so a built block
-  costs its put-back and natural ground nothing past its dig; an unseen cell is access/hidden-guess); at one price,
-  heading-order of toward."
-  [p feet toward steps]
-  (let [cut-s (cost/cut-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
+  steps steps, nil until out from under the roof) as go-to's dig route does: a cell of the body's own builds
+  (own-builds/own-cut-fn) at its put-back, any other with cost/cut-fn (its dig and what it destroys, natural ground
+  nothing past its dig; an unseen cell is access/hidden-guess); at one price, heading-order of toward."
+  [c feet toward steps]
+  (let [p (:primitives c)
+        cut-s (cost/cut-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
+        own-s (own-builds/own-cut-fn c)
         block-at (access/sensed-at p access/hidden-guess)
         solid? (fn [[x y z]] (sh-sense/solid-at? p {:x x :y y :z z}))
-        price (fn [h] (reduce + 0 (map #(cut-s (block-at %) %) (stair-cuts solid? [(:x feet) (:y feet) (:z feet)] h steps))))]
-    (vec (sort-by price (heading-order feet toward)))))
+        cell-s (fn [cell] (let [own (own-s cell)] (if (pos? own) own (cut-s (block-at cell) cell))))
+        price (fn [h] (reduce + 0 (map cell-s (stair-cuts solid? [(:x feet) (:y feet) (:z feet)] h steps))))]
+    (->> (heading-order feet toward) (map (juxt price identity)) (sort-by first) (mapv second))))
 
 (defn exit-attempts
   "The stairs to try: every heading respecting zones, then every heading with :ignore-zones? (the last resort, taken
@@ -325,7 +329,7 @@
   ([c {:keys [start]} toward order]
   (let [{:keys [i tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
         feet (sh-sense/feet (:primitives c))
-        order (or (:order (leave-mem c)) order (stair-order (:primitives c) feet toward (when start (max 1 (- (:y start) (:y feet))))))
+        order (or (:order (leave-mem c)) order (stair-order c feet toward (when start (max 1 (- (:y start) (:y feet))))))
         _ (update-leave! c assoc :order order)
         attempt (get (exit-attempts order) i)]
     (cond
