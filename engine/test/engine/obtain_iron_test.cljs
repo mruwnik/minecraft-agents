@@ -670,11 +670,20 @@
           (await (obtain! s {:item "raw_iron" :count 1} 100))
           (is (seq (f/events-of s :obtain.leave-water)) "the body left the pool before the first mine"))))))
 
-(deftest a-cell-a-mine-gave-up-on-in-two-runs-is-left-out-of-the-third
-  (let [once (gather/note-skipped {} [[1 2 3] [4 5 6]])
-        twice (gather/note-skipped once [[1 2 3]])]
-    (is (empty? (:skip-cells once)))
-    (is (= #{[1 2 3]} (:skip-cells twice)))))
+;; Tamsin run 4 (F14b): runs that got some raw iron dropped what they gave up on, so each next run walked to the same ore again.
+(deftest every-mine-run-passes-the-cells-it-gave-up-on-to-the-next-even-one-that-got-items
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [given (atom [])
+              s (-> (f/start (ore-world {"0,64,6" "iron_ore" "1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])
+                    (assoc-in [:eng :jobs 'jobs.gather.mine :round]
+                              (fn ^:async f [c]
+                                (swap! given conj (:given-up (:args c)))
+                                (fake/add-item! (:primitives c) "raw_iron" 1)
+                                (ctx/end c :nothing-possible {:reason :tunnel-stopped} {:got 1 :reason :tunnel-stopped :given-up {[0 64 6] {:n 1 :s 30}}}))))]
+          (await (obtain! s {:item "raw_iron" :count 3 :ways #{:gather} :explore false} 200))
+          (is (= [nil {[0 64 6] {:n 1 :s 30}} {[0 64 6] {:n 2 :s 60}}] (take 3 @given))))))))
 
 (deftest ore-whose-mine-child-is-a-look-is-gathered-not-none-seen
   (async done

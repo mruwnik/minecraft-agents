@@ -26,6 +26,7 @@
             [jobs.gather.dig-for :as mine]
             [jobs.gather.mine :as mine-job]
             [jobs.gather.mine.descent :as mine-descent]
+            [jobs.gather.mine.drops :as drops]
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine.torches :as mine-torches]
@@ -548,7 +549,7 @@
           (is (= [1 :gave-up] [cheap-walks cheap-end]) "4 sand (1.4 s at the measured worth) is not worth a second walk after the first gave up (a dig retry wins 0.014 on the pooled spread, 0.06 at one pseudo-count)")
           (is (> dear-walks cheap-walks) "a dear goal is"))))))
 
-(deftest cells-a-call-gave-up-on-are-passed-on-and-not-walked-to-again
+(deftest cells-a-call-gave-up-on-are-left-out-of-a-later-call-while-another-try-is-not-worth-its-price
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -557,12 +558,35 @@
               first-run (start world)
               _ (core/submit! (:eng first-run) (tu/order (spec {:block "sand" :count 4 :ways #{:seen}})) {})
               _ (await (run-ticks first-run 60))
-              gave-up (:skipped (done-event first-run))
-              s (start world)]
-          (is (= 4 (count gave-up)))
-          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 4 :ways #{:seen} :skip gave-up})) {})
-          (await (run-ticks s 60))
-          (is (empty? (events-of s :mine.walk-failed))))))))
+              gave-up (:given-up (done-event first-run))
+              at-s (fn [secs] (update-vals gave-up #(assoc % :s secs)))
+              walks-with (fn ^:async w [given]
+                           (let [s (start world)]
+                             (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 4 :ways #{:seen} :given-up given})) {})
+                             (await (run-ticks s 60))
+                             (count (events-of s :mine.walk-failed))))]
+          (is (seq gave-up))
+          (is (every? #(= 1 (:n %)) (vals gave-up)) "one run each")
+          (is (zero? (await (walks-with (at-s 1e6)))) "a run that spent more on them than they are worth leaves them out")
+          (is (pos? (await (walks-with (at-s 0)))) "one that cost nothing does not: another try is worth it"))))))
+
+;; Tamsin run 4 (F14b): the walk to raw iron gave up, the cut toward it waited, and every next round walked the same failing walk
+;; (pillar and dig-route cycles) before the cut went on.
+(deftest a-cut-toward-a-target-that-waited-goes-on-without-walking-there-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [steps (atom [])
+              stub {:round (fn [c] (swap! steps conj :walk) (ctx/end c :nothing-possible {:reason :unreachable :why :exhausted} {:arrived false}))}
+              cuts (atom [:partial :partial :cut])
+              orig drops/cut-to-drop!
+              s (start {:world {:blocks (cells "sand" [15] [64] [0])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
+          (set! drops/cut-to-drop! (fn ^:async f [_ _ _ _] (swap! steps conj :cut) (let [r (first @cuts)] (swap! cuts rest) r)))
+          (try
+            (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+            (await (run-ticks s 30))
+            (finally (set! drops/cut-to-drop! orig)))
+          (is (= [:walk :cut :cut :cut :walk] (take 5 @steps)) "the cut resumes; the walk is tried again once the cut is open"))))))
 
 (deftest a-stair-that-stopped-own-zone-with-the-body-inside-the-zone-walks-out-and-digs-again
   (async done

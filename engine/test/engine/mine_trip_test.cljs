@@ -227,3 +227,10 @@
             (is (= "north" (:heading @m)) "the next stair goes on down the one it stands at the foot of")
             (is (= [0 64 0] (get-in @m [:descent :top])))
             (finally (let [[a b d] orig] (set! ctx/mem a) (set! ctx/update-mem! b) (set! ctx/emit! d)))))))))
+
+;; Tamsin run 4 (F14b): a dig that stopped :no-tool had given up on raw iron; the trip's next dig walked to it again.
+(deftest the-next-dig-of-a-trip-gets-the-cells-its-earlier-digs-gave-up-on-summed-with-the-callers
+  (let [m (-> {} (mine/booked {:data {:given-up {[1 2 3] {:n 1 :s 40}}}}) (mine/booked {:data {:given-up {[1 2 3] {:n 1 :s 30} [4 5 6] {:n 1 :s 5}}}}))
+        c {:args {:block "iron_ore" :given-up {[1 2 3] {:n 1 :s 10}}}}]
+    (with-redefs [ctx/mem (constantly m) ctx/frozen-call (constantly nil)]
+      (is (= {[1 2 3] {:n 3 :s 80} [4 5 6] {:n 1 :s 5}} (:given-up (mine/dig-args c)))))))

@@ -72,7 +72,7 @@
   Ends :done when :got meets :count (or the call's :least); else condition-failed for the facts :none :wet :refused :own-zone
   :no-shaft :flooded :no-tool :no-torches, nothing-possible for failed tries (:no-drops
   :gave-up :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :not-back). 0 of :count is never done.
-  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :unreached, :ground (with :track-ground), :start-floor-dug (the cell under the start was dug), :cut {:down :level :back} (the stair cells down, the tunnel, branch and side-cut cells and the blocks walked back from branch and side-cut ends); text says reason,
+  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :unreached, :given-up (cells it gave up on, {:n 1 :s job seconds spent going for each}), :ground (with :track-ground), :start-floor-dug (the cell under the start was dug), :cut {:down :level :back} (the stair cells down, the tunnel, branch and side-cut cells and the blocks walked back from branch and side-cut ends); text says reason,
   :got, the stair and the tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
@@ -82,7 +82,7 @@
    :radius :shared
    :center :shared
    :wet :shared
-   :skip {:doc "cells [x y z] never targeted (a caller passes the ones an earlier call gave up on: :skipped of its result)" :spec (a/coll-of (a/pred "a cell [x y z]" #(and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
+   :given-up {:doc "{[x y z] {:n runs :s seconds}}: cells earlier calls gave up on (their results' :given-up, u/add-given-up), each left out while another try is not worth its price (dear-again)" :spec (a/map-of (a/pred "a cell [x y z]" #(and (sequential? %) (= 3 (count %)) (every? number? %))) (a/map-with {:n (a/int-in 1 nil) :s (a/num-in 0 nil)})) :default nil}
    :ignore-zones? :shared
    :track-ground {:doc "dig the 5x5x2 ground under the start last and list the cells of it that were open at the end or dug in :ground of the result, for a caller that fills them again" :spec boolean? :default false}
    :heading :shared
@@ -282,6 +282,15 @@
       :else walked)))
 
 
+(defn dear-again
+  "The targets earlier calls gave up on (:given-up arg) whose next try is not worth its price: cost/try-again? :walk after their
+  n runs, a try at the s/n seconds a run spent on one, against the worth of its cluster (cluster-worth)."
+  [c targets]
+  (let [given (:given-up (:args c))]
+    (into #{} (filter (fn [pos] (when-let [{:keys [n s]} (get given (access/cell pos))]
+                                  (not (cost/try-again? c :walk {:fails n :try-s (/ s n) :worth (cluster-worth c pos targets)})))))
+          targets)))
+
 (defn give-up?
   "Whether the digs failed in a row (u/failed!, a dug cell resets) make another not worth its price."
   [c]
@@ -293,6 +302,7 @@
         {:keys [wet]} (:args c)
         dry-digs (settings/get settings ::dry-digs)
         {:keys [targets refused wet? wet-n side far]} (scan c)
+        targets (let [dear (dear-again c targets)] (filterv (complement dear) targets))
         ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (not (give-up? c)) (some? looked))
         pos (when ready? (await (next-target! c targets)))]
     (when (seq far) (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) far)))
@@ -307,28 +317,33 @@
       (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
       (and (some? pos) (last-exit? c pos)) (do (ctx/emit! c :mine.spared-exit :info {:pos (access/cell pos) :text (str "mine leaves " (str/join "," (access/cell pos)) ": it is the body's last way out")})
                                                (skip! c pos) :again)
-      (some? pos) (let [walked (await (walk-to-dig! c pos targets))
-                        cell (access/cell pos)
-                        mid-air? (and (= :blocked walked) (result/mid-air? (near/last-walk c)))
+      (some? pos) (let [cell (access/cell pos)
+                        _ (targets/going! c pos)
+                        ;; a cut that waited goes on from where it is: the walk that sent the body to it would fail as before
+                        cutting (when (= cell (:cell (:cutting (ctx/mem c)))) (:cutting (ctx/mem c)))
+                        walked (if cutting :blocked (await (walk-to-dig! c pos targets)))
+                        last-walk (if cutting (:walk cutting) (near/last-walk c))
+                        mid-air? (and (= :blocked walked) (result/mid-air? last-walk))
                         float? (and (= :blocked walked) (not mid-air?) (floating? c (targets/cluster-of pos targets)))
-                        cut (when (and (= :blocked walked) (not mid-air?) (not float?) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
-                                       (not (#{:off-plan :needs-health :damage-budget} (result/why (near/last-walk c))))
+                        cut (when (and (= :blocked walked) (not mid-air?) (not float?) (not (mw/stay-level? (:args c))) (cut-after? last-walk)
+                                       (not (#{:off-plan :needs-health :damage-budget} (result/why last-walk)))
                                        (not (contains? (:target-cut (ctx/mem c)) cell)))
                               (let [cluster (targets/cluster-of pos targets)
                                     r (await (cut-to-drop! c cell (cluster-worth c pos targets) (set (map access/cell cluster))))]
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
                                 r))]
+                    (ctx/update-mem! c #(if (= :partial cut) (assoc % :cutting {:cell cell :walk last-walk}) (dissoc % :cutting)))
                     (cond
                       mid-air? (do (u/failed! c) :continue)
                       float? (do (skip-unreachable! c pos targets) :again)
-                      (= :risky walked) (do (targets/skip-risky! c pos (:data (near/last-walk c))) :again)
+                      (= :risky walked) (do (targets/skip-risky! c pos (:data last-walk)) :again)
                       (= :cut cut) (do (ctx/update-mem! c update :target-cut (fnil conj #{}) cell) :again)
                       (= :partial cut) :continue
-                      (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos targets) :again)
-                      (and (= :blocked walked) (= :risky (contract/cause-key (near/last-walk c))))
+                      (and (= :blocked walked) (result/unreachable-walk? last-walk)) (do (skip-unreachable! c pos targets) :again)
+                      (and (= :blocked walked) (= :risky (contract/cause-key last-walk)))
                       (do (ctx/emit! c :mine.walk-refused :info {:pos cell :text (str "mine skips " (str/join "," cell) ": the walk is too dangerous for what it is worth")})
                           (skip! c pos) :again)
-                      (= :blocked walked) (let [w (near/last-walk c)]
+                      (= :blocked walked) (let [w last-walk]
                                             (ctx/emit! c :mine.walk-failed :info {:pos (access/cell pos) :why (result/why w) :cause (contract/cause-key w)
                                                                                   :text (str "mine's walk to " (str/join "," (access/cell pos)) " gave up (" (result/why w) (when (= :too-big cut) ", and the heap was too full for a cut search") "); it skips the target and counts a failure")})
                                             (skip-failed! c pos) :again)
@@ -397,7 +412,6 @@
         (ctx/update-mem! c assoc
                          :goal (:count (:args c)) :had now :start start
                          :dry 0 :last-carried now
-                         :skipped (mapv (fn [[x y z]] {:x x :y y :z z}) (:skip (:args c)))
                          :heading (or heading (targets/open-heading c start faced))
                          :ground (if (:track-ground (:args c)) (snapshot c start) [])
                          :phase :dig)

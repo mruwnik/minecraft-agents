@@ -244,3 +244,8 @@
 
 
 (defn cut-cells "The cells a mine's :cut {:down :level} dug." [{:keys [down level]}] (+ (or down 0) (or level 0)))
+
+(defn add-given-up
+  "Two records {[x y z] {:n runs :s seconds}} of cells a mine gave up on (its :given-up arg and result) as one: runs and seconds summed."
+  [a b]
+  (merge-with (fn [x y] {:n (+ (:n x) (:n y)) :s (+ (:s x) (:s y))}) (or a {}) b))

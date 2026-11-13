@@ -254,10 +254,27 @@
   [c pos]
   (ctx/update-mem! c assoc-in [:walk-skipped pos] (:y (cell-of (u/self-pos c)))))
 
+(defn job-s [c] (:job-time (ctx/spent c) 0))
+
+(defn going!
+  "Note pos as the target the body goes for (:going), from the call's job time now, unless it already was."
+  [c pos]
+  (when (not= (access/cell pos) (:cell (:going (ctx/mem c))))
+    (ctx/update-mem! c assoc :going {:cell (access/cell pos) :since (job-s c)})))
+
+(defn give-up!
+  "Book cells in :given-up as one run each, at the job seconds the call spent going for pos (going!): a later call's evidence
+  for the price of trying them again (dig-for/dear-again)."
+  [c pos cells]
+  (let [{:keys [cell since]} (:going (ctx/mem c))
+        s (if (= cell (access/cell pos)) (- (job-s c) since) 0)]
+    (ctx/update-mem! c #(-> % (dissoc :going) (update :given-up u/add-given-up (into {} (map (fn [q] [(access/cell q) {:n 1 :s s}])) cells))))))
+
 (defn skip-failed!
-  "Skip the target and count a failure; a walk's failure is noted too (walk-skip!)."
+  "Skip the target, give it up (give-up!) and count a failure; a walk's failure is noted too (walk-skip!)."
   [c pos]
   (skip! c pos)
+  (give-up! c pos [pos])
   (walk-skip! c pos)
   (u/failed! c))
 
@@ -272,13 +289,14 @@
         found))))
 
 (defn skip-unreachable!
-  "Skip a target the walk cannot reach (result/unreachable-walk?) and the targets touching it: their stands are the same cells, so
+  "Skip a target the walk cannot reach (result/unreachable-walk?) and the targets touching it, and give them up (give-up!): their stands are the same cells, so
   the verdict holds. No failure counted, so a vein of such cells never ends the run."
   [c pos targets]
   (let [cluster (cluster-of pos targets)]
     (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (result/why (near/last-walk c)) :cluster (count cluster)
                                           :text (str "mine skips " (str/join "," (access/cell pos)) (when (> (count cluster) 1) (str " and " (dec (count cluster)) " touching") ) ": no way to stand beside it")})
     (doseq [cell cluster] (skip! c cell))
+    (give-up! c pos cluster)
     (walk-skip! c pos)
     (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) (map access/cell cluster)))))
 

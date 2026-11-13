@@ -48,7 +48,7 @@
 
   Ends :done when :got meets :count (or the call's :least); else the dig's ending (condition-failed for the facts
   :none :wet :refused :own-zone :no-shaft :flooded :no-tool :no-torches, nothing-possible for
-  failed tries). Data {:got n :reason r :mended n} plus the dig's data (:cut summed over its dig calls); text says reason, :got, :mended, the stair and the
+  failed tries). Data {:got n :reason r :mended n} plus the dig's data (:cut and :given-up summed over its dig calls); text says reason, :got, :mended, the stair and the
   tunnel. Quote: about ::item-s s an item (jobs.gather.mine.targets), open-ended.")
 
 (a/defargs args
@@ -58,7 +58,7 @@
    :radius :shared
    :center :shared
    :wet :shared
-   :skip {:doc "cells [x y z] never targeted (a caller passes the ones an earlier call gave up on: :skipped of its result)" :spec (a/coll-of (a/pred "a cell [x y z]" #(and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
+   :given-up {:doc "{[x y z] {:n runs :s seconds}}: cells earlier calls gave up on (their results' :given-up), passed to jobs.gather.dig-for with the trip's own dig calls' added" :spec (a/map-of (a/pred "a cell [x y z]" #(and (sequential? %) (= 3 (count %)) (every? number? %))) (a/map-with {:n (a/int-in 1 nil) :s (a/num-in 0 nil)})) :default nil}
    :ignore-zones? :shared
    :mend {:doc "fill the ground under the start again once the dig is over" :spec boolean? :default false}
    :heading :shared
@@ -229,7 +229,7 @@
 (defn finish!
   "End the trip: the dig's ending in memory and the mend's count."
   [c]
-  (let [{:keys [dig-end dig-ending tool-ending end-cause reason mended tool-why dug-got cut]} (ctx/mem c)
+  (let [{:keys [dig-end dig-ending tool-ending end-cause reason mended tool-why dug-got cut given-up]} (ctx/mem c)
         dug (let [d (merge dig-end end-cause)]
               (if (seq (:left d))
                 (let [left (end/still-lying c (:left d))]
@@ -239,7 +239,8 @@
         mended (or mended 0)
         data (cond-> (merge (dissoc dug :text) {:got n :reason reason :mended mended})
                (and tool-why (= :no-tool reason)) (assoc :why tool-why)
-               (pos? (u/cut-cells cut)) (assoc :cut cut))
+               (pos? (u/cut-cells cut)) (assoc :cut cut)
+               (seq given-up) (assoc :given-up given-up))
         text (str (dig-text (or (:text dug) (str "dig-for got " n " of " (owed c) ": " (name reason))))
                   (when (pos? mended) (str "; mended " mended)))
         because (if (and tool-ending (= :no-tool reason)) tool-ending dig-ending)
@@ -251,15 +252,16 @@
 ;; ------------------------------------------------------------------ the steps
 
 (defn dig-args
-  "The args of the dig-for call: the trip's, without :mend, tracking the ground when it mends, a tunnel keeping its heading
-  unless a seen unbreakable block walls it off where the body stands."
+  "The args of the dig-for call: the trip's, without :mend, tracking the ground when it mends, its earlier dig calls' :given-up
+  added, a tunnel keeping its heading unless a seen unbreakable block walls it off where the body stands."
   [c]
   (let [{:keys [dug-heading]} (ctx/mem c)
         dug-heading (when-not (and dug-heading (walled? c (cell-of (u/self-pos c)) dug-heading)) dug-heading)]
     (cond-> (-> (:args c)
                 (dissoc :mend :submitted-at)
                 (assoc :track-ground (boolean (:mend (:args c))) :least (:least (ctx/frozen-call c) :all)
-                       :shed (not (:shed-failed (ctx/mem c)))))
+                       :shed (not (:shed-failed (ctx/mem c)))
+                       :given-up (not-empty (u/add-given-up (:given-up (:args c)) (:given-up (ctx/mem c))))))
       (and dug-heading (nil? (:heading (:args c))) (nil? (:direction (:args c)))) (assoc :heading dug-heading))))
 
 (defn booked
@@ -269,6 +271,7 @@
         known (into #{} (map :pos) (:ground m))]
     (-> m
         (assoc :dig-end d)
+        (update :given-up u/add-given-up (:given-up d))
         (update :cut end/add-cut (:cut d))
         (update :ground (fnil into []) (remove #(known (:pos %))) (:ground d))
         (update-in [:descent :steps] #(max (or % 0) (get-in d [:descent :steps] 0)))
