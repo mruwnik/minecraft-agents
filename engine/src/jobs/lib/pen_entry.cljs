@@ -33,7 +33,8 @@
                  inside)))
 
 (defn pens
-  "[{:gates [{:x :y :z}] :animals n}] of the pens round the passive animals in sight, one per pen; metadata :unseen?
+  "[{:gates [{:x :y :z}] :animals n :here? bool}] of the pens round the passive animals in sight, one per pen (:here?: the
+  body stands inside it); metadata :unseen?
   when a pen has cells the body has not seen. Those are noted for sense/decide! (u/*reads*) only for an animal whose
   fill met no leak but unseen cells: plausibly inside a fence ring, not loose in the open. An animal whose own floor
   is unseen (the pen is out of view) notes that floor, so it gets looked at."
@@ -64,7 +65,9 @@
                        (conj found {:inside (:inside answer) :gates (mapv :pos (:gates answer)) :open (mapv :pos (filter :open? (:gates answer))) :animals 1})
                        found)
                      (or unseen? ring?)))))
-        (with-meta (mapv #(dissoc % :inside) found) {:unseen? unseen?})))))
+        (let [me (u/self-pos c)
+              here [(js/Math.floor (:x me)) (js/Math.floor (+ (:y me) 0.01)) (js/Math.floor (:z me))]]
+          (with-meta (mapv #(-> % (assoc :here? (contains? (:inside %) here)) (dissoc :inside)) found) {:unseen? unseen?}))))))
 
 (defn ^:async pens!
   "pens judged after a look at the unseen cells of the pens it read (sense/decide!: bounded per call, each cell looked

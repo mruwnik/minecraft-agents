@@ -108,6 +108,16 @@
           (is (= [(assoc gate :factor ##Inf)] (:tolls @args)))
           (is (some #(= :blocks.pen-kept-out (:kind %)) @seen)))))))
 
+(deftest walk!*-does-not-keep-out-of-the-gate-of-the-pen-the-body-stands-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args (atom nil)
+              go-to (assoc stranded :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :nothing-possible :unreachable)))]
+          (with-redefs [pen-entry/pens! (fn ^:async p [_] [{:gates [{:x 5 :y 64 :z 0}] :animals 2 :here? true}])]
+            (await (in-parent go-to (fn ^:async g [c] (await (b/walk!* c [9 64 0]))))))
+          (is (nil? (:tolls @args)) "the gate is the way out"))))))
+
 (deftest walk-into!*-asks-go-to-for-the-slots-walk
   (async done
     (tu/run-async done

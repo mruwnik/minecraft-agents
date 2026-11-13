@@ -39,6 +39,15 @@
     (perception/pass! (aget p "perception"))
     [p (st/stub-ctx p)]))
 
+(deftest a-pen-the-body-stands-in-is-marked-here
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ c] (seeing-body (assoc world :self {:pos {:x 19.5 :y 64 :z 16.5}}))
+              [_ out] (seeing-body world)]
+          (is (= [true] (map :here? (await (pen-entry/pens! c)))) "inside the fence")
+          (is (= [false] (map :here? (await (pen-entry/pens! out)))) "outside it"))))))
+
 (def walled-world
   "A tall stone wall inside the pen hides its far half from the body: a look never settles those cells."
   (-> world

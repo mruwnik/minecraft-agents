@@ -4,6 +4,7 @@
 ;; Should-succeed: go-to out of the pen with wheat in the bag (put away before the gate click) or without: gate shut behind, both cows stay;
 ;; go-to away from an open stocked gate warns go-to.pen-gate-open; blocks.place deep in the pen declines with blocks.pen-kept-out,
 ;; places with the enter-pens setting (gate shut behind the body); use-on at the gate from outside clicks it without entering.
+;; blocks.dig of a block outside, from inside the pen, walks out by the gate (the pen the body stands in is no keep-out): dug, gate shut, cows stay.
 ;; Should-fail (no warn / declined): a goal beside the open gate; use-on deep in the pen (blocks.pen-kept-out, the lever unpowered).
 {:defaults
  {:tags [:animals :pen-gate :movement]
@@ -29,6 +30,14 @@
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [10 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 2.5] [:block [18 0 16] "oak_fence_gate[open=false]"]
+           [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
+  {:name "dig-outside-from-inside-the-pen-leaves-by-the-gate"
+   :blocks [[:set [10 0 16] "dirt"]]
+   :body {:at [20.5 0 16.5]}
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [10 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :blocks.pen-kept-out} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:not-block [10 0 16] "dirt"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
   {:name "go-to-away-from-an-open-stocked-gate-warns"
    :blocks [[:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]]
