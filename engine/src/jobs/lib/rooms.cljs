@@ -236,13 +236,27 @@
 
 (defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))
 
-(defn spent! "Keep s as the flight step's searches' CPU." [c s] (ctx/update-mem! c assoc :search-s s))
+(defn spent!
+  "Keep s as the flight step's searches' CPU, what search by (a keyword) ran since the last noted in the step's log
+  (memory :search-log, step-searches!)."
+  [c s by]
+  (ctx/update-mem! c (fn [m] (-> (assoc m :search-s s) (update :search-log (fnil conj []) [by (- s (:search-s m 0))])))))
 
-(defn new-step! "A new flight step: its searches start a fresh search-meter." [c] (spent! c 0))
+(defn new-step! "A new flight step: its searches start a fresh search-meter." [c] (ctx/update-mem! c #(-> % (assoc :search-s 0) (dissoc :search-log))))
+
+(defn step-searches!
+  "One debug retreat.step-searches of the step's log, what each search spent of its meter, ms, and what was left
+  (:left-ms, at most 0 when the meter ran out); none when no search ran."
+  [c]
+  (when-let [log (seq (:search-log (ctx/mem c)))]
+    (let [ms #(/ (js/Math.round (* 10000 %)) 10)]
+      (ctx/emit! c :retreat.step-searches :debug {:searches (mapv (fn [[by s]] [by (ms s)]) log)
+                                                  :left-ms (ms (- (cost/search-budget-s) (step-spent-s c)))}))
+    (ctx/update-mem! c dissoc :search-log)))
 
 (defn step-meter "The flight step's search-meter, from what its searches have run (step-spent-s)." [c] (search-meter (step-spent-s c)))
 
-(defn spent-meter! "Keep what meter m has spent as the flight step's searches' CPU." [c m] (spent! c (reach/spent-s m)))
+(defn spent-meter! "Keep what meter m has spent as the flight step's searches' CPU, by (spent!)." [c m by] (spent! c (reach/spent-s m) by))
 
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start, :home? and, when its walk search
@@ -252,10 +266,11 @@
   :unjudged (not judged this step: a door side whose side-s does not pay, cost/refuge-search-pays?, against threats'
   lead at its door, lead-s straight, or fire, and the run it saves over a room with a run on; or a flood cut by the
   meter, a known closed room's too). Its floods and walk searches run under one search-meter from spent-s (default 0): each stops where it runs
-  out, :spent-s what they all ran. The home (judged whatever its price) and sides judged before or kept (side-s none)
+  out, :spent-s what they all ran (:ways-s of it the walk searches). The home (judged whatever its price) and sides judged before or kept (side-s none)
   come first, then the rest nearest first; each closed room found gets its walk search (way-s) as verdicts prices it. A
   home with a bare doorway gap counts as a room (doorway-room: its :gap; :fill? when a block is carried to fill it).
-  keep? false: the judgements are kept nowhere (closed?). Defaults: no threats, no fire, keep? true."
+  keep? false: the judgements but the home's are kept nowhere (closed?: the home is judged whatever its price, so a
+  flight's steps judge it alike). Defaults: no threats, no fire, keep? true."
   ([c home] (survey c home {}))
   ([c home {:keys [threats fire keep? spent-s] :or {keep? true spent-s 0}}]
    (binding [reach/*search* (search-meter spent-s)]
@@ -265,6 +280,7 @@
            here (here-s p threats)
            best (volatile! ##Inf)
            found (volatile! [])
+           ways-s (volatile! 0)
            known (fn [pos] (get (:refuge-rooms (ctx/mem c)) (cell-key pos)))
            free? (fn [{:keys [pos home?]}] (or home? (some? (known pos)) (known-open? c pos) (zero? (side-s p pos))))
            judge (fn [{:keys [pos home? door]}]
@@ -276,7 +292,7 @@
                        (known-open? c pos) :not-closed
                        (or home? (zero? cost)
                            (cost/refuge-search-pays? (reach/spent-s) cost here (lead-s p [at] threats (u/dist me at)) (cost/run-saved-s (u/dist me at) @best (food p)) fire))
-                       (case (closed? c pos keep?) true nil :unseen :unseen :cut :unjudged :not-closed)
+                       (case (closed? c pos (or keep? home?)) true nil :unseen :unseen :cut :unjudged :not-closed)
                        :else :unjudged)))
            with-way (fn [{:keys [home?] :as r}]
                       (let [doors (map (comp mid :cell) (:doors r))
@@ -285,7 +301,9 @@
                             n (reach/cuts)]
                         (if-not (or home? (cost/refuge-search-pays? (reach/spent-s) cost here (lead-s p doors threats blocks) (cost/run-saved-s blocks @best (food p)) fire))
                           r
-                          (let [w (way-in p r)]
+                          (let [s0 (reach/spent-s)
+                                w (way-in p r)
+                                _ (vswap! ways-s + (- (reach/spent-s) s0))]
                             (when (and w (race-won? p r w threats)) (vswap! best min (:steps w)))
                             ;; a door's search the meter cut may hold a shorter way: verdicts prices the room again
                             (cond-> r (= n (reach/cuts)) (assoc :way-in w))))))
@@ -310,6 +328,7 @@
                        (sort-by first)
                        (mapv second))]
        {:spent-s (reach/spent-s)
+        :ways-s @ways-s
         :dropped (vec (for [{:keys [pos home? why]} judged :when why] {:at (mapv pos [:x :y :z]) :own? home? :why why}))
         :rooms (->> judged
                     (keep :room)
@@ -398,7 +417,7 @@
   [c survey threats]
   (let [m (step-meter c)
         at (binding [reach/*search* m] (glance-at c survey threats))]
-    (spent-meter! c m)
+    (spent-meter! c m :glance)
     (await (glance-through! c at))))
 
 (defn ^:async glance-through!
@@ -456,13 +475,17 @@
 (defn way-in
   "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach.room/walk-steps to the room
   cell inside it): {:cell :inside :steps}, nil when it finds none. Its searches run under reach/*search*, a fresh
-  search-meter when none is bound: those the meter cut leave the best of the rest."
+  search-meter when none is bound: those the meter cut leave the best of the rest. Kept per body from the feet cell
+  while the world stays the same (reach-room/kept: a flight's decision and its first step ask it from the same cell)."
   [p room]
   (binding [reach/*search* (or reach/*search* (search-meter 0))]
-    (->> (:doors room)
-         (keep (fn [d] (when-let [n (reach-room/walk-steps p (sh-sense/feet p) (:inside d))] (assoc d :steps n))))
-         (sort-by :steps)
-         first)))
+    (let [feet (sh-sense/feet p)]
+      (reach-room/kept p (str "way-in|" (cell-key feet) "|" (pr-str (map :inside (:doors room))))
+                       (fn [_]
+                         (->> (:doors room)
+                              (keep (fn [d] (when-let [n (reach-room/walk-steps p feet (:inside d))] (assoc d :steps n))))
+                              (sort-by :steps)
+                              first))))))
 
 (defn race-won?
   "Whether the body, at its own speed (food), walks way-in's steps before any melee threat gets to a door of room:

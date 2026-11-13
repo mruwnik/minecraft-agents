@@ -126,7 +126,7 @@
         ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))
                                                :fire (:route (fire-price c threats covered?)) :meter m :near near-ring
                                                :enough (delay (choose-opts c threats covered? nil))}))
-        _ (room-lib/spent-meter! c m)
+        _ (room-lib/spent-meter! c m :flee-search)
         home (safe-home ends homes)]
     {:goal goal :home home :room room :ends ends :home-why (home-why ends (last homes))
      :why (when goal

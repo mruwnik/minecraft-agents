@@ -384,7 +384,7 @@
   [c chasers]
   (let [m (room-lib/step-meter c)
         ends (await (search/search! c chasers [] {:reach (back-off-reach) :meter m}))]
-    (room-lib/spent-meter! c m)
+    (room-lib/spent-meter! c m :back-off)
     (back-off-of c ends)))
 
 (defn ^:async back-off!

@@ -22,7 +22,7 @@
   Underground (jobs.lib.shelter.sense/buried?) it first takes the stairs the body cut (ledger/ways-of) or the places its recent walks began (cover/trail-floors): the highest such cell within 14
   blocks, above it and no nearer a chaser), before any walk to the :goal, and with none digs a side pocket (as below) before it walks across the open cave,
   unless a creeper or a melee mob is within cover-gap.
-  Each flee step emits debug retreat.step-speed (leg-step!).
+  Each flee step emits debug retreat.step-speed (leg-step!), and each step debug retreat.step-searches: what each of its searches spent of its one search meter (room-lib/step-searches!).
   3. Walks a go-to leg (:ways #{:walk :clear-seal}) to the end jobs.lib.flee-search picks: it first looks away and to either
      side where it has not seen the ground (at most 3 looks), then plans ring ends round it and the home and the :goal (the
      destination of the walk the flight interrupted) over what it has seen, each priced and scored by when the first chaser
@@ -151,7 +151,7 @@
         survey (if glanced? (cover/survey c threats true) survey0)
         rooms (:rooms survey)
         verdicts (when survey (let [v (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?)) (room-lib/step-spent-s c) (cover/fire-on c threats))]
-                                (room-lib/spent! c (:spent-s v))
+                                (room-lib/spent! c (:spent-s v) :verdicts)
                                 (:verdicts v)))
         {:keys [room way inside?]} (room-lib/pick verdicts)
         gap-way (when (and inside? (:fill? room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
@@ -230,6 +230,7 @@
             (ctx/update-mem! c assoc :last-step (ctx/now c))
             (flight/note-position! c)
             (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (or (await (cover-step! c)) (flight-step! c))))
+                  _ (room-lib/step-searches! c)
                   clear? (and (= :again r) (ctx/alive? c) (clear? c))]
               (cond
                 (not= :again r) r

@@ -174,7 +174,7 @@
         ;; one flood, a part of the step's one search (Q141): a cut one is no room
         room (fn [] (let [m (room-lib/step-meter c)
                           r (binding [reach/*search* m] (reach-room/room-near p feet (close-radius)))]
-                      (room-lib/spent-meter! c m)
+                      (room-lib/spent-meter! c m :boxed-in)
                       r))
         in-room? (fn [{:keys [cells]}]
                    (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]

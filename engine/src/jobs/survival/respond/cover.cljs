@@ -59,11 +59,12 @@
 (defn survey
   "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead or the shooters' fire, fire-on,
   pricing its door sides judged afresh), its searches part of the step's one (room-lib/step-spent-s); nil with a creeper
-  of threats within blast reach (blast). keep? as room-lib/survey's: the flee price (caught-chance!) keeps nothing."
+  of threats within blast reach (blast). keep? as room-lib/survey's: the flee price (caught-chance!) keeps only the home's judgement."
   [c threats keep?]
   (when (empty? (blast (:primitives c) threats))
     (let [r (room-lib/survey c (home-pos c) {:threats threats :keep? keep? :fire (fire-on c threats) :spent-s (room-lib/step-spent-s c)})]
-      (room-lib/spent! c (:spent-s r))
+      (room-lib/spent! c (- (:spent-s r) (:ways-s r)) :survey-floods)
+      (room-lib/spent! c (:spent-s r) :survey-ways)
       r)))
 
 (def glance-turns
@@ -198,7 +199,7 @@
                        :let [{:keys [seen unseen]} (reach-room/boundary p (:pos g))]]
                    {:at g :seconds (room-lib/glance-s c g) :closed (cost/closed-chance seen (count unseen))
                     :refuge-s (/ (u/dist (room-lib/mid (:d g)) (room-lib/mid (:pos g))) pace)})))]
-    (room-lib/spent-meter! c m)
+    (room-lib/spent-meter! c m :building-looks)
     r))
 
 (defn ^:async caught-chance-once!

@@ -143,10 +143,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (flee! (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)])))]
+        (let [{:keys [eng p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)])))
+              steps (filter #(= :retreat.step-searches (:kind %)) @seen)
+              budget-ms (* 1000 (cost/search-budget-s))]
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (false? (hs/door-open? p)) "the door is shut behind it")
-          (is (= [] (:list (core/state eng)))))))))
+          (is (= [] (:list (core/state eng))))
+          (is (some #(some (comp #{:survey-floods} first) (:searches %)) steps) (str "each step says what its searches spent: " (vec steps)))
+          (is (every? #(< (js/Math.abs (- budget-ms (:left-ms %) (reduce + (map second (:searches %))))) 0.5) steps)
+              "what they spent and what is left make up the step's meter"))))))
 
 (deftest a-low-body-with-blocks-near-its-hut-runs-home-instead-of-pillaring-in-the-open
   (async done
@@ -764,6 +769,22 @@
           (is (true? (get-in (ctx/mem c) [:refuge-rooms (rooms/cell-key home)])) "kept closed for the flight")
           (is (= [] (:rooms late)) "three cells left: its room's flood is cut")
           (is (some #(= {:at [5 64 0] :own? true :why :unjudged} %) (:dropped late)) (str "and the home says so: " (:dropped late))))))))
+
+(deftest the-flee-prices-home-judgement-serves-the-flights-first-step-from-the-same-cell
+  ;; Fenwick j363/j381 (run4 F24): the price's survey kept nothing, so the step after it floods and walk-searches home again on the meter they share
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []) :perceive true))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 30.5)]
+              price (rooms/survey c home {:threats threats :keep? false})
+              step (rooms/survey c home {:threats threats})]
+          (is (= [true true] (mapv (comp :home? first :rooms) [price step])) "the home is a closed room both times")
+          (is (true? (get-in (ctx/mem c) [:refuge-rooms (rooms/cell-key home)])) "the price keeps the home's judgement")
+          (is (pos? (:ways-s price)) "the price walk-searches the way in")
+          (is (= [0 0] [(:ways-s step) (:spent-s step)]) (str "the step from the same cell runs neither again: " (select-keys step [:spent-s :ways-s]))))))))
 
 (deftest a-way-in-found-while-another-doors-search-was-cut-is-not-kept-as-the-best
   ;; card 9ccd6f0c: the cut door may hold the shorter way, so verdicts prices the room again
