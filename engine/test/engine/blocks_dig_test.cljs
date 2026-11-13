@@ -1032,14 +1032,6 @@
           (is (= "air" (block-at p under-feet)) "the body stepped beside and dug")
           (is (= 1 (count (calls p "dig")))))))))
 
-(deftest the-drops-collect-child-gets-the-worth-of-the-drops-not-the-callers
-  (let [drops #js [#js {:name "sugar_cane" :count 1}]
-        worth (dig/drops-worth drops)
-        args (dig/collect-args {:ids [7] :names ["sugar_cane"] :want 1 :worth worth} {:x 0 :y 63 :z 0})]
-    (is (pos? worth))
-    (is (= worth (:worth args)) "a drop far out of reach is dearer than itself, so it is left")
-    (is (not (contains? (dig/collect-args {:ids [7] :want 1} {:x 0 :y 63 :z 0}) :worth)) "drops with no measured worth inherit the caller's")))
-
 ;; ------------------------------------------------------------------ lava the dig lays open
 
 (def lava-under {:x 0 :y 62 :z 0})

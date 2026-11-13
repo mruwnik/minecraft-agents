@@ -8,6 +8,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.build.kept :refer [kept?]]
             [jobs.lib.choose :as choose]
@@ -97,11 +98,14 @@
     (vec (for [x (span (:x a) (:x b)) y (span (:y a) (:y b)) z (span (:z a) (:z b))] {:x x :y y :z z}))
     (into [] (comp (map a/cell) (distinct)) (:cells area))))
 
+(declare pending)
+
 (defn dig-args
-  "The jobs.blocks.dig args for the cell at pos: a tool that harvests it (fetched or made; snow, whose drop is a snowball, is dug by hand), the drop picked up, the job's :accept and opt-out."
+  "The jobs.blocks.dig args for the cell at pos: a tool that harvests it (fetched or made; snow, whose drop is a snowball, is dug by hand), the drop picked up, the job's :accept and opt-out; :worth the cell's even share of the job's worth over the cells still to dig (so a drop dearer to reach than its share is left; the last cell's share is the whole)."
   [c pos]
   (merge (select-keys (:args c) [:accept :ignore-zones? :for-plan])
-         {:pos pos :need-drop (not= "snow" (u/seen-name (:primitives c) pos)) :collect true :through false}))
+         {:pos pos :need-drop (not= "snow" (u/seen-name (:primitives c) pos)) :collect true :through false
+          :worth (cost/worth-left c (cost/others-share-s c 1 (max 1 (count (pending c)))))}))
 
 (defn named
   "[[pos block-name] ...] of the loaded cells not skipped."

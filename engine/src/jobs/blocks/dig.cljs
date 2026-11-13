@@ -13,7 +13,6 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
-            [jobs.lib.cost :as cost]
             [jobs.lib.cost.table :as table]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.pace :as pace]
@@ -55,7 +54,7 @@
   :hazards [:under-feet] :why :no-side-stand}. Only :accept :under-feet digs it from on top.
   In reach it holds the best carried tool (tools/equip!; by hand when a tool of another kind is held) and digs through
   jobs.lib.tidy/dig!, so a dig of another's block with :ignore-zones? is recorded for jobs.survival.restore-broken.
-  With :collect it picks up the drops (only the item entities that appeared with this dig, by id; the collect child is worth the drops' own measured worth, so a drop dearer to reach than itself is left). A cancel or limit after
+  With :collect it picks up the drops (only the item entities that appeared with this dig, by id). A cancel or limit after
   the block came out leaves the seal and the pickup to the cleanup.
   With :on-lava :seal (default), seen lava beside the dug cell is filled with a building block from the rim
   (jobs.lib.lava, a jobs.blocks.place child, event blocks.dig.sealed); the dug cell stays dug. When it cannot be (no block
@@ -301,20 +300,6 @@
         carried (fn [inv] (transduce (comp (filter (comp names :name)) (map :count)) + 0 inv))]
     (if (empty? drops) 1 (max 0 (- (transduce (map :count) + 0 drops) (- (carried after) (carried before)))))))
 
-(defn drops-worth
-  "Seconds the dug block's drops (JS array of {:name :count}) are worth (cost/goal-value), nil when they have no measured worth."
-  [drops]
-  (let [v (:value (cost/goal-value (mapv (fn [d] {:name (.-name d) :count (.-count d)}) (array-seq (or drops #js [])))))]
-    (when (pos? v) v)))
-
-(defn collect-args
-  "The collect-drops args for a dug block: the drops are worth what they are, not the whole of the caller's goal (a farm pass), so a walk to a drop that costs more is left."
-  [{:keys [ids names want worth]} pos]
-  (cond-> {:radius (collect-radius) :ids ids :holes [pos]}
-    (pos? want) (assoc :search search-blocks :least want)
-    (and (pos? want) (seq names)) (assoc :least-items names)
-    worth (assoc :worth worth)))
-
 (defn mark-full
   "The left drops with their reason :inventory-full when the body has no room for the block's drop now (the pickup filled the last stack), else as they are."
   [left room?]
@@ -323,8 +308,10 @@
 (defn ^:async collect!
   "Pick up the dug block's drops (jobs.items.collect-drops child); :continue while it waits, else the call's ending."
   [c pos]
-  (let [{:keys [block] :as dug} (:dug (ctx/mem c))
-        r (await (child/run!* c :collect 'jobs.items.collect-drops (collect-args dug pos)))]
+  (let [{:keys [block ids want names]} (:dug (ctx/mem c))
+        r (await (child/run!* c :collect 'jobs.items.collect-drops (cond-> {:radius (collect-radius) :ids ids :holes [pos]}
+                                                                               (pos? want) (assoc :search search-blocks :least want)
+                                                                               (and (pos? want) (seq names)) (assoc :least-items names))))]
     (if (= :continue r)
       :continue
       (let [res (:data r)]
@@ -374,8 +361,7 @@
     (case status
       "dug" (do (when (seq ids) (loose/owe! c (select-keys pos [:x :y :z]) (collect-radius)))
                 (ctx/update-mem! c assoc :dug {:block block :ids ids :names (vec (distinct (keep #(.-name %) (array-seq (or (.-drops r) #js [])))))
-                                               :want (drops-wanted (.-drops r) before (u/inventory (:primitives c)))
-                                               :worth (drops-worth (.-drops r))}) :collect)
+                                               :want (drops-wanted (.-drops r) before (u/inventory (:primitives c)))}) :collect)
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (finish! c {:dug false :pos pos :block block :reason :cannot})
       "unreachable" :unreachable

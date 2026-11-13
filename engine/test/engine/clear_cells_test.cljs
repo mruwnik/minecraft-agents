@@ -524,3 +524,13 @@
           (await (run-until-empty eng 20))
           (is (= ["air"] [(block-at p {:x 1 :y 64 :z 1})]))
           (is (some #(re-find #"cleanup-open" (str (:text %))) (kinds seen :cleanup_failed)) "the pillar still in the ledger is told, not ended :done"))))))
+
+(deftest each-cell-is-dug-at-its-share-of-the-jobs-worth
+  (let [p (tu/fake {:blocks {"1,64,1" "sugar_cane" "2,64,1" "sugar_cane" "1,64,2" "sugar_cane" "2,64,2" "sugar_cane"}})
+        c {:primitives p :mem (atom {}) :worth (constantly 800)
+           :args {:area {:cells [{:x 1 :y 64 :z 1} {:x 2 :y 64 :z 1} {:x 1 :y 64 :z 2} {:x 2 :y 64 :z 2}]}}}
+        worth-at (fn [c pos] (:worth (clear-cells/dig-args c pos)))]
+    (with-redefs [ctx/mem (fn [c] @(:mem c)) ctx/worth (fn [c] ((:worth c)))]
+      (is (= 200 (worth-at c {:x 1 :y 64 :z 1})) "one of four stalks: a quarter, not the whole pass")
+      (swap! (:mem c) assoc :skipped {{:x 2 :y 64 :z 1} :cannot {:x 1 :y 64 :z 2} :cannot {:x 2 :y 64 :z 2} :cannot})
+      (is (= 800 (worth-at c {:x 1 :y 64 :z 1})) "the last cell left carries the whole worth: a needed drop is still fetched"))))
