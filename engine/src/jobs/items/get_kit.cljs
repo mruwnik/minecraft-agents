@@ -488,7 +488,9 @@
               (do (ctx/update-mem! c assoc :fed true)
                   (when r
                     (ctx/emit! c :kit.no-food :warn {:cause (:reason r) :why (:why r) :food fp
-                                                     :text (str "no food found (" (name (:reason r)) ")")}))
+                                                     :text (if (= :no-carry (:reason r))
+                                                             (str "pack short of the kit's food (carries " fp " of " (kit-carry c) " points), no more found; going on")
+                                                             (str "no food found (" (name (:reason r)) ")"))}))
                   (if (and r (hungry? c))
                     (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hungry with no food carried and none found (" (or (:why r) (name (:reason r))) "); mining ahead needs some"))
                                                  :item (first todo)))

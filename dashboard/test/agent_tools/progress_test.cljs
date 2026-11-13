@@ -141,6 +141,10 @@
                 {:wake :idle :jobs [{:job "j1" :name "noop" :idle-ok true}
                                     {:job "j8" :name "pen" :holding {:reason :searching}}
                                     {:job "j9" :name "pen"}]}
+                {:wake :idle :jobs [{:job "j1" :name "noop" :holding {:reason :idle} :idle-ok true}
+                                    {:job "j35" :name "get-kit"}]}
+                {:wake :idle :jobs [{:job "j1" :name "noop" :idle-ok true}
+                                    {:job "j35" :name "get-kit" :waiting {:reason :risky :wait :dawn :recheck-after-ms 10000}}]}
                 {:wake :idle :jobs [{:job "j9" :name "noop" :idle-ok true}
                                     {:job "j14" :name "smelt" :waiting :cooking}]}
                 {:wake :idle :jobs [{:job "j14" :name "repeat" :waiting {:reason :resting :after :already}}]}
@@ -161,7 +165,6 @@
                        [{:wake :job-finished :job "j15" :result :stopped :message "unreachable"} :gave-up]
                        [{:wake :idle :jobs [{:job "j14" :name "obtain" :waiting {:reason :no-source}}]} :needs-you]
                        [{:wake :idle :jobs []} :needs-you]
-                       [{:wake :idle :jobs [{:job "j8" :name "pen"} {:job "j9" :name "pen"}]} :needs-you]
                        [{:wake :idle :jobs [{:job "j8" :name "pen" :holding {:reason :searching}}
                                             {:job "j9" :name "pen" :waiting {:reason :no-source}}]} :needs-you]
                        [{:wake :idle :jobs [{:job "j1" :name "noop" :idle-ok true}]} :needs-you]

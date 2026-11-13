@@ -428,6 +428,7 @@
         (let [s (start (hungry-world [{:name "bread" :count 2}] 16) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= [:no-carry] (mapv :cause (f/events-of s :kit.no-food))))
+          (is (str/includes? (:text (first (f/events-of s :kit.no-food))) "pack short") "carried food is not called none")
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 

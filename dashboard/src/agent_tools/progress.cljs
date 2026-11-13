@@ -131,10 +131,11 @@
 
 (defn routine-wait?
   "A wait the engine ends itself: a routine reason, a repeat's rest judged like the ending it follows (a round done,
-  or one that ended for a routine reason such as :nothing-to-do; a failed round's rest still wakes), or a check that
-  daylight lowers (:lowered-by has :light)."
+  or one that ended for a routine reason such as :nothing-to-do; a failed round's rest still wakes), a check that
+  daylight lowers (:lowered-by has :light), or a wait that names its end (:wait :dawn)."
   [waiting]
   (or (contains? routine-reasons (reason-of waiting))
+      (and (map? waiting) (some? (:wait waiting)))
       (and (= :resting (reason-of waiting)) (map? waiting)
            (or (= :done (:kind waiting)) (= :already (:after waiting)) (contains? routine-reasons (:after waiting))))
       (and (map? waiting) (boolean (some #(= "light" (word %)) (:lowered-by waiting))))))
@@ -262,11 +263,11 @@
   (and (not (:idle-ok job)) (or (:failed job) (and (:waiting job) (not (routine-wait? (:waiting job)))))))
 
 (defn routine-idle?
-  "Whether a body.idle is the engine working normally: some job holds on purpose or waits for a routine reason, and
-  no job failed or waits for another. Jobs with neither (queued behind the running one) do not count; idle-ok jobs
-  (a noop) neither."
+  "Whether a body.idle is the engine working normally: a job other than an idle-ok one is running (holding, waiting
+  for a routine reason, or between steps with no act: a smelting job alternates holds and such gaps) and none failed
+  or waits for another. A job stuck for good is caught by --stall."
   [jobs]
-  (boolean (and (some routine-job? (remove :idle-ok jobs)) (not-any? waking-job? jobs))))
+  (boolean (and (some (complement :idle-ok) jobs) (not-any? waking-job? jobs))))
 
 (defn failed-rest? [job] (and (waking-job? job) (= :resting (reason-of (:waiting job)))))
 
