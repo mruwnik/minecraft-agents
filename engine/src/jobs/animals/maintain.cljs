@@ -7,9 +7,11 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
+            [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
@@ -32,8 +34,9 @@
   - :mend (jobs.build.pen over the whole :plan, only with :plan): a fence, gate or wall cell of the plan beside the box
     was seen as something else (blown away), so the plan's fence is built again, at the pass's worth (with a :mob). Only cells the body has seen count; a gap
     that stays rests the pen.
-  - :herd (jobs.animals.herd for 2 adults, or :target if less): fewer adults than that are in the box, so breeding cannot start; herd fetches
-    and searches for animals of the kind within ::herd-radius (64) of the body and brings them in.
+  - :herd (jobs.animals.herd, :target at most): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
+    adults of the kind are listed outside the box (in no enclosure, on ground the zones let it take from) whose cost/animal-worth beats the
+    walk to each and on to the pen; herd brings the box up to the pair plus those strays, fetching and searching within ::herd-radius (64) of the body.
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
     food carried (breed fetches it unless the ways are only #{:carried}).
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
@@ -45,7 +48,7 @@
   A body outside the box that lists fewer animals of the kind in it than the target first walks to the box (go-to, once; the server
   lists animals only near the body) and counts again; the job starts for that look.
 
-  A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :at-pair,
+  A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :no-strays,
   :too-few-adults, :cooldown (fewer than two adults not fed or refused within the breeding cooldown), :no-food and :no-shears (only with ways #{:carried}), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
@@ -146,14 +149,33 @@
                               (and (pg/open-gate? seen) (not (held (vec pos))))))]
            pos))))
 
+(defn strays
+  "How many adults of the kind the body lists within ::herd-radius outside the box, in no closed enclosure and on ground the
+  zone rules let it take from, are worth more (cost/animal-worth) than the walk to each and on to the pen."
+  [c]
+  (let [{:keys [mob]} (:args c)
+        {:keys [min max] :as box} (pen-read/arg-box c)
+        here (u/self-pos c)
+        mid {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)}
+        pens (atom #{})
+        out (into [] (remove #(or (animals/in-box? box (u/pos-of (.-pos %))) (spare/enclosed? c pens %)))
+                  (animals/adults (:primitives c) mob (herd-radius)))
+        ok (set (:allowed (gate/look c :take (map animals/cell-of out) {:own-plans-ok? true})))
+        worth (cost/animal-worth mob)]
+    (count (filter #(let [pos (u/pos-of (.-pos %))]
+                      (and (ok (animals/cell-of %))
+                           (< (* (cost/walk-step-s) (+ (u/dist here pos) (u/dist pos mid))) worth)))
+                   out))))
+
 (defn facts
-  "What the decisions are made from, read live."
+  "What the decisions are made from, read live; :strays only while the box holds fewer adults than :target."
   [c]
   (let [{:keys [adults babies]} (hunting/census c)
         inventory (u/inventory (:primitives c))
         stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))]
     {:gaps (missing-barrier c)
      :adults (count adults)
+     :strays (if (and (:mob (:args c)) (< (count adults) (:target (:args c)))) (strays c) 0)
      :ready (count (remove (comp (animals/cooling c) animals/key-of) adults))
      :babies (count babies)
      :drops (drops-in-box c)
@@ -176,11 +198,18 @@
                           mob (assoc :worth (mend-worth args facts))
                           (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
 
+(defn herd-target
+  "The adults herd is to bring the box up to: a breeding pair (or :target if less), more while worthwhile strays are listed, :target at most."
+  [target adults strays]
+  (max (min 2 target) (min target (+ adults (or strays 0)))))
+
 (defn decide-herd
-  [{:keys [mob box ways target]} {:keys [adults]}]
-  (if (<= (min 2 target) adults)
-    {:skip :at-pair}
-    {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target) :radius (herd-radius)} (some? ways) (assoc :ways ways))}}))
+  [{:keys [mob box ways target]} {:keys [adults strays]}]
+  (let [want (herd-target target adults strays)]
+    (cond
+      (<= target adults) {:skip :at-target}
+      (<= want adults) {:skip :no-strays}
+      :else {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target want :radius (herd-radius)} (some? ways) (assoc :ways ways))}})))
 
 (defn decide-breed
   [{:keys [mob target ways box]} {:keys [adults ready babies food reach]}]
@@ -286,8 +315,8 @@
   (one pair, one calf) and cull steps would add or kill, the goal-value of the wool its shear and of the drops its collect
   would take, what the herd would lose through the fence gaps its mend would close (cost/gap-loss) and the goal-value of
   the produce its deposit would store (none without a :chest)."
-  [{:keys [mob target chest]} {:keys [adults babies drops shearable gaps stored-items]}]
-  (let [heads (+ (max 0 (- (min 2 target) adults))
+  [{:keys [mob target chest]} {:keys [adults babies strays drops shearable gaps stored-items]}]
+  (let [heads (+ (max 0 (- (herd-target target adults strays) adults))
                  (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
                  (max 0 (- adults (max 2 (- target babies)))))
         items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) (when chest stored-items))

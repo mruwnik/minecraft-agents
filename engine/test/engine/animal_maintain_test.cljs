@@ -220,13 +220,30 @@
           (is (= :stopped (:kind (done-event s))) "a failed herd that brought nobody is no done")
           (is (= (get-in (done-event s) [:steps :herd :cause]) (or (:cause (done-event s)) (get-in (done-event s) [:data :cause])))))))))
 
-(deftest herd-is-asked-for-a-pair-or-the-target-if-less
-  (are [expected target adults] (= expected (maintain/decide :herd {:mob "cow" :box box :target target} {:adults adults}))
-    {:skip :at-pair} 4 2
-    {:skip :at-pair} 0 0
-    {:skip :at-pair} 1 1
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 2 :radius 64}}} 4 1
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 1 :radius 64}}} 1 0))
+(deftest herd-is-asked-for-a-pair-and-the-strays-worth-bringing-up-to-the-target
+  (are [expected target adults strays] (= expected (maintain/decide :herd {:mob "cow" :box box :target target} {:adults adults :strays strays}))
+    {:skip :no-strays} 4 2 0
+    {:skip :at-target} 0 0 0
+    {:skip :at-target} 1 1 3
+    {:skip :at-target} 4 5 2
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 2 :radius 64}}} 4 1 0
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 1 :radius 64}}} 1 0 0
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 3 :radius 64}}} 4 2 1
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 4 :radius 64}}} 4 2 5))
+
+(deftest escaped-adults-outside-the-pen-are-herded-back-up-to-the-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [call ctx/call
+              asked (atom nil)]
+          (set! ctx/call (fn [c slot job args]
+                           (if (= :herd slot)
+                             (do (reset! asked args) (js/Promise.resolve (contract/ending :condition-failed {:reason :no-gate :text "stub"} nil)))
+                             (call c slot job args))))
+          (try (await (scenario {:target 4} {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) (cow 3 12 0) (cow 4 13 1) (cow 5 14 -1)]} 12))
+               (finally (set! ctx/call call)))
+          (is (= 4 (:target @asked)) "two penned, three strays near: herd brings the pen up to 4, not just a pair"))))))
 
 (deftest items-inside-the-box-are-collected-and-those-outside-left
   (async done
@@ -322,7 +339,7 @@
               r (done-event s)]
           (is (= {:mob "cow" :target 4 :adults 4 :babies 0} (select-keys r [:mob :target :adults :babies])))
           (is (= [:mend :herd :breed :cull :shear :collect :deposit] (vec (keys (:steps r)))))
-          (is (= {:mend {:skipped :no-plan} :herd {:skipped :at-pair} :breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
+          (is (= {:mend {:skipped :no-plan} :herd {:skipped :at-target} :breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
                  (select-keys (:steps r) [:mend :herd :breed :shear :deposit]))))))))
 
 (deftest the-pure-pieces-decide-from-facts
