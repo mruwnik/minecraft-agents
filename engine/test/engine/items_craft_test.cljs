@@ -888,6 +888,10 @@
     (is (= [4 4 4] (get-in q [:yields :items "oak_planks"])))
     (is (= [0 1 1] (get-in q [:uses :items "oak_log"])))))
 
+(deftest the-quote-counts-the-walk-to-a-seen-table-beyond-reach
+  (let [mean (fn [table] (second (get-in ((:quote-of (get registry/jobs job)) {:primitives (tu/fake {:inventory [{:name "wheat" :count 3}]}) :args {:item "bread" :count 1 :table table}}) [:uses :job-time])))]
+    (is (< (mean {:x 2 :y 64 :z 0}) (mean {:x 30 :y 64 :z 0})))))
+
 (deftest a-craft-ends-with-a-kind-and-a-cause
   (async done
     (tu/run-async done

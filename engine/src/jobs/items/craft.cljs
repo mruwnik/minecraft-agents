@@ -55,13 +55,17 @@
 (def target [:item])
 (def ways need/fetch-ways)
 
+(defn walk-s
+  "Seconds of the walk to a seen table beyond reach and back; 0 when none is seen or it is in reach."
+  [c]
+  (let [table (or (:table (:args c)) (crafting-table/nearest (:primitives c) table-radius))
+        away (if table (max 0 (- (u/dist (u/self-pos c) table) (reach))) 0)]
+    (/ (* 2 away) (cost/walk-blocks-per-s))))
+
 (defn stay-s
   "Seconds the craft keeps the body where it is: the batches and the walk to a seen table beyond reach and back."
   [c]
-  (let [p (:primitives c)
-        table (or (:table (:args c)) (crafting-table/nearest p table-radius))
-        away (if table (max 0 (- (u/dist (u/self-pos c) table) (reach))) 0)]
-    (+ (* (max 1 (or (:count (:args c)) 1)) (batch-s)) (/ (* 2 away) (cost/walk-blocks-per-s)))))
+  (+ (* (max 1 (or (:count (:args c)) 1)) (batch-s)) (walk-s c)))
 
 (def safe? (price/stays ready/safe-here-by-night stay-s))
 (def fit? ready/ok)
@@ -183,7 +187,7 @@
         st {:have (storage/carried-totals (u/inventory p))}
         r (first (sort-by #(recipes/short-count st % (recipes/ceil-div count (:count %))) rs))
         batches (if r (recipes/ceil-div count (:count r)) 0)
-        mean (+ 1 (* batches (batch-s)))]
+        mean (+ 1 (* batches (batch-s)) (walk-s c))]
     (cond-> {:uses {:job-time [(* batches (batch-s)) mean (max mean (time-s))]}}
       r (assoc-in [:yields :items item] [count (* batches (:count r)) (* batches (:count r))])
       (seq (dissoc (:needs r) item))
