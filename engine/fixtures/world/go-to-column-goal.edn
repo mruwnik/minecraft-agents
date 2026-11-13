@@ -2,7 +2,7 @@
 ;; Plot 90 long, stone floor at y -1; the plateau cases build a 12-high plateau reached by a 1-per-step ramp, so the ground at the
 ;; goal column is more than 8 above/below the feet (perception is 16 blocks, so the far column is unseen from the start).
 ;; Should-succeed: column goal, :unknown far plateau/valley column, y 3 off, far plateau column, valley column, y goal inside the far plateau, :unknown goal inside a mound,
-;; :unknown block goal with :range 1 (stands beside it). Should-fail: a column behind a bottomless gap ends :arrived false, bounded.
+;; :unknown block goal with :range 1 (stands beside it), a column in a roofed hut (its floor), a wall under an eave (the ground beside it). Should-fail: a column behind a bottomless gap ends :arrived false, bounded.
 {:defaults
  {:tags [:movement :go-to :column]
   :time :any
@@ -95,4 +95,18 @@
             [:fill [20 0 8] [40 5 24] "stone"] [:fill [22 0 14] [36 2 18] "air"] [:fill [20 0 16] [21 1 16] "air"]]
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
-   :after [[:body-near [30.5 6 16.5] 2.5]]}]}
+   :after [[:body-near [30.5 6 16.5] 2.5]]}
+  {:name "column-goal-in-a-roofed-hut-arrives-on-its-floor"
+   ;; card 74623624: a roof is cover, the plank floor under it is the column's ground; nothing of the hut is dug
+   :blocks [[:fill [30 0 14] [34 0 18] "oak_planks"] [:fill [30 1 14] [34 3 18] "cobblestone"] [:fill [30 4 14] [34 4 18] "oak_planks"]
+            [:fill [31 1 15] [33 3 17] "air"] [:fill [30 1 16] [30 2 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [32 16] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [32.5 1 16.5] 1.5] [:block [32 4 16] "oak_planks"] [:block [34 2 16] "cobblestone"]]}
+  {:name "column-goal-on-a-wall-under-an-eave-arrives-beside-it"
+   ;; card 74623624 (run 4): the column is a court wall under a slab eave; neither the eave nor the wall top is ground, the ground beside it is
+   :blocks [[:fill [30 0 10] [30 0 22] "mossy_cobblestone"] [:fill [30 1 10] [30 1 22] "cobblestone_wall"] [:set [30 2 16] "lantern"]
+            [:fill [29 3 10] [31 3 22] "oak_slab"]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 16] :range 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [30.5 0 16.5] 2.5] [:block [30 1 16] "cobblestone_wall"] [:block [30 3 16] "oak_slab"]]}]}

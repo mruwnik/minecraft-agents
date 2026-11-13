@@ -185,11 +185,20 @@
         p (hiding tree (constantly false))]
     (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true)))))
 
-(deftest a-roof-over-a-column-is-not-its-surface
-  (let [house (merge flat (box 10 65 0 10 65 0 "oak_planks") (box 10 66 0 10 66 0 "oak_slab"))
-        p (hiding house (constantly false))]
-    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true))
-        "a built roof is cover like a canopy: the column's ground, not the roof")))
+(deftest a-roof-over-a-column-is-not-its-surface-but-a-built-floor-is
+  (doseq [[why blocks y] [["a roof over the ground" (merge (box 10 66 0 10 66 0 "oak_planks") (box 10 67 0 10 67 0 "oak_slab")) 64]
+                          ["a plank floor under a roof" (merge (box 8 64 -1 12 64 1 "oak_planks") (box 8 68 -1 12 68 1 "oak_planks")) 65]
+                          ["a plank path" (box 8 64 0 12 64 0 "oak_planks") 65]
+                          ["farmland" (box 8 64 -1 12 64 1 "farmland") 65]
+                          ["a stone-brick terrace" (box 6 64 -2 14 65 2 "stone_bricks") 66]]]
+    (is (= {:pos {:x 10 :y y :z 0} :resolved true :why :surface} (column/aim (hiding (merge flat blocks) (constantly false)) {:x 10 :z 0} 4 64 true))
+        why)))
+
+(deftest a-wall-under-an-eave-aims-at-the-ground-beside-it-not-its-top
+  (let [court (merge flat (box 10 64 0 10 64 0 "mossy_cobblestone") (box 10 65 0 10 65 0 "cobblestone_wall")
+                     (box 10 66 0 10 66 0 "lantern") (box 9 67 -1 11 67 1 "oak_slab"))]
+    (is (= {:pos {:x 10 :y 64 :z 0}} (column/aim (hiding court (constantly false)) {:x 10 :z 0} 4 80 true))
+        "the run-4 court wall: the eave and the wall top are no stand; the ground of the columns beside it, not the feet y")))
 
 (deftest a-tree-column-with-its-ground-unseen-is-not-aimed-at-a-seen-tunnel-far-below
   (let [world (merge flat (box 0 10 -3 40 62 3 "stone") (box 10 16 0 10 17 0 "air")

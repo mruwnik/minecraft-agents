@@ -24,16 +24,14 @@
     (boolean (and b (not (true? (.-unknown b))) (trees/log-name? (.-name b))))))
 
 (defn surface-kind-at
-  "As seen-kind-at, a log, leaf or built solid (a roof, wall top, eave: not rules/natural?) read as :open: a tree or a build is
-  not the surface, the ground under it is. The ground under a trunk is never in
+  "As seen-kind-at, a log or leaf block read as :open: a tree is not the surface. The ground under a trunk is never in
   view (the trunk covers it, the ground beside it hides its sides): an unseen cell under a log reads :solid."
   [p]
   (if (some? (.-sensedAt p))
     (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})]
                   (cond (nil? b) (if (trunk-over? p x y z) :solid :unknown)
                         (surface/canopy? (.-name b)) :open
-                        :else (let [k (kind b)]
-                                (if (and (keyword-identical? :solid k) (not (rules/natural? (.-name b)))) :open k)))))
+                        :else (kind b))))
     (constantly :unknown)))
 
 (defn seen-kind-at
@@ -46,14 +44,39 @@
 
 (defn free? [k] (or (keyword-identical? :open k) (keyword-identical? :water k)))
 
+(defn built-at
+  "(fn [x y z]) -> whether the body of p sees a built block there that a walker cannot pass (not rules/natural?: a floor,
+  roof, wall or fence)."
+  [p]
+  (if (some? (.-sensedAt p))
+    (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})]
+                  (boolean (and b (not (surface/canopy? (.-name b))) (not (rules/natural? (.-name b)))
+                                (#{:solid :tall} (kind b))))))
+    (constantly false)))
+
+(defn roof-under
+  "For a built floor at x y z: the y of the cell under its built blocks when they are a roof, not ground (they end on a
+  free cell: a roof or eave over a walkable space; or hold a wall or fence, which no one walks on), else nil."
+  [kind-at built? x y z lo]
+  (loop [y y tall? false]
+    (if (and (>= y lo) (built? x y z))
+      (recur (dec y) (or tall? (keyword-identical? :tall (kind-at x y z))))
+      (when (or tall? (free? (kind-at x y z))) y))))
+
 (defn top
   "The y of the highest stand of the column x z (from lo to hi: default the build height) with no solid or hazard over it
-  up to hi, else nil."
-  ([kind-at x z lo hi]
+  up to hi, else nil. With built? ((fn [x y z]), built-at), a roof (roof-under) is cover, not a stand: the stand under it
+  counts."
+  ([kind-at x z lo hi] (top kind-at x z lo hi (constantly false)))
+  ([kind-at x z lo hi built?]
    ;; one read per cell, as stands? reads them: the feet of y are the head of y - 1
    (loop [y hi head (kind-at x (inc y) z) feet (kind-at x y z)]
      (when (>= y lo)
        (let [floor (kind-at x (dec y) z)]
-         (cond (and (free? feet) (free? head) (or (keyword-identical? :water feet) (keyword-identical? :solid floor))) y
+         (cond (and (free? feet) (free? head) (keyword-identical? :solid floor))
+               (if-let [b (roof-under kind-at built? x (dec y) z lo)]
+                 (recur b (kind-at x (inc b) z) (kind-at x b z))
+                 y)
+               (and (free? feet) (free? head) (keyword-identical? :water feet)) y
                (#{:solid :hazard} feet) nil
                :else (recur (dec y) feet floor)))))))

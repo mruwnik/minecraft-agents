@@ -144,8 +144,8 @@
         (is (zero? (surface/climb-s c)) "climbed? : out on open ground since")))
     (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
                                                         :blocks (merge (dissoc (box -3 63 -3 3 67 3 "stone") "0,64,0" "0,65,0")
-                                                                       (box 2 68 0 2 68 0 "stone"))})))
+                                                                       (box 2 68 0 2 68 0 "cobblestone"))})))
           c {:primitives p}]
       (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [{:data {:dim dim :floors [[2 68 0]]}}])]
-        (is (= {:x 2 :y 69 :z 0} (surface/own-top c)))
+        (is (= {:x 2 :y 69 :z 0} (surface/own-top c)) "a placed cobblestone step is ground, not a roof")
         (is (zero? (surface/climb-s c)) "own-top : a stair of its own ends under the open sky")))))
