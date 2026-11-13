@@ -46,7 +46,7 @@
     wait :bees-indoors before every round.
   - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :ways #{:carried} waits for food; a failed fetch ends with the fetch's own ending, reason :no-food, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
     :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
-  - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
+  - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable, or the walk to :box failed)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
   - every ending but done carries :next (jobs.lib.next-call): a failed fetch's calls, then the breed again.
 
@@ -225,7 +225,7 @@
       :too-few (str "fewer than two " mob " adults within " radius " blocks; go to the herd, widen :radius or pass :box")
       :no-food (str "no food for " mob " carried and none fetched; bring some")
       :food-out "the food ran out; bring more"
-      :unreachable "an animal could not be reached; open a way in or pass :box"
+      :unreachable "an animal or the :box pen could not be reached; open a way in"
       :unpaired "an odd number was fed; another adult is needed"
       :no-baby "a pair was fed but no calf showed; look again later"
       nil)))
@@ -395,12 +395,14 @@
   [(js/Math.floor x) (js/Math.floor z)])
 
 (defn ^:async walk-to-pen!
-  "Walk to the middle of the known pen, once. Resolves to :continue while the walk goes on, else :again."
+  "Walk to the middle of the known pen, once. Resolves to :continue while the walk goes on, :again once there, and the
+  run's ending :unreachable (go-to's ending as its :because) when the walk failed."
   [c box]
   (let [r (await (child/call-walk* c :pen {:pos (pen-read/look-pos box) :range 3}))]
-    (if (= :continue r)
-      :continue
-      (do (ctx/update-mem! c assoc :pen-walked true) :again))))
+    (cond
+      (= :continue r) :continue
+      (not= :done (:kind r)) (await (finish! c :unreachable r))
+      :else (do (ctx/update-mem! c assoc :pen-walked true) :again))))
 
 (defn ^:async leave-pen!
   "Walk back to where the run started when it ends with the body inside the known pen. Resolves to :continue while the

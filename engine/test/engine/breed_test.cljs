@@ -507,6 +507,18 @@
           (is (< x 6) "back outside the pen")
           (is (false? (gate-open? s))))))))
 
+(deftest breed-ends-unreachable-when-the-walk-to-a-known-pen-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow" :box known-pen}
+                                 {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
+                                  :unreachable (vec (for [x (range 7 20) z (range -7 8)] (str x ",64," z)))
+                                  :entities [(cow 1 19 {:pos {:x 19 :y 64 :z 1}}) (cow 2 19 {:pos {:x 19 :y 64 :z -1}})]} 40))
+              e (done-event s)]
+          (is (= :unreachable (:reason e)) "a failed walk to :box is not too-few")
+          (is (empty? (interacts s))))))))
+
 (deftest breed-with-the-animals-already-in-view-still-walks-out-of-a-known-pen
   (async done
     (tu/run-async done
