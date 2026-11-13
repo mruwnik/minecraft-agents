@@ -419,10 +419,10 @@
                      (cond-> {:column col :any-of (vec items) :count (:count cause 1)}
                        (= :any col) (assoc :trees (mapv (comp (juxt :x :z) :column) (part-cut/part-cut-trees (:primitives c) (trees/part-cut-owed (ctx/view c)) default-radius nil))))
                      trees/need-policy))
-    (when-let [{:keys [x z]} (:column (ctx/mem c))]
-      (if (= :done (:kind e))
-        (ctx/forget-where! c trees/part-cut-kind #(= [x z] (vec (:column %))))
-        (log/owe-part-cut! c))))
+    (if (= :done (:kind e))
+      (let [cols (log/cut-columns c)]
+        (ctx/forget-where! c trees/part-cut-kind #(contains? cols (vec (:column %)))))
+      (log/owe-part-cut! c)))
   (await (pillar/cleanup c e)))
 
 (def target [:at])

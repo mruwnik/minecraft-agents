@@ -106,13 +106,18 @@
       (ctx/remember! c replant-kind {:pos at :species species} {:cap 50 :ttl :forever :durable? true})
       at)))
 
-(defn owe-part-cut!
-  "Record the chosen column as owed (trees/part-cut-kind) when logs of it were cut: the tree stands part-cut until a fell-tree finishes it."
+(defn cut-columns
+  "Every [x z] column the body cut a log of in this tree, plus the chosen one: a tree's connected logs stand in neighbouring columns too."
   [c]
   (let [{:keys [column cut-cells]} (ctx/mem c)]
-    (when (and column (seq cut-cells))
-      (ctx/forget-where! c trees/part-cut-kind #(= [(:x column) (:z column)] (vec (:column %))))
-      (ctx/remember! c trees/part-cut-kind {:column [(:x column) (:z column)]} trees/part-cut-policy))))
+    (into (if column #{[(:x column) (:z column)]} #{}) (map (fn [[x _ z]] [x z])) cut-cells)))
+
+(defn owe-part-cut!
+  "Record every column logs were cut in as owed (trees/part-cut-kind): the tree stands part-cut until a fell-tree finishes it."
+  [c]
+  (doseq [col (when (seq (:cut-cells (ctx/mem c))) (cut-columns c))]
+    (ctx/forget-where! c trees/part-cut-kind #(= col (vec (:column %))))
+    (ctx/remember! c trees/part-cut-kind {:column col} trees/part-cut-policy)))
 
 (defn mark-unreachable!
   "Remember the chosen column as unreachable and forget the choice; why (the walk's give-up reason) is kept for the end."

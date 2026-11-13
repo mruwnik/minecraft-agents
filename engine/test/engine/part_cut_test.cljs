@@ -98,12 +98,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 9))
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 9)
+                                                (into {} (for [y (range 64 73)] [(fm/k 7 y 0) "oak_log"])))
                                          :zones [{:name "vault" :min [5 68 -1] :max [7 80 1] :allow #{:place}}]})
               out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 12 :ways #{:carried}} 600))]
           (is (not= :done (:status out)) "the felling ended without the tree down")
           (is (seq (fm/digs p)) "some logs were cut")
-          (is (= [{:column [6 0]}] (map :data (mem/entries (mem/view (:store eng)) trees/part-cut-kind)))))))))
+          (is (= (set (map (fn [[x _ z]] [x z]) (fm/digs p)))
+                 (set (map (comp vec :column :data) (mem/entries (mem/view (:store eng)) trees/part-cut-kind))))
+              "every column logs were cut in is owed, the neighbouring one too"))))))
 
 (def stumped
   "An oak of 5 logs at x 6 cut at its second log: the stump on the ground, three logs over the gap, leaves on top."
