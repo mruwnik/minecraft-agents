@@ -4,10 +4,11 @@
             [engine.game :as game]
             [engine.notes :as notes]
             [jobs.lib.crafting-table :as crafting-table]
+            [jobs.lib.crops :as crops]
             [jobs.items.obtain.base :refer [explore-opts gathers? makes? plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
-            [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
+            [jobs.items.obtain.seen :refer [growable? ripe-crop seen-of sheep-in-range shears-source standing-crops]]
             [jobs.items.obtain.table :refer [gather-needs grass-seeds leaves-of material-blocks need-way searchable? stalks wool-color wool?]]
             [jobs.lib.sources :refer [hand-dug source-opts]]
             [jobs.lib.recipes :as recipes]
@@ -179,17 +180,31 @@
         (= "lava" name) (when (= "obsidian" (:key need)) "obsidian")
         :else name))
 
+(defn grow-s
+  "Seconds a growable crop need (seen/growable?) with no ripe crop seen waits for the grow child: its standing crops
+  ripening from the most grown (as many growths as its count over their cells takes; cost/ripen-s), else, none
+  standing, jobs.farm.grow's field tilled, sown and ripened from seed. 0 for any other need."
+  [c need]
+  (if-not (and (growable? need) (not (ripe-crop c need)))
+    0
+    (let [crop (:crop need)
+          standing (standing-crops c need)
+          {:keys [w h]} crops/starter-field]
+      (if (seq standing)
+        (cost/ripen-s crop (:count need) (count standing) (apply max (map #(or (:age %) 0) standing)))
+        (+ (cost/ripen-s crop (:count need) (* w h) 0) (cost/field-step-s :till (* w h)) (cost/field-step-s :plant (* w h)))))))
+
 (defn need-cost
   "Seconds to gather a need whose nearest block is seen, a lower bound (the walk's danger is go-to's to price): the
-  straight walk there, the digs (see dug-block), a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
-  loot holds none), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
+  straight walk there (none to a crop still to be sown: grow-s), the digs (see dug-block), a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
+  loot holds none), a growable crop's wait for the grow (grow-s), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
   the body's kit)."
   [c need]
   (let [p (:primitives c)
         src (seen-of c need)
         {:keys [pos name]} (if (map? src) src {:pos (u/pos-of (.-pos src))})
         self (u/self-pos c)
-        d (u/dist self pos)
+        d (if pos (u/dist self pos) 0)
         walk (:cost (cost/walk-cost {:distance d}))
         mob (:mob need)
         kills (when (and mob (cost/hostile? (game/version-of p) {:name mob}))
@@ -199,7 +214,7 @@
         dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost (dug-block need name)) 0)))]
     (if (and (:ore? need) (below? c need) (unlit? p pos))
       (+ dig (cost/dark-way-s walk d (threats/body-of p)))
-      (+ walk dig))))
+      (+ walk dig (grow-s c need)))))
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each its walk (its

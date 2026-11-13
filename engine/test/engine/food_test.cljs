@@ -554,11 +554,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 19}})]
+        (let [{:keys [eng p seen]} (setup {:self {:food 10} :inventory [{:name "apple" :count 6}]})]
           (core/submit! eng (tu/order '(jobs.survival.get-food {:carry 0})) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= [] (tu/walk-calls p))))))))
+          (is (= [] (tu/walk-calls p)))
+          (is (= [] (calls p "eat")) "food 10 at full health is above the hungry line: the apples are kept")
+          (let [end (first (filter #(and (= :job (:source %)) (= :completed (:kind %))) @seen))]
+            (is (= "fed: food 10, hungry below 7" (:text end)) "a fed ending names the food and the line, not a meal")
+            (is (= 0 (get-in end [:report :left])) "a completed goal has no points left")))))))
 
 (def farm
   {:blocks {"10,64,0" "carrots" "11,64,0" "carrots" "12,64,0" "carrots" "10,63,0" "farmland"}

@@ -64,12 +64,13 @@
 (defn bread-worth [] (:value (cost/goal-value [{:name "bread" :count 1}])))
 
 (defn ^:async gathered-via
-  "The child an obtain of one wheat, worth what a caller's bread is (a lone wheat is not worth growing a field), gathers by."
-  [world]
+  "The child an obtain of one wheat worth `worth` (default what a caller's bread is) gathers by, nil when it gathers by none."
+  ([world] (gathered-via world (bread-worth)))
+  ([world worth]
   (let [s (grow/setup world)
-        _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops} :worth (bread-worth)}) {})
+        _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops} :worth worth}) {})
         _ (await (tu/run-ticks (:eng s) (:clock s) 6 700))]
-    (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s))))))
+    (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s)))))))
 
 (defn ^:async gathered-under
   "The child an obtain of one wheat (no :worth of its own) called by a parent of worth `worth` gathers by, nil when it gathers by none."
@@ -94,8 +95,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= 'jobs.farm.grow (await (gathered-via {}))) "nothing seen")
-        (is (= 'jobs.farm.grow (await (gathered-via (young-or-ripe 3)))) "a crop still growing")
+        (is (= 'jobs.farm.grow (await (gathered-via {} 100000))) "nothing seen")
+        (is (= 'jobs.farm.grow (await (gathered-via (young-or-ripe 3) 100000))) "a crop still growing")
+        (is (nil? (await (gathered-via (young-or-ripe 3)))) "the wait for a growing crop is dearer than a bread")
         (is (= 'jobs.farm.harvest (await (gathered-via (young-or-ripe 7)))) "a ripe crop")))))
 
 (deftest a-ripe-crop-far-from-the-body-is-harvested

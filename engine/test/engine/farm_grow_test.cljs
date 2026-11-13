@@ -6,24 +6,29 @@
             [engine.registry :as registry]
             [engine.triggers :as triggers]
             [engine.farm-tend-test :as ft]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.world-files :as ew]))
 
 (defn setup
-  "As ft/setup, the clock moving 5 s with every primitive call, so a wait ends by time."
-  [spec]
+  "As ft/setup, the clock moving 5 s with every primitive call, so a wait ends by time; plans {id plan} in its world."
+  ([spec] (setup spec nil))
+  ([spec plans]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor spec))
         now (tu/act-clock clock p 5000)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
-                          :events (events/make {:body "Fake" :sinks [sink] :now now})})]
-    {:eng eng :p p :seen seen :clock clock}))
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                                  :events (events/make {:body "Fake" :sinks [sink] :now now})}
+                           plans (assoc :world (ew/of-data plans {} []))))]
+    {:eng eng :p p :seen seen :clock clock})))
 
-(defn ^:async scenario [args spec n]
-  (let [s (setup spec)]
+(defn ^:async scenario
+  ([args spec n] (scenario args spec n nil))
+  ([args spec n plans]
+  (let [s (setup spec plans)]
     (core/submit! (:eng s) (tu/order (list 'jobs.farm.grow args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
-    s))
+    s)))
 
 (def kit [(ft/item "iron_hoe" 1) (ft/item "wheat_seeds" 9)])
 
@@ -50,6 +55,14 @@
           (is (some #(= :limit_reached (:kind %)) @(:seen s)) "waited for it to ripen until its time was up")
           (is (= 9 (get (ft/inv s) "wheat_seeds")) "no seed was sown")
           (is (empty? (ft/calls s "dig"))))))))
+
+(deftest a-growing-field-in-a-plan-of-the-bodys-own-is-waited-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plans {"farm" {:id "farm" :metadata {:by "Fake"} :parts [{:id "wheat" :cells [[2 64 2]] :want "wheat"}]}}
+              s (await (scenario {:count 2 :spend {:job-time 120}} (ft/world (ft/farm "wheat" 2 [[2 2]] [[2 2]]) ft/wheat-drops {:inventory kit}) 60 plans))]
+          (is (= 9 (get (ft/inv s) "wheat_seeds")) "no field of its own was sown beside it"))))))
 
 (deftest a-growing-wait-ends-the-round-so-a-queued-job-takes-its-turn
   (async done

@@ -18,6 +18,7 @@
             [jobs.lib.recipes :as recipes]
             [jobs.lib.cost :as cost]
             [jobs.lib.surface-up :as surface]
+            [jobs.lib.world-files :as ew]
             [jobs.items.get-kit :as kit]))
 
 (defn rooted
@@ -371,3 +372,29 @@
         pl (plan/gather-plan (assoc-in c [:args :item] "campfire") ["campfire"] 1)]
     (is (some? pl))
     (is (nil? (:gather pl)) "no coal gathered")))
+
+(defn wheat-cost
+  "need-cost of 24 wheat (8 loaves) for a body at x on a floor round it, with world's blocks and the plans {id plan}."
+  [x world plans]
+  (let [p (tu/seeing-all (tu/fake-on-floor (merge {:floor [63 (- x 20) -20 (+ x 20) 20] :time 6000 :self {:pos [(+ x 0.5) 64 0.5]}} world)))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c (rooted {:primitives p :view (constantly view) :engine {:world (ew/of-data plans {} [])}
+                   :args {:item "wheat" :count 24 :ways #{:crops}}})]
+    (plan/need-cost c (first (table/gather-needs {"wheat" 24} (game/version-of p))))))
+
+(deftest wheat-with-none-in-sight-is-priced-by-growing-a-field-not-by-where-the-body-stands
+  (let [here (wheat-cost 0 {} {})]
+    (is (= here (wheat-cost 20000 {} {})) "a field still to be sown has no place to walk to")
+    (is (<= (cost/ripen-s "wheat" 24 9 0) here) "the field's three growths from seed")))
+
+(def young-field
+  (let [cells (for [x [2 3 4] z [-1 0 1]] [x 64 z])]
+    {:world {:blocks (into {} (mapcat (fn [[x y z]] [[(str x "," (dec y) "," z) "farmland"] [(str x "," y "," z) "wheat"]])) cells)
+             :ages (into {} (map (fn [[x y z]] [(str x "," y "," z) 3])) cells)}
+     :plan (fn [by] {"farm" {:id "farm" :metadata {:by by} :parts [{:id "wheat" :cells (vec cells) :want "wheat"}]}})}))
+
+(deftest a-young-crop-in-the-bodys-own-plan-is-waited-for-and-one-in-anothers-is-not-a-source
+  (let [own (wheat-cost 0 (:world young-field) ((:plan young-field) "Fake"))
+        other (wheat-cost 0 (:world young-field) ((:plan young-field) "Miles"))]
+    (is (<= (cost/ripen-s "wheat" 24 9 3) own) "its 9 cells ripen from stage 3, then grow twice more")
+    (is (< own other) "another's field is left: a field of its own is sown from seed")))

@@ -272,9 +272,12 @@
 (def can-start? ready/ok)
 
 (defn done?
-  "Fed (fed?); the food points still wanted."
+  "Fed (fed?), its text the food and the hungry line; the food points still wanted (none once fed)."
   [c]
-  (checks/goal (fed? c) [:fed "fed"] [:hungry "not fed"] {:units :food :left (max 0 (- foods/top-up-food (food-level c)))}))
+  (let [self (.self (:primitives c))
+        fed (fed? c)]
+    (checks/goal fed [:fed (str "fed: food " (.-food self) ", hungry below " (foods/hungry-line (.-health self) (:args c)))] [:hungry "not fed"]
+                 {:units :food :left (if fed 0 (max 0 (- foods/top-up-food (food-level c))))})))
 
 (defn worth-of
   "Seconds a root get-food is worth: reaching food for the body's hunger, or the :carry reserve it lacks (animals/search-benefit)."

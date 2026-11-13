@@ -33,8 +33,8 @@
 (a/defargs args
   {:crop {:doc "the crop block to grow (wheat, carrots, potatoes, beetroots); only wheat has a seed that can be got without a field" :spec a/name? :default "wheat"}
    :count {:doc "how many of the crop's item to carry at least (carried at the start count)" :spec (a/int-in 1 nil) :default 1}
-   :w {:doc "field width (x), 1 to 16" :spec (a/int-in 1 16) :default 3}
-   :h {:doc "field depth (z), 1 to 16" :spec (a/int-in 1 16) :default 3}
+   :w {:doc "field width (x), 1 to 16" :spec (a/int-in 1 16) :default (:w crops/starter-field)}
+   :h {:doc "field depth (z), 1 to 16" :spec (a/int-in 1 16) :default (:h crops/starter-field)}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -91,9 +91,9 @@
              {:name crop :pos pos :age (some-> (aget (.-properties b) "age") js/Number)})))))
 
 (defn standing
-  "The crops of :crop the body has seen standing (its field's remembered cells first, then those near the body), that its zones allow cutting and no harvest gave up on (the cells it left)."
+  "The crops of :crop the body has seen standing (its field's remembered cells first, then those near the body), that its zones allow cutting (its own plans' crops too) and no harvest gave up on (the cells it left)."
   [c]
-  (let [in (access/rules-input c)
+  (let [in (access/rules-input c {:own-plans-ok? true})
         given-up (:given-up (ctx/mem c))
         near (crops/seen-crops (:primitives c) [(:crop (:args c))] 64 256)
         known (remembered c)]

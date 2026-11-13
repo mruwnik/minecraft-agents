@@ -16,6 +16,8 @@
   "The field crops: farm jobs plant, tend and cut these; nether wart, berries and cocoa need other handling."
   (select-keys constants/crop-ripe-age ["wheat" "carrots" "potatoes" "beetroots"]))
 
+(def starter-field "The :w x :h of the field jobs.farm.grow sows when no crop stands: its args' defaults, and what obtain prices growing by." {:w 3 :h 3})
+
 (def grow-light "Light (the brighter of block and sky light, the sky's before the night's darkening) under which a crop does not grow." 9)
 
 (def random-ticks-per-s "Random ticks a second a block gets: 3 a game tick among the 4096 blocks of a section, 20 game ticks a second." (/ (* 3 20) 4096))

@@ -71,11 +71,11 @@
 
 (defn seen-blocks-of
   "The seen blocks of a need (within the seen radius), nearest first, with those a zone, claim or plan footprint bars
-  taking left out unless all? is true. The nearest n are read and filtered, n doubling until one may be taken or
+  taking left out unless all? is true (a crop in a plan of the body's own may be cut: the harvest replants it). The nearest n are read and filtered, n doubling until one may be taken or
   none is left, so barred blocks never crowd out a free one."
   [c need all?]
   (when (:seen need)
-    (let [in (access/rules-input c)
+    (let [in (if (:crop need) (access/rules-input c {:own-plans-ok? true}) (access/rules-input c))
           water? (= "water_bucket" (:key need))
           read (fn [n] (if water?
                          (look/seen-water-sources (:primitives c) (seen-radius))
@@ -93,14 +93,18 @@
   [need]
   (boolean (and (:crop need) (grass-seeds (crops/seed-of (:crop need))))))
 
-(defn ripe-crop
-  "The nearest ripe crop of the need's kind that may be cut and is no cut-off column, else nil."
+(defn standing-crops
+  "The seen crops of the need's kind that may be cut (one in a plan of the body's own too) and stand in no cut-off column,
+  nearest first, as crops/seen-crops gives them."
   [c need]
-  (let [in (access/rules-input c)]
-    (first (filter #(and (some-> (:age %) (>= (crops/ripe-age (:crop need))))
-                         (:ok (access/may? in :harvest (:pos %)))
-                         (not (cut-off? c %)))
-                   (crops/seen-crops (:primitives c) [(:crop need)] (seen-radius) 256)))))
+  (let [in (access/rules-input c {:own-plans-ok? true})]
+    (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %)))
+            (crops/seen-crops (:primitives c) [(:crop need)] (seen-radius) 256))))
+
+(defn ripe-crop
+  "The nearest ripe crop of standing-crops, else nil."
+  [c need]
+  (first (filter #(some-> (:age %) (>= (crops/ripe-age (:crop need)))) (standing-crops c need))))
 
 (defn animals-of
   "The animals in sight a hunt or shear of an animal need may go for, nearest first: sheep of its colour in range, or adults of its mob worth the trip."
