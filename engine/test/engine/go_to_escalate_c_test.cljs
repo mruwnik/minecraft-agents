@@ -18,6 +18,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.threat-field :as threat-field]
             [jobs.lib.need :as need]
             [jobs.lib.cost.ways :as cw]
@@ -598,8 +599,10 @@
     (is (< (escape-way/price p [0 64 0] stair) (at-chance 1 #(escape-way/price p [0 64 0] stair))) "an unseen cut is dug at the chance it is solid")
     (is (< (route-s) (at-chance 1 route-s)) "the climb route digs an unseen cell at the chance it is solid")
     (are [r n] (let [q (body r)
-                     roof-s (* n ((escape/dig-share-fn q) [0 67 0]) (/ (tools/clear-ms q "stone") 1000))]
-                 (= (+ (cw/pillar-cost 2) (* n unseen-s) (escape/pillar-knock q [0 64 0] 2) roof-s) (escape-way/price q [0 64 0] {:step :pillar :height 2})))
+                     roof-s (* n ((escape/dig-share-fn q) [0 67 0]) (/ (tools/clear-ms q "stone") 1000))
+                     ;; the unseen [0 68 0] over the roof [0 67 0] (solid at its chance) and [0 67 0] over the seen roof [0 66 0]
+                     landing-s (* n (value/hidden-fall-share) (cost/hp-cost cost/landing-hp) (+ 1 ((escape/dig-share-fn q) [0 67 0])))]
+                 (= (+ (cw/pillar-cost 2) (* n unseen-s) (escape/pillar-knock q [0 64 0] 2) roof-s landing-s) (escape-way/price q [0 64 0] {:step :pillar :height 2})))
       50 0
       2.9 1)))
 
@@ -654,6 +657,20 @@
     (is (= (+ (cw/pillar-cost 1) (cost/pillar-knock-of open [0 0 0 0 0 1])) ((block-s open) 6 0 64 0)) "the sixth, on open sides, falls six")
     (is (< ((block-s open) 3 0 64 0) ((block-s open) 6 0 64 0)) "a taller run falls farther")
     (is (= (cw/pillar-cost 1) ((block-s walled) 6 0 64 0)) "a walled column is never knocked off")))
+
+(deftest a-climb-does-not-pillar-up-under-a-seen-falling-block
+  ;; live (Tamsin S7): a climb's pillar dug its roof under sand that landed on the body (4 suffocation hits). The sand
+  ;; over the roof is cheaper to dig than stone, so unpriced the column would be pillared as the stone one is.
+  (let [climb (fn [over]
+                (let [p (tu/seeing-within (tu/fake {:blocks (assoc stone-mass "0,67,0" over "0,68,0" over) :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                                    :inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 16}]}) 20)
+                      id (gensym)
+                      e (try (loop [] (let [e (climb-route/climb-way p [0 64 0] [0 70 0] (constantly true) {:skip #{} :pillar-item {:item "dirt" :count 16} :slice (choose/route-slice id)})]
+                                        (if (= :searching (:step e)) (recur) e)))
+                             (finally (choose/end-searches! id)))]
+                  (set (keep #(when (= :pillar (:step %)) (:from %)) (cons e (:then e))))))]
+    (is (contains? (climb "stone") [0 64 0]) "under stone the climb pillars straight up from the feet")
+    (is (not-any? (fn [[x y z]] (and (= 0 x z) (< y 67))) (climb "sand")) "under sand no pillar digs up into it from below")))
 
 (deftest climb-way-gives-the-search-the-pillar-block-price-at-the-measured-chance
   (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})

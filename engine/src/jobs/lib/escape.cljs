@@ -16,6 +16,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
@@ -99,6 +100,24 @@
   "cost/pillar-knock-of a pillar of height blocks up from feet: each block's open sides of four share its chance."
   [p feet height]
   (cost/pillar-knock-of p (map #(/ % 4) (pillar-open-sides p feet height))))
+
+(defn roof-landing-fn
+  "(fn [roof]) seconds a dig of the cell roof over the body's head risks in a falling block over it landing on the body, which
+  stands in the column below with no side to step to (a pillar's roof): cost/landing-hp at cost/hp-cost (no death priced, as
+  pillar-knock prices none), for sure under a seen falling block, at value/hidden-fall-share under an unseen cell, an unseen
+  roof at the measured chance it is solid; 0 for a roof seen open."
+  [p]
+  (let [block-at (block-at-of p)
+        unseen? (unseen-of p)
+        solid-at (look/unseen-solid-at-fn p)
+        landing-s (cost/hp-cost cost/landing-hp)]
+    (fn [roof]
+      (let [above (up roof 1)
+            fall (cond (unseen? above) (value/hidden-fall-share) (rules/falling? (block-at above)) 1 :else 0)]
+        (cond (zero? fall) 0
+              (unseen? roof) (* (solid-at roof) fall landing-s)
+              (solid? (block-at roof)) (* fall landing-s)
+              :else 0)))))
 
 (defn protected? [n] (boolean (and n (re-find protected n))))
 

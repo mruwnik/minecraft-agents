@@ -121,7 +121,8 @@
 (defn pillar-way-s
   "Seconds a pillar of height blocks up from feet takes, short of them fetched: cost/pillar-s, its knock
   (escape/pillar-knock), and a dig of each cell over it the head climbs into that the body has not seen, at the
-  chance it is loose ground over a seen loose cell (loose-run) else solid (escape/dig-share-fn)."
+  chance it is loose ground over a seen loose cell (loose-run) else solid (escape/dig-share-fn), with the landing that
+  dig risks (escape/roof-landing-fn)."
   [p feet height short]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
@@ -134,7 +135,8 @@
                           + 0 (range 2 (+ height 2)))]
     (+ (cost/pillar-s (wworld/unseen-share p) height (escape/unseen-pillar-blocks p feet height) short)
        (escape/pillar-knock p feet height)
-       roof-s)))
+       roof-s
+       (transduce (map (escape/roof-landing-fn p)) + 0 (map #(escape/up feet %) (range 2 (+ height 2)))))))
 
 (defn price
   "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug

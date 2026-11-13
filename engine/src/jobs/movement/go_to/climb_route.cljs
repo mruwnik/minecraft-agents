@@ -10,16 +10,19 @@
             [jobs.movement.go-to.route-ways :as route-ways]))
 
 (defn pillar-block-s
-  "(fn [n x y z]) the seconds of the n-th block of a pillar run from cell x y z: cw/pillar-cost 1 and its knock-off fall of n
-  blocks (cost/pillar-knock-block-s) at the cell's open sides, so a run costs by its own height."
+  "(fn [n x y z]) the seconds of the n-th block of a pillar run from cell x y z: cw/pillar-cost 1, its knock-off fall of n
+  blocks (cost/pillar-knock-block-s) at the cell's open sides, so a run costs by its own height, and the landing its roof
+  dig (the cell two over x y z) risks (escape/roof-landing-fn)."
   [p]
   (let [self (.self p)
         equipment (cost/equipment-of (.-equipment self))
         open-sides (escape/open-sides-fn p)
-        shares (js/Map.)
-        share (fn [x y z] (let [k (str x "," y "," z)]
-                            (if (.has shares k) (.get shares k) (let [v (/ (open-sides [x y z]) 4)] (.set shares k v) v))))]
-    (fn [n x y z] (+ (cw/pillar-cost 1) (if (== 1 n) 0 (cost/pillar-knock-block-s equipment n (share x y z)))))))
+        roof-landing (escape/roof-landing-fn p)
+        cached (js/Map.)
+        at (fn [x y z] (let [k (str x "," y "," z)]
+                         (if (.has cached k) (.get cached k) (let [v [(/ (open-sides [x y z]) 4) (roof-landing [x (+ y 2) z])]] (.set cached k v) v))))]
+    (fn [n x y z] (let [[share landing-s] (at x y z)]
+                    (+ (cw/pillar-cost 1) landing-s (if (== 1 n) 0 (cost/pillar-knock-block-s equipment n share)))))))
 
 (defn climb-way
   "The way up for a shut-in body at feet to goal above it, its stair, pillar and dig route allowed (not in opts :skip):

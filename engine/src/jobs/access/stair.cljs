@@ -14,6 +14,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.stair-cells :as geo]
             [jobs.access.stair.judge :as judge]
             [jobs.lib.stair-memory :as smem]
@@ -104,8 +105,7 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::return-reach {:default 32 :doc "Blocks from the stair's line the body may be found for a call to walk back onto it; farther, only a whole way back quoted no longer than cutting its steps again is walked, else it stops :off-stair (the caller starts a stair where the body is)." :spec (a/num-in 0 nil)}
-   ::hidden-fall-share {:default 0.05 :doc "Chance an unseen cell over a stair up's top cut holds a falling block (gravel, sand), weighed in undermine-worth?: a prior, not measured (the logs do not say what an unseen cell over a cut held)." :spec (a/num-in 0 1)}})
+   ::return-reach {:default 32 :doc "Blocks from the stair's line the body may be found for a call to walk back onto it; farther, only a whole way back quoted no longer than cutting its steps again is walked, else it stops :off-stair (the caller starts a stair where the body is)." :spec (a/num-in 0 nil)}})
 (defn return-reach [] (settings/get settings ::return-reach))
 
 (declare dir-of)
@@ -333,10 +333,10 @@
   (+ (/ undermine-settle-ms 1000) (/ 2 cost/walk-speed)))
 
 (defn undermine-worth?
-  "Whether cutting from beside costs less than what an unseen cell over the column risks a body at health: ::hidden-fall-share
+  "Whether cutting from beside costs less than what an unseen cell over the column risks a body at health: cost.value/hidden-fall-share
   x a landing, its landing-hp at cost.health/hp-cost or, at health landing-hp or less, the death (death-s), against undermine-s."
   [health death-s]
-  (> (* (settings/get settings ::hidden-fall-share) (if (<= health cost-health/landing-hp) death-s (cost-health/hp-cost cost-health/landing-hp)))
+  (> (* (value/hidden-fall-share) (if (<= health cost-health/landing-hp) death-s (cost-health/hp-cost cost-health/landing-hp)))
      (undermine-s)))
 
 (defn undermine-cell
