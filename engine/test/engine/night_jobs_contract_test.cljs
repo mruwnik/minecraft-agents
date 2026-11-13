@@ -200,22 +200,13 @@
         (is (= [:condition-failed :not-night]
                (ending-of (await (call! (spawn-world {:time st/noon :blocks {"6,64,0" "red_bed"}}) 'jobs.survival.bed-down {} (constantly nil))))))
         (is (= [:condition-failed :no-bed]
-               (ending-of (await (call! (spawn-world {}) 'jobs.survival.bed-down {:ways #{:carried}} (constantly nil))))))))))
-(deftest bed-down-fetch-false-starts-no-fetch
+               (ending-of (await (call! (spawn-world {}) 'jobs.survival.bed-down {} (constantly nil))))))))))
+(deftest bed-down-with-no-bed-starts-no-fetch-child
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (call! (spawn-world {}) 'jobs.survival.bed-down {:ways #{:carried}} (constantly nil)))
+        (await (call! (spawn-world {}) 'jobs.survival.bed-down {} (constantly nil)))
         (is (empty? (filterv #(and (= :child_started (:kind %)) (= :need (:slot %))) @@seen-events)))))))
-
-(deftest bed-down-with-no-bed-fetches-one-through-a-need-child
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [e (await (call! (spawn-world {}) 'jobs.survival.bed-down {} (constantly nil)))]
-          (is (= 1 (count (filterv #(and (= :child_started (:kind %)) (= :need (:slot %))) @@seen-events))))
-          (is (= :need (contract/cause-key e)) "no bed to be had in an empty world")
-          (is (some? (:because e)) "the fetch's own ending says why"))))))
 
 (deftest bed-down-beside-an-open-bed-is-condition-failed-bed-open
   ;; at a spawn rate of one meet in 200 s: at the measured one (0.0012) an open bed is the cheapest night and is slept in

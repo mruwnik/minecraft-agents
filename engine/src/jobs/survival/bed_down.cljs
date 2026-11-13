@@ -2,7 +2,6 @@
   (:require [engine.notes :as notes]
             [jobs.lib.shelter.fill :as fill]
             [jobs.lib.block-sets :as bs]
-            [engine.game :as game]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -16,7 +15,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.price :as price]
             [jobs.lib.threats :as threats]
-            [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as lb]
@@ -41,7 +39,7 @@
 
 (def doc
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
-  Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), no known hostile in the bed's rest box (:hostile-near: the server refuses the sleep), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with the default ways, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
+  Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), no known hostile in the bed's rest box (:hostile-near: the server refuses the sleep), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first).
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered at any distance, its walk priced; never an occupied one or one given up on; never one whose walk leaves a dug-in or room shelter unless that long without sleep): jobs.survival.sleep on it.
   A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. Beds are priced against the other ways through the night (answers, cheapest): a bed not sheltered (sh-beds/bed-sheltered?: shut in a closed roofed room where no mob spawns) is slept in only when overdue for sleep or lying there is the cheapest; a carried bed goes down as the :answer says (else the cheapest): :bed lain in where it lies, :sealed its row walled and roofed first (seal-and-sleep!), and when another way is cheaper it is not put down. A sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open, and a carried bed not put down ends condition-failed :bed-open {:answer} too; a row left open ends nothing-possible :seal-failed.
   A sleep that ends :bed-unreachable yields :continue: the next round picks another bed or puts the carried one down (sleep wrote :bed-unreachable; when its walk was refused on the night's price it wrote nothing, and the bed goes into :bed-walk-unsafe instead, skipped while the world is as priced); for a bed named by :bed there is no other, so it ends nothing-possible :bed-unreachable. A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
@@ -54,7 +52,7 @@
    :roofed-only {:doc "put a carried bed down on roofed cells only, never in the open (a body inside a home)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::job-time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down, the sleep." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 1800 :doc "Seconds a bed-down may last from its start, the jobs that run between its rounds included." :spec (a/num-in 0 nil)}
    ::bed-tries {:default 3 :doc "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row." :spec (a/int-in 1 nil)}})
 
@@ -329,27 +327,16 @@
 
 (def fit? ready/ok)
 
-(def ways need/fetch-ways)
-
 (def target [])
 
 (def job 'jobs.survival.bed-down)
 
-(def bed-names
-  (mapv #(str % "_bed") game/dye-colors))
-
-(defn problem
-  "The need wait for a bed while there is none to use and none carried to put down, else nil."
-  [c]
-  (when-not (or (bed-to-use c) (sh-beds/place-wanted? c))
-    {:reason :need :any-of bed-names :count 1}))
-
 (defn bed-status
-  "A bed to use, a bed item to put down or a bed to fetch, else :no-bed (:look until the body looked round)."
+  "A bed to use or a bed item to put down, else :no-bed (:look until the body looked round)."
   [c]
-  (if (when-let [w (problem c)] (not (some->> (need/fetch-opts c) (need/plan-for w))))
-    (contract/status :look :no-bed "no bed to use and none carried to put down" {})
-    (contract/ok :bed "a bed to use, put down or fetch")))
+  (if (or (bed-to-use c) (sh-beds/place-wanted? c))
+    (contract/ok :bed "a bed to use or put down")
+    (contract/status :look :no-bed "no bed to use and none carried to put down" {})))
 
 (defn rest-box-status
   "Later :hostile-near while a hostile the body knows of stands in the rest box of the bed to use (none: the body's cell,
@@ -361,7 +348,7 @@
       (contract/ok :rest-box-clear "no known hostile near the bed"))))
 
 (defn can-start?
-  "Night, and by night a bed (a room flood fill) to use, put down or fetch, with no hostile near it (rest-box-status). Not
+  "Night, and by night a bed (a room flood fill) to use or put down, with no hostile near it (rest-box-status). Not
   cond/and: bed-status is skipped by day, where its flood fill would run for nothing."
   [c]
   (let [n (contract/asked c (checks/night :not-night))]
@@ -537,9 +524,4 @@
       (#{:bed :sealed} answer) (await (place-bed-and-sleep! c answer))
       answer (ctx/end c :condition-failed :bed-open {:slept false :bed-open true :answer answer
                                                      :text (str "the carried bed would lie in the open on a night it does not end; " (name answer) " is cheaper; not putting it down")})
-      :else (let [o (need/fetch-opts c)
-                  e (when (and o (problem c)) (await (need/blocks! c bed-names 1 o)))]
-              (cond
-                (or (= :continue e) (nil? (problem c))) :continue
-                (and e (not= :done (:kind e))) (contract/with-because (ctx/end c (:kind e) {:reason :need} {:slept false}) e)
-                :else (ctx/end c :condition-failed :no-bed {:slept false}))))))
+      :else (ctx/end c :condition-failed :no-bed {:slept false :text "no bed to use and none carried to put down"}))))
