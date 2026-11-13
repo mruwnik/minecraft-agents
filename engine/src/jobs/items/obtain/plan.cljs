@@ -15,6 +15,7 @@
             [jobs.lib.recipes :as recipes]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.animal-spare :as spare]
+            [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
@@ -337,14 +338,16 @@
 (defn by-chest
   "The raw need withdrawn from the takeable chest booked as holding its count (stocked-chest; any species for \"log\")
   by an obtain child of the :chest way, when that walk costs less than its gather (need-cost, search-cost unseen) and no
-  such child came back empty this call ([:gather :chest-tried key]); else need as it is. A player takes the wheat in
+  such child came back empty this call ([:gather :chest-tried key]); else need as it is. A gather round that came back
+  fruitless adds the seconds it took to the gather's price, so the chest wins the next plan. A player takes the wheat in
   their chest for bread rather than growing it."
   [c need]
   (let [k (:key need)
         names (if (= "log" k) facts/log-names [k])
         chest (when-not (or (= "water_bucket" k) (get-in (ctx/mem c) [:gather :chest-tried k]))
                 (stocked-chest c names (:count need)))]
-    (if (and chest (< (:cost chest) (if (seen-of c need) (need-cost c need) (search-cost c need))))
+    (if (and chest (< (:cost chest) (+ (if (seen-of c need) (need-cost c need) (search-cost c need))
+                                       (if (pos? (child/fruitless c :gather)) (get-in (ctx/mem c) [:fruitless-s :gather] 0) 0))))
       {:key k :count (:count need) :chest (:pos chest) :job 'jobs.items.obtain
        :args (assoc (if (= "log" k) {:any-of names} {:item k})
                     :count (+ (reduce + 0 (map #(storage/carried (u/inventory (:primitives c)) %) names)) (:count need))

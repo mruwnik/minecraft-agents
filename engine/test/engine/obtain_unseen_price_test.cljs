@@ -14,6 +14,7 @@
             [jobs.items.obtain.need :as need]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.price :as price]
+            [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
             [jobs.lib.recipes :as recipes]
             [jobs.lib.cost :as cost]
@@ -398,3 +399,14 @@
         other (wheat-cost 0 (:world young-field) ((:plan young-field) "Miles"))]
     (is (<= (cost/ripen-s "wheat" 24 9 3) own) "its 9 cells ripen from stage 3, then grow twice more")
     (is (< own other) "another's field is left: a field of its own is sown from seed")))
+
+(deftest a-fruitless-gather-round-prices-its-source-above-the-chest
+  (let [c (ctx {:time 6000})
+        need {:key "beef" :count 2}
+        by (fn [mem] (with-redefs [ctx/mem (constantly mem)
+                                   seen/seen-of (constantly {:pos {:x 1 :y 64 :z 1}})
+                                   plan/need-cost (constantly 10)
+                                   plan/stocked-chest (constantly {:pos [3 64 3] :cost 15})]
+                       (:chest (plan/by-chest c need))))]
+    (is (nil? (by {})) "the seen source is cheaper than the chest walk")
+    (is (some? (by {:fruitless {:gather 1} :fruitless-s {:gather 20}})) "a round that took 20 s and brought nothing makes the chest the cheaper")))
