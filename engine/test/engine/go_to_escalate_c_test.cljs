@@ -486,18 +486,23 @@
 
 (deftest a-climb-through-rock-it-barely-sees-has-a-route-in-hand-at-the-search-ceiling
   ;; Q141: seeing 2 blocks, the unseeded search read 142k cells (2.8 s) over 29 calls before its first route; searched
-  ;; round its planned stairs first it holds one at once and answers once its CPU passes dig-route/answer-s, at the
-  ;; unseeded search's price or lower (the straight dig, 53.82 s, to [8 76 0]); a stair lane alone was up to 3x dearer
-  (doseq [[goal price] [[[8 72 0] 31.76] [[8 76 0] 47.62]]]
-    (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}) 2)
-          id "climb-ceiling"
-          a (try (loop [i 0]
-                   (let [a (choose/route-answer p [0 64 0] goal (constantly true) (constantly false) false false
-                                                {:read-s (cost/search-read-s) :slice (choose/route-slice id)})]
-                     (if (and (= :searching a) (< i 3)) (recur (inc i)) a)))
-                 (finally (choose/end-searches! id)))]
-      (is (< (js/Math.abs (- price (:seconds a))) 0.005) (str goal " " (pr-str (dissoc a :steps :dig))))
-      (is (< (:searched-s a) (* 2 dig-route/answer-s)) (str (:searched-s a) " s of CPU")))))
+  ;; round its planned stairs first it holds one at once and answers once its CPU passes dig-route/answer-s (a stair lane
+  ;; alone was up to 3x dearer). Prices move with every prior, so the test pins the route, the ceiling and the order
+  (let [answer (fn [goal]
+                 (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}) 2)
+                       id "climb-ceiling"]
+                   (try (loop [i 0]
+                          (let [a (choose/route-answer p [0 64 0] goal (constantly true) (constantly false) false false
+                                                       {:read-s (cost/search-read-s) :slice (choose/route-slice id)})]
+                            (if (and (= :searching a) (< i 3)) (recur (inc i)) a)))
+                        (finally (choose/end-searches! id)))))
+        near (answer [8 72 0])
+        far (answer [8 76 0])]
+    (doseq [[goal a] [[[8 72 0] near] [[8 76 0] far]]]
+      (is (seq (:steps a)) (str goal " " (pr-str (dissoc a :steps :dig))))
+      (is (= goal (:to (last (:steps a)))) (str goal " reached"))
+      (is (< (:searched-s a) (* 2 dig-route/answer-s)) (str goal " " (:searched-s a) " s of CPU")))
+    (is (< (:seconds near) (:seconds far)) "four blocks higher is dearer")))
 
 (deftest a-dig-route-and-its-straight-dig-pay-the-calls-tolls
   ;; a level tunnel x 0..10 in stone, tolled factor 60 but for its ends: the straight dig walks it, so priced without the
