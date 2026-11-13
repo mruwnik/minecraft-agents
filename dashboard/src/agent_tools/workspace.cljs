@@ -13,7 +13,7 @@
 (def body-tools #{"observe" "jobs" "quote" "triggers" "say" "entities" "world" "snapshot" "goal" "progress"})
 (def format-id :minecraft-agent-workspace/v1)
 (def wrapper-marker "// Generated Minecraft agent workspace tool v1\n")
-(def usage "usage: node engine/tools/workspace.mjs <directory> --body <body> --world <world> [--worlds <directory>] [--update-tools] [--adopt-existing]\nCreate an agent workspace for an existing or future body; does not start it.\nReruns preserve AGENTS.md, briefing.md and notes/, and rewrite PLAYING.md and WORKSPACE.md. --update-tools refreshes generated wrappers only; bindings cannot change.\n--adopt-existing requires a canonical body folder and matching config.json; it preserves existing documents and runtime files.")
+(def usage "usage: node engine/tools/workspace.mjs <directory> --body <body> --world <world> [--worlds <directory>] [--update-tools] [--adopt-existing]\nCreate an agent workspace for an existing or future body; does not start it.\nReruns preserve AGENTS.md, briefing.md and notes/. PLAYING.md is rewritten on every run; WORKSPACE.md only with --update-tools, which also refreshes the generated wrappers; bindings cannot change.\n--adopt-existing requires a canonical body folder and matching config.json; it preserves existing documents and runtime files.")
 (defn fail! [message] (throw (js/Error. message)))
 (defn file-exists? [file] (try (.lstatSync fs file) true (catch :default e (if (= "ENOENT" (.-code e)) false (throw e)))))
 (defn regular! [file directory?]
@@ -230,6 +230,7 @@ The first suits a body with no bed yet: it waits the night out offline. `./bin/t
                             "# Briefing\n\nRecord the mission, constraints, current priorities, and handoff here.\n")]]]
         (when-not (file-exists? file) (.writeFileSync fs file text #js {:flag "wx"})))
       (.writeFileSync fs (.join path dir "PLAYING.md") playing-md)
+      (when update-tools (.writeFileSync fs (.join path dir "WORKSPACE.md") (agents-text ctx)))
       (doseq [[file content] contents]
         (when (or (not (file-exists? file)) update-tools) (.writeFileSync fs file content #js {:mode 493}))
         (.chmodSync fs file 493))
