@@ -10,6 +10,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.fuel :as fuel]
             [jobs.lib.game-facts :as facts]
+            [jobs.lib.recipes :as recipes]
             [engine.args :as a]
             [engine.heap :as heap]
             [engine.settings :as settings]
@@ -242,19 +243,11 @@
                  (aget (.-blocksByName md) name)))))
 
 (defn recipe-list
-  "[[result-name result-count [ingredient-name ...]] ...] of every crafting recipe."
-  [md]
-  (let [item-name (fn [id] (some-> (aget (.-items md) (if (number? id) id (some-> id .-id))) .-name))]
-    (for [[_ rs] (js/Object.entries (.-recipes md))
-          r (array-seq rs)
-          :let [result (.-result r)
-                ids (if (.-inShape r)
-                      (mapcat array-seq (array-seq (.-inShape r)))
-                      (array-seq (.-ingredients r)))
-                names (keep #(when (some? %) (item-name %)) ids)
-                out (item-name result)]
-          :when (and out (seq names))]
-      [out (max 1 (or (.-count result) 1)) (vec names)])))
+  "[[result-name result-count [ingredient-name ...]] ...] of every crafting recipe, with the stand-ins of jobs.lib.recipes."
+  [version]
+  (for [[out rs] (recipes/recipes-for version)
+        {:keys [count needs]} rs]
+    [out count (vec (mapcat (fn [[n k]] (repeat k n)) needs))]))
 
 (defn override-fn
   "(fn [worth]) for override o: a number replaces the worth, {:times n} multiplies it; nil leaves it."
@@ -299,7 +292,7 @@
            names (mapv #(.-name %) items)
            ix (into {} (map-indexed (fn [i n] [n i])) names)
            ix-of #(get ix % -1)
-           recipes (recipe-list md)
+           recipes (recipe-list version)
            by-result (group-by first recipes)
            smelts (smelt-sources names)
            dependents (reduce (fn [m [n ins]] (reduce #(update %1 %2 (fnil conj #{}) n) m ins))

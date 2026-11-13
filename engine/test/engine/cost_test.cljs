@@ -2,6 +2,7 @@
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
   (:require [cljs.test :refer [deftest is are use-fixtures]]
             [jobs.lib.cost.value :as value]
+            [jobs.lib.cost.table :as tbl]
             [engine.args :as a]
             [engine.constants :as constants]
             [engine.fake :as fake]
@@ -1149,3 +1150,7 @@
                 (- (risk/work-death-chance :heal h s) (risk/work-death-chance :heal 20 s)))]
     (is (not (risk/too-hurt? h :heal (* 0.98 flip))) "a death just under the flip: goes")
     (is (risk/too-hurt? h :heal (* 1.02 flip)) "a death just over: heals first")))
+
+(deftest the-priced-recipes-list-a-campfire-made-with-charcoal-for-any-log
+  (let [campfires (filter #(= "campfire" (first %)) (tbl/recipe-list game/default-version))]
+    (is (some #(and (some #{"charcoal"} (nth % 2)) (some #{"oak_log"} (nth % 2))) campfires))))

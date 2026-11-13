@@ -365,3 +365,9 @@
                 (get-in @mem [:gather :why])))]
     (is (re-find #"job time left \(515 s\)" (why 515)) "515 s left under a worth of 5000 s")
     (is (re-find #"the call's worth$" (why 9000)) "ample time: the worth")))
+
+(deftest a-campfire-with-charcoal-and-logs-carried-is-crafted-not-searched-for-coal
+  (let [c (ctx {:time 6000 :inventory [{:name "oak_log" :count 196} {:name "charcoal" :count 1} {:name "crafting_table" :count 1}]})
+        pl (plan/gather-plan (assoc-in c [:args :item] "campfire") ["campfire"] 1)]
+    (is (some? pl))
+    (is (nil? (:gather pl)) "no coal gathered")))

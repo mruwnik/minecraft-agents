@@ -545,7 +545,7 @@
        (reduce (fn [m [out n ins]]
                  (let [pts (get-in food [out :points])]
                    (if (and pts (apply = ins)) (update m (first ins) (fnil max 0) (/ (* pts n) (count ins))) m)))
-               {} (tbl/recipe-list (facts/data version)))))))
+               {} (tbl/recipe-list version))))))
 
 (defn food-points
   "Hunger points one item of name gives at best: eaten (none when harmful), cooked or made into a food alone (meal-points); 0 when none."
