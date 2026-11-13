@@ -75,7 +75,9 @@
   [ctx body now]
   (let [pose (read-pose ctx body)
         why (why-unusable ctx pose now)
-        predicted? (and (#{:offline :stale} why) (<= 0 (- now (:t pose))))]
+        predicted? (and (#{:offline :stale} why)
+                        (contains? #{nil :stale} (why-unusable ctx (assoc pose :status "online") now))
+                        (<= 0 (- now (:t pose))))]
     (when (or (nil? why) predicted?)
       (let [age (- now (:t pose))
             tick (cond-> (:timeOfDay pose) predicted? (-> (+ (* (max 0 age) (/ ticks-per-s 1000))) js/Math.floor (mod 24000)))]

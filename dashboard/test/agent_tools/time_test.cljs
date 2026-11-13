@@ -72,6 +72,12 @@
   (is (= [:no-time-of-day] (-> (clock-of (assoc pose :timeOfDay nil) 1001000) :bodies vals vec))
       "an unknown clock says per body why it gave none"))
 
+(deftest an-offline-pose-without-a-usable-overworld-time-is-no-clock
+  (doseq [p [(assoc pose :status "offline" :timeOfDay nil)
+             (assoc pose :status "offline" :dimension "the_nether")
+             (assoc pose :status "offline" :dimension "minecraft:the_end")]]
+    (is (= {:ok false :reason :time-unknown} (select-keys (clock-of p 1010000) [:ok :reason])))))
+
 (deftest a-fresh-reading-beats-a-predicted-one
   (let [dir (world-with-pose (assoc pose :status "offline"))
         zed (.join path dir "agents" "Zed" "view")]
