@@ -114,6 +114,22 @@
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 11] "oak_fence"] [:block [12 0 11] "oak_fence_gate"]]}
+  ;; Run 4 F5: a built ring whose planned gate stands open, the body outside: the check's open-gate leak is shut, then the pen holds.
+  {:name "an-open-plan-gate-is-shut-by-the-check"
+   :body {:at [17.5 0 12.5]}
+   :blocks [[:fill [10 0 10] [14 0 10] "oak_fence"] [:fill [10 0 14] [14 0 14] "oak_fence"] [:fill [10 0 11] [10 0 13] "oak_fence"]
+            [:set [14 0 11] "oak_fence"] [:set [14 0 13] "oak_fence"] [:set [14 0 12] "oak_fence_gate[facing=east,open=true]"]]
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                    {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 80 :until {:source :job :kind :completed}}]
+   :after [[:block [14 0 12] "oak_fence_gate[open=false]"]]}
   ;; leaves outside the fence an animal steps from onto its top are dug away; no second fence is piled on the fence
   {:name "leaves-beside-the-fence-are-cleared"
    :blocks [[:set [15 0 11] "oak_leaves[persistent=true]"]]

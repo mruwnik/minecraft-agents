@@ -1,8 +1,9 @@
 ;; The pen-gate reflex and jobs.maintenance.shut: it shuts a PLANNED fence gate that stands open with the body away
-;; (4 s, more than 2 and at most 64 blocks off), and leaves every other gate alone. Fence line z=12, x 10..22, gates at
+;; (4 s, the body not in its cell and at most 64 blocks off), and leaves every other gate alone. Fence line z=12, x 10..22, gates at
 ;; [13 0 12] and [19 0 12], both open; the body at [16.5 0 16.5], 5 blocks from each, facing north (:yaw 180): the
 ;; reflex reads only gates it has seen, and the default view faces south.
-;; Should-succeed: both planned gates shut; with one planned, only that one; a gate seen open 24 blocks away.
+;; Should-succeed: both planned gates shut; with one planned, only that one; a gate seen open 24 blocks away; the
+;; body one block beside the gate (run 4: a body there never got the gate shut).
 ;; Should-fail (left alone): no plan, body standing in the gate, gate walled into glass (seen, never
 ;; reached: gave up; a stone wall hides the gate and the reflex never sees it).
 {:defaults
@@ -43,6 +44,13 @@
    :body {:at [13.5 0 12.5]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 20}]
    :after [[:block [13 0 12] "oak_fence_gate[open=true]"]]}
+  {:name "body-beside-the-gate-shuts-it"
+   :plans [{:id "pen" :parts [{:id "gate" :cells [#at [13 0 12]] :want [:any "oak_fence_gate"]}]}]
+   :blocks [[:fill [19 0 12] [19 0 12] "oak_fence"]]
+   :body {:at [13.5 0 13.5]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 50}]
+   :after [[:block [13 0 12] "oak_fence_gate[open=false]"]]}
   ;; card 9a1d3b27: the reflex radius is 64, so a gate left open far behind the body (here ~24 away, in view) is walked back to and shut
   {:name "far-gate-in-view-walked-back-and-shut"
    :plans [{:id "pen" :parts [{:id "gate" :cells [#at [2 0 28]] :want [:any "oak_fence_gate"]}]}]
