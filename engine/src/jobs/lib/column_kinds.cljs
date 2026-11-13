@@ -1,6 +1,7 @@
 (ns jobs.lib.column-kinds
   "How a body reads the cells of a column: the kind of a seen block, and the highest stand of a column."
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.surface :as surface]
@@ -23,14 +24,16 @@
     (boolean (and b (not (true? (.-unknown b))) (trees/log-name? (.-name b))))))
 
 (defn surface-kind-at
-  "As seen-kind-at, a log or leaf block read as :open: a tree is not the surface. The ground under a trunk is never in
+  "As seen-kind-at, a log, leaf or built solid (a roof, wall top, eave: not rules/natural?) read as :open: a tree or a build is
+  not the surface, the ground under it is. The ground under a trunk is never in
   view (the trunk covers it, the ground beside it hides its sides): an unseen cell under a log reads :solid."
   [p]
   (if (some? (.-sensedAt p))
     (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})]
                   (cond (nil? b) (if (trunk-over? p x y z) :solid :unknown)
                         (surface/canopy? (.-name b)) :open
-                        :else (kind b))))
+                        :else (let [k (kind b)]
+                                (if (and (keyword-identical? :solid k) (not (rules/natural? (.-name b)))) :open k)))))
     (constantly :unknown)))
 
 (defn seen-kind-at

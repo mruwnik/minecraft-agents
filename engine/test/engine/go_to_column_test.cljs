@@ -185,6 +185,12 @@
         p (hiding tree (constantly false))]
     (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true)))))
 
+(deftest a-roof-over-a-column-is-not-its-surface
+  (let [house (merge flat (box 10 65 0 10 65 0 "oak_planks") (box 10 66 0 10 66 0 "oak_slab"))
+        p (hiding house (constantly false))]
+    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true))
+        "a built roof is cover like a canopy: the column's ground, not the roof")))
+
 (deftest a-tree-column-with-its-ground-unseen-is-not-aimed-at-a-seen-tunnel-far-below
   (let [world (merge flat (box 0 10 -3 40 62 3 "stone") (box 10 16 0 10 17 0 "air")
                      (box 10 64 0 10 68 0 "oak_log") (box 9 69 -1 11 70 1 "oak_leaves"))
