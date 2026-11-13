@@ -65,8 +65,8 @@
 
   After a pair was fed with no baby in view, the run watches for the calf, a one-second pause (a jobs.time.noop child)
   at a time, until one shows or the setting calf-wait-s (the 30 s the animals stay in love) is over: the fed pair must
-  first walk together, and the calf shows a few seconds after they meet. :babies is what the body sees within :radius
-  or in the known pen. The wait yields,
+  first walk together, and the calf shows a few seconds after they meet. :babies is what the body sees on the known pen (else within :radius).
+  The wait yields,
   so another job may walk the body off: with no fed animal in view at the count, it walks back (once) to where it last
   fed one and counts there.
 
@@ -127,20 +127,22 @@
 
 (declare pen-box)
 
-(defn count-radius
-  "Radius of the herd counts (babies, the fed pair, the result): :radius, widened to cover the known pen from where the
-  body stands now, since a caller measures :radius from where it stood and the body moves."
-  [c]
-  (let [r (:radius (:args c))
+(defn counted
+  "The adults or babies (pick) of the mob the herd counts cover: those on the known pen's cells when there is a pen
+  (the same area wherever the body stands), else those within :radius."
+  [c pick]
+  (let [{:keys [mob radius]} (:args c)
+        p (:primitives c)
         box (pen-box c)]
-    (if box (max r (hunting/reach (assoc c :args {:box box}))) r)))
+    (if box
+      (filterv #(animals/in-box? box (u/pos-of (.-pos %))) (pick p mob (max radius (hunting/reach (assoc c :args {:box box})))))
+      (pick p mob radius))))
 
 (defn new-babies
   "How many babies of the mob are in view beyond those there at the first feeding; none before it."
   [c]
-  (let [{:keys [mob]} (:args c)
-        before (:babies-before (ctx/mem c))]
-    (if before (max 0 (- (count (animals/babies (:primitives c) mob (count-radius c))) before)) 0)))
+  (let [before (:babies-before (ctx/mem c))]
+    (if before (max 0 (- (count (counted c animals/babies)) before)) 0)))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 15 (wanted c)) ##Inf]}})
@@ -207,7 +209,7 @@
   [c]
   (when-not (:hand-noted (ctx/mem c))
     (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c))) :hand-noted true
-                     :babies-before (count (animals/babies (:primitives c) (:mob (:args c)) (count-radius c))))))
+                     :babies-before (count (counted c animals/babies)))))
 
 (defn mark-bred!
   "Leave one entry of kind :bred/<mob> when the run fed at least two animals, for (since :bred/cow)."
@@ -254,15 +256,14 @@
   [c reason]
   (let [m (ctx/mem c)
         mob (:mob (:args c))
-        radius (count-radius c)
         p (:primitives c)
         result {:reason reason
                 :fed (vec (:fed m))
                 :refused (vec (:refused m))
                 :given-up (:given-up m {})
                 :food (or (animals/food-carried p mob) (:food m))
-                :adults (count (animals/adults p mob radius))
-                :babies (count (animals/babies p mob radius))}]
+                :adults (count (counted c animals/adults))
+                :babies (count (counted c animals/babies))}]
     (let [why (why-of c reason)]
       (cond-> (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", adults " (:adults result) ", babies " (:babies result)
                                        (when why (str " (" why ")"))))
@@ -284,7 +285,7 @@
   "Whether an animal the run fed is in view."
   [c]
   (let [fed (set (:fed (ctx/mem c)))]
-    (boolean (some #(contains? fed (animals/key-of %)) (animals/adults (:primitives c) (:mob (:args c)) (count-radius c))))))
+    (boolean (some #(contains? fed (animals/key-of %)) (counted c animals/adults)))))
 
 (defn back-to-pair?
   "Whether the calf count must first walk back to where the last animal was fed: a pair was fed, no calf is in view
@@ -420,7 +421,7 @@
      (and (need/fetch-opts c)
           (< fed n)
           (nil? (animals/food-carried p mob))
-          (or (pos? fed) (>= (count (animals/adults p mob radius)) 2))
+          (or (pos? fed) (>= (count (counted c animals/adults)) 2))
           (seq (candidates c))))))
 
 (defn can-run?
