@@ -1570,6 +1570,18 @@
             (is (re-find #"1 of 2" (:text e)))
 ))))))
 
+(def wall-west-of-pen
+  (into {} (for [z (range -4 11) y (range 64 68)] [(str "5," y "," z) "stone"])))
+
+(deftest a-cow-known-in-the-pen-counts-while-a-wall-hides-the-pen
+  (let [answer {:inside (set (for [x (range 11 16) z (range 1 6)] [x 64 z]))}
+        keys-from (fn [blocks]
+                    (let [p (tu/fake (world {:self {:pos {:x -5 :y 64 :z 3}} :blocks blocks}))]
+                      (with-redefs [ctx/mem (constantly {:in-pen-start ["u1"] :brought ["u2"]})]
+                        (hr/pen-keys {:primitives p :args {:mob "cow" :box box :radius 30}} answer))))]
+    (is (= #{"u1" "u2"} (keys-from wall-west-of-pen)) "unlisted behind a wall: not seen, so still counted")
+    (is (= #{} (keys-from {})) "unlisted with the whole pen in sight: gone")))
+
 (deftest a-led-cow-that-drops-out-of-sight-on-the-way-is-waited-for-not-given-up
   (async done
     (tu/run-async done

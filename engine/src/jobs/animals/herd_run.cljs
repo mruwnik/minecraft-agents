@@ -8,6 +8,7 @@
             [jobs.lib.bait :as bait]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.danger :as danger]
             [jobs.lib.escort :as escort]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]
@@ -150,15 +151,27 @@
     (condition-reasons reason) :condition-failed
     :else :nothing-possible))
 
+(defn pen-in-sight?
+  "Whether the body has a clear sight of every feet cell of the pen (danger/in-sight?: walls and unlit cells hide); no
+  cells read is no sight."
+  [c answer]
+  (let [sight (danger/sight-lookup (:primitives c))
+        here (u/self-pos c)]
+    (boolean (and (seq (:inside answer)) (every? #(danger/in-sight? sight here %) (:inside answer))))))
+
 (defn pen-keys
   "The keys of the adults in the pen: those on its cells as sensed, plus those known in it (in at the start or brought)
-  that the sensing does not show while the body is farther than ::listed-range from the pen (near it, an animal not listed is dead or out)."
+  that the sensing does not show while the body cannot see the whole pen (farther than ::listed-range, or a cell hidden):
+  only an animal not listed where the body sees every cell is dead or out."
   [c answer]
   (let [m (ctx/mem c)
         sensed (into #{} (map animals/key-of) (in-pen-adults c answer))
-        far? (> (u/dist (u/self-pos c) (box-centre (pen-box c))) (settings/get settings ::listed-range))
-        unseen? #(and far? (nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (escort/watch-radius) %)))]
-    (into sensed (filter unseen?) (concat (:in-pen-start m) (:brought m)))))
+        unlisted (remove #(or (sensed %) (animals/find-by-key (:primitives c) (:mob (:args c)) (escort/watch-radius) %))
+                         (distinct (concat (:in-pen-start m) (:brought m))))
+        blind? (and (seq unlisted)
+                    (or (> (u/dist (u/self-pos c) (box-centre (pen-box c))) (settings/get settings ::listed-range))
+                        (not (pen-in-sight? c answer))))]
+    (cond-> sensed blind? (into unlisted))))
 
 (defn pen-count-text
   "\"2 of 3 in the pen\"; past the target, \"4 in the pen, 3 wanted\"."
