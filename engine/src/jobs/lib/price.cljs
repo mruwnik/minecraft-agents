@@ -56,6 +56,7 @@
   "The wait reason {:reason :low-health :health :hurry-s :wait-s :text} while the body should heal before the work of a job of
   category (hostile-loss/too-hurt?: going now costs more over going healed, hurry-s, than the heal wait, wait-s); none while
   waiting cannot heal the body (cannot-heal?): the job's own cannot-heal check (ready/hurt-cannot-heal?) stops it instead.
+  With :hit true while a mob's blows hurt the body (danger/hit-ids): a rest where it is hit never heals, so it is no wait.
   `seconds`: the job's own quoted stay, else the category's."
   ([c category] (fit c category nil))
   ([c category seconds]
@@ -64,11 +65,15 @@
            view (ctx/view c)
            health (.-health (.self p))
            hurry (risk/hurry-s health category (cost/death-fn p view) {:seconds seconds :present (hostile-loss/present-fn c view)})
-           wait (risk/heal-wait-s health)]
+           wait (risk/heal-wait-s health)
+           hit? (boolean (seq (danger/hit-ids view)))]
        (when (> hurry wait)
-         {:reason :low-health :health health :hurry-s (round1 hurry) :wait-s (round1 wait)
+         {:reason :low-health :health health :hurry-s (round1 hurry) :wait-s (round1 wait) :hit hit?
           :text (str "health " (.toFixed health 1) " of 20: going now costs " (round1 hurry) " s more than going healed, over the "
-                     (round1 wait) " s healing takes: eat or rest to heal first (natural healing needs food 18+)")})))))
+                     (round1 wait) " s healing takes: "
+                     (if hit?
+                       "a mob is hitting the body, so resting here cannot heal it"
+                       "eat or rest to heal first (natural healing needs food 18+)"))})))))
 
 (defn spawn-parts
   "{:kill :each} of one mob spawned beside body at `at` (cost/spawn-kill, cost/spawn-hurt), read once per body and place
