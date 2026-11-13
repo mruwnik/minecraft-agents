@@ -279,12 +279,12 @@
 
 (defn dear
   "The stop (stop-of) of the first furnace material of short ({material n} beyond the carried) whose obtain the bill would
-  call refuses :not-worth at the kit's worth now (need/item-status; a :look, the same price judged after a look round,
-  counts too: the kit would get its food before that look), item that material; else nil."
+  call refuses :not-worth at the kit's worth now (need/item-status :later; a :look starts the bill, which looks first and
+  prices after, so it is no refusal), item that material; else nil."
   [c short]
   (some (fn [[mat n]]
           (let [[kind _ data :as s] (need/item-status c mat n {:slot :bill :explore (:explore (:args c))} nil)]
-            (when (and (#{:later :look} kind) (= :not-worth (:reason data)))
+            (when (and (= :later kind) (= :not-worth (:reason data)))
               (let [cause (contract/status-cause s)]
                 (assoc (stop-of :condition-failed cause (:text cause)) :item mat)))))
         short))

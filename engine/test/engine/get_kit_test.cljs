@@ -14,6 +14,7 @@
             [engine.game :as game]
             [jobs.lib.cost :as cost]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.need :as need]
             [engine.memory :as mem]
             [engine.perception :as perception]
             [jobs.items.obtain.bill :as bill]
@@ -403,16 +404,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc (hungry-world [{:name "bread" :count 1}] 20) :entities (for [[id x] [[7 5] [8 6] [9 7]]]
+        (let [s (start (-> (hungry-world [{:name "bread" :count 1}] 20)
+                       (assoc :entities (for [[id x] [[7 5] [8 6] [9 7]]]
                                                                  {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :health 20
-                                                                  :drops [{:name "beef" :count 1}]}))
-                       {:items ["iron_pickaxe"] :worth (/ (cost/worth-to nil ["raw_iron"] nil) 2)})]
+                                                                  :drops [{:name "beef" :count 1}]})))
+                       {:items ["iron_pickaxe"] :worth 0.01})]
           (let [timer (js/setInterval #(swap! (:clock s) + 500) 5)]
             (await (f/run-ticks s 80))
             (js/clearInterval timer))
           (is (= {:status :stopped :item "iron_ingot" :reason :not-worth}
                  (select-keys @(:out s) [:status :item :reason])))
           (is (zero? (get (f/inv s) "beef" 0)) "the cows beside it are not hunted for a kit it will not pay for"))))))
+
+(deftest a-look-start-is-no-refusal-of-the-bill
+  (let [status (fn [kind] (fn [& _] [kind :x {:reason :not-worth}]))]
+    (with-redefs [need/item-status (status :look)]
+      (is (nil? (kit/dear {:args {}} {"iron_ingot" 3})) "a :look prices after the look, so the bill goes on"))))
 
 (deftest a-full-bar-and-some-carried-food-with-no-food-source-warns-and-goes-on
   (async done
