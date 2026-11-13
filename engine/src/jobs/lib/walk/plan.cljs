@@ -181,8 +181,8 @@
                (zero? (aget (.-climb table) own))))))))
 
 (defn path-steps
-  "The executor's steps for a planner path over pw: corner free sides and hops, high corners, gap ceilings and drops onto a
-  bouncing block marked, the planned damage of each, and over a masked snapshot the unseen floors (jobs.lib.walk.sight) and
+  "The executor's steps for a planner path over pw: lava beside a step, corner free sides and hops, high corners, gap ceilings
+  and drops onto a bouncing block marked, the planned damage of each, and over a masked snapshot the unseen floors (jobs.lib.walk.sight) and
   the ones a torch lights (:light)."
   [pw ^js path]
   (let [solid? (wworld/solid-fn pw)
@@ -193,7 +193,7 @@
                   executor/policy
                   (executor/with-high-corners
                     executor/policy
-                    (executor/with-corner-hops (executor/with-free-sides (with-light (with-damage (executor/steps-of (.-steps path)) (.-steps path)) (.-steps path)) solid?) solid?)
+                    (executor/with-corner-hops (executor/with-free-sides (with-light (with-damage (executor/with-lava-sides (executor/steps-of (.-steps path)) (wworld/lava-fn pw)) (.-steps path)) (.-steps path)) solid?) solid?)
                     solid?)
                   solid?)
                 (wworld/bounce-fn pw)

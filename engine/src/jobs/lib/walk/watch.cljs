@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.game :as game]
             [engine.hurt :as hurt]
+            [engine.path.blocks :as blocks]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.threat-field :as field]
@@ -88,6 +89,25 @@
         (mapcat (fn [k] (step-cells (nth steps (dec k)) (nth steps k))))
         (remove skip)
         distinct)))
+
+(defn side-cells
+  "The cells round the feet cells of steps i .. i+n-1 (sides and corners) at feet and head height: lava there burns a body
+  that stands on the step with its box over the cell's edge (executor/lava-sides)."
+  [steps i n]
+  (distinct (for [k (range (max 1 i) (min (count steps) (+ i n)))
+                  :let [{:keys [x y z]} (nth steps k)]
+                  dx [-1 0 1] dz [-1 0 1] :when (not= 0 dx dz) dy [0 1]]
+              [(+ x dx) (+ y dy) (+ z dz)])))
+
+(defn lava-id? [^js table id] (== blocks/LAVA (aget (.-kind table) id)))
+
+(defn new-lava
+  "The cells of side-cells of steps from i over the window that are lava in the fresh snapshot now and were not in base's:
+  lava come into sight (or flowed in) beside the way ahead, which the plan neither priced nor walks clear of."
+  [^js base ^js now steps i]
+  (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)]
+    (filterv (fn [[x y z]] (and (lava-id? table (.stateAt ns x y z)) (not (lava-id? table (.stateAt bs x y z)))))
+             (side-cells steps i (:window watch-policy)))))
 
 (defn state-keys
   "The names of the state table's per-state arrays that the planner reads (every typed array with one entry per state, but
@@ -240,7 +260,8 @@
 
 (defn watch-stop
   "The look-ahead at one tick: nil, or the done map that stops the walk to plan again: {:status :replan :why :changed :cells}
-  when a cell of the window ahead differs for the planner between the plan's snapshot (base) and a fresh one, {:status
+  when a cell of the window ahead differs for the planner between the plan's snapshot (base) and a fresh one, or lava is new
+  beside a step of it (new-lava), {:status
   :replan :why :mob :cells} (the cells as walls) when a mob has stood in a 1-wide way ahead (still-mob-cells), else
   {:status :replan :why :danger} when a danger sensed now, not known when the walk began, lies within danger-reach of the
   way ahead (watch :sense, :known: the keys already planned for, which the stop adds its own to), else
@@ -255,9 +276,10 @@
           at [(:x pose) (:y pose) (:z pose)]
           still (when (and mobs now) (still-mob-cells watch here i2 tick now))
           changed (when now
-                    (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)]
-                      (filterv (fn [[x y z]] (not (same-for-planner? table (.stateAt bs x y z) (.stateAt ns x y z))))
-                               (remove (or skip #{}) (window-cells here i2 (:window watch-policy) (opens-of watch steps ahead))))))
+                    (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)
+                          cells (filterv (fn [[x y z]] (not (same-for-planner? table (.stateAt bs x y z) (.stateAt ns x y z))))
+                                         (remove (or skip #{}) (window-cells here i2 (:window watch-policy) (opens-of watch steps ahead))))]
+                      (into cells (remove (set cells)) (new-lava base now here i2))))
           quiet? (and (empty? still) (empty? changed))
           dstop (when quiet? (danger-stop watch all i2 at))
           hstop (when (and quiet? (not dstop)) (health-stop watch all i2 at))]

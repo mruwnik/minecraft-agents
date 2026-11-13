@@ -76,3 +76,38 @@
           bad (first (filter #(corner-lava? fills %) poses))]
       (is (= :arrived (:status done)) (pr-str [sx sz wall-on-x tall-h back done]))
       (is (nil? bad) (pr-str [sx sz wall-on-x tall-h back bad])))))
+
+;; A run of 1-block drops ending on a landing with lava straight ahead beside its feet (run4 F43: the body landed 0.21 past
+;; the landing's middle, still moving on, its box 0.008 into the lava). The way on turns aside at the landing. In a local
+;; frame a along the run, b across it, rotated to each of the four directions.
+(defn landing-fills [[dx dz] run drops side]
+  (let [w (fn [a b] [(- (* a dx) (* b dz)) (+ (* a dz) (* b dx))])
+        cell (fn [a y b name] (let [[x z] (w a b)] [x y z x y z name {}]))
+        land-a (+ run drops) land-y (- 65 drops)]
+    (vec (concat [[-16 55 -16 16 70 16 "stone" {}]]
+                 (for [a (range 0 (inc run)) b (range -3 1) y [65 66 67]] (cell a y b "air"))
+                 (for [k (range 1 (inc drops)) y (range (- 65 k) 68)] (cell (+ run k) y 0 "air"))
+                 [(cell (inc land-a) land-y 0 "lava") (cell (inc land-a) (dec land-y) 0 "lava")
+                  (cell (inc land-a) (inc land-y) 0 "air") (cell (inc land-a) (+ 2 land-y) 0 "air")]
+                 (for [b (range 1 4) y [land-y (inc land-y)]] (cell land-a y (* side b) "air"))))))
+
+(defn landing-goal [[dx dz] run drops side]
+  (let [a (+ run drops) b (* side 3)] [(- (* a dx) (* b dz)) (- 65 drops) (+ (* a dz) (* b dx))]))
+
+(defn fills-lava? [fills {:keys [x y z]}]
+  (some (fn [[lx ly lz _ _ _ name]]
+          (and (= "lava" name)
+               (< (- x half) (inc lx)) (> (+ x half) lx)
+               (< (- z half) (inc lz)) (> (+ z half) lz)
+               (< (+ y 0.001) (+ ly lava-top)) (> (+ y 1.8) ly)))
+        fills))
+
+(deftest a-drop-onto-a-landing-beside-lava-keeps-the-box-off-the-lava
+  (doseq [d [[1 0] [-1 0] [0 1] [0 -1]] run [9] drops [1 3] side [0 1] b0 [0 -3]]
+    (let [fills (landing-fills d run drops side)
+          [dx dz] d
+          {:keys [done poses]} (sp/walk fills [(- (* b0 dz)) 65 (* b0 dx)] (landing-goal d run drops side))
+          bad (first (filter #(fills-lava? fills %) poses))]
+      (is (= :arrived (:status done)) (pr-str [d run drops side b0 done]))
+      (is (nil? bad) (pr-str [d run drops side b0 bad])))))
+

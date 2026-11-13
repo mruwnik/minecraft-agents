@@ -137,6 +137,14 @@
     (is (= :changed (:why done)))
     (is (= [[[1 64 0] "air" "stone"]] (:states done)))))
 
+(deftest lava-come-into-sight-beside-a-step-ahead-replans-another-block-there-does-not
+  (let [air (sid "air" {})
+        snap (fn [id] #js {:snapshot #js {:stateAt (fn [x y z] (if (= [x y z] [3 63 1]) id air))} :table table})
+        steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 64 0 :walk) (step 2 63 1 :drop)]
+        stop (fn [id] (wwatch/watch-stop {:base (snap air) :fresh (constantly (snap id)) :ahead [] :skip #{}} steps 1 {:i 2 :tick 1} pose-on-ground))]
+    (is (= [[3 63 1]] (:cells (stop (sid "lava" {:level 0})))) "lava at the feet of the drop's landing, beside it")
+    (is (nil? (stop (sid "stone" {}))) "a block beside the way is no change")))
+
 (deftest a-cell-the-plan-walled-is-no-change-in-the-look-ahead
   (let [p (tu/fake {:floor tu/walk-floor :blocks {"1,64,0" "red_bed"}})
         walls [{:x 1 :y 64 :z 0}]

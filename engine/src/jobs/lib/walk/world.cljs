@@ -560,6 +560,12 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
+(defn lava-fn
+  "lava? for executor/with-lava-sides over a pathWorld."
+  [pw]
+  (let [snapshot (.-snapshot pw) kinds (.-kind (.-table pw))]
+    (fn [x y z] (== blocks/LAVA (aget kinds (.stateAt snapshot x y z))))))
+
 (def bounce-blocks
   "The blocks a fall bounces off (prismarine-physics bounces only slime)."
   ["slime_block"])

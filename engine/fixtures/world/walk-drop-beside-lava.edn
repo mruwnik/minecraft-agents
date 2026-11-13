@@ -1,0 +1,22 @@
+;; A 1-block drop at the end of a 10-block run lands on a cell whose feet-level neighbour straight ahead holds the thin edge
+;; of a lava flow (a source 4 cells on spreads to it and stops short of the landing); the way turns aside at the landing.
+;; Run4 F43: a body that came off such a drop with its speed slid 0.21 past the landing's middle, its box into the lava.
+;; Should-succeed: the body arrives without a hurt (the walker holds the box clear of the lava face).
+{:defaults
+ {:tags [:movement :lava :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [8 0 12] [28 7 22] "stone"]
+           [:fill [10 3 16] [20 5 16] "air"]
+           [:fill [21 2 16] [21 5 16] "air"]
+           [:fill [22 2 16] [22 4 16] "air"]
+           [:fill [23 2 16] [24 2 16] "air"]
+           [:fill [21 2 17] [21 3 19] "air"]
+           [:set [25 2 16] "lava"]]
+  :body {:at [11.5 3 16.5] :settle-s 8}
+  :limit-s 120}
+ :cases
+ [{:name "a-drop-onto-a-landing-beside-lava-arrives-unburnt"
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [21 2 19] :range 0})]]
+   :expect [{:event {:source :job :kind #{:completed} :data {:status :completed}} :within-s 100 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]}]}

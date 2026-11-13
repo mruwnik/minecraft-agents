@@ -40,6 +40,7 @@
    :pressed-rise 0.01      ; pressed on a block ahead, any rise above this is jumped (a step under a low ceiling is refused
                            ; by the client physics, which lifts the body by the step height first)
    :body-half constants/body-half-width ; half the body's width, as the client physics has it
+   :hitbox-half constants/hitbox-half-width ; half the body's width, as the server has it (what lava burns)
    :body-height constants/body-height ; a corner jump needs the side cells clear this far over the landing's stand height
    :walk-accel 0.098       ; client physics: a walking (not sprinting) body on the ground gains this much speed per tick
                            ; along its yaw (0.1 speed x 0.98 forward)
@@ -230,6 +231,48 @@
                         :settle-ticks (+ (:settle (base/bounce-flight fall)) (:bounce-margin-ticks policy))))))
         steps)))
 
+;; ---------------------------------------------------------------- lava beside a step
+
+(defn lava-sides
+  "The [dx dz] of the cells round the feet cell of step (sides and corners) with lava at its feet or head height. lava? is a
+  fn [x y z] -> bool."
+  [{:keys [x y z]} lava?]
+  (vec (for [dx [-1 0 1] dz [-1 0 1]
+             :when (and (not= 0 dx dz) (or (lava? (+ x dx) y (+ z dz)) (lava? (+ x dx) (inc y) (+ z dz))))]
+         [dx dz])))
+
+(defn with-lava-sides
+  "Add :lava, its lava-sides, to each step with lava beside it. lava? is a fn [x y z] -> bool."
+  [steps lava?]
+  (mapv (fn [s] (let [l (lava-sides s lava?)] (cond-> s (seq l) (assoc :lava l)))) steps))
+
+(defn lava-clear?
+  "The body's box at pose (as the server has it) is clear of the lava beside step (its :lava)."
+  [policy {:keys [x z lava]} pose]
+  (let [m (- 0.5 (:hitbox-half policy))
+        ox (- (:x pose) x 0.5)
+        oz (- (:z pose) z 0.5)]
+    (not-any? (fn [[dx dz]] (and (or (zero? dx) (> (* dx ox) m)) (or (zero? dz) (> (* dz oz) m)))) lava)))
+
+(defn lava-aim
+  "On one axis of a step with lava beside it, the coordinate to steer to in the cell whose low face is at c, for the stand
+  point p: with lava on the plus or minus side only, the body's box flush with the face away from it (the most room for an
+  overshoot); with lava on both, the middle; else p."
+  [policy c p plus? minus?]
+  (cond (and plus? minus?) (+ c 0.5)
+        plus? (min p (+ c (:body-half policy)))
+        minus? (max p (- (inc c) (:body-half policy)))
+        :else p))
+
+(defn stand-point
+  "Where to stand on step: its px pz, moved away from the lava beside it (lava-aim)."
+  [policy {:keys [x z px pz lava]}]
+  (if-not lava
+    [px pz]
+    (let [side? (fn [k v] (some #(= v (nth % k)) lava))]
+      [(lava-aim policy x px (side? 0 1) (side? 0 -1))
+       (lava-aim policy z pz (side? 1 1) (side? 1 -1))])))
+
 ;; ---------------------------------------------------------------- what the planner may plan
 
 (def planner-kinds
@@ -371,7 +414,8 @@
 (defn reached?
   "The body is in the step's cell and at its height (climbs: at least that high going up, at most that high going
   down). A :hatch step (a trapdoor cell over a ladder) counts only once the body is held there, on the ladder's top
-  edge or climbing, because the client bobs over the ladder's top until it stands on that edge."
+  edge or climbing, because the client bobs over the ladder's top until it stands on that edge. A step with lava beside it
+  counts once the body is held there with its box clear of the lava (lava-clear?): a body still moving off a drop is not."
   [policy step {:keys [x y z] :as pose}]
   (let [sy (stand-y step)]
     (and (in-cell? step pose)
@@ -379,6 +423,7 @@
          (or (not= :gap (:move step)) (:on-ground pose))
          (or (not (:bounce step)) (and (:on-ground pose) (<= (Math/abs (or (:vy pose) 0)) (:bounce-settle-vy policy))))
          (or (not (:hatch step)) (and (>= y sy) (or (:on-ground pose) (:on-climbable pose))))
+         (or (not (:lava step)) (and (lava-clear? policy step pose) (or (:on-ground pose) (:on-climbable pose) (:in-water pose))))
          (case (:move step)
            (:climb-up :jump-climb) (>= y (- sy 0.1))
            :climb-down (<= y (+ sy (:arrive-y policy)))
@@ -410,7 +455,7 @@
 
 (defn aim-point
   "Where to steer on this step: the midpoint towards a corner's free cell, the crossing point, or the
-  stand point. A body in water inside a corner's free cell first lines up with the stand point across it, so its box
+  stand point (stand-point: away from lava beside the step). A body in water inside a corner's free cell first lines up with the stand point across it, so its box
   clears the blocked side instead of pressing on it."
   [policy {:keys [px pz cx cz free] :as step} {:keys [x z in-water] :as pose}]
   (let [[fx fz] free
@@ -422,7 +467,7 @@
       (and in-free? in-water (> (Math/abs (if along-z? (- x px) (- z pz))) (:line-up-xz policy)))
       (if along-z? [px (+ fz 0.5)] [(+ fx 0.5) pz])
       (and (some? cx) (not in-step?) (> (dist-xz x z cx cz) (:crossing-xz policy))) [cx cz]
-      :else [px pz])))
+      :else (stand-point policy step))))
 
 ;; ---------------------------------------------------------------- tick
 
@@ -560,6 +605,7 @@
                     (not in-water)
                     (= 3 (count window))
                     (every? #(contains? sprint-moves (:move %)) window)
+                    (not-any? :lava window)
                     (not-any? #(or (some? (:cx %)) (:bend %)) window))))))
 
 (defn yaw-to

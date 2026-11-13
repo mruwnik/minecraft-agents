@@ -191,6 +191,21 @@
     (is (= 1 (get-in r [:state :i])))
     (is (yaw-eq? (ex/yaw-to 3.5 3.5 3.8 3.5) (:yaw r)))))
 
+;; a step with lava beside it (run4 F43: a body landed off a 1-block drop with its box 0.008 into the lava beside)
+(deftest a-step-beside-lava-is-reached-held-with-the-box-clear-and-aimed-away-from-it
+  (let [[land] (ex/with-lava-sides [(step 3 63 3 :drop)] #(= [%1 %2 %3] [2 63 3]))]
+    (is (= [[-1 0]] (:lava land)))
+    (are [ps expected] (= expected (ex/reached? p land ps))
+      (pose 3.5 63 3.5) true
+      (pose 3.29 63 3.5) false
+      (pose 3.5 63.3 3.5 {:on-ground false}) false)
+    (is (= [(- 4 (:body-half p)) 3.5] (ex/aim-point p land (pose 3.5 63 3.5))) "flush with the face away from the lava")))
+
+(deftest lava-beside-a-corner-burns-only-a-box-over-both-its-edges
+  (let [land (step 3 63 3 :walk {:lava [[1 1]]})]
+    (is (ex/lava-clear? p land (pose 3.75 63 3.5)))
+    (is (not (ex/lava-clear? p land (pose 3.75 63 3.75))))))
+
 ;; tick: reaching and overshoot
 
 (deftest start-state
