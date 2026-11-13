@@ -145,3 +145,11 @@
     (is (not= first-shape (shape (plan logs "wooden_pickaxe" 1 {:table? true}))) "the table option")
     (is (not= first-shape (shape (plan (assoc logs "stick" 4 "oak_planks" 8) "wooden_pickaxe" 1))) "what is carried")
     (is (= [[:craft "stick" 4]] (shape (plan {"oak_planks" 8} "stick" 4))) "a different item and have")))
+
+(deftest a-campfire-is-made-with-carried-charcoal-and-any-log
+  (let [src (assoc (sources/source-opts) :table? true)
+        logs {"oak_log" 196 "charcoal" 1}]
+    (is (= {"charcoal" 1} (select-keys (:uses (plan logs "campfire" 1 src)) ["charcoal" "coal"])) "no coal asked for")
+    (is (nil? (:gather (plan logs "campfire" 1 (assoc src :gather? true)))) "nothing is gathered either")
+    (is (= {"coal" 1} (:gather (plan {"oak_log" 196} "campfire" 1 (assoc src :gather? true)))) "coal is the cheaper gather")
+    (is (some #(get (:needs %) "charcoal") (get (recipes/recipes-for game/default-version) "campfire")))))

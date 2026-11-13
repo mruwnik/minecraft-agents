@@ -30,29 +30,63 @@
     (or (> (alength shape) 2) (some #(> (alength %) 2) (array-seq shape)))
     (> (alength (.-ingredients r)) 4)))
 
-(defn recipes-of
-  "{result name [{:count n made per craft :needs {name n} :table? bool}]} for a minecraft-data version."
-  [version]
-  (let [md (facts/data version)
-        name-of (fn [id] (some-> (aget (.-items md) id) .-name))]
-    (reduce (fn [acc [_ rs]]
-              (reduce (fn [acc r]
-                        (let [ids (if (.-inShape r) (mapcat array-seq (array-seq (.-inShape r))) (array-seq (.-ingredients r)))
-                              needs (frequencies (keep #(some-> (id-of %) name-of) ids))
-                              out (name-of (id-of (.-result r)))]
-                          (if (and out (seq needs))
-                            (update acc out (fnil conj []) {:count (max 1 (or (some-> (.-result r) .-count) 1))
-                                                           :needs needs :table? (boolean (needs-table? r))})
-                            acc)))
-                      acc (array-seq rs)))
-            {} (js/Object.entries (.-recipes md)))))
-
 (defn slots-of
   "The ingredient ids of a recipe, in slot order (-1 for an empty cell)."
   [r]
   (if (.-inShape r)
     (map #(or (id-of %) -1) (mapcat array-seq (array-seq (.-inShape r))))
     (map #(or (id-of %) -1) (array-seq (.-ingredients r)))))
+
+(defn same-slot-sets
+  "[[result name #{names}] ...]: the items that stand in one slot of recipes making the same result (as many per craft) in the same layout."
+  [md]
+  (let [name-of (fn [id] (some-> (aget (.-items md) id) .-name))
+        groups (group-by (fn [r] [(id-of (.-result r)) (some-> (.-result r) .-count) (map #(= -1 %) (slots-of r))])
+                         (mapcat (comp array-seq second) (js/Object.entries (.-recipes md))))]
+    (for [[[out] rs] groups :when (> (count rs) 1)
+          slot (apply map vector (map slots-of rs))
+          :let [names (set (keep name-of (remove #{-1} slot)))]
+          :when (> (count names) 1)]
+      [(name-of out) names])))
+
+(defn merge-overlapping
+  "The sets of sets with every two that share a member joined."
+  [sets]
+  (reduce (fn [classes names]
+            (let [hit (filter #(seq (clojure.set/intersection % names)) classes)]
+              (conj (remove (set hit) classes) (apply clojure.set/union names hit))))
+          [] sets))
+
+(defn with-alternatives
+  "The recipes of one result with, for each ingredient that has stand-ins (classes: the sets of items that fill one slot),
+  a recipe per stand-in: minecraft-data lists a tag's members one recipe per member and leaves some out (a campfire
+  takes coal or charcoal, but only a dark oak wood one is listed with charcoal)."
+  [classes rs]
+  (let [class-of (into {} (for [cls classes n cls] [n cls]))
+        swap (fn [needs] (reduce (fn [variants [n k]]
+                                   (let [alts (get class-of n #{n})]
+                                     (for [v variants a alts] (update v a (fnil + 0) k))))
+                                 [{}] needs))]
+    (distinct (for [r rs v (swap (:needs r))] (assoc r :needs v)))))
+
+(defn recipes-of
+  "{result name [{:count n made per craft :needs {name n} :table? bool}]} for a minecraft-data version."
+  [version]
+  (let [md (facts/data version)
+        name-of (fn [id] (some-> (aget (.-items md) id) .-name))
+        listed (reduce (fn [acc [_ rs]]
+                         (reduce (fn [acc r]
+                                   (let [ids (if (.-inShape r) (mapcat array-seq (array-seq (.-inShape r))) (array-seq (.-ingredients r)))
+                                         needs (frequencies (keep #(some-> (id-of %) name-of) ids))
+                                         out (name-of (id-of (.-result r)))]
+                                     (if (and out (seq needs))
+                                       (update acc out (fnil conj []) {:count (max 1 (or (some-> (.-result r) .-count) 1))
+                                                                      :needs needs :table? (boolean (needs-table? r))})
+                                       acc)))
+                                 acc (array-seq rs)))
+                       {} (js/Object.entries (.-recipes md)))
+        classes (update-vals (group-by first (same-slot-sets md)) #(merge-overlapping (map second %)))]
+    (into {} (for [[out rs] listed] [out (vec (with-alternatives (get classes out) rs))]))))
 
 (defn interchange-classes
   "{name #{names}} for a version: items that stand in the same slot of recipes making the same result in the same layout
@@ -61,13 +95,7 @@
   [version planks?]
   (let [md (facts/data version)
         name-of (fn [id] (some-> (aget (.-items md) id) .-name))
-        groups (group-by (fn [r] [(id-of (.-result r)) (map #(= -1 %) (slots-of r))])
-                         (mapcat (comp array-seq second) (js/Object.entries (.-recipes md))))
-        pairs (for [rs (vals groups) :when (> (count rs) 1)
-                    slot (apply map vector (map slots-of rs))
-                    :let [names (set (keep name-of (remove #{-1} slot)))]
-                    :when (> (count names) 1)]
-                names)
+        pairs (map second (same-slot-sets md))
         all (mapcat (comp array-seq second) (js/Object.entries (.-recipes md)))
         plank-logs (set (for [r all :let [out (name-of (id-of (.-result r)))]
                               :when (and out (clojure.string/ends-with? out "_planks") (= 1 (count (slots-of r))))]
@@ -82,10 +110,7 @@
                         :when (> (count forms) 1)]
                     forms)
         pairs (if planks? (concat (remove #(some plank-logs %) pairs) log-pairs) pairs)
-        merged (reduce (fn [classes names]
-                         (let [hit (filter #(seq (clojure.set/intersection % names)) classes)]
-                           (conj (remove (set hit) classes) (apply clojure.set/union names hit))))
-                       [] pairs)]
+        merged (merge-overlapping pairs)]
     (into {} (for [cls merged n cls] [n cls]))))
 
 (def interchange-memo (memoize interchange-classes))
