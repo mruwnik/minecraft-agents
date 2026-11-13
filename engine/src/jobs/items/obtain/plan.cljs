@@ -69,6 +69,8 @@
           (and (not= chosen wanted) (seq (wool-of chosen)) (seq (wool-of wanted)))
           (assoc :wool-fallback {:wanted (first (colors-of wanted)) :taking (first (colors-of chosen))}))))))
 
+(declare raw-needs)
+
 (defn raw-seen?
   "Whether every raw need of a gather plan (but wool, left to pick-plan) has a block seen: of several names, the plans
   whose blocks are seen come before one that would have to look for them (coal unseen, logs seen: charcoal). Fish
@@ -76,7 +78,7 @@
   [c plan]
   (let [rod? (pos? (storage/carried (u/inventory (:primitives c)) "fishing_rod"))]
     (every? #(or (:sheep %) (and (seen-of c %) (or rod? (not= 'jobs.food.fish (:job %)))))
-            (some-> plan :gather (gather-needs (game/version-of (:primitives c)))))))
+            (raw-needs c plan))))
 
 (defn any-log
   "The gather map with the logs any species would do as \"log\" (summed); a log only its own species makes (oak_log
@@ -139,6 +141,17 @@
   (when (way? c :chest)
     (some->> (seq (candidates c names)) (map #(walk-s c (:pos %))) (apply min))))
 
+(defn stocked-chest
+  "The chest booked as holding n of names (stock summed over names), takeable (obtain.chest/candidates), whose walk
+  (walk-s) costs least: {:pos :cost}, else nil."
+  [c names n]
+  (when (way? c :chest)
+    (some->> (candidates c names)
+             (filter (fn [{:keys [stock]}] (<= n (reduce + 0 (map #(get stock % 0) names)))))
+             seq
+             (map (fn [{:keys [pos]}] {:pos pos :cost (walk-s c pos)}))
+             (apply min-key :cost))))
+
 (defn loose-s [c names]
   (when (way? c :loose)
     (some->> (seq (loose-way/seen c names)) (map #(walk-s c (u/pos-of (.-pos %)))) (apply min))))
@@ -198,23 +211,25 @@
   "Seconds to gather a need whose nearest block is seen, a lower bound (the walk's danger is go-to's to price): the
   straight walk there (none to a crop still to be sown: grow-s), the digs (see dug-block), a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
   loot holds none), a growable crop's wait for the grow (grow-s), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
-  the body's kit)."
+  the body's kit); for a need taken from a chest (by-chest), the walk there and back (walk-s)."
   [c need]
-  (let [p (:primitives c)
-        src (seen-of c need)
-        {:keys [pos name]} (if (map? src) src {:pos (u/pos-of (.-pos src))})
-        self (u/self-pos c)
-        d (if pos (u/dist self pos) 0)
-        walk (:cost (cost/walk-cost {:distance d}))
-        mob (:mob need)
-        kills (when (and mob (cost/hostile? (game/version-of p) {:name mob}))
-                (if-let [drops (cost/kill-drops mob (:key need) :version (game/version-of p))]
-                  (* (js/Math.ceil (/ (:count need) drops)) (cost/kill-price (threats/death-body c) mob self))
-                  js/Infinity))
-        dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost (dug-block need name)) 0)))]
-    (if (and (:ore? need) (below? c need) (unlit? p pos))
-      (+ dig (cost/dark-way-s walk d (threats/body-of p)))
-      (+ walk dig (grow-s c need)))))
+  (if-let [chest (:chest need)]
+    (walk-s c chest)
+    (let [p (:primitives c)
+          src (seen-of c need)
+          {:keys [pos name]} (if (map? src) src {:pos (u/pos-of (.-pos src))})
+          self (u/self-pos c)
+          d (if pos (u/dist self pos) 0)
+          walk (:cost (cost/walk-cost {:distance d}))
+          mob (:mob need)
+          kills (when (and mob (cost/hostile? (game/version-of p) {:name mob}))
+                  (if-let [drops (cost/kill-drops mob (:key need) :version (game/version-of p))]
+                    (* (js/Math.ceil (/ (:count need) drops)) (cost/kill-price (threats/death-body c) mob self))
+                    js/Infinity))
+          dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost (dug-block need name)) 0)))]
+      (if (and (:ore? need) (below? c need) (unlit? p pos))
+        (+ dig (cost/dark-way-s walk d (threats/body-of p)))
+        (+ walk dig (grow-s c need))))))
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each its walk (its
@@ -310,11 +325,33 @@
 
 (defn search-cost "Seconds per find of the cheaper search-way for an unseen need." [c need] (:cost (search-way c need)))
 
+(defn by-chest
+  "The raw need withdrawn from the takeable chest booked as holding its count (stocked-chest; any species for \"log\")
+  by an obtain child of the :chest way, when that walk costs less than its gather (need-cost, search-cost unseen) and no
+  such child came back empty this call ([:gather :chest-tried key]); else need as it is. A player takes the wheat in
+  their chest for bread rather than growing it."
+  [c need]
+  (let [k (:key need)
+        names (if (= "log" k) facts/log-names [k])
+        chest (when-not (or (= "water_bucket" k) (get-in (ctx/mem c) [:gather :chest-tried k]))
+                (stocked-chest c names (:count need)))]
+    (if (and chest (< (:cost chest) (if (seen-of c need) (need-cost c need) (search-cost c need))))
+      {:key k :count (:count need) :chest (:pos chest) :job 'jobs.items.obtain
+       :args (assoc (if (= "log" k) {:any-of names} {:item k})
+                    :count (+ (reduce + 0 (map #(storage/carried (u/inventory (:primitives c)) %) names)) (:count need))
+                    :ways #{:chest})}
+      need)))
+
+(defn raw-needs
+  "A gather plan's raw needs (obtain.table/gather-needs), each by-chest."
+  [c pl]
+  (some->> pl :gather (#(gather-needs % (game/version-of (:primitives c)))) (mapv #(by-chest c %))))
+
 (defn plan-cost
-  "Seconds to gather a plan's raw needs (need-cost, search-cost when a need has no block seen) and smelt what it smelts.
-  The torches the tunnelled needs stock first (stock-s) are got once for them all."
-  [c version pl]
-  (let [needs (some-> pl :gather (gather-needs version))
+  "Seconds to gather a plan's raw needs (raw-needs: need-cost, search-cost when a need has no block seen) and smelt what
+  it smelts. The torches the tunnelled needs stock first (stock-s) are got once for them all."
+  [c _version pl]
+  (let [needs (raw-needs c pl)
         ways (map #(when-not (seen-of c %) (search-way c %)) needs)
         tunnels (count (filter #(= :tunnel (:way %)) ways))
         stock (if (< 1 tunnels) (stock-s c) 0)]
@@ -335,7 +372,7 @@
   spawns), that plan. A way whose own needs are unseen (wool dyed
   from wool) is passed over for the next while that leaves out more items; none is left once it leaves out none."
   [c version pl have name n opts]
-  (let [needs #(some-> % :gather (gather-needs version))
+  (let [needs #(raw-needs c %)
         unseen #(set (map :key (remove (fn [need] (seen-of c need)) (needs %))))
         hard (some->> (needs pl) (filter #(or (nil? (seen-of c %)) (and (:ore? %) (below? c %)))) (map :key) set not-empty)
         alt (loop [off hard]

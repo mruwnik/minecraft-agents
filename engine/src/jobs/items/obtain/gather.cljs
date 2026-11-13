@@ -6,7 +6,7 @@
             [engine.game :as game]
             [jobs.items.obtain.base :refer [explore-opts job-time-binds? job-time-left search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [callable? climbs-first? gather-viable? pickaxe-first? seen-refusal tree? light-settling? tools-wanted torch-due trees-unreachable?]]
-            [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan gathered-s search-way]]
+            [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan gathered-s raw-needs search-way]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -350,7 +350,7 @@
   [c names have target]
   (let [p (:primitives c)
         pl (gather-plan c names (- target have))
-        need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p) (with-avoid c))
+        need (some->> (first (raw-needs c pl)) (with-block c) (with-count p) (with-avoid c))
         climb (delay (climb-y c need))
         stocking (await (torch-step! c need))
         wet (when (and need (not stocking) (not (get-in (ctx/mem c) [:gather :before])) (not= "water_bucket" (:key need)) (not (animal? need)) (breath/in-water? p))
@@ -436,6 +436,7 @@
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
                       (cond
+                        (:chest need) (do (ctx/update-mem! c assoc-in [:gather :chest-tried (:key need)] true) :again)
                         (torch-due c (:cause e)) (book-light! c (torch-due c (:cause e)))
                         (light-settling? c (:cause e)) :again
                         (and (#{:flooded :wet :exposed :hazard} (contract/cause-key e)) at)

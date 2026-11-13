@@ -114,9 +114,10 @@
     (animals-worth-hunting c (:mob need) #(not (true? (.-baby %))))))
 
 (defn seen-of
-  "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range; a growable crop need with none seen is sourced by growing it ({:grow true}); else nil."
+  "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range; a growable crop need with none seen is sourced by growing it ({:grow true}); a need taken from a chest (obtain.plan/by-chest) its chest ({:pos}); else nil."
   [c need]
   (cond
+    (:chest need) {:pos (:chest need)}
     (growable? need) (or (first (seen-blocks-of c need false)) {:grow true})
     (or (:sheep need) (:mob need)) (first (animals-of c need))
     :else (first (seen-blocks-of c need false))))
@@ -125,6 +126,8 @@
   "The need with the nearest seen water as the :pos a bucket is filled at, :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, craftable from 2 iron ingots or in a booked chest, else hunts."
   [c need]
   (cond
+    (:chest need) need
+
     (and (:sheep need) (shears-source c))
     (assoc need :job 'jobs.animals.shear :args {:color (:sheep need) :radius (seen-radius)})
 
@@ -186,4 +189,4 @@
 (defn gather-slot
   "The child slot of a gather need: one per source, since a slot's memory outlives its job while it runs and another job must not start over it."
   [need]
-  (keyword (str "gather-" (:key need))))
+  (keyword (str "gather-" (when (:chest need) "chest-") (:key need))))

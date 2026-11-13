@@ -3,13 +3,12 @@
   (:require [engine.composite :as composite]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
             [jobs.items.obtain.base :refer [explore-opts gathers? makes? names-of search-names way?]]
             [jobs.items.obtain.chest :refer [candidates]]
-            [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
+            [jobs.items.obtain.plan :refer [craft-plan gather-plan raw-needs]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
-            [jobs.items.obtain.table :refer [gather-needs searchable?]]
+            [jobs.items.obtain.table :refer [searchable?]]
             [jobs.lib.cost :as cost]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface]
@@ -65,7 +64,7 @@
   "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
   the child of the first would run (or, when no carried tool harvests its block, the tool's obtain child would)."
   [c names n]
-  (when-let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)]
+  (when-let [needs (seq (raw-needs c (gather-plan c names n)))]
     (and (every? #(seen-of c %) needs)
          (let [need (with-block c (first needs))]
            (boolean (if (tools-wanted c names need)
@@ -77,7 +76,7 @@
   "The start status of the first seen raw need's child when it declines to start (its readiness or price), else nil:
   a seen source the gather cannot take now is not one never seen."
   [c names n]
-  (when-let [need (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) first)]
+  (when-let [need (first (raw-needs c (gather-plan c names n)))]
     (when (and (seen-of c need) (not (tools-wanted c names need)))
       (let [need (with-block c need)
             s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
@@ -108,7 +107,7 @@
   (when (explore-opts c)
     (filter #(and (searchable? %) (or (not (seen-of c %)) (trees-unreachable? c (with-block c %)))
                   (or (not (tools-wanted c names %)) (tool-viable? c names %)))
-            (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c)))))))
+            (raw-needs c (gather-plan c names n)))))
 
 (defn explorable?
   "Whether :explore is on and a raw need of the chain is not seen, or its logs are seen but not fellable: the search
@@ -141,7 +140,7 @@
   hold (the gather lights it, lights-itself?). The cause's metadata :kind is
   the child's status kind (:later or :look)."
   [c names n]
-  (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)
+  (let [needs (seq (raw-needs c (gather-plan c names n)))
         need (when (and needs (every? #(seen-of c %) needs)) (with-block c (first needs)))]
     (when need
       (if-let [tools (tools-wanted c names need)]

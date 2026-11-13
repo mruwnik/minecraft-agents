@@ -367,6 +367,27 @@
           (is (= :done (:kind e)))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the far chest"))))))
 
+(defn ^:async planks-from-booked-logs
+  "An obtain of 4 oak planks, nothing carried, no tree seen, the chest beside the body booked as holding 2 oak logs and
+  really holding logs: its ending, the gathering events and the chest's items after."
+  [logs]
+  (let [s (f/start (f/world {f/chest-at logs}) [f/own-zone])
+        _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [-2 64 3] :items {"oak_log" 2}} stock/stock-policy)
+        e (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 4 :explore false} 60))]
+    {:e e :via (mapv :via (f/events-of s :obtain.gathering)) :chest (f/chest-items s f/chest-at) :inv (f/inv s)}))
+
+(deftest a-chains-raw-need-booked-in-a-chest-is-taken-from-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [e via inv]} (await (planks-from-booked-logs [{:name "oak_log" :count 2}]))]
+          (is (= :done (:kind e)) "the logs for the planks come from the chest, not a tree")
+          (is (= ['jobs.items.obtain] via))
+          (is (<= 4 (get inv "oak_planks" 0))))
+        (let [{:keys [e via]} (await (planks-from-booked-logs []))]
+          (is (not= :done (:kind e)))
+          (is (= ['jobs.items.obtain] via) "a booking found stale is tried once, then the gather goes on without it"))))))
+
 (deftest the-walk-to-a-remembered-chest-says-when-it-was-last-seen
   (async done
     (tu/run-async done
