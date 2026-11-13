@@ -401,6 +401,18 @@
               "the cow nearer than the chest stands in the body's own zone: the hunt would spare it, so it is no source")
           (is (empty? (f/chest-items s f/chest-at)) "the beef is taken from the chest"))))))
 
+(deftest a-smelt-input-booked-in-a-chest-is-taken-from-it-not-hunted-from-the-kept-pair-of-cows
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cow (fn [id x] {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 2} :health 20 :drops [{:name "beef" :count 1}]})
+              s (f/start (assoc (f/world {f/chest-at [{:name "beef" :count 2}]}) :entities [(cow 7 1) (cow 8 2)]) [])
+              _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [-2 64 3] :items {"beef" 2}} stock/stock-policy)
+              _ (await (ending-of s 'jobs.items.obtain {:item "cooked_beef" :count 2 :explore false} 30))]
+          (is (= 'jobs.items.obtain (first (map :via (f/events-of s :obtain.gathering))))
+              "exactly two cows in sight are a breeding pair the hunt keeps: no source, so the chest is taken first")
+          (is (empty? (f/chest-items s f/chest-at)) "the beef is taken from the chest"))))))
+
 (deftest the-walk-to-a-remembered-chest-says-when-it-was-last-seen
   (async done
     (tu/run-async done

@@ -107,14 +107,24 @@
   [c need]
   (first (filter #(some-> (:age %) (>= (crops/ripe-age (:crop need)))) (standing-crops c need))))
 
+(defn spared-fn
+  "A fn of an adult animal of need's mob in sight giving the rule the hunt leaves it alone by (jobs.lib.animal-spare/why),
+  else nil: the pair rule counted as combat.hunt counts it (adults in sight plus noted ones)."
+  [c need]
+  (let [mob (:mob need)
+        pens (atom [])
+        es (remove #(true? (.-baby %)) (animals/herd (:primitives c) mob (seen-radius)))
+        n (spare/adults-of-kind c mob es (set (map #(.-uuid %) es)) (seen-radius))]
+    #(spare/why (spare/keep-adults) mob n (spare/penned? c pens %) false)))
+
 (defn animals-of
   "The animals in sight a hunt or shear of an animal need may go for, nearest first: sheep of its colour in range, or adults
-  of its mob worth the trip that the hunt would not leave alone (jobs.lib.animal-spare/spared)."
+  of its mob worth the trip that the hunt would not leave alone (spared-fn)."
   [c need]
   (if (:sheep need)
     (filter #(= (:sheep need) (.-color %)) (sheep-in-range c))
-    (let [pens (atom [])]
-      (animals-worth-hunting c (:mob need) #(not (or (true? (.-baby %)) (spare/spared c pens %)))))))
+    (let [spared (spared-fn c need)]
+      (animals-worth-hunting c (:mob need) #(not (or (true? (.-baby %)) (spared %)))))))
 
 (defn spared-why
   "The text of a hunt ending that left animals alone (its :spared-by, a count per rule: pen, keep ..), else nil."
@@ -123,12 +133,12 @@
     (str "left alone: " (clojure.string/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))
 
 (defn spared-in-sight
-  "{rule n} of the adults of an animal need's mob in sight that the hunt leaves alone (animal-spare/spared), else nil."
+  "{rule n} of the adults of an animal need's mob in sight that the hunt leaves alone (spared-fn), else nil."
   [c need]
-  (when-let [mob (:mob need)]
-    (let [pens (atom [])]
-      (not-empty (frequencies (keep #(when-not (true? (.-baby %)) (spare/spared c pens %))
-                                    (animals/herd (:primitives c) mob (seen-radius))))))))
+  (when (:mob need)
+    (let [spared (spared-fn c need)]
+      (not-empty (frequencies (keep #(when-not (true? (.-baby %)) (spared %))
+                                    (animals/herd (:primitives c) (:mob need) (seen-radius))))))))
 
 (defn seen-of
   "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range; a growable crop need with none seen is sourced by growing it ({:grow true}); a need taken from a chest (obtain.plan/by-chest) its chest ({:pos}); else nil."

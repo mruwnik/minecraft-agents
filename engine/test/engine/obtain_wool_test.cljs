@@ -284,10 +284,10 @@
           (is (re-find #"left alone: 3 pen" (:why (first (filter #(= :stopped (:kind %)) @(:seen s))))) "the ending says the cows were spared"))))))
 
 (defn ^:async approached
-  "The gather memory after obtain's approach! to two cows 10 blocks off for leather worth 20 s, by an unarmed body, in a
+  "The gather memory after obtain's approach! to three cows 10 blocks off (more than the pair the hunt keeps) for leather worth 20 s, by an unarmed body, in a
   world set up by prepare! (eng, the clock atom)."
   [prepare!]
-  (let [s (h/setup {:entities [(cow 1 10) (cow 2 11)]} 50)
+  (let [s (h/setup {:entities [(cow 1 10) (cow 2 11) (cow 3 12)]} 50)
         out (atom nil)
         parent {:round (fn ^:async r [c]
                          (await (gather/approach! c {:mob "cow" :key "leather"}))
