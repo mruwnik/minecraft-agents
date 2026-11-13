@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
             [jobs.lib.waits :as waits]))
@@ -56,19 +57,19 @@
   (and (= :condition-failed (:kind e)) (empty? (:data e))))
 
 (defn begin!
-  "slot's round starts now, unless one is under way (fruitless! and progress! end it): fruitless! prices the round from
+  "slot's round starts now, a round not ended by fruitless! or progress! forgotten: fruitless! prices the round from
   here, so the caller's own work in it (a walk, a feed) counts."
   [c slot]
-  (when-not (get-in (ctx/mem c) [:round-t slot])
-    (ctx/update-mem! c assoc-in [:round-t slot] (ctx/now c))))
+  (let [{:keys [now age]} (ctx/view c)]
+    (ctx/update-mem! c assoc-in [:round-t slot] (cond-> {:t now} age (assoc :age age)))))
 
 (defn round-s
-  "The seconds of slot's round ending in e: from begin! when it was called, else e's :wall-time; nil (the kind's
-  seconds) when the child never ran (declined?)."
+  "The seconds of slot's round ending in e: from begin! when it was called, in world age (a host pause counts none),
+  else e's :wall-time; nil (the kind's seconds) when the child never ran (declined?)."
   [c slot e]
   (when-not (declined? e)
     (if-let [t (get-in (ctx/mem c) [:round-t slot])]
-      (/ (- (ctx/now c) t) 1000)
+      (/ (settings/ticks->ms (game/ticks-since t (ctx/view c))) 1000)
       (get-in e [:report :uses :wall-time]))))
 
 (defn fruitless!

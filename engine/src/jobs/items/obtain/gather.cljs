@@ -406,6 +406,7 @@
         (tried! c :gather :none-seen))
       :else
       (do (when-not (get-in (ctx/mem c) [:gather :before])
+            (child/begin! c :gather)
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
             (ctx/update-mem! c assoc-in [:gather :item] (:key need))
             (keep-crafting-items! c (:uses pl))
@@ -430,7 +431,6 @@
               (ctx/emit! c :obtain.wool-colour :info
                          {:message (str "no " wanted " sheep worth the walk; taking " taking " wool instead")
                           :wanted wanted :taking taking})))
-          (child/begin! c :gather)
           (let [e (waits/waiting-out c (await (ctx/call c (gather-slot need) (:job need) (:args need))))]
             (if (= :continue e)
               :continue
