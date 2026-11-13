@@ -14,6 +14,12 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0]
            [:entities "type=item" [[0 -1 0] [32 5 32]] 0]]}
+  {:name "planks-only-takes-its-table-along"
+   :body {:inventory [["oak_planks" 7] ["stick" 2]]}
+   :act [[:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 1] [:item "oak_planks" 0]
+           [:entities "type=item" [[0 -1 0] [32 5 32]] 0]]}
   {:name "seen-table-planks-sticks"
    :blocks [[:set [19 0 16] "crafting_table"]]
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}

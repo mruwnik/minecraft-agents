@@ -25,7 +25,8 @@
             [jobs.lib.price :as price]
             [jobs.lib.spent :as spent]
             [jobs.lib.spot :as free-spot]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.storage :as storage]
+            [jobs.lib.tools :as tools]))
 
 (def doc
   "Craft until at least :count of :item are carried in all (:count is the total to carry, not how many more to make: :count 1 with one carried crafts nothing). 2x2 recipes work anywhere; bigger ones use a crafting table
@@ -33,13 +34,13 @@
   Needs: an item name (impossible :bad-args); a table known when the recipe needs one, else one look round first (:look :no-table). An ingredient that runs out is fetched (jobs.lib.need) from the ways the call allows (:ways #{:carried}: stops :short).
   Returns :done {:made n :item :text}. Stopping short it ends with :made, :item and :text: condition-failed
   :need (:short, :alternatives), :no-table, :not-a-table or :full; nothing-possible :unreachable, :cannot or :craft-failed.
-  A table this call put down is dug up again however the call ends, unless :keep-table.")
+  A table this call put down is dug up again however the call ends, unless :keep-table and what is carried makes another sooner.")
 
 (a/defargs args
   {:item {:doc "item name to craft" :spec a/item? :default nil}
    :count {:doc "how many to carry at least, counted when the call starts: done once those carried then plus those this call crafted reach it (items eaten or put away meanwhile are not made again)" :spec (a/int-in 0 nil) :default 1}
    :table {:doc "crafting table position; the nearest seen when nil and the recipe needs one" :spec ::a/pos :default nil}
-   :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
+   :keep-table {:doc "leave a table this call put down standing while what is carried makes another sooner than digging it up takes (table-replaceable?); false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}
    :for-plan {:doc "id of the plan whose work this is: a table may stand in its own cells; nil: no plan's cells are used" :spec a/name? :default nil}})
 
@@ -116,14 +117,29 @@
                                         {:known "a crafting table is known" :missing "no crafting table in sight" :fetches? true})
                    (checks/holds))]))
 
+(declare chooser)
+
+(defn table-replaceable?
+  "Whether the carried items (less what the register holds from this call) make another crafting table in less time
+  (its crafts at batch-s each) than digging this one up takes (tools/clear-ms): a body with wood to spare leaves its
+  table, one without takes it along, as the next tool on a mining trip needs one."
+  [c]
+  (let [p (:primitives c)
+        have (storage/carried-totals (reserve/free c (chooser c)))
+        steps (if (pos? (get have recipes/table-item 0))
+                []
+                (:steps (recipes/plan (game/version-of p) have recipes/table-item 1 {})))]
+    (boolean (and steps (<= (* (count steps) (batch-s)) (/ (tools/clear-ms p recipes/table-item) 1000))))))
+
 (defn pickup-spot
-  "The table cell this call put down and is still to dig up, else nil: not with :keep-table, once dug, gone, in an area of the
-  body's own (but a cell of the :for-plan plan is dug: the build needs it) or refused by a zone."
+  "The table cell this call put down and is still to dig up, else nil: not with :keep-table while the table is
+  replaceable, once dug, gone, in an area of the body's own (but a cell of the :for-plan plan is dug: the build needs
+  it) or refused by a zone."
   [c]
   (let [spot (:table-placed (ctx/mem c))
         for-plan (:for-plan (:args c))
         in-plan? (and for-plan spot (= for-plan (get (known/footprints c) (mapv #(js/Math.floor %) [(:x spot) (:y spot) (:z spot)]))))]
-    (when (and spot (not (:keep-table (:args c))) (not (:picked-up (ctx/mem c)))
+    (when (and spot (not (and (:keep-table (:args c)) (table-replaceable? c))) (not (:picked-up (ctx/mem c)))
                (= "crafting_table" (u/seen-name (:primitives c) spot))
                (or in-plan? (not (access/in-own-area? c spot)))
                (:ok (access/may? (access/rules-input c {:except (:for-plan (:args c))}) :dig spot)))
