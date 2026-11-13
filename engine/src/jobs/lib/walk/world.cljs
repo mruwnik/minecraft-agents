@@ -650,6 +650,7 @@
   :air-drain and :air-grace follow the helmet (jobs.lib.cost/air-profile), :swim-h Depth Strider on the boots (swim-profile); with the head under water, or the breath not yet full, :air-used is the air
   its oxygen says it has used, and under water there is no turtle grace (it may be spent on this dive), only Water Breathing's seconds left; :health is the hp drowning to which
   is lethal (each hp of it at :damage-weight), :air-seen (known-fn) which air counts;
+  :costs prices a drop onto farmland at the measured till of the dirt it leaves (cost/field-step-s :till);
   c's :budget-near (go-to's) is :budget-near."
   [c]
   (let [self (.self (:primitives c))
@@ -666,10 +667,10 @@
                     :danger-cap (max cost/danger-cap (:max-rate (cost/danger-opts)))}
                    (when-some [landing (cost/walk-landing)] {:landing landing})
                    {:drop-cost (cost/walk-drop-cost)}
-                   (when-some [costs (cost/walk-costs)] {:costs costs})
+                   {:costs (cond-> (merge {:trample (cost/field-step-s :till 1)} (cost/walk-costs))
+                             (some? (:descent-s c)) (assoc :descent (:descent-s c)))}
                    (when-some [m (y-margin)] {:y-margin m})
                    (when-some [f (:dive-floor c)] {:y-below (max 0 (- (js/Math.floor (.-y (.-pos self))) f))})
-                   (when-some [d (:descent-s c)] {:costs (assoc (cost/walk-costs) :descent d)})
                    (when-some [n (:budget-near c)] {:budget-near n}))
       (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
                                                (merge (drowning self))

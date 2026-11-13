@@ -254,9 +254,8 @@
         (or (neg? rx) (>= rx SPAN) (neg? rz) (>= rz SPAN)) (.boxedAt s)
         (or (< x (.-bx0 s)) (> x (.-bx1 s)) (< z (.-bz0 s)) (> z (.-bz1 s)) (< y (.-by0 s)) (> y (.-by1 s))) (.boxedAt s)
         (and (some? (.-only-cells s)) (not ^boolean (.has ^js (.-only-cells s) (cell-key x y z)))) nil
-        ;; a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node
-        ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
-        (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget (.-tbl-farmland s) (.stateAt ^js (.-snapshot s) x y z)) 1)) nil
+        ;; a gap jump or a drop onto farmland tramples it: costs.trample, refused when infinite
+        (and (== ##Inf (.-c-trample s)) ^boolean (.tramples s x y z move)) nil
         ;; options.unknown: a phantom floor the walk cannot check first or see (also sets move-unk and move-light)
         (and (>= (.-unk-id s) 0) ^boolean (.unseenRefuses s x y z move parent-node dsec)) nil
         ;; (holdsBack keeps the drop to replay: a probe cannot tell)
@@ -280,6 +279,7 @@
               ddark (+ (if (some? (.-dark-at s)) (* dsec (.darkOf s x y z)) 0)
                        (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0)
                        (if (and (some? (.-trample-tolls s)) (landing-move? move)) (* dsec (.trampleTollOf s x y z)) 0)
+                       (if (and (pos? (.-c-trample s)) ^boolean (.tramples s x y z move)) (.-c-trample s) 0)
                        (if (some? (.-edge-tolls s)) (.edgeToll s x y z move parent-node) 0)
                        (.-move-unk s)
                        (if (pos? (.-c-descent s)) (* (.-c-descent s) (js/Math.max 0 (- (aget (.-ys s) parent-node) y))) 0))]
@@ -375,6 +375,11 @@
       (and (not (zero? (bit-and kinds AVOID-WATER))) (or (>= move MOVE-SWIM) ^boolean (.isWater s x y z))) true
       (and (not (zero? (bit-and kinds AVOID-OPEN))) (or (== move MOVE-OPEN) (pos? (.-move-open s)))) true
       :else false))
+
+  ;; whether `move` into x,y,z tramples farmland: a gap jump or a drop lands after a fall of over 0.5 blocks (a farmland node
+  ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it does not)
+  (tramples [s x y z move]
+    (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget (.-tbl-farmland s) (.stateAt ^js (.-snapshot s) x y z)) 1)))
 
   ;; the factor of its own seconds the caller's toll (options.tolls) adds to entering x,y,z, 0 for none
   (tollOf [s x y z]

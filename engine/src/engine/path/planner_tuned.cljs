@@ -437,6 +437,7 @@
      ;; goal-seen
      (.-goalSeen options)
      (unchecked-get costs "descentS")
+     (unchecked-get costs "trample")
      (if (pos? rw) (/ (* (unchecked-get costs "gapMiss") lethal-s) rw) 0)
      (unchecked-get costs "gapMiss")
      (base/gap-miss-share (option options "gapMissJumps" base/GAP-MISS-JUMPS))

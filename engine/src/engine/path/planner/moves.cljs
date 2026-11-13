@@ -339,11 +339,13 @@
                 (.tightMove s i x y z h region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
                 (.edge s x2 y z2 0 MOVE-SWIM i sec risk 0 0 0))
               (.swimEnd s)))
-          ;; no ground ahead at our level: the body must at least fit in the column to leave the edge
-          (when ^boolean (.clear s x2 z2 h0 (+ h0 BODY))
-            (.expandDrop s i x y z h region c x2 z2 h0 slow-from tight-src)
+          ;; no ground ahead at our level: the body must at least fit in the column to leave the edge (a tight column's
+          ;; masks check that themselves: a drop past a fence post, as the jump up past it)
+          (let [clear (.clear s x2 z2 h0 (+ h0 BODY))]
+            (when (or ^boolean clear ^boolean (.tightAt s x2 y z2))
+              (.expandDrop s i x y z h region c x2 z2 h0 slow-from (or tight-src (not clear))))
             ;; no gap jumps out of a tight cell, but over a gate or door cell: the body has no other way across the hole
-            (when (or (not tight-src) ^boolean (.openableAt s x2 y z2))
+            (when (and ^boolean clear (or (not tight-src) ^boolean (.openableAt s x2 y z2)))
               (.expandGap s i x y z c h0)))))))
 
   (expandDiagonal [s x y z slow-from i c h0]

@@ -173,6 +173,8 @@
    ^js goal-seen
    ;; costs.descentS: seconds a block of descent adds to a move's cost
    c-descent
+   ;; costs.trample: seconds a gap jump or drop that tramples farmland adds (it is tilled again); infinite: none is planned
+   c-trample
    ;; hp of risk a gap jump that falls short to its death adds: costs.gapMiss (the chance) times lethal-s, over riskWeight
    gap-death
    ;; costs.gapMiss: the chance a gap jump falls short; its hole's fall damage times it is the jump's priced damage
