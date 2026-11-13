@@ -3,8 +3,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import prismarineRegistry from 'prismarine-registry'
-import { botOptions, connectBot, installTickEnd, guardRejections, DEFAULTS } from './connect.mjs'
+import { createRequire } from 'node:module'
+import { botOptions, connectBot, installTickEnd, installServerClock, guardRejections, DEFAULTS } from './connect.mjs'
 import { createSense } from './prim-sense.mjs'
+
+const injectTime = createRequire(import.meta.url)('mineflayer/lib/plugins/time.js')
 
 test('botOptions passes the default view distance to mineflayer', () => {
   assert.equal(botOptions({ host: 'h', port: 1, username: 'u' }).viewDistance, DEFAULTS.viewDistance)
@@ -78,6 +81,24 @@ test('installTickEnd writes one tick_end per physics tick when the protocol has 
   installTickEnd(without.bot)
   without.bot.emit('physicsTick')
   assert.deepEqual(without.writes, [])
+})
+
+// The 26.1 server's time packet every 20 ticks has the age and no clocks; the body's physics ran 400 ticks while the server ran 200.
+test('installServerClock keeps the day time on the server ticks, not the body physics ticks, and takes a clock change', () => {
+  const client = new EventEmitter()
+  const bot = Object.assign(new EventEmitter(), { _client: client, registry: { dimensionsById: { 0: { name: 'overworld' } } }, game: { dimension: 'overworld' } })
+  injectTime(bot)
+  installServerClock(bot)
+  const packet = (age, clockUpdates = []) => client.emit('update_time', { age: [0, age], clockUpdates })
+  packet(0, [{ id: 0, totalTicks: 12000, partialTick: 0, rate: 1 }])
+  for (let i = 0; i < 400; i++) bot.emit('physicsTick')
+  packet(200)
+  assert.equal(bot.time.timeOfDay, 12200)
+  packet(220, [{ id: 0, totalTicks: 1000, partialTick: 0, rate: 1 }])
+  for (let i = 0; i < 40; i++) bot.emit('physicsTick')
+  packet(240)
+  assert.equal(bot.time.timeOfDay, 1020)
+  assert.equal(bot.time.isDay, true)
 })
 
 test('guardRejections logs an unhandled rejection instead of leaving node to exit, and installs once', () => {

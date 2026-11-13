@@ -34,6 +34,37 @@ export function installTickEnd (bot) {
   bot.on('physicsTick', () => bot._client.write('tick_end', {}))
 }
 
+// A 26.1 server sends the world clocks only on join and on a change (/time, a night skip); its time packet every 20 ticks
+// carries the world age alone, and mineflayer runs the clocks on by the body's own physics ticks. Under a lagging server
+// the body's day ran thousands of ticks ahead (14985 against the server's 9283: the server refused the bed). So each clock follows
+// the server's age since the clock's last update; the physics ticks only fill the second between packets.
+export function installServerClock (bot) {
+  const bases = new Map()
+  bot.on('time', () => {
+    const time = bot.time
+    const age = Number(time?.age)
+    if (!time?.clocks || !Number.isFinite(age)) return
+    for (const [name, clock] of Object.entries(time.clocks)) {
+      const base = bases.get(name)
+      if (base?.clock !== clock) {
+        bases.set(name, { clock, age, ticks: Number(clock.totalTicks) + (clock.partialTick ?? 0) })
+        continue
+      }
+      const ticks = base.ticks + (age - base.age) * (clock.rate ?? 1)
+      clock.totalTicks = Math.floor(ticks)
+      clock.partialTick = ticks - clock.totalTicks
+    }
+    const clock = time.clocks[bot.game?.dimension]
+    if (!clock) return
+    time.time = clock.totalTicks
+    time.bigTime = BigInt(clock.totalTicks)
+    time.timeOfDay = time.time % 24000
+    time.day = Math.floor(time.time / 24000)
+    time.isDay = time.timeOfDay < 13000
+    time.moonPhase = time.day % 8
+  })
+}
+
 // Mineflayer leaves promises nobody awaits (openVillager's trade-list handler rejects when the window never opens), and
 // node exits on one: log it instead, a stray rejection must not take the body down.
 let guarded = null
@@ -57,6 +88,7 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     if (bot._client?.removeAllListeners) installFastBlockUpdatesOnInject(bot)
     params.gameClock?.attach(bot._client)
     installTickEnd(bot)
+    installServerClock(bot)
     bot.loadPlugin(pathfinder)
     // Mineflayer does not keep the damage_type registry; primitives names a damage packet's type from it.
     bot._client.on('registry_data', packet => {
