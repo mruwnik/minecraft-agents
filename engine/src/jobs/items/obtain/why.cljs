@@ -2,13 +2,14 @@
   "The texts of a source that has nothing: why no source, what a failed try adds."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [explore-opts gathers? makes? seen-radius way?]]
+            [jobs.items.obtain.base :refer [explore-opts gathers? makes? search-names seen-radius way?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of spared-in-sight spared-why]]
             [jobs.items.obtain.table :refer [animal? gather-needs material-blocks]]
             [jobs.lib.sources :refer [source-opts]]
             [jobs.lib.recipes :as recipes]
             [jobs.lib.game-facts :as facts]
+            [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.storage :as storage]
@@ -31,11 +32,14 @@
 (defn unseen? [c need] (not (or (seen-of c need) (seq (seen-blocks-of c need true)))))
 
 (defn gather-fix
-  "The gather call (its own defaults for the fetches it needs) for the first raw need of the chain whose blocks are not seen, or nil."
+  "The call for the first raw need of the chain whose blocks are not seen, or nil: for an animal a jobs.explore.search
+  for it (a hunt or shear acts only on animals in sight), else its gather call (its own defaults for the fetches it needs)."
   [c names n]
   (when (gathers? c)
     (when-let [need (first (filter #(unseen? c %) (raw-needs c names n)))]
-      (next-call/call (:job need) (dissoc (:args need) :ways)))))
+      (if (animal? need)
+        (next-call/call 'jobs.explore.search {:target (search-names need) :forage (boolean (foods/edible? (:key need)))})
+        (next-call/call (:job need) (dissoc (:args need) :ways))))))
 
 (defn unseen-why
   "Text for the gather source: the raw needs of the chain whose blocks are not seen, those seen but not taken (a zone,

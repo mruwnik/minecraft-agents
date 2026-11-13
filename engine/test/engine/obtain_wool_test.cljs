@@ -138,6 +138,16 @@
           (await (tu/run-ticks (:eng s) (:clock s) 3 700))
           (is (empty? (filter #(= :failed (:kind %)) @(:seen s))) "no round or check threw"))))))
 
+(deftest with-no-sheep-in-sight-the-next-call-searches-for-them-not-a-hunt
+  ;; Tamsin j117/j119: the suggested hunt stopped at once, as a hunt acts only on sheep in sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "white_wool" :count 1 :explore false} {:inventory h/sword} 10))
+              e (first (filter #(= :stopped (:kind %)) @(:seen s)))]
+          (is (= {:job "jobs.explore.search" :args {:target ["sheep"] :forage false}}
+                 (update (first (:next (:cause e))) :args dissoc :worth))))))))
+
 (def shears-recipe {"shears" {:count 1 :needs {"iron_ingot" 2}}})
 
 (defn wool-source [{:keys [seen]}] (first (filter #(= :obtain.wool-source (:kind %)) @seen)))
