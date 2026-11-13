@@ -16,10 +16,10 @@
             [jobs.survival.shut-in-night :as sin]))
 
 (def doc
-  "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, :range 2, walking on
-  through the night).
+  "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, walking on through the
+  night): into the closed room it lies in (jobs.lib.shelter/home-room), the room's cell nearest it, else within 2 of it.
   Conditions (at the start only): a :home or :bed remembered, else :no-home.
-  Done {:home pos} on arrival (also records :home there unless a live one exists), or at once when already within 2 of it.
+  Done {:home pos} on arrival (also records :home there unless a live one exists), or at once when already home (in its room, else within 2 of it).
   A place farther than :limit blocks is a condition: the call waits (:too-far {:pos :distance :text}) while the night job digs in or sleeps. A walk that did not arrive is
   nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
@@ -37,7 +37,7 @@
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds the walk home may take." :spec (a/num-in 0 nil)}})
 
-(def arrive-range "How near the place counts as home." 2)
+(def arrive-range "How near a place in no closed room counts as home." 2)
 
 (defn home-status
   "A home within :limit blocks: else :no-home, or :too-far {:pos :distance} with a text telling the agent to dig in or
@@ -63,7 +63,14 @@
 
 (def fit? ready/ok)
 
-(defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
+(defn at-home? [c] (sh/home-at? (:primitives c) (ctx/view c) (u/self-pos c) arrive-range))
+
+(defn goal
+  "go-to's args for the walk home to pos: the cell of the home's room (sh/home-room) nearest pos, else within arrive-range of pos."
+  [c pos]
+  (if-let [room (sh/home-room (:primitives c) (ctx/view c))]
+    {:pos (zipmap [:x :y :z] (apply min-key #(u/dist (zipmap [:x :y :z] %) pos) (sort (:cells room)))) :range 0}
+    {:pos pos :range arrive-range}))
 
 (defn worth-of
   "The loss doing nothing costs (Q151), each trigger's own: with :commute? (dusk-home) the night where the body stands,
@@ -85,7 +92,7 @@
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async walk! [c pos]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range arrive-range}))]
+  (let [e (await (child/call-walk* c :walk (goal c pos)))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (places/offer! c :home pos)
@@ -99,7 +106,7 @@
   [c pos]
   (let [p (:primitives c)]
     (and (:commute? (:args c)) (sh/in-ground? p (ctx/view c))
-         (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range arrive-range})))]
+         (let [r (:route (await (ctx/quote c 'jobs.movement.go-to (goal c pos))))]
            (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (sin/time-s (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))))))
 
 (defn ^:async round [c]

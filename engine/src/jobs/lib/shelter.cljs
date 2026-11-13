@@ -24,7 +24,7 @@
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
                      :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
    ::home-due {:default {:margin-s 60 :slack 1.4 :arrive 4} :spec (a/map-of keyword? number?)
-               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, slack factor on the straight line, and blocks within which the body counts as home."}})
+               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, slack factor on the straight line, and blocks within which the body counts as home when its home is in no closed room (home-at?)."}})
 
 
 (defn mean-s [] (settings/get settings ::mean-s))
@@ -208,10 +208,29 @@
   (let [{:keys [slack]} (settings/get settings ::home-due)]
     (if-let [home (home-target view)] (/ (* slack (u/dist pos home)) cost/walk-speed) 0)))
 
+(defn home-room
+  "The closed room (reach-room/room) the home-target lies in, flooded from its cell or, that being solid (a bed), a cell
+  beside it; nil with no home or a home in no closed room."
+  [p view]
+  (when-let [home (home-target view)]
+    (let [h (update-vals (select-keys home [:x :y :z]) js/Math.floor)]
+      (some #(when-not (sh-sense/solid-at? p %) (reach-room/room p %))
+            (cons h (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] (-> h (update :x + dx) (update :z + dz))))))))
+
+(defn home-at?
+  "Whether a body standing at pos is home: in the home-room, or, for a home in no closed room, within `within` blocks of
+  the home-target."
+  [p view pos within]
+  (boolean
+   (when-let [home (home-target view)]
+     (if-let [room (home-room p view)]
+       (contains? (:cells room) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+       (<= (u/dist pos home) within)))))
+
 (defn home-due-at?
-  "Whether a body standing at pos would be due home before night: its home-target within sh-clock/home-limit and farther
-  than :arrive, and the day left no longer covering the walk (:slack times the straight line at cost/walk-speed)
-  plus :margin-s. The timing is setting ::home-due."
+  "Whether a body standing at pos would be due home before night: its home-target within sh-clock/home-limit, pos not
+  home (home-at? within :arrive), and the day left no longer covering the walk (:slack times the straight line at
+  cost/walk-speed) plus :margin-s. The timing is setting ::home-due."
   [p view pos]
   (let [{:keys [margin-s arrive]} (settings/get settings ::home-due)
         left-s (/ (- sh-clock/dusk-tick (.-timeOfDay (.self p))) 20)
@@ -219,7 +238,8 @@
     (boolean
      (and home (pos? left-s)
           (let [d (u/dist pos home)]
-            (and (< arrive d) (<= d sh-clock/home-limit) (<= left-s (+ margin-s (home-walk-s view pos)))))))))
+            (and (<= d sh-clock/home-limit) (<= left-s (+ margin-s (home-walk-s view pos)))
+                 (not (home-at? p view pos arrive))))))))
 
 (defn home-wanted-at?
   "Whether the dusk-home trigger holds for a body standing at pos: due home there (home-due-at?) and not sheltered there

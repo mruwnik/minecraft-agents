@@ -7,6 +7,7 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.settings :as settings]
+            [engine.hut-shelter-test :refer [hut-world]]
             [engine.test-util :as tu]
             [triggers.survival.dusk-home :as dh]))
 
@@ -177,3 +178,26 @@
           (is (< x 1))
           (is (= {:reason :risky :wait :dawn} w))
           (is (> wait-s 500) "the night's 546 s come after the 27 s to nightfall"))))))
+
+(def bed-hut
+  "hut-shelter-test's shut-door hut (room x 4..6, z -1..1) with a bed in its north-west corner."
+  {"4,64,-1" "red_bed"})
+
+(deftest home-is-the-bed-s-closed-room-not-a-radius-round-it
+  ;; outside the north wall 3 blocks from the bed is not home: go-home ended there and work beside it was cut every 2 s
+  (are [pos places expected] (= expected (holds? 12000 places (assoc (hut-world pos bed-hut) :time 12000)))
+    {:x 4 :y 64 :z -4} [[:bed 4 -1]] true
+    {:x 5 :y 64 :z 0} [[:bed 4 -1]] false
+    {:x 4 :y 64 :z -4} [[:bed 4 -6]] false))
+
+(deftest go-home-walks-into-the-bed-s-room
+  ;; from the north, within 2 of the bed is the far side of the wall; home is through the door, in the room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (assoc (hut-world {:x 4 :y 64 :z -6} bed-hut) :time st/noon))]
+          (mem/write! (:store eng) :bed {:pos {:x 4 :y 64 :z -1}} mem/place-policy)
+          (core/submit! eng (tu/order '(jobs.survival.go-home {})) {})
+          (await (tu/run-until-empty eng 30))
+          (let [{:keys [x z]} (st/pos-of p)]
+            (is (and (<= 4 x 7) (<= -1 z 2)) (str "inside the hut, at " x " " z))))))))
