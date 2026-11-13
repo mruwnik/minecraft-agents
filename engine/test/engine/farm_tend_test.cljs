@@ -596,6 +596,29 @@
           (is (seq (tu/walk-calls (:p s))) "13 blocks off and unseen: the body goes to the field")
           (is (= (set hidden-cells) (dug s)) "and cuts the wheat there"))))))
 
+(deftest a-walk-to-the-field-held-risky-till-dawn-is-waited-out-not-a-failed-step
+  ;; run 4 (Fenwick bug 20): at dusk go-to ends the walk condition-failed :risky :wait :dawn (the dusk-home trigger cuts it);
+  ;; tend ended on it, so the repeat rested after a failed run and the body idled past dawn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (assoc (world (farm "wheat" 7 hidden-cells hidden-cells) wheat-drops) :floor [-5 -5 60 15]))
+              risky (atom 1)
+              orig ctx/call]
+          (tu/seeing-within (:p s) 10)
+          (set! ctx/call (fn [c slot job args]
+                           (if (and (= :walk slot) (= 'jobs.movement.go-to job) (pos? @risky))
+                             (do (swap! risky dec)
+                                 (js/Promise.resolve (contract/ending :condition-failed {:reason :risky :wait :dawn :recheck-after-ms 10000 :text "the dusk-home trigger cuts the walk"} nil)))
+                             (orig c slot job args))))
+          (try
+            (core/submit! (:eng s) (tu/order (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false}))) {})
+            (await (tu/run-ticks (:eng s) (:clock s) 80 700))
+            (finally (set! ctx/call orig)))
+          (is (some #(= :risky (:reason %)) (events-of s :waiting)) "the tend waits the walk's :risky")
+          (is (not-any? #(= :resting (:reason %)) (events-of s :waiting)) "no rest after a failed run")
+          (is (= (set hidden-cells) (dug s)) "the walk is made once the wait lifts"))))))
+
 (deftest a-tend-waits-not-worth-while-the-least-walk-to-its-unseen-field-costs-more-than-the-pass
   (async done
     (tu/run-async done

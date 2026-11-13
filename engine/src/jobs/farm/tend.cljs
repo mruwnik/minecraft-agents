@@ -21,6 +21,7 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
+            [jobs.lib.waits :as waits]
             [jobs.farm.field :as fld]
             [jobs.lib.farm :as lib-farm]
             [jobs.farm.irrigate :as irrigate]
@@ -616,7 +617,8 @@
 (defn ^:async walk-to-site!
   "Walk to the field out of sight before the pass, as a player does, when go-to's quote of the walk costs less than the pass is
   worth as the walk survives (walk-pick/quoted-s, ev-worth; a quote that cannot price it leaves the walk to say): :again
-  once there, :continue while the quote or the walk waits, the walk's own ending, or condition-failed :not-worth, the quote
+  once there, :continue while the quote or the walk waits (a walk that ends for a world wait, waits/waiting-out, such as
+  :risky till dawn, is waited out, not a failed step), the walk's own ending, or condition-failed :not-worth, the quote
   remembered from this cell (not-worth reads it)."
   [c site]
   (let [args (walk-args c site)
@@ -634,6 +636,7 @@
       (let [e (await (ctx/call c :walk 'jobs.movement.go-to (assoc args :worth worth)))]
         (cond
           (= :continue e) (do (ctx/update-mem! c assoc :walking true) :continue)
+          (= :continue (waits/waiting-out c e)) (do (ctx/update-mem! c assoc :walking false) :continue)
           (= :done (:kind e)) (do (ctx/update-mem! c assoc :site-walked true :walking false) :again)
           :else (ctx/end c (:kind e) (contract/cause-key e)
                          {:steps {} :text (str "farm tend: could not walk to the field, go there first: " (contract/cause-key e))}))))))
