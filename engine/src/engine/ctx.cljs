@@ -201,10 +201,13 @@
 
 (defn child-status
   "check-status of the child job (a registry symbol, or a definition) in slot with args, for a parent that asks before
-  it calls. The child gets no :quote-call: the caller's would-be call is not its own, and it would read as started."
+  it calls. The child gets no :quote-call: the caller's would-be call is not its own, and it would read as started.
+  Its worth is its args' :worth, else the caller's, as contract/freeze gives the call."
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)]
-    (check-status (assoc (dissoc ctx :quote-call) :slots (conj (:slots ctx) slot) :args args) def)))
+    (check-status (cond-> (assoc (dissoc ctx :quote-call) :slots (conj (:slots ctx) slot) :args args)
+                    (some? (:worth args)) (assoc :worth (constantly (:worth args))))
+                  def)))
 
 (defn returns-on-later?
   "Whether a :later check ends this job condition-failed for its caller to decide: a reflex (one round) and a called child.

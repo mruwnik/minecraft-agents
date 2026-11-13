@@ -178,6 +178,20 @@
                    (->> @seen (filter #(= [:job :stopped] [(:source %) (:kind %)])) (mapv #(select-keys (:data %) [:kind :cause]))))
                 (str spec))))))))
 
+(deftest a-listed-combinators-child-check-reads-the-worth-its-args-give
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [spec ['(seq (kid)) '(any (kid)) '(repeat 1 (kid))]]
+          (let [worths (atom [])
+                kid {:can-run? (fn [c] (swap! worths conj (ctx/worth c)) (contract/ok :go "go"))
+                     :round (fn [c] (ctx/end c :done nil))}
+                eng (core/create {:primitives (tu/fake {}) :jobs {'kid kid} :triggers {} :dir (tu/tmp-dir)})]
+            (core/submit! eng (tu/order spec 77) {})
+            (await (core/tick! eng))
+            (is (= #{77} (set @worths)) (str spec ": the combinator itself has no worth; the check reads its child's"))
+            (is (empty? (:failed (core/state eng))) (str spec ": the check does not throw and park it"))))))))
+
 (defn rest-s [] (settings/get composite/settings ::composite/rest-s))
 
 (defn ^:async rests-and-runs-again [spec kind]

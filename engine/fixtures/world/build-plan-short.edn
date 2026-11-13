@@ -3,6 +3,8 @@
 ;; tool-fetched-while-a-short-item-has-no-source: the plan wants dirt where stone stands ([20 0 16]; dirt carried, no pickaxe, a seen chest
 ;; holds one) and a gold_block nobody has; the gold fetch fails (:explore false) and the pickaxe is still fetched, the stone replaced.
 ;; default-fetch-gathers-logs-and-crafts-planks: oak_planks wanted, none carried, a log column in sight; the default :fetch obtains them.
+;; in-a-seq-with-the-cells-behind-it-fetches-and-builds: the same as the first step of a listed seq, the cells out of view, so the start check
+;; prices a look at the seq child's own worth (the seq has none).
 ;; fetch-false-names-the-short-item: the same plan with :ways #{:carried} names the item: the job waits :no-items. grass-under-the-floor-says-short:
 ;; a cobblestone cell holds grass, no cobblestone carried, :ways #{:carried}: the job waits :no-items needing cobblestone, the grass stays.
 ;; Both turn the body to face the cells first and wait: a cell not yet in view is looked at, and the job then ends stopped short instead
@@ -35,6 +37,15 @@
    :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 140 :of-job true}]
+   :after [[:block [14 0 14] "oak_planks"] [:block [15 0 14] "oak_planks"]]}
+  {:name "in-a-seq-with-the-cells-behind-it-fetches-and-builds"
+   :blocks [[:fill [24 0 14] [24 3 14] "oak_log"] [:set [24 4 14] "oak_leaves[persistent=true]"]]
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-facing {:yaw -90 :pitch 0} 10]
+         [:job (seq (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"}) (jobs.time.noop {:worth 1200 :seconds 0.5 :why :idle}))]]
+   :expect [{:no-event {:source :system :kind :error} :for-s 10}
+            {:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40}
+            {:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:block [14 0 14] "oak_planks"] [:block [15 0 14] "oak_planks"]]}
   {:name "fetch-false-names-the-short-item"
    :blocks [[:fill [24 0 14] [24 3 14] "oak_log"] [:set [24 4 14] "oak_leaves[persistent=true]"]]
