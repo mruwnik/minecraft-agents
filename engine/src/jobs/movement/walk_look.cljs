@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.cost.health :as cost-health]
             [jobs.lib.look :as look]
             [jobs.lib.look-edge :as look-edge]
@@ -108,9 +109,9 @@
           (do (ctx/update-mem! c assoc :leg (update next-leg :side (fn [[x y z]] {:x x :y y :z z})) :edge-walked false :edge-close false) :again)
           (let [w (if (u/within? (sh-sense/feet (:primitives c)) from 0)
                     {:kind :done}
-                    (await (ctx/call c :back 'jobs.movement.go-to {:pos from :range 0 :ways #{:walk} :floor cost-health/spend-down})))]
+                    (await (child/call-walk* c :back {:pos from :range 0 :ways #{:walk} :floor cost-health/spend-down})))]
             (cond
-              (= :continue w) :again
+              (= :continue w) (if (some-> (:child-wait c) deref) :continue :again)
               (= :done (:kind w)) (ended c :done nil)
               :else (ended c :condition-failed {:reason :no-way-back :from from}))))))))
 

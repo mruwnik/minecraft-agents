@@ -21,6 +21,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.steps :as steps]
             [jobs.lib.walk-pick :as pick]
+            [jobs.lib.walk-risk :as risk]
             [jobs.lib.world-files :as world]))
 
 (def box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
@@ -662,6 +663,28 @@
             (finally (set! pick/quoted-s quoted)))
           (is (seq (tu/walk-calls (:p s))) "the walk is made")
           (is (= 1 @asked) "the walk is quoted before it starts, not again while it goes on (a body leaving its shelter on the way is priced by the walk)"))))))
+
+(deftest a-walk-to-the-field-a-check-holds-waits-and-walks-once-it-clears
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (assoc (world (farm "wheat" 7 hidden-cells hidden-cells) wheat-drops) :floor [-5 -5 60 15]))
+              hold (atom true)
+              r #(if @hold (contract/later :risky "test: the dusk-home trigger would cut the walk" :recheck-after-ms 1000) (contract/ok :acceptable "test"))
+              status risk/status
+              quoted pick/quoted-s]
+          (tu/seeing-within (:p s) 10)
+          (set! pick/quoted-s (fn [_c _q] 1))
+          (set! risk/status (fn ([_ _] (r)) ([_ _ _] (r))))
+          (try
+            (core/submit! (:eng s) (tu/order (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false})) {})
+            (await (tu/run-ticks (:eng s) (:clock s) 30 700))
+            (is (empty? (done-events s)) "a held walk is a wait, not a failed tend")
+            (is (some #(= :risky (:reason %)) (events-of s :waiting)))
+            (reset! hold false)
+            (await (tu/run-ticks (:eng s) (:clock s) 60 700))
+            (finally (set! risk/status status) (set! pick/quoted-s quoted)))
+          (is (= (set hidden-cells) (dug s)) "once the hold clears the body walks there and cuts the wheat"))))))
 
 (defn pass-ctx
   "A check ctx of tend over the box from x0 to x1 (z 2) in setup s."

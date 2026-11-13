@@ -11,6 +11,7 @@
             [jobs.lib.field-area :as fa]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
+            [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.gate :as gate]
             [jobs.lib.job-common :as common]
@@ -277,7 +278,7 @@
 (defn ^:async look-toward!
   "Walk within 3 blocks of the cell whose reach is partly unseen and look round there, as a player steps closer; each cell once."
   [c cell]
-  (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos (update cell :y inc) :range 3}))]
+  (let [e (await (child/call-walk* c :walk {:pos (update cell :y inc) :range 3}))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c update :reach-tried (fnil conj #{}) cell)

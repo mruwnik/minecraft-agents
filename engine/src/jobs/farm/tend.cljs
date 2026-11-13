@@ -8,6 +8,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
+            [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.field-area :as fa]
@@ -608,7 +609,7 @@
   "Walk (a go-to child) within 3 blocks of the ground cell whose reach is unseen and look round there, as a player steps closer to see a far row; each cell once."
   [c]
   (let [cell (unseen-reach-target c)
-        e (await (ctx/call c :walk 'jobs.movement.go-to {:pos (update cell :y inc) :range 3}))]
+        e (await (child/call-walk* c :walk {:pos (update cell :y inc) :range 3}))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c update :reach-tried (fnil conj #{}) cell)
@@ -633,7 +634,7 @@
                    {:steps {} :worth worth :walk-s price
                     :text (str "farm tend: the walk to the field out of sight costs " (js/Math.round price) " s, more than the pass is worth (" (js/Math.round worth) " s)")}))
       :else
-      (let [e (await (ctx/call c :walk 'jobs.movement.go-to (assoc args :worth worth)))]
+      (let [e (await (child/call-walk* c :walk (assoc args :worth worth)))]
         (cond
           (= :continue e) (do (ctx/update-mem! c assoc :walking true) :continue)
           (= :continue (waits/waiting-out c e)) (do (ctx/update-mem! c assoc :walking false) :continue)
