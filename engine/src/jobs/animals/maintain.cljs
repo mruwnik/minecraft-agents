@@ -13,6 +13,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
+            [jobs.lib.pen-gate :as pg]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
@@ -124,17 +125,22 @@
 
 (defn missing-barrier
   "The plan's fence, gate and wall cells beside the box (one column out) that the body has seen as something its plan
-  does not want there, as [x y z]; a cell never seen is no gap."
+  does not want there, or as a gate standing open that no job holds open (jobs.lib.pen-gate), as [x y z]; a cell never
+  seen is no gap."
   [c]
   (let [{:keys [plan]} (:args c)
         cells (when plan (:cells (known/plan c plan)))
         {:keys [min max]} (pen-read/arg-box c)
         beside? (fn [[x _ z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
-        p (:primitives c)]
+        p (:primitives c)
+        view (ctx/view c)
+        held (into (pg/opened-cells view) (pg/held-cells view (* 1000 (:held-s pg/defaults))))]
     (vec (for [{:keys [pos want]} cells
                :when (and (pen-read/barrier? want) (beside? pos))
                :let [seen (u/sensed p (u/cell-pos pos))]
-               :when (and seen (not (true? (.-unknown seen))) (not (some #{(.-name seen)} (pen-read/want-blocks want))))]
+               :when (and seen (not (true? (.-unknown seen)))
+                          (or (not (some #{(.-name seen)} (pen-read/want-blocks want)))
+                              (and (pg/open-gate? seen) (not (held (vec pos))))))]
            pos))))
 
 (defn facts

@@ -214,14 +214,15 @@
           (is (true? (:closed? result)) (pr-str (:leaks result)))
           (is (every? #(= "oak_fence" (h/block-at p (first %) 64 (nth % 2))) gaps)))))))
 
-(deftest an-open-gate-is-a-leak
+(deftest an-open-plan-gate-is-shut-and-the-pen-checked-again
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world-spec (assoc (spec kit built-pen) :states {"3,64,2" {:open true :facing "north"}})
-              [result] (await (build! world-spec {"pen" (ring-plan)} {}))]
-          (is (= :leak (:reason result)))
-          (is (= [:open-gate] (mapv :why (:leaks result)))))))))
+              [result _ p e] (await (build! world-spec {"pen" (ring-plan)} {}))]
+          (is (= :done (:kind e)) (pr-str (kc e)))
+          (is (true? (:closed? result)))
+          (is (= "false" (str (some-> (.blockAt p #js {:x 3 :y 64 :z 2}) .-properties .-open))) "the gate is shut"))))))
 
 ;; ---------------------------------------------------------------- access and materials
 

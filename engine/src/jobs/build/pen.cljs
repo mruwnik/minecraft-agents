@@ -40,7 +40,8 @@
   Phase 1 runs jobs.build.from-plan on the :part, or with none on each part holding fence, wall or gate cells in turn (a house or field of the same plan is not built or fetched for; the pen's cells are those parts' only). Its args :accept and :worth pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a fence stacked on a gate is dug off, then a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
-  over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
+  over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak. A plan gate the check
+  finds open is shut once by jobs.maintenance.shut, then the pen is checked again.
   A leak left after the build (a hole in the plan, or a cell the build refused, gave up on or lacked material for) is
   patched in up to ::max-passes passes (each fills the listed leaks, then reads again; a pass that put nothing right is the last) unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
   :gap cell and on top of each :climb or :perch-in cell (a :perch-in stepped from leaves gets the leaves cleared by a jobs.blocks.clear-cells child instead), then the pen is checked again. Nothing else is placed that the plan does not ask for.
@@ -291,6 +292,12 @@
   {:patch-queue (if (patch-item cells) (pen-patch/fence-cells leaks) [])
    :leaf-queue (pen-patch/leaf-cells leaks)})
 
+(defn open-plan-gates
+  "The :open-gate leaks that are gates of the plan's cells: the shut-gate child (:shut phase) closes them."
+  [cells leaks]
+  (let [gates (into #{} (comp (filter #(gate? (:want %))) (map #(vec (:pos %)))) cells)]
+    (filterv #(and (= :open-gate (:why %)) (gates ((juxt :x :y :z) (:pos %)))) leaks)))
+
 (def max-return-walks 3)
 
 (defn ^:async return-walk!
@@ -317,6 +324,8 @@
         back (when (= :unloaded (:reason answer)) (await (return-walk! c cells)))]
     (cond
       back back
+      (and (seq (open-plan-gates cells (:leaks answer))) (not (:check-shut (ctx/mem c))))
+      (do (ctx/update-mem! c assoc :phase :shut :check-shut true) :again)
       (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
       (and (ctx/way? c :patch) (seq (apply concat (vals (patch-queues cells (:leaks answer)))))
