@@ -637,7 +637,7 @@
 (def chance-of find/chance-of)
 (def leg-stops? find/leg-stops?)
 (def ore-of find/ore-of)
-(def vein-seen find/vein-seen)
+(defn vein-seen [] (find/vein-seen))
 (def seen-ore find/seen-ore)
 (def tunnel-ore find/tunnel-ore)
 (def tunnel-chance find/tunnel-chance)
