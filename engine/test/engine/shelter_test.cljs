@@ -597,10 +597,19 @@
   (is (> (lo/default-time {:stay-ms 21600000}) 21600))
   (is (< (lo/default-time {}) 3600)))
 
-(deftest log-out-declines-by-day
-  (let [{:keys [eng]} (setup {:time noon})]
-    (core/submit! eng (tu/order '(jobs.survival.log-out {})) {})
-    (is (nil? (core/tick! eng)))))
+(deftest a-plain-log-out-goes-offline-by-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time noon})
+              asked (atom [])]
+          (.override (.-world p) "offline"
+                     (fn [_ a _]
+                       (swap! asked conj (.-ms a))
+                       #js {:status "ok" :ms 1000}))
+          (let [out (await (tu/child-outcome eng 'jobs.survival.log-out {} 4))]
+            (is (= [nil] @asked) "no till-morning ms by day: the primitive's default stint")
+            (is (= :done (:status out)))))))))
 
 (deftest log-out-unsupported-is-impossible-without-acting
   (async done

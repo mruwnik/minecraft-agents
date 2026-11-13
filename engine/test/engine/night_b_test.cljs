@@ -105,13 +105,13 @@
           (is (= :done (:status stint)))
           (is (= "ok" (:how stint))))))))
 
-(deftest a-log-out-needs-night-and-says-so
+(deftest a-plain-log-out-starts-at-any-hour
   (let [can-start? (:can-start? (get registry/jobs 'jobs.survival.log-out))
         status (fn [world args]
                  (let [[kind _ {:keys [reason]}] (can-start? {:primitives (tu/fake world) :args args :slots [:x]
                                                               :view (fn [] {:data mem/empty-data :now 0})})]
                    [kind reason]))]
-    (is (= [:later :not-night] (status {:time noon} {})))
+    (is (= :ok (first (status {:time noon} {}))))
     (is (= :ok (first (status {:time night} {}))))))
 
 (deftest a-log-out-quotes-the-stint-in-time

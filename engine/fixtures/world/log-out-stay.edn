@@ -18,4 +18,11 @@
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 760]]
    :expect [{:count-event {:source :body :kind :online} :for-s 640 :at-most 0}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 780}]
-   :after [[:memory {:entries {:log-out [{:data {:status "ok" :ms [:>= 659000]}}]}}]]}]}
+   :after [[:memory {:entries {:log-out [{:data {:status "ok" :ms [:>= 659000]}}]}}]]}
+  {:name "a-plain-log-out-by-day-goes-offline-and-returns"
+   :limit-s 420
+   :act [[:http :submit (jobs.survival.log-out {:worth 1200}) [] {:ok true}]
+         [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline [:any]}] 30]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 380]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 400}]
+   :after [[:memory {:entries {:log-out [{:data {:status "ok"}}]}}]]}]}

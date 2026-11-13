@@ -7,7 +7,6 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.cond :as cond]
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -20,8 +19,9 @@
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
-  night. Waits for night (:not-night); impossible once a log-out
-  was unsupported (:log-out-unsupported).
+  night; impossible once a log-out
+  was unsupported (:log-out-unsupported). Called with no stay it goes offline at any hour: till morning at night, by day the
+  primitive's default stint. The night job calls it only at night and while another player sleeps.
   With :stay-ms and/or :until (wall-clock epoch ms; both: the later) it works at any hour and stays offline that long
   (the stint's end is kept in the job's memory, so a restart does not start it over): chained offline stints of the
   primitive's cap each, one per round, then back; :spend :job-time is the stay. No night rule, no sleep-count wait.
@@ -61,12 +61,7 @@
   [c]
   (or (some? (:stay-ms (:args c))) (some? (:until (:args c)))))
 
-(defn night-or-stay [c]
-  (if (staying? c)
-    (contract/ok :staying "a stay is asked, any hour")
-    (contract/asked c (checks/night :not-night))))
-
-(def can-start? (cond/and night-or-stay supported))
+(def can-start? supported)
 
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}
@@ -141,7 +136,10 @@
 
 (defn ^:async log-out! [c]
   (let [assumed (not (sh-sleepers/asleep-known? (:primitives c) (ctx/view c)))
-        r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
+        ms (away-ms c)
+        r (await (ctx/act c :offline (if (pos? ms)
+                                       #js {:ms ms :why "logged-out-for-sleeping-player"}
+                                       #js {:why "logged-out-for-sleeping-player"})))
         how (.-status r)
         out {:ms (.-ms r) :how how}]
     (when (and (= "ok" how) (sh-sense/night? (:primitives c)))

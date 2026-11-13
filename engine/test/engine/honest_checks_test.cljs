@@ -68,9 +68,6 @@
     (merge {:listed (boolean (seq (:list (core/state eng))))}
            (some #(when (#{:completed :stopped} (:kind %)) {:event (:kind %) :reason (:reason %)}) @seen))))
 
-(deftest log-out-says-why-it-declines
-  (is (= :not-night (waiting-reason 'jobs.survival.log-out {}))))
-
 (deftest a-goal-that-already-holds-is-done-not-a-wait
   (async done
     (tu/run-async done
