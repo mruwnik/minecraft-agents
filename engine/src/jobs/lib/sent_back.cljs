@@ -2,7 +2,8 @@
   "A walk the body was sent back from at dusk or by night, learned from its own walks: a cut walk that resumes farther
   from its goal, in shelter (a closed room, the ground) or home, with the sky dark or home due where the cut found it and
   no hostile near the way (that one is go-to's own send-back), was sent back for the night. One :sent-back entry
-  {:to cell :place kind :at time-of-day}, kept until the morning, holds walks out of that place (walk-risk): walked
+  {:to cell :place kind :at time-of-day :until world-day-time}, kept until the world clock reaches that morning (a sleep
+  or a time skip ends it early), holds walks out of that place (walk-risk): walked
   now, the same cut sends them back again."
   (:require [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -13,10 +14,28 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
-(defn policy
-  "One entry, until the morning (sh-clock/morning-tick) after time of day t."
+(defn until-morning-ticks
+  "Ticks from time of day t to the next morning (sh-clock/morning-tick)."
   [t]
-  {:cap 1 :ttl (max 1 (settings/ticks->ms (mod (- sh-clock/morning-tick t) sh-clock/night-end-tick)))})
+  (mod (- sh-clock/morning-tick t) sh-clock/night-end-tick))
+
+(defn policy
+  "One entry; its ttl, in engine time, is only a backstop to the world-clock :until."
+  [t]
+  {:cap 1 :ttl (max 1 (settings/ticks->ms (until-morning-ticks t)))})
+
+(defn day-time
+  "The body's absolute world clock in ticks (self().dayTime), nil when it has none."
+  [p]
+  (.-dayTime (.self p)))
+
+(defn remaining-ticks
+  "Ticks until the entry's morning: by the absolute clock, else by the time of day; 0 once it has passed."
+  [p {:keys [until]}]
+  (let [dt (day-time p)]
+    (max 0 (if (and dt until)
+             (- until dt)
+             (until-morning-ticks (.-timeOfDay (.self p)))))))
 
 (defn place-kind
   "What shelters a body at pos: :home (sh/home-at?), :room (a closed roofed room), :ground (sealed from the sky), else nil."
@@ -37,7 +56,8 @@
         kind (place-kind p view pos)
         t (.-timeOfDay (.self p))]
     (when (and kind (not hostiles?) (or (sh-sense/dark-outside? p) (sh/home-due-at? p view from)))
-      (let [entry {:to (sh-sense/feet p) :place kind :at t :text (str "sent back into " (name kind) " at " t "; walks out wait for dawn")}]
+      (let [dt (day-time p)
+            entry {:to (sh-sense/feet p) :place kind :at t :until (some-> dt (+ (until-morning-ticks t))) :text (str "sent back into " (name kind) " at " t "; walks out wait for dawn")}]
         (ctx/remember! c :sent-back entry (policy t))
         (ctx/emit! c :walk.sent-back :info entry)
         entry))))
@@ -56,12 +76,12 @@
   [c goal]
   (let [p (:primitives c)]
     (when-let [e (:data (ctx/latest c :sent-back))]
-      (when (and (in-place? p e (u/self-pos c)) (not (in-place? p e goal)))
+      (when (and (or (nil? (day-time p)) (nil? (:until e)) (pos? (remaining-ticks p e)))
+                 (in-place? p e (u/self-pos c)) (not (in-place? p e goal)))
         e))))
 
 (defn wait-s
-  "Seconds until the morning ends the entry: to nightfall, then the night left (its mean)."
+  "Seconds until the entry's morning, 0 once it has passed."
   [c]
-  (let [t (.-timeOfDay (.self (:primitives c)))
-        dusk-s (sh-clock/ticks->s (max 0 (- sh-clock/dusk-tick t)))]
-    (+ dusk-s (second (get-in (sh-clock/night-left-quote false (max t sh-clock/dusk-tick)) [:uses :job-time])))))
+  (let [p (:primitives c)]
+    (sh-clock/ticks->s (remaining-ticks p (:data (ctx/latest c :sent-back))))))

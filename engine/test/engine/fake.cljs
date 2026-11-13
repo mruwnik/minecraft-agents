@@ -195,6 +195,7 @@
                (and (:bodyHitbox spec) (:pos (:self spec))) (update :pos centre-xz))]
     (-> {:self (merge default-self self {:held (:held self)})
          :time (:time spec 1000)
+         :days 0
          :players (vec (:players spec))
          :server (merge {:difficulty "easy" :simulationDistance 10} (:server spec))
          :raining (:raining spec false)
@@ -685,7 +686,7 @@
     (not (near? w pos)) [w {:status "unreachable"}]
     (:monsters-near w) [w {:status "monsters-near"}]
     ;; the night is skipped at once and the server wakes the body at morning; with others awake it lies in bed
-    (:skip-night w) [(assoc w :time 0) {:status "sleeping"}]
+    (:skip-night w) [(-> w (assoc :time 0) (update :days inc)) {:status "sleeping"}]
     :else [(assoc-in w [:self :isSleeping] true) {:status "sleeping"}]))
 
 (def swims-up
@@ -837,13 +838,19 @@
       (aset o "hittable" (if (some? (:hittable e)) (:hittable e) (can-hit? w e))))
     o))
 
+(defn advance-clock
+  "w with the world clock moved on ticks: :time wraps each day, :days counts the wraps (self().dayTime is absolute)."
+  [w ticks]
+  (let [t (+ (:time w) ticks)]
+    (assoc w :time (mod t 24000) :days (+ (:days w) (js/Math.floor (/ t 24000))))))
+
 (defn self-view-build [w]
   (let [s (:self w)]
     (to-js (merge (dissoc s :vehicle :held :pos :experience)
                   {:username (:username s) :pos (or (steer/sub-pos w) (:pos s)) :settling (:settling w)
                    :vehicle (some-> (vehicle-of w) (update :uuid identity))
                    :experience (:experience s)
-                   :timeOfDay (:time w) :isDay (senses/day-at? (:time w)) :players (:players w) :raining (:raining w) :thundering (:thundering w)
+                   :timeOfDay (:time w) :dayTime (+ (* 24000 (:days w)) (:time w)) :isDay (senses/day-at? (:time w)) :players (:players w) :raining (:raining w) :thundering (:thundering w)
                    :held (:held s) :equipment (equipment-view w) :inventory (with-slots (:inventory w))}))))
 
 (def self-view-cache (atom nil))
@@ -970,7 +977,7 @@
                                                         (reset! sleeper {:token token :wake (fn [] (js/clearTimeout timer) (resolve false))})))))]
                                    (reset! sleeper nil)
                                    (swap! state #(cond-> (assoc % :offline false :settling (:settles %))
-                                                   full (update :time (fn [t] (mod (+ t (js/Math.floor (/ wanted ms-per-tick))) 24000))))))
+                                                   full (advance-clock (js/Math.floor (/ wanted ms-per-tick))))))
                                  (reset! away nil)
                                  (emit! #js {:kind "online" :pos (pos-js (body-pos @state))})
                                  (@released nil)
@@ -1025,7 +1032,7 @@
                     :emit emit!
                     :setTime (fn [t] (swap! state assoc :time t))
                     :advance (fn [ticks]
-                               (swap! state #(-> % (assoc :time (mod (+ (:time %) ticks) 24000)) (furnace/advance ticks))))
+                               (swap! state #(-> % (advance-clock ticks) (furnace/advance ticks))))
                     :setRaining (fn [on & [thunder]] (swap! state assoc :raining on :thundering (boolean thunder)))
                     :settle (fn [on] (swap! state assoc :settling on))
                     ;; Respawns where the body stands: emits respawned like the real body and opens a settling window if the spec settles.
