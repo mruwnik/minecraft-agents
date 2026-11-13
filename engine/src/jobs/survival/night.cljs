@@ -582,7 +582,7 @@
   night.bed-walk-unsafe info, and false. :searching (nothing remembered) while go-to's quote still searches: no route is known yet, not none."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
-      (let [q (await (pick/quote-once! c {:pos bed :range 2}))
+      (let [q (await (pick/quote-once! c (sh-beds/bed-walk bed)))
             r (budget-priced c q)
             [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
             dig-s (when (:found r) (await (bed-down/dig-in-time-s c)))
@@ -615,7 +615,7 @@
         _ (doseq [bed refused] (swap! worths assoc bed (await (bed-worth c bed :bed))))
         worth #(get @worths %)
         beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) permit? worth)) {:price (sense/fails-to c)}))
-        walk #(hash-map :pos % :range 2)
+        walk sh-beds/bed-walk
         placed (mem/place (ctx/view c) :bed)
         set-bed (when (= placed (first beds)) placed)
         set-safe? (and set-bed (not (:bed-down (ctx/mem c))) (await (bed-walk-safe? c set-bed)))

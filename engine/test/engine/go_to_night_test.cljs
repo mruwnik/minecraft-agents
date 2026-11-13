@@ -301,6 +301,17 @@
             (await (ticks eng 4))
             (is (not-any? #{:night-sheltered} (map :reason (st/emitted seen :holding))) (pr-str bed))))))))
 
+(deftest sleep-walks-round-to-a-stand-that-sees-the-bed-not-one-behind-its-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (merge (hut/hut-world {:x 5 :y 64 :z -5} {"5,64,-1" "red_bed" "5,64,2" "air" "5,65,2" "air"}) {:time st/night}))]
+          (tu/seeing-after-look p)
+          (core/submit! eng (tu/order '(jobs.survival.sleep {:bed {:x 5 :y 64 :z -1}})) {})
+          (await (tu/run-until-empty eng 60))
+          (is (seq (st/calls p "sleep")) "it lies down")
+          (is (<= -1 (:z (st/pos-of p)) 1) (str "from inside the room, not from behind the back wall: " (pr-str (st/pos-of p)))))))))
+
 (deftest a-queued-craft-whose-walk-is-too-risky-stays-in-the-hut-at-night
   (async done
     (tu/run-async done

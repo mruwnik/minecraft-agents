@@ -266,7 +266,7 @@
         taken? #(not (sh-beds/bed-free? p bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
         sealed? (boolean (or (sh-inside/sheltered-in c) (own-seal-near? c)))
-        quote-args {:pos bed :range sh-beds/bed-reach :ways (if sealed? seal-ways walk-ways)}
+        quote-args (assoc (sh-beds/bed-walk bed) :ways (if sealed? seal-ways walk-ways))
         t0 (ctx/now c)
         q (when-not (taken?) (await (ctx/quote c 'jobs.movement.go-to quote-args)))
         route (:route q)

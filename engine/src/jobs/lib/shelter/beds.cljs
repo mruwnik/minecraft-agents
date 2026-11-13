@@ -66,6 +66,12 @@
   "Blocks from a bed within which sleep's walk ends."
   2)
 
+(defn bed-walk
+  "go-to's args for the walk to the bed at pos: a stand within bed-reach that sees it (:see), as a player clicks it, never one
+  behind a wall."
+  [pos]
+  {:pos pos :range bed-reach :see true})
+
 (defn bed-permit
   "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed that is bed-free? and that a walk from the
   body's cell may end within bed-reach of (not outside its work area, wworld/goal-outside-area?)."
