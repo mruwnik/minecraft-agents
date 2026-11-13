@@ -387,6 +387,18 @@
     (is (= #{:gap} (set (map :why (:leaks r)))))
     (is (every? #(= 64 (:y (:pos %))) (:leaks r)) "at the cell under the fence")))
 
+;; a fence line on z -1 with the floor dug at [2 63 0] just inside it: a 1-deep hole an animal steps out of again
+(def holed (assoc fence-ring [2 63 0] "air"))
+
+(deftest a-hole-in-the-floor-by-the-fence-is-no-leak-and-the-way-under-the-fence-is-named-there
+  ;; the pen's own floor beside a hole is a step, not a wall: naming the hole patched it with a fence, a perch
+  (is (true? (:closed? (pen/check {:block-at (block-at-from holed) :box box}))))
+  (let [under-fence (assoc holed [2 63 -1] "air" [2 62 -1] "air" [2 63 -2] "air")
+        r (pen/check {:block-at (block-at-from under-fence) :box box})]
+    (is (= [{:pos {:x 2 :y 62 :z -1} :why :gap}] (:leaks r)) "the cell the animal walks through under the hung fence")
+    (is (true? (:closed? (pen/check {:block-at (block-at-from (assoc under-fence [2 62 -1] "oak_fence")) :box box})))
+        "a fence in the named cell closes the pen")))
+
 ;; ------------------------------------------------------------------ uneven ground
 
 (deftest a-block-inside-beside-a-fence-names-the-fence-top-as-the-climb

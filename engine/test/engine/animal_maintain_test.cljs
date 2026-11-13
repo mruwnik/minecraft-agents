@@ -351,7 +351,7 @@
               r (done-event s)]
           (is (= {:mob "cow" :target 4 :adults 4 :babies 0} (select-keys r [:mob :target :adults :babies])))
           (is (= [:mend :herd :breed :cull :shear :collect :deposit] (vec (keys (:steps r)))))
-          (is (= {:mend {:skipped :no-plan} :herd {:skipped :at-target} :breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
+          (is (= {:mend {:skipped :sound} :herd {:skipped :at-target} :breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
                  (select-keys (:steps r) [:mend :herd :breed :shear :deposit]))))))))
 
 (deftest the-pure-pieces-decide-from-facts
@@ -382,9 +382,11 @@
     nil {:adults 5 :babies 0}
     nil {:adults 5 :babies 2}))
 
-(deftest a-seen-leaky-pen-of-a-plan-is-mended-first
+(deftest a-seen-leaky-pen-is-mended-first
   (are [expected args facts] (= expected (maintain/decide :mend args facts))
-    {:skip :no-plan} {} {:gaps [[1 64 1]]}
+    {:call {:slot :mend :job 'jobs.animals.pen-check :args {:box box}}} {:box box} {:gaps [[1 64 1]]}
+    {:call {:slot :mend :job 'jobs.animals.pen-check :args {:box box :ways #{:check :patch}}}} {:box box :ways #{:carried}} {:gaps [[1 64 1]]}
+    {:skip :sound} {:box box} {:gaps []}
     {:skip :sound} {:plan "pen"} {:gaps []}
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen"}}} {:plan "pen"} {:gaps [[1 64 1]]}
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :ways #{:carried}}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]})
@@ -447,6 +449,17 @@
               _ (mem/write! (:store eng) :gate-gave-up {:cell [3 64 2] :reason :unreachable})
               result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
           (is (= :sound (get-in result [:ending :cause :skipped :mend])) "a gate the shut job gave up on is no gap"))))))
+
+;; card f0d2a35a: a box pen with no plan said "mend skipped no-plan" while herd waited on the leak for good
+(deftest a-box-pen-with-no-plan-is-patched-from-the-read
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring (into {} (for [x (range -1 6) z (range -1 6) :when (or (#{-1 5} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
+              {:keys [eng p]} (b/start (assoc (pb/spec pb/kit (assoc ring "5,64,2" "air")) :entities [(cow 1 1.5 1.5) (cow 2 3.5 3.5)]) {} [])
+              result (await (tu/child-outcome eng 'jobs.animals.maintain {:box {:min [0 64 0] :max [4 64 4]} :mob "cow" :target 2} 600))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= "oak_fence" (some-> (.blockAt p #js {:x 5 :y 64 :z 2}) .-name)) "the gap is fenced"))))))
 
 ;; run4 F42: every fence stood, so mend said sound while herd's read of the box found climbs over the fence from a mound
 (deftest a-block-in-the-pen-an-animal-climbs-the-fence-from-is-mended-as-herd-reads-it

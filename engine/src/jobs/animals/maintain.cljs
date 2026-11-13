@@ -32,10 +32,10 @@
   "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over seven steps in this
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
-  - :mend (jobs.build.pen over the whole :plan, only with :plan): a fence, gate or wall cell of the plan beside the box
-    was seen as something else (blown away), or the box read herd judges by names a leak a patch mends (:gap, :climb,
-    :perch-in), so the plan's fence is built again, at the pass's worth (with a :mob). Only cells the body has seen count; a gap
-    that stays rests the pen.
+  - :mend: a fence, gate or wall cell of the plan beside the box was seen as something else (blown away), or the box
+    read herd judges by names a leak a patch mends (:gap, :climb, :perch-in): with :plan the plan's fence is built again
+    (jobs.build.pen over the whole :plan, at the pass's worth with a :mob), without one the box is patched from the read
+    (jobs.animals.pen-check over :box). Only cells the body has seen count; a gap that stays rests the pen.
   - :herd (jobs.animals.herd, :target less the babies at most; never with adults plus babies at :target): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
     adults of the kind are listed outside the box (in no enclosure, on ground the zones let it take from) whose cost/animal-worth beats the
     walk (cost/walk-cost) to each and on to the pen; herd brings the box up to the pair plus those strays, fetching and searching within ::herd-radius (64) of the body.
@@ -50,7 +50,7 @@
   A body that lists fewer animals of the kind in the box than the target, outside it or inside but not seeing all of it, first walks to the middle of the box (go-to, once; the server
   lists animals only near the body) and counts again; the job starts for that look.
 
-  A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :no-strays,
+  A step whose conditions do not hold is skipped and booked {:skipped reason}: :sound, :at-target, :no-strays,
   :too-few-adults, :cooldown (fewer than two adults not fed or refused within the breeding cooldown), :no-food and :no-shears (only with ways #{:carried}), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
@@ -103,6 +103,11 @@
    :shear 'jobs.animals.shear
    :collect 'jobs.items.collect-drops
    :deposit 'jobs.storage.deposit})
+
+(defn step-jobs
+  "jobs for the pen of args: a box pen with no :plan is mended by patching it from the read."
+  [{:keys [plan]}]
+  (cond-> jobs (nil? plan) (assoc :mend 'jobs.animals.pen-check)))
 
 (def extra-produce
   "What a kind gives besides what jobs.lib.hunting/drops lists."
@@ -202,7 +207,7 @@
         counted (pen-census c read)
         inventory (u/inventory (:primitives c))
         stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))]
-    {:gaps (vec (distinct (into (missing-barrier c) (when (:plan (:args c)) (pen-patch/patch-cells (:leaks read))))))
+    {:gaps (vec (distinct (into (missing-barrier c) (pen-patch/patch-cells (:leaks read)))))
      :adults (:adults counted)
      :strays (if (and (:mob (:args c)) (< (+ (:adults counted) (:babies counted)) (:target (:args c)))) (strays c) 0)
      :ready (max 0 (- (:adults counted) (count (filter (comp (animals/cooling c) animals/key-of) adults))))
@@ -218,14 +223,16 @@
 (declare mend-worth)
 
 (defn decide-mend
-  [{:keys [plan ways mob] :as args} {:keys [gaps] :as facts}]
+  [{:keys [plan box ways mob] :as args} {:keys [gaps] :as facts}]
   (cond
-    (nil? plan) {:skip :no-plan}
     (empty? gaps) {:skip :sound}
-    :else {:call {:slot :mend :job (jobs :mend)
-                  :args (cond-> {:plan plan}
-                          mob (assoc :worth (mend-worth args facts))
-                          (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
+    plan {:call {:slot :mend :job (jobs :mend)
+                 :args (cond-> {:plan plan}
+                         mob (assoc :worth (mend-worth args facts))
+                         (not (need/fetching? ways)) (assoc :ways #{:carried}))}}
+    :else {:call {:slot :mend :job ((step-jobs args) :mend)
+                  :args (cond-> {:box box}
+                          (not (need/fetching? ways)) (assoc :ways #{:check :patch}))}}))
 
 (defn herd-target
   "The adults herd is to bring the box up to: a breeding pair (or :target if less), more while worthwhile strays are listed,
@@ -471,7 +478,7 @@
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {}))
   (census! c)
-  (let [{:keys [call] :as p} (steps/next-plan decide jobs c facts)]
+  (let [{:keys [call] :as p} (steps/next-plan decide (step-jobs (:args c)) c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call
       (finish! c (:report p))

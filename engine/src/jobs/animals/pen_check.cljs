@@ -257,12 +257,13 @@
   (u/cell-vec (or (work-place/spot c) (u/self-pos c))))
 
 (defn fence-near
-  "The name of the nearest fence or wall seen within 3 cells of [x y z], else the first one carried, else nil."
+  "The name of the nearest fence or wall seen within 3 cells of [x y z] (above or below too: a gap under a fence line
+  hung over dug ground), else the first one carried, else nil."
   [p [x y z]]
-  (let [near (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
-                      (for [dx (range -3 4) dz (range -3 4)] [dx dz]))]
+  (let [near (sort-by (fn [[dx dy dz]] (+ (* dx dx) (* dy dy) (* dz dz)))
+                      (for [dx (range -3 4) dy (range -3 4) dz (range -3 4)] [dx dy dz]))]
     (or (->> near
-             (map (fn [[dx dz]] (some-> (u/sensed p [(+ x dx) y (+ z dz)]) .-name)))
+             (map (fn [[dx dy dz]] (some-> (u/sensed p [(+ x dx) (+ y dy) (+ z dz)]) .-name)))
              (filter barrier-name?)
              first)
         (first (filter barrier-name? (keys (storage/carried-totals (u/inventory p))))))))

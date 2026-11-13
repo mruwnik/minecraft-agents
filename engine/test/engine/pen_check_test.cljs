@@ -603,3 +603,15 @@
         (let [{:keys [event]} (await (run-patching {:at [2 64 2] :ways #{:check :patch} :settings {:jobs.animals.pen-check/max-cells 100}} (assoc (world {"2,64,-1" "air"}) :inventory [])))]
           (is (= {:kind :stopped :reason :leak} (select-keys event [:kind :reason])) (pr-str event))
           (is (= :gap (:why (first (:leaks event))))))))))
+
+(deftest a-way-out-under-a-fence-hung-over-dug-ground-is-patched-under-the-fence
+  ;; card f0d2a35a: a stair dug up through the floor beside the fence left a hole inside and a pit under the fence
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [under (into {} (for [x (range -10 16) z (range -10 16)] [(str x ",62," z) "stone"]))
+              dug (merge under {"2,63,0" "air" "2,63,-1" "air" "2,62,-1" "air" "2,61,-1" "stone" "2,63,-2" "air"})
+              {:keys [event p]} (await (run-patching {:box {:min [0 64 0] :max [4 64 4]} :settings {:jobs.animals.pen-check/max-cells 100}} (world dug)))]
+          (is (= "oak_fence" (tu/true-block-name p 2 62 -1)) "the cell an animal walks through under the fence")
+          (is (= "air" (tu/true-block-name p 2 63 0)) "the hole inside is no leak")
+          (is (true? (:closed? event)) (pr-str event)))))))

@@ -91,10 +91,12 @@
 ;; ------------------------------------------------------------------ where it leaks
 
 (defn barrier-at?
-  "True when cell x y z holds something that blocks an animal standing there (more than half a block high)."
+  "True when cell x y z holds something that blocks an animal standing there (more than half a block high) and that it
+  cannot step onto: a fence or wall, or a block with another over it. The floor round a hole is a step out of it, no wall."
   [{:keys [cell]} x y z]
   (let [c (cell x y z)]
-    (boolean (and c (not (:unloaded? c)) (> (:hi c) 0.5)))))
+    (boolean (and c (not (:unloaded? c)) (> (:hi c) 0.5)
+                  (or (> (:hi c) 1) (some? (cell x (inc y) z)))))))
 
 (defn barrier-both-sides?
   "True when a barrier stands within d cells on both opposite sides of x y z, along one axis."
