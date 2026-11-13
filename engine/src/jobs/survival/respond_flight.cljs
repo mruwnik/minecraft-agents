@@ -75,7 +75,7 @@
   A chase is bounded by the response's time spend: past it the response ends limit-reached :job-time where it
   stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
   nearest chaser in ::no-gain-steps (20) steps it takes the cornered options instead of walking on; it ends nothing-possible
-  :cannot-escape only once every option failed in two sweeps in a row with no gain between.
+  :cannot-escape only once every option failed in two sweeps in a row with no gain between (a sweep after a flee search the meter cut before it planned anything does not count).
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
   Blocks placed are the call's :use :blocks, else every :build filler, carried or dug.

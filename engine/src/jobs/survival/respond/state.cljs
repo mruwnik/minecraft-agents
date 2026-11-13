@@ -99,10 +99,16 @@
   [p dead radius ranged-radius]
   (remove #(contains? dead (.-id %)) (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})))
 
+(defn note-search
+  "mem after a flee search, starved? when its meter ran out before it planned anything (flee-search/starved?)."
+  [mem starved?]
+  (assoc mem :starved? starved?))
+
 (defn count-sweep
-  "mem with one more sweep of every option failed."
+  "mem with one more sweep of every option failed, unless the last flee search was starved (note-search): it found no
+  way because it looked for none, so the sweep shows nothing about the ways out."
   [mem]
-  (update mem :sweeps (fnil inc 0)))
+  (cond-> mem (not (:starved? mem)) (update :sweeps (fnil inc 0))))
 
 (defn cannot-escape?
   "Whether two sweeps of every option failed with no gain between."

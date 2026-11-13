@@ -749,6 +749,11 @@
 
 (defn cut? "Whether search ends (search!) were cut by the search's meter before every target was planned." [ends] (boolean (:cut? (meta ends))))
 
+(defn starved?
+  "Whether the search's meter ran out before it planned anything (cut?, none planned): the ends say nothing of the ways."
+  [ends]
+  (and (cut? ends) (zero? (:planned (meta ends) 0))))
+
 (defn boxed?
   "Whether the search planned routes and the planner found every one's region explored with no way on (price!'s meta:
   all planned, all unrouted as exhausted, none left by a cut, cut?): what is round the body is seen and shut, no unseen

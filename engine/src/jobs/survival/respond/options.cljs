@@ -385,6 +385,7 @@
   (let [m (room-lib/step-meter c)
         ends (await (search/search! c chasers [] {:reach (back-off-reach) :meter m}))]
     (room-lib/spent-meter! c m :back-off)
+    (ctx/update-mem! c flight/note-search (search/starved? ends))
     (back-off-of c ends)))
 
 (defn ^:async back-off!
@@ -433,7 +434,7 @@
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, pause a moment (why cornered) and go on: the next step
   tries them again from the start (the danger still stands); no pause while the body is being hit or a creeper is near (it closes in
-  and blows while the body stands, so the next step must try the fight or a walk at once). The second sweep in a row ends the flight :cannot-escape."
+  and blows while the body stands, so the next step must try the fight or a walk at once). The second sweep in a row ends the flight :cannot-escape; a sweep after a starved flee search (flight/count-sweep) does not count."
   [c why]
   (ctx/update-mem! c #(-> % (dissoc :tried) flight/count-sweep))
   (when-not (:blocked-warned (ctx/mem c))

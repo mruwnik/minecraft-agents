@@ -600,7 +600,13 @@
 
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
   (is (not (respond.state/cannot-escape? (respond.state/count-sweep {}))))
-  (is (respond.state/cannot-escape? (respond.state/count-sweep (respond.state/count-sweep {})))))
+  (is (respond.state/cannot-escape? (respond.state/count-sweep (respond.state/count-sweep {}))))
+  ;; Fenwick j381 (run4 F24): every flee search of the first sweep planned nothing, the meter spent, yet it counted
+  (let [sweep #(respond.state/count-sweep (respond.state/note-search %1 %2))]
+    (is (not (respond.state/cannot-escape? (-> {} (sweep true) (sweep false)))) "a sweep after a starved search shows no way failed")
+    (is (respond.state/cannot-escape? (-> {} (sweep true) (sweep false) (sweep false)))))
+  (is (= [true false false] (mapv flee-search/starved? [(with-meta [] {:cut? true :planned 0}) (with-meta [] {:cut? true :planned 1}) (with-meta [] {:planned 0})]))
+      "starved: cut before any plan"))
 
 (deftest respond-to-hostile-never-continues
   (async done
