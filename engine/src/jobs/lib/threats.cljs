@@ -108,11 +108,13 @@
     {:health (.-health self) :food (.-food self) :equipment (cost/equipment-of (.-equipment self))
      :weapon (combat/best-weapon p combat/default-weapons) :pos (u/pos-of (.-pos self))}))
 
+(defn mob-entry [p e] {:key (mob-key e) :name (.-name e) :held (.-held e) :chaser (cost/mob-kind e) :pos (danger-q/mob-pos p e)})
+
 (defn sensed-mobs
   "The real dangers primitives p senses (jobs.lib.danger/dangers within its known-scan: seen or heard, with a way to the
   body or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :held :chaser (cost/mob-kind) :pos}]."
   [p danger-opts]
-  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :held (.-held e) :chaser (cost/mob-kind e) :pos (danger-q/mob-pos p e)})
+  (mapv #(mob-entry p %)
         (danger-q/dangers p (danger-q/known-scan) {:ranged-radius (danger-q/known-scan)} danger-opts)))
 
 (defn remembered-spots
@@ -154,7 +156,7 @@
 
 (defn known-threats
   "The mobs c's body knows may hurt it, [{:mob :pos :weight :key :chaser :fled :remembered}], at most ::max-threats, the nearest
-  the body first: one sensed now (sensed-mobs, weight 1), :fled a :threat flight's last place (remembered-spots, 1; one whose
+  the body first: one sensed now (sensed-mobs, weight 1) or felt hitting it (danger/felt-hostiles, 1, where the blow came from), :fled a :threat flight's last place (remembered-spots, 1; one whose
   :key is sensed now is left out: the sensed place wins), and, :remembered, a recent death or near-death by a mob at its
   spot (death-spot/recent, weighing death-spot/present-share of its fading weight; a walker's only while not seen-clear?, a water
   mob's whatever the light: it lives in the water, not in the dark) and a :hurt entry by a water mob (fading over the
@@ -165,7 +167,9 @@
         now (ctx/now c)
         ttl (:ttl (or (mem/policy (ctx/view c) :hurt) mem/default-policy))
         fade (fn [age] (if (number? ttl) (cost/death-weight age ttl) (cost/death-weight age)))
-        sensed (sensed-mobs p {:way? false :any-range? true})
+        sensed (into (sensed-mobs p {:way? false :any-range? true})
+                     (map #(mob-entry p %))
+                     (danger-q/felt-hostiles p (ctx/view c)))
         now-keys (set (map :key sensed))
         fled (vec (remove #(contains? now-keys (:key %)) (remembered-spots c)))
         known-keys (into now-keys (map :key) fled)

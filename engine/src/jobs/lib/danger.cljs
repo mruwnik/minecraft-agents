@@ -11,8 +11,10 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [engine.entity-observations :as obs]
+            [engine.memory :as mem]
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
@@ -47,6 +49,11 @@
   [view]
   (body/attacker-ids view (- (:now view) (* 1000 (settings/get settings ::hit-s)))))
 
+(defn felt?
+  "Whether hostile e is felt only (felt-hostiles): a blow the body took, from a mob it never saw or heard."
+  [e]
+  (true? (.-felt e)))
+
 (defn closed-quarters?
   "Whether the body's cell [x y z] is in closed quarters by kind-at, where a sound alone does not show a mob is near: a
   tunnel (solid over the head and at both ends of one horizontal axis, feet and head cells), or a small room or pocket
@@ -77,10 +84,10 @@
           (assoc from :x (+ (:x from) (* d (js/Math.sin a))) :z (- (:z from) (* d (js/Math.cos a))))))))
 
 (defn mob-pos
-  "Where the body takes hostile e to be: its exact place when seen, else (heard only) the rough spot its direction and
-  band from the body give (rough-pos); the exact place of a heard mob is never read."
+  "Where the body takes hostile e to be: its exact place when seen, the place its blow came from when felt (felt-hostiles),
+  else (heard only) the rough spot its direction and band from the body give (rough-pos); the exact place of a heard mob is never read."
   [p e]
-  (if (seen-only? e)
+  (if (or (seen-only? e) (felt? e))
     (u/pos-of (.-pos e))
     (let [from (u/pos-of (.-pos (.self p)))]
       (rough-pos (assoc (obs/rough-hearing from (u/pos-of (.-pos e))) :from from)))))
@@ -108,12 +115,33 @@
 (defn entity-radius [e radius ranged-radius]
   (kind-radius {:name (.-name e) :held (.-held e)} radius ranged-radius))
 
+(defn felt-hostiles
+  "The mobs whose blows hurt the body within ::hit-s (hit-ids) that it does not know of (not among combat/known-or-raw):
+  a player feels the blow and knows a mob is at hand. Each a JS entity, :felt true, neither seen nor heard, placed where
+  the blow came from: cost.danger/melee-reach from where the body stood along the hit's :dir (the damage packet's), the
+  latest blow of each mob."
+  [p view]
+  (let [since (- (:now view) (* 1000 (settings/get settings ::hit-s)))
+        known (into #{} (map #(.-id %)) (combat/known-or-raw p (known-scan)))
+        body (u/pos-of (.-pos (.self p)))
+        blows (into {} (for [{:keys [data]} (mem/since view :hurt since)
+                             d (or (seq (:damages data)) [data])
+                             :let [id (get-in d [:attacker :id])]
+                             :when (and id (not (contains? known id)))]
+                         [id (assoc d :at (or (:pos data) body))]))]
+    (for [[id {:keys [attacker dir at]}] blows
+          :let [r (cost-danger/melee-reach)
+                pos {:x (+ (:x at) (* r (:x dir 0))) :y (:y at) :z (+ (:z at) (* r (:z dir 0)))}]]
+      #js {:id id :name (:name attacker) :held (:held attacker) :kind "hostile" :pos (clj->js pos)
+           :distance (u/dist body pos) :seen false :heard false :remembered false :felt true})))
+
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones within :ranged-radius: a number, or :fire-range for their kind's), nearest first; a heard one by
-  its band (mob-distance). Uses the perception's mob memory (p.knownMobs) when p has one, else the raw hostile list."
-  [p radius {:keys [ranged-radius]}]
+  its band (mob-distance). Uses the perception's mob memory (p.knownMobs) when p has one, else the raw hostile list, and
+  :felt (felt-hostiles) when given."
+  [p radius {:keys [ranged-radius felt]}]
   (let [within (fn [e] (<= (mob-distance p e) (entity-radius e radius ranged-radius)))]
-    (->> (combat/known-or-raw p (max (known-scan) (threat/listing-radius radius ranged-radius)))
+    (->> (concat (combat/known-or-raw p (max (known-scan) (threat/listing-radius radius ranged-radius))) felt)
          (filter within)
          (sort-by #(mob-distance p %))
          vec)))
@@ -361,12 +389,14 @@
   "The dangers (dangers) the hostile-near trigger weighs (args :radius, :ranged-radius, :visible-only, :ignore-heard?), nearest first:
   heard mobs are left out when args say so and muted while jobs.lib.body/heard-muted?, a ranged mob counts only within its fire range (:shooting?):
   doing nothing about one past it loses nothing, and the trigger re-arms as it closes. None for a dead body. A heard mob is
-  never placed in the body's clear sight (a player would see it there); opts go on to danger-in?."
+  never placed in the body's clear sight (a player would see it there); args :felt? true adds the felt-hostiles (each a
+  danger: it hit the body); opts go on to danger-in?."
   ([world memory args] (hostile-dangers world memory args {}))
   ([world memory args opts]
    (if (body/dead? memory)
      []
-     (dangers world (:radius args (hostile-radius)) {:ranged-radius (:ranged-radius args :fire-range)}
+     (dangers world (:radius args (hostile-radius)) {:ranged-radius (:ranged-radius args :fire-range)
+                                                     :felt (when (:felt? args) (felt-hostiles world memory))}
               (merge {:sight? (:visible-only args true) :ignore-heard? (or (:ignore-heard? args) (body/heard-muted? memory)) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true
                       :sight-at (when (:visible-only args true) (sight-lookup world))}
                      opts)))))

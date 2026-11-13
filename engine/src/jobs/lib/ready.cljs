@@ -497,17 +497,21 @@
       :else s)))
 
 (defn hostile-now?
-  "Whether the hostile-near trigger would hold now (the radii and options of its register entry) for a mob seen or
-  remembered: read off the world, not from threatened's short cache, for a job that checks again mid-run."
+  "Whether the hostile-near trigger would hold now (the radii and options of its register entry) for a mob seen,
+  remembered or felt (danger/felt-hostiles): read off the world, not from threatened's short cache, for a job that checks again mid-run."
   [c]
-  (hostile-loss/hostile-near? c (ctx/view c) (assoc (trigger-args c) :ignore-heard? true)))
+  (hostile-loss/hostile-near? c (ctx/view c) (assoc (trigger-args c) :ignore-heard? true :felt? true)))
 
 (defn seen-price
-  "hostile-status of the dangers the hostile-near trigger holds for (seen or remembered), :seen-priced: the reflex answers
+  "hostile-status of the dangers the hostile-near trigger holds for (seen or remembered) and of the mobs felt hitting the
+  body (danger/felt-hostiles), :seen-priced: the reflex answers
   a mob it can answer, so a job that still finds one near has seen the reflex decline or fail, and waiting on it has no end."
   [c]
-  (let [hs (danger/hostile-dangers (:primitives c) (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))]
-    (hostile-status c :seen-priced (str "a hostile is near" (nearest-text c)) (hostile-cost c hs))))
+  (let [p (:primitives c)
+        hs (danger/hostile-dangers p (ctx/view c) (assoc (trigger-args c) :ignore-heard? true :felt? true))
+        felt (seq (filter danger/felt? hs))]
+    (hostile-status c :seen-priced (str "a hostile is near" (if felt (str ": " (dawn/hostile-text (map #(dawn/describe p %) felt))) (nearest-text c)))
+                    (hostile-cost c hs))))
 
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry) for a

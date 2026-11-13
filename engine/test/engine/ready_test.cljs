@@ -87,6 +87,7 @@
             [jobs.storage.withdraw :as withdraw]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.danger :as danger]
+            [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.maintenance.shut :as shut]
             [jobs.survival.eat :as eat]
@@ -715,6 +716,27 @@
        (is (= :never kind-of) "a rest where the blows land never heals")
        (is (re-find #"hitting the body" text))
        (is (= :later (first (check mem/empty-data))) "unhit, the same body rests to heal")))))
+
+(deftest threatened-prices-a-mob-felt-hitting-the-body-that-it-never-sensed
+  ;; Would fail on old code: hit-ids marked only mobs among known-hostiles, so a drowned under the water that perception
+  ;; never listed was no danger: threatened :ok :no-hostile-near, and known-threats held no threat for walks to price.
+  (dear-death
+   (fn []
+     (let [blow {:attacker {:id 58552 :name "drowned"} :dir {:x 0 :z 1}}
+           hurt {:t 9000 :data (assoc blow :amount 5 :pos {:x 0.5 :y 64 :z 0.5} :damages [blow])}
+           drowned {:id 58552 :name "drowned" :kind "hostile" :pos {:x 0.5 :y 64 :z 1.8}}
+           ctx (fn [entities]
+                 (-> (remembering-ctx (merge at-origin {:self {:pos {:x 0.5 :y 64 :z 0.5} :health 3 :food 20} :entities entities
+                                                        :blocks (tu/box -4 62 -4 4 64 4 "water")}))
+                     (assoc-in [:engine :state] (atom {:register [{:id :hostile-near :trigger :hostile-near :args {}}]}))
+                     (assoc :view (constantly {:now 10000 :data (mem/add-entry mem/empty-data :hurt hurt {:cap 50 :ttl 60000})}))))
+           c (ctx [])
+           [kind-of text data] (ready/threatened c)
+           felt (some #(when (= 58552 (:key %)) %) (threats/known-threats c))]
+       (is (= [:later :hostile-near] [kind-of (:reason data)]) "a drowned hitting a 3 hp body with much to lose: priced over a hand order's worth")
+       (is (re-find #"drowned felt" text))
+       (is (= {:x 0.5 :y 64 :z (+ 0.5 (cost-danger/melee-reach))} (:pos felt)) "the walks' threat: a blow's reach off along the hit's direction")
+       (is (empty? (danger/felt-hostiles (:primitives (ctx [drowned])) (ctx/view c))) "a mob the body knows of is not felt again")))))
 
 (deftest fit-prices-the-jobs-own-quoted-seconds-before-the-category-stay
   (dear-death

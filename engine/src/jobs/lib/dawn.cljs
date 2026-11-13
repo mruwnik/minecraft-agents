@@ -31,9 +31,9 @@
   ([p danger-opts] (boolean (seq (known-dangers p danger-opts)))))
 
 (defn describe
-  "{:kind :pos :distance :how} of hostile e: how is :seen, :heard or :remembered (with :age-s since it was last sensed)."
+  "{:kind :pos :distance :how} of hostile e: how is :seen, :heard, :felt (danger/felt-hostiles) or :remembered (with :age-s since it was last sensed)."
   [p e]
-  (let [how (cond (.-remembered e) :remembered (.-heard e) :heard :else :seen)
+  (let [how (cond (.-remembered e) :remembered (.-heard e) :heard (danger/felt? e) :felt :else :seen)
         at (danger/mob-pos p e)]
     (cond-> {:kind (.-name e) :pos (some-> at (select-keys [:x :y :z])) :distance (js/Math.round (danger/mob-distance p e)) :how how}
       (.-ageMs e) (assoc :age-s (js/Math.round (/ (.-ageMs e) 1000))))))
