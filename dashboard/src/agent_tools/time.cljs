@@ -10,7 +10,7 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: the asking body's reading (a trial body never reads a Probe* world-test body); :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is (both commands wake an unwatched online body whose pose is over 5 s old), :note when it is over 5 s old or at night (why a bed may not skip). dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: the asking body's reading (a trial body never reads a Probe* world-test body); :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is (both commands wake an unwatched online body whose pose is over 5 s old), :predicted true (with :last-seen-time-of-day) when only an offline or over-90 s-old pose exists: its time aged forward at 20 ticks/s, :note when it is over 5 s old or at night (why a bed may not skip). dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
 (def stale-ms 90000)
 (def fresh-ms
   "A reading older than this is noted as old, so a pose older than this is refreshed first: no answer goes out that its own note calls old."
@@ -33,13 +33,18 @@
     {:ctx (data/context (select-keys values [:state :worlds :world])) :command command :body (:body values)
      :timeout-ms (* 1000 timeout) :poll-ms poll-ms}))
 
+(def ticks-per-s
+  "The vanilla clock rate; the server never pauses its clock with no player online (pause-when-empty-seconds=-1)."
+  20)
+
 (def night-note "Sleeping skips the night only when every online player sleeps; one awake player means no skip, the clock still runs.")
 
 (defn noted
   "Say plainly how old a reading is when it is not fresh, and why a bed may not skip the night."
-  [{:keys [age-ms day? by] :as reading}]
+  [{:keys [age-ms day? by predicted last-seen-time-of-day] :as reading}]
   (let [notes (cond-> []
-                (> age-ms fresh-ms) (conj (str "Reading is " (js/Math.round (/ age-ms 1000)) " s old (last seen by " by "); the real time of day is later."))
+                predicted (conj (str "Predicted: the last reading (time of day " last-seen-time-of-day ", by " by ") is " (js/Math.round (/ age-ms 1000)) " s old; the clock is assumed to have run at " ticks-per-s " ticks/s since."))
+                (and (not predicted) (> age-ms fresh-ms)) (conj (str "Reading is " (js/Math.round (/ age-ms 1000)) " s old (last seen by " by "); the real time of day is later."))
                 (not day?) (conj night-note))]
     (cond-> reading (seq notes) (assoc :note (apply str (interpose " " notes))))))
 
@@ -65,11 +70,18 @@
       (not (and (js/Number.isFinite tick) (<= 0 tick) (< tick 24000))) :no-time-of-day
       (not (and (js/Number.isFinite seen) (<= 0 (- now seen) stale-ms))) :stale)))
 
-(defn report [ctx body now]
-  (let [pose (read-pose ctx body)]
-    (when-not (why-unusable ctx pose now)
-      {:ok true :world (:world ctx) :time-of-day (:timeOfDay pose) :day? (or (< (:timeOfDay pose) 12542) (> (:timeOfDay pose) 23460))
-       :seen-at (:t pose) :age-ms (- now (:t pose)) :by body})))
+(defn report
+  "A reading from the body's pose. An offline or stale pose is aged forward by the wall time since it at ticks-per-s and marked :predicted."
+  [ctx body now]
+  (let [pose (read-pose ctx body)
+        why (why-unusable ctx pose now)
+        predicted? (and (#{:offline :stale} why) (<= 0 (- now (:t pose))))]
+    (when (or (nil? why) predicted?)
+      (let [age (- now (:t pose))
+            tick (cond-> (:timeOfDay pose) predicted? (-> (+ (* (max 0 age) (/ ticks-per-s 1000))) js/Math.floor (mod 24000)))]
+        (cond-> {:ok true :world (:world ctx) :time-of-day tick :day? (or (< tick 12542) (> tick 23460))
+                 :seen-at (:t pose) :age-ms age :by body}
+          predicted? (assoc :predicted true :last-seen-time-of-day (:timeOfDay pose)))))))
 
 (defn body-names [ctx]
   (try (->> (array-seq (.readdirSync fs (.join path (:world-dir ctx) "agents") #js {:withFileTypes true}))
@@ -80,12 +92,12 @@
 (defn probe? [body] (str/starts-with? (str body) "Probe"))
 
 (defn clock
-  "The asking body's reading when it has a fresh one, else the newest body's. A world-test probe body is read only
+  "The asking body's reading when it has a fresh one, else the newest body's, else a predicted one (offline or stale poses aged forward). A world-test probe body is read only
   for a probe asker or no asker: its cases set the server time, so a trial body would see the clock jump.
   Without a reading, :bodies says why each body gave none."
   [ctx now asker]
   (let [bodies (cond->> (body-names ctx) (and asker (not (probe? asker))) (remove probe?))]
-    (or (some-> (first (sort-by (juxt (comp not #(= asker (:by %))) (comp - :seen-at) :by) (keep #(report ctx % now) bodies))) noted)
+    (or (some-> (first (sort-by (juxt :predicted (comp not #(= asker (:by %))) (comp - :seen-at) :by) (keep #(report ctx % now) bodies))) noted)
         {:ok false :world (:world ctx) :reason :time-unknown
          :bodies (into {} (map (fn [b] [b (why-unusable ctx (read-pose ctx b) now)])) bodies)})))
 

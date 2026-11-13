@@ -58,13 +58,28 @@
 (deftest dawn-waits-through-the-evening-and-the-last-ticks-before-the-wrap
   (is (= [false false false false true true] (map time/dawn-reached? [10437 11505 12455 23500 0 1000]))))
 
-(deftest a-stale-or-offline-reading-is-no-clock
-  (is (= {:ok false :reason :time-unknown} (select-keys (clock-of pose (+ 1000000 time/stale-ms 1)) [:ok :reason])))
-  (is (false? (:ok (clock-of (assoc pose :status "offline") 1001000))))
-  (is (= [:stale :offline :no-time-of-day]
-         (mapv #(-> (clock-of % 1001000) :bodies vals first)
-               [(assoc pose :t 1) (assoc pose :status "offline") (assoc pose :timeOfDay nil)]))
+(deftest a-stale-or-offline-pose-gives-a-predicted-reading
+  (let [stale (clock-of pose (+ 1000000 time/stale-ms 10000))
+        offline (clock-of (assoc pose :status "offline") 1010000)
+        wrapped (clock-of (assoc pose :status "offline" :timeOfDay 23900) 1030000)]
+    (is (= [true true 13398 100000 15398] ((juxt :ok :predicted :last-seen-time-of-day :age-ms :time-of-day) stale)))
+    (is (= [13598 true] ((juxt :time-of-day :predicted) offline)))
+    (is (= 500 (:time-of-day wrapped)) "aged forward past the wrap")
+    (is (re-find #"Predicted" (:note offline)))))
+
+(deftest no-pose-or-time-of-day-is-still-no-clock
+  (is (= {:ok false :reason :time-unknown} (select-keys (clock-of (assoc pose :timeOfDay nil) 1001000) [:ok :reason])))
+  (is (= [:no-time-of-day] (-> (clock-of (assoc pose :timeOfDay nil) 1001000) :bodies vals vec))
       "an unknown clock says per body why it gave none"))
+
+(deftest a-fresh-reading-beats-a-predicted-one
+  (let [dir (world-with-pose (assoc pose :status "offline"))
+        zed (.join path dir "agents" "Zed" "view")]
+    (.mkdirSync fs zed #js {:recursive true})
+    (.writeFileSync fs (.join path zed "pose.json") (js/JSON.stringify (clj->js (assoc pose :t 900000 :status "online"))))
+    (let [r (time/clock {:world "w" :world-dir dir} 1001000 "Bob")]
+      (.rmSync fs dir #js {:recursive true :force true})
+      (is (= ["Bob" true] ((juxt :by :predicted) r))))))
 
 (deftest a-dawn-result-without-a-checkpoint-or-body-gets-no-missed
   (async done
@@ -113,3 +128,10 @@
       (-> (time/execute! {:ctx {:world "w" :world-dir dir} :command :dawn :timeout-ms 8000 :poll-ms 100 :body "Bob"})
           (.then (fn [r] (is (= {:ok true :wake :day} (select-keys r [:ok :wake])))))
           (.finally (fn [] (js/clearInterval bob) (.rmSync fs dir #js {:recursive true :force true}) (done)))))))
+
+(deftest dawn-waits-on-a-predicted-reading-when-every-body-is-offline
+  (async done
+    (let [dir (world-with-pose (assoc pose :status "offline" :t (js/Date.now) :timeOfDay 20000))]
+      (-> (time/execute! {:ctx {:world "w" :world-dir dir} :command :dawn :timeout-ms 400 :poll-ms 100 :body "Bob"})
+          (.then (fn [r] (is (= [false :timeout true] ((juxt :ok :reason :predicted) r)))))
+          (.finally (fn [] (.rmSync fs dir #js {:recursive true :force true}) (done)))))))

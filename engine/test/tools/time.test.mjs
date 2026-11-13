@@ -63,12 +63,16 @@ test('newest fresh online Overworld observation wins, with stable engine day bou
   }
 })
 
-test('missing, malformed, stale, future, wrong-dimension and disconnected reports are unknown', t => {
+test('stale and disconnected poses give a predicted reading; missing, malformed, future and wrong-dimension reports are unknown', t => {
   const {pose, ctx, worldDir} = fixture(t), now = Date.now()
   assert.equal(clock(ctx, now).reason.key, 'time-unknown')
-  pose('Stale', {t: now - 90001})
+  pose('Stale', {t: now - 90001, timeOfDay: 1000})
+  assert.equal(clock(ctx, now).predicted, true)
+  assert.equal(clock(ctx, now)['time-of-day'], 1000 + Math.floor(90001 * 20 / 1000))
+  pose('Stale', {t: now - 90001, status: 'offline', timeOfDay: 1000})
+  assert.equal(clock(ctx, now).predicted, true)
+  pose('Stale', {t: now + 1})
   pose('Future', {t: now + 1})
-  pose('Offline', {status: 'offline'})
   pose('End', {dimension: 'the_end'})
   pose('NoTime', {timeOfDay: null})
   pose('Broken')
@@ -94,7 +98,8 @@ test('dawn stops at timeout or observer loss', async t => {
   assert.equal(timed.reason.key, 'timeout')
   const lost = await withFakeClock(t, execute(options([...args, 'dawn', '--timeout', '1', '--poll-ms', '10'])), [{at: 20, run: () => pose('Observer', {status: 'offline'})}])
   assert.equal(lost.ok, false)
-  assert.equal(lost.reason.key, 'time-unknown')
+  assert.equal(lost.reason.key, 'timeout')
+  assert.equal(lost.predicted, true)
 })
 
 test('CLI emits compact EDN and handles unknown time without creating a body', t => {
