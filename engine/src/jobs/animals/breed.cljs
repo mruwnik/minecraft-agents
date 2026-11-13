@@ -34,8 +34,8 @@
   Per animal:
   - Fed: it went into love mode.
   - Refused: nothing happened twice (on its breeding cooldown, or already in love; a lost click is tried once more). It is not tried again.
-  An animal fed or refused is remembered (jobs.lib.animals/note-love!) and not a candidate for the breeding cooldown,
-  as a player remembers which they fed.
+  An animal fed or refused is remembered (jobs.lib.animals/note-love!) and is not tried again, as a player remembers
+  which animals they fed.
   - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
     (the food was eaten without love; a baby the sensing missed, warn breed.baby).
 
@@ -232,7 +232,8 @@
       :food-out "the food ran out; bring more"
       :unreachable "an animal or the :box pen could not be reached; open a way in"
       :unpaired "an odd number was fed; another adult is needed"
-      :no-baby "a pair was fed but no calf showed; look again later"
+      :no-baby (str "a pair was fed but no calf showed; look again later"
+                    (when-let [w (:back-failed m)] (str " (the walk back to the pair failed: " w ")")))
       nil)))
 
 (defn result
@@ -287,10 +288,12 @@
   [c reason & [ending]]
   (cond
     (calf-pending? c) (do (await (child/pause! c 1 :calf-wait)) :continue)
-    (back-to-pair? c) (if (= :continue (await (child/call-walk* c :back {:pos (:fed-from (ctx/mem c)) :range 1})))
-                        :continue
-                        (do (ctx/update-mem! c assoc :back-walked true)
-                            (await (finish! c reason ending))))
+    (back-to-pair? c) (let [r (await (child/call-walk* c :back {:pos (:fed-from (ctx/mem c)) :range 1}))]
+                        (if (= :continue r)
+                          :continue
+                          (do (ctx/update-mem! c #(cond-> (assoc % :back-walked true)
+                                                    (not= :done (:kind r)) (assoc :back-failed (or (get-in r [:data :text]) (some-> r :data :reason name) "no reason given"))))
+                              (await (finish! c reason ending)))))
     :else (finish-now! c reason ending)))
 
 (defn pen-box

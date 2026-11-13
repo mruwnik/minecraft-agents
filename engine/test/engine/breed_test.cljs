@@ -522,6 +522,22 @@
             (is (= :fed (:reason e)) "the calf is counted from where the pair was fed")
             (is (= 1 (:babies e)))))))))
 
+(deftest a-failed-walk-back-to-the-pair-is-named-in-the-no-baby-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]
+                          :unreachable (vec (for [x (range -4 5) z (range -4 5) y [63 64 65]] (str x "," y "," z)))})]
+          (core/submit! (:eng s) (tu/order (list 'jobs.animals.breed {:mob "cow"})) {})
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 5}
+                   (fn ^:async phases []
+                     (loop [n 0] (when (and (< n 20) (< (count (interacts s)) 2)) (await (run-ticks s 1 700)) (recur (inc n))))
+                     (swap! (fake/state (:p s)) assoc-in [:self :pos] [30 64 0])
+                     (await (run-ticks s 60 700)))))
+          (let [e (done-event s)]
+            (is (= :no-baby (:reason e)))
+            (is (re-find #"walk back to the pair failed: \S+" (:why e)))))))))
+
 (def known-pen {:min {:x 7 :y 64 :z -7} :max {:x 19 :y 64 :z 7}})
 
 (deftest breed-walks-to-a-known-pen-out-of-view-feeds-and-leaves-it-shut
