@@ -181,6 +181,14 @@
     (let [in (access/rules-input c {:spare-own? true})]
       (some #(when (access/own-keep in %) %) cells))))
 
+(defn way-trespass
+  "The cell of cells that is another's (a refused place) when the body stands in a doorway: walls round it shut a way through that area, which is never worth a last resort."
+  [c cells]
+  (let [p (:primitives c)
+        in (access/rules-input c)]
+    (when (sh-sense/doorway? p (sh-sense/feet p))
+      (some #(when (access/trespass-refusal in :place %) %) cells))))
+
 (defn ^:async seal-cells!
   "The body of seal!: place the open cells round the feet."
   [c]
@@ -199,6 +207,8 @@
       (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) (refuse! c :hostile-in-cell "a hostile stands in a cell to close")
       (and (false? (:trespass? (:args c))) (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
       (do (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area"}) :failed)
+      (way-trespass c cells)
+      (do (ctx/update-mem! c assoc :stop {:reason :trespass-way :text "the walls would shut a way through another's area"}) :failed)
       (own-plan-cell c cells)
       (do (ctx/update-mem! c assoc :stop {:reason :own-plan :text "the walls need a cell of the body's own plan"}) :failed)
       (nil? (lb/pick c blocks)) (refuse! c :no-block "no block is carried to close the walls")
@@ -225,7 +235,7 @@
   in a side cell, which the seal leaves alone).
   A door standing open in a side cell is no wall (fill/sealed?): it is shut. Cells it has not sensed (a ceiling
   out of view) are looked at first: an unseen cell is not taken for an open one. A support block under a wall cell is never placed in another's
-  area (the wall cell then fails no-support); the wall cells themselves are a last resort.
+  area (the wall cell then fails no-support); the wall cells themselves are a last resort, but not when the body stands in a doorway: the walls would shut a way through that area (stop :trespass-way).
   An open iron door in a side cell can be neither shut nor filled: the body first steps to a spot not beside it (step-from-door!)."
   [c]
   (let [stepped (await (step-from-door! c))]

@@ -150,6 +150,17 @@
             (is (= places (count (calls p "place"))) (pr-str zones))
             (is (= warns (mapv :zones (trespass seen :shut-in.trespass-last-resort))) (pr-str zones)))))))))
 
+(deftest walls-are-not-placed-over-a-way-through-a-foreign-area
+  (async done
+    (tu/run-async done
+      (st/walls-cheap (fn ^:async t []
+        (let [gate-world (update night-world :blocks merge {"1,64,0" "stone" "-1,64,0" "stone" "1,65,0" "stone" "-1,65,0" "stone"})
+              {:keys [eng p seen]} (setup gate-world [(whole-zone "Miles")])]
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:walls}})) {})
+          (await (run-until-empty eng 10))
+          (is (= [] (calls p "place")) "a body in a gateway never walls it up in another's area")
+          (is (= [] (trespass seen :shut-in.trespass-last-resort)))))))))
+
 (deftest shelter-through-dig-in-follows-the-same-rule
   (async done
     (tu/run-async done
