@@ -85,7 +85,7 @@
   With :of :orphans, scaffold out of dig reach that jobs.lib.ledger/walk-blocker refuses (far below, near a death, roofed, submerged) is not walked to (held :walk-blocked). A walk leg also stops while such a threat or flight
   holds (:danger).
 
-  A shelter's block (purpose :shelter or :retreat-plug) also stays (held :danger) while the field of a known threat holds its cell or one beside it: taking it back would open a wall onto that mob, however far the body has gone. It stays while a known hostile could reach the body or shoot it were the shelter's blocks open (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
+  A shelter's block (purpose :shelter or :retreat-plug) also stays (held :danger) while the field of a known threat holds its cell or one beside it: taking it back would open a wall onto that mob, however far the body has gone. It stays while a known hostile could reach the body or shoot it were that block open (:hostile-near; a block on the side away from the hostile is taken back, so the body can leave that way) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
 
   A block whose walk go-to prices over its worth (worth-s) for seen lava near it (jobs.lib.lava-risk/hp) is left open (:lava-near: no walk, no dig) unless :accept names :lava-adjacent: a tidy-up is no reason to go near lava.
 
@@ -202,7 +202,7 @@
             :lava-near? (let [items (into {} (map (juxt :cell :item)) entries)]
                           (memoize #(> (* (lava-risk/hp (:primitives c) %) (cost/hp-seconds)) (worth-s (items %)))))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
-            :hostile-near? (and (some (comp stay/shelter-purposes :purpose) entries) (stay/hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :threat-at? (threat-at-fn c) :keep-at-night? (stay/at-night?)
+            :hostile-near? (when (some (comp stay/shelter-purposes :purpose) entries) (stay/hostile-near-fn (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :threat-at? (threat-at-fn c) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
             :walk-blocker (when (= :orphans (:of (:args c))) (walk-blocker-of c l))

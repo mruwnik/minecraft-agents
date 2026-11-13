@@ -838,8 +838,8 @@
           (is (= "air" (block p [-2 64 0])) "the seal near the feet is taken back too"))
         (let [{:keys [out p]} (await (seals-near-goal-and-feet! [{:id 1 :name "zombie" :kind "hostile" :pos {:x -4.5 :y 64 :z 0.5} :visible true}]))]
           (is (true? (:arrived out)) (pr-str out))
-          (is (= ["cobblestone" "cobblestone" "cobblestone" "cobblestone"] (mapv #(block p %) [[-2 64 0] [-2 65 0] [2 64 0] [2 65 0]]))
-              "both seals are kept for the zombie (the resumed cleanups' :seal-kept): the way out is cut through the rock"))))))
+          (is (= ["cobblestone" "cobblestone" "air" "air"] (mapv #(block p %) [[-2 64 0] [-2 65 0] [2 64 0] [2 65 0]]))
+              "the seal between the body and the zombie stays (:seal-kept); the one on the far side opens nothing to it and is taken back (F38)"))))))
 
 (def own-pillar "A 3-high column under the body: every way off it is a 3-block drop." {"0,64,0" "cobblestone" "0,65,0" "cobblestone" "0,66,0" "cobblestone"})
 

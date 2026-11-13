@@ -198,13 +198,13 @@
   (let [plug (entry [3 64 1] :purpose :retreat-plug)
         pillar (entry [3 65 1])]
     (is (= [{:cell [3 64 1] :item "dirt" :reason :hostile-near}]
-           (:open (step :entries [plug] :hostile-near? true :block-at (lookup [3 64 1] "dirt"))))
+           (:open (step :entries [plug] :hostile-near? any? :block-at (lookup [3 64 1] "dirt"))))
         "the refuge's plug keeps the hostile off")
     (is (= {:step :dig :cell [3 65 1] :item "dirt"}
-           (step :entries [pillar] :hostile-near? true :block-at (lookup [3 65 1] "dirt")))
+           (step :entries [pillar] :hostile-near? any? :block-at (lookup [3 65 1] "dirt")))
         "other scaffold is taken back")
     (is (= {:step :dig :cell [3 64 1] :item "dirt"}
-           (step :entries [plug] :hostile-near? false :block-at (lookup [3 64 1] "dirt")))
+           (step :entries [plug] :hostile-near? (constantly false) :block-at (lookup [3 64 1] "dirt")))
         "the hostile gone, the plug is taken back")))
 
 (deftest a-shelter-seal-stays-while-it-opens-onto-dark-and-while-a-hostile-is-near
@@ -214,7 +214,7 @@
         world (lookup [3 64 1] "dirt" [3 65 1] "dirt" [3 66 1] "dirt")]
     (is (= #{:night} (set (map :reason (:open (step :entries [seal plug] :opens-dark? any? :block-at world))))))
     (is (= [{:cell [3 64 1] :item "dirt" :reason :hostile-near}]
-           (:open (step :entries [seal] :hostile-near? true :block-at world))))
+           (:open (step :entries [seal] :hostile-near? any? :block-at world))))
     (is (= :dig (:step (step :entries [pillar] :opens-dark? any? :block-at world))) "other scaffold is taken back")
     (is (= :dig (:step (step :entries [seal] :opens-dark? (constantly false) :block-at world))) "opening onto lit cells the seal is taken back")
     (is (= :dig (:step (step :entries [seal] :opens-dark? any? :keep-at-night? false :block-at world))) "unless the night keep is off")))
@@ -1111,6 +1111,24 @@
           (await (ticks s eng 60))
           (is (= (set cells) (set (map first @digs))))
           (is (empty? (:open @out))))))))
+
+(deftest a-retreat-plug-on-the-far-side-from-a-skeleton-is-taken-back
+  ;; Fenwick F38: every block of a pocket sealed against a skeleton stayed, the one away from it too, so no walk could
+  ;; leave. The pocket has a plug each side; the skeleton is heard east, open ground between, rock behind the west plug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [east [[4 64 0] [4 65 0]]
+              west [[2 64 0] [2 65 0]]
+              rock (zipmap ["1,64,0" "1,65,0" "2,64,1" "2,65,1" "2,64,-1" "2,65,-1" "3,64,1" "3,65,1" "3,64,-1" "3,65,-1"] (repeat "stone"))
+              {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (pillar-blocks (concat east west)) rock)
+                                                     :entries (mapv #(entry % :purpose :retreat-plug) (concat east west))})]
+          (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x 9.5 :y 64 :z 0.5} :health 20})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
+          (await (ticks s eng 60))
+          (is (= (set west) (set (map first @digs))) "the west plug opens nothing to the skeleton")
+          (is (= {:cells (set east) :reasons #{:hostile-near}} {:cells (set (map :cell (:open @out))) :reasons (set (map :reason (:open @out)))})
+              "the east plug stays"))))))
 
 (deftest a-far-scaffold-block-beside-a-known-hostile-is-not-walked-to
   (async done

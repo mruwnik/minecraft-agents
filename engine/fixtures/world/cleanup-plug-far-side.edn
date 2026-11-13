@@ -1,0 +1,29 @@
+;; Card eb4cd618 (run4 F38): a retreat-plug block is kept only while a known hostile could reach or shoot the body were
+;; that block open. The body stands in a pocket with a plug each side; a NoAI skeleton stands in the open 6 blocks east.
+;; The east plug stays (:hostile-near); the west plug, rock behind it, opens nothing to the skeleton and is taken back
+;; (the old rule kept every block of the shelter, so no walk could leave it).
+;; Control: without the skeleton both plugs are taken back.
+{:defaults
+ {:tags [:cleanup :access :hostile] :time :any
+  :plot {:height 12}
+  :blocks [[:set [9 0 8] "dirt"] [:set [9 1 8] "dirt"] [:set [11 0 8] "dirt"] [:set [11 1 8] "dirt"]
+           [:set [10 0 7] "stone"] [:set [10 1 7] "stone"] [:set [10 0 9] "stone"] [:set [10 1 9] "stone"]
+           [:set [9 0 7] "stone"] [:set [9 1 7] "stone"] [:set [9 0 9] "stone"] [:set [9 1 9] "stone"]
+           [:set [8 0 8] "stone"] [:set [8 1 8] "stone"]]
+  :memory [{:kind :scaffold :data {:entries [{:cell #at [9 0 8] :item "dirt" :before "air" :job "j1" :purpose :retreat-plug :state :placed}
+                                             {:cell #at [9 1 8] :item "dirt" :before "air" :job "j1" :purpose :retreat-plug :state :placed}
+                                             {:cell #at [11 0 8] :item "dirt" :before "air" :job "j1" :purpose :retreat-plug :state :placed}
+                                             {:cell #at [11 1 8] :item "dirt" :before "air" :job "j1" :purpose :retreat-plug :state :placed}]}}]
+  :body {:at [10.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 70}
+ :cases
+ [{:name "the-plug-away-from-the-skeleton-is-taken-back"
+   :act [[:summon "skeleton" [16.5 0 8.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true :checks {:safe? (always)}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:open [{:reason :hostile-near} {:reason :hostile-near}]}} :within-s 50 :of-job true}]
+   :after [[:block [11 0 8] "dirt"] [:block [11 1 8] "dirt"] [:not-block [9 0 8] "dirt"] [:not-block [9 1 8] "dirt"]]
+   :limit-s 60}
+  {:name "no-hostile-both-plugs-are-taken-back"
+   :act [[:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:removed [:has [:any]]}} :within-s 60 :of-job true}]
+   :after [[:not-block [9 0 8] "dirt"] [:not-block [9 1 8] "dirt"] [:not-block [11 0 8] "dirt"] [:not-block [11 1 8] "dirt"]]}]}

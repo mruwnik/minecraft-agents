@@ -14,12 +14,16 @@
 
 (def shelter-purposes #{:shelter :retreat-plug})
 
-(defn hostile-near?
-  "Whether a known hostile (heard or seen) within the longest follow range (ranged ones within the danger ranged radius)
-  could reach the body or shoot it were the shelter blocks of ledger l open (danger-q/danger-opened?): one walled off
-  by rock the body has seen is no reason to keep the shelter."
+(defn hostile-near-fn
+  "A fn of a shelter block's cell [x y z]: whether a known hostile (heard or seen) within the longest follow range (ranged
+  ones within the danger ranged radius) could reach the body or shoot it were that block open, with the shelter blocks
+  of ledger l right above and below it (a mob passes a gap two high) (danger-q/danger-opened?). A block on the far side
+  of the shelter from the hostile opens nothing to it; one walled off by rock the body has seen is no reason to keep it."
   [p l]
-  (danger-q/danger-opened? p threats/max-follow-range (keep #(when (shelter-purposes (:purpose %)) (:cell %)) l)))
+  (let [shelter (into #{} (keep #(when (shelter-purposes (:purpose %)) (:cell %))) l)]
+    (memoize
+      (fn [[x y z :as cell]]
+        (danger-q/danger-opened? p threats/max-follow-range (into [cell] (filter shelter) [[x (dec y) z] [x (inc y) z]]))))))
 
 (defn opens-dark?
   "A fn of a cell: whether a neighbour of it is not solid and dark (sh-sense/lit-here?: a cell the body has not seen by
