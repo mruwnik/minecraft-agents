@@ -1071,6 +1071,14 @@
           (is (= [] @digs) "Juniper j658: the plug dug next to the skeleton let it in")
           (is (= #{:hostile-near} (set (map :reason (:open @out))))))))))
 
+(deftest the-trigger-does-not-offer-a-retreat-plug-a-skeleton-could-come-through
+  (let [beside (doto (tu/seeing-all (tu/fake {:self {:pos {:x 3.5 :y 64 :z 0.5}} :blocks (pillar-blocks [[2 64 0] [2 65 0]])}))
+                 (fake/add-entity! {:id 9 :name "skeleton" :kind "hostile" :pos {:x -4 :y 64 :z 0} :health 20}))]
+    (settings/with-settings {:triggers.access.scaffold-left/with-hostile true}
+      (fn []
+        (is (false? (fires? beside (trigger-store [(entry [2 64 0] :purpose :retreat-plug) (entry [2 65 0] :purpose :retreat-plug)] []) [])) "cleanup keeps it: no run")
+        (is (true? (fires? beside (trigger-store [(entry [2 64 0])] []) [])) "a pillar block is no shelter")))))
+
 (deftest a-retreat-plug-is-taken-back-from-a-skeleton-walled-off-by-seen-rock
   ;; Teasel #6: a skeleton heard in a sealed cave kept the plug for ever. The body's pocket opens east by its plug; the
   ;; skeleton is heard west, behind the pocket's wall, which stops its arrows whether the plug is open or not

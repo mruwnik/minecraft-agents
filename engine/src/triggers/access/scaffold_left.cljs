@@ -9,6 +9,7 @@
   It holds only in the light (a retreat plug is taken back in the dark too: the body sits inside it, but not while it opens onto a dark cell, which cleanup keeps; so is scaffold in the body's own column under its feet: a body perched on its pillar comes down by digging under itself, a step at a time, whatever the light or its health), past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
   jobs.lib.threats/fled-memory-ms of a flight, unless ::at-night / ::with-hostile are set: the night's seal is scaffold
   too, and the body is inside it.
+  A shelter or retreat-plug block is not offered while a known hostile could reach the body through it (stay/hostile-near?: cleanup keeps it, a longer range than the dawn check's).
   Runs jobs.access.cleanup, which takes exactly those entries.
   Persistence :stop: a cleanup that leaves entries holds them, so the condition turns false.
   It fires again only for new entries or once the hold has run out."
@@ -57,12 +58,15 @@
         plug-kept? #(and (stay/at-night?) (opens-dark? (:cell %)))
         entries (ledger/open-entries memory)
         feet (reach/standing-vec p)
-        died-near? (ledger/died-near-of {:primitives p :view (constantly memory)})]
+        died-near? (ledger/died-near-of {:primitives p :view (constantly memory)})
+        kept-by-hostile? (let [kept (delay (stay/hostile-near? p entries))]
+                           #(and (stay/shelter-purposes (:purpose %)) @kept))]
     (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                   (some? (world/zones kn))
                   (or (settings/get settings ::with-hostile)
                       (and (not (dawn/hostile-known? p)) (not (threats/fled-recently? p memory))))
                   (some #(and (not (walk-blocked? p died-near? entries %))
+                              (not (kept-by-hostile? %))
                               (or dark-ok? (perched-on? feet %) (and (= :retreat-plug (:purpose %)) (not (plug-kept? %)))))
                         (ledger/offered memory (block-at-of p) nil
                                         (ledger/near-of-args {:primitives p} args)))))))

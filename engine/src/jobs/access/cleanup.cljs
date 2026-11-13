@@ -136,13 +136,6 @@
 (defn give-up [] (settings/get settings ::give-up))
 
 
-(defn hostile-near?
-  "Whether a known hostile (heard or seen) within the longest follow range (ranged ones within the danger ranged radius)
-  could reach the body or shoot it were the shelter blocks of ledger l open (danger-q/danger-opened?): one walled off
-  by rock the body has seen is no reason to keep the shelter."
-  [p l]
-  (danger-q/danger-opened? p threats/max-follow-range (keep #(when (stay/shelter-purposes (:purpose %)) (:cell %)) l)))
-
 (def beside (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz]))
 
 (defn danger-ahead?
@@ -198,7 +191,7 @@
             :lava-near? (let [items (into {} (map (juxt :cell :item)) entries)]
                           (memoize #(> (* (lava-risk/hp (:primitives c) %) (cost/hp-seconds)) (worth-s (items %)))))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
-            :hostile-near? (and (some (comp stay/shelter-purposes :purpose) entries) (hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :threat-at? (threat-at-fn c) :keep-at-night? (stay/at-night?)
+            :hostile-near? (and (some (comp stay/shelter-purposes :purpose) entries) (stay/hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :threat-at? (threat-at-fn c) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
             :walk-blocker (when (= :orphans (:of (:args c))) (walk-blocker-of c l))

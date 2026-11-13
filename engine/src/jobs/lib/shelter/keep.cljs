@@ -2,8 +2,10 @@
   "Whether a shelter's block stays: a shelter or retreat-plug block opens onto a dark cell (cleanup keeps it, the scaffold-left trigger skips it, blocks.dig waits for the light)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
-            [jobs.lib.shelter.sense :as sh-sense]))
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.threats :as threats]))
 
 (a/defargs settings
   {::at-night? {:default true :doc "A shelter's block (:shelter, :retreat-plug) stays while it opens onto a dark cell; false takes it back anyway." :spec boolean?}})
@@ -11,6 +13,13 @@
 (defn at-night? [] (settings/get settings ::at-night?))
 
 (def shelter-purposes #{:shelter :retreat-plug})
+
+(defn hostile-near?
+  "Whether a known hostile (heard or seen) within the longest follow range (ranged ones within the danger ranged radius)
+  could reach the body or shoot it were the shelter blocks of ledger l open (danger-q/danger-opened?): one walled off
+  by rock the body has seen is no reason to keep the shelter."
+  [p l]
+  (danger-q/danger-opened? p threats/max-follow-range (keep #(when (shelter-purposes (:purpose %)) (:cell %)) l)))
 
 (defn opens-dark?
   "A fn of a cell: whether a neighbour of it is not solid and dark (sh-sense/lit-here?: a cell the body has not seen by
