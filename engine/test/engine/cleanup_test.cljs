@@ -437,13 +437,13 @@
 (defn setup
   "An engine over the fake world with the ledger written into body memory; a recording parent (j1) runs cleanup with
   args as its child and keeps its result in :out. :make starts another engine on the same body."
-  [{:keys [self blocks entries zones args drops jobs] :or {zones []}}]
+  [{:keys [self blocks entries zones args drops jobs plans] :or {zones []}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
         p (tu/fake (cond-> {:self {:pos self} :blocks blocks :inventory [{:name "iron_sword" :count 1}]} drops (assoc :drops drops)))
         out (atom :not-done)
-        w (world/of-data {} {} zones)
+        w (world/of-data (or plans {}) {} zones)
         parent (tu/recording-parent job (or args {}) out)
         make (fn [] (core/create {:primitives p :jobs (merge registry/jobs jobs {'recording-parent parent})
                                   :triggers triggers/all :dir dir :now #(deref clock) :world w
@@ -637,6 +637,21 @@
             (is (= [[0 64 0]] (mapv first @digs)) "the dug block is not dug again")
             (is (= [] (the-ledger again)))
             (is (= #{[0 64 0] [0 65 0]} (set (map :cell (:removed @out)))))))))))
+
+(deftest a-block-left-in-the-clear-inside-of-an-own-plans-pen-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out digs] :as s}
+              (setup {:self {:x 3.5 :y 64 :z 0.5}
+                      :blocks (merge (floor -2 5) {"1,64,0" "dirt"})
+                      :entries [(entry [1 64 0])]
+                      :plans {"court" {:id "court" :metadata {:by "Fake"} :parts [{:id "cows" :box [[0 64 -1] [2 65 1]] :want "air"}]}}})]
+          (core/submit! eng (tu/order '(recording-parent {})) {})
+          (await (ticks s eng 30))
+          (is (= [[1 64 0]] (mapv first @digs)) "the plan wants the pen's inside clear: the block is in its way, not part of it")
+          (is (nil? (block p [1 64 0])))
+          (is (empty? (the-ledger eng))))))))
 
 (deftest a-zone-refusal-keeps-the-entry-and-reports-it
   (async done

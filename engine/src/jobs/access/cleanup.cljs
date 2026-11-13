@@ -77,7 +77,7 @@
   (:no-floor-below).
 
   A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
-  never dug, unless the spare-own-builds setting is false.
+  never dug, unless the spare-own-builds setting is false. A cell the plan wants clear (a pen's inside) is no footprint here.
 
   Ready: safe? is jobs.lib.ready/safe-at-build here (:hostile-near; a dark cell within the spawn-free radius is no wait); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
   :unarmed: no weapon carried). Both are the :checks defaults, so a caller or trigger overrides them (:checks {:fit? '(always)}).
@@ -181,11 +181,21 @@
             :ledger (ledger/cells l)}]
     #(ledger/walk-blocker in %)))
 
+(defn clear-cells
+  "The cells plan id wants clear (a :want of air, such as a pen's inside)."
+  [c id]
+  (known/memo c [:clear-cells id] #(into #{} (comp (filter (comp #{:clear} :want)) (map (comp vec :pos))) (:cells (known/plan c id)))))
+
+(defn build-footprints
+  "footprints less the cells of cells whose plan wants them clear: a block there is in the plan's way, not part of it."
+  [c footprints cells]
+  (reduce (fn [fp cell] (if-let [id (get fp cell)] (cond-> fp (contains? (clear-cells c id) cell) (dissoc cell)) fp)) footprints cells))
+
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
   (let [{:keys [accept]} (:args c)]
-    (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
+    (merge (update (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))}) :footprints #(build-footprints c % (map :cell entries)))
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (floor-at c l) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :lava-near? (let [items (into {} (map (juxt :cell :item)) entries)]
@@ -418,6 +428,7 @@
   dropped entries (one cleanup.dropped info each). The ledger after."
   [c l picked]
   (let [{:keys [footprints own-plans]} (access/zone-input c)
+        footprints (build-footprints c footprints (map :cell l))
         planned (plan-cells (filterv #(picked (:cell %)) l) footprints own-plans (access/spare-own-builds))
         {:keys [ledger removed dropped]} (ledger/settle (filterv #(not (planned (:cell %))) l) #(picked (:cell %)) (access/sensed-at (:primitives c) nil))]
     (when (not= ledger l) (ledger/remember! c ledger))
