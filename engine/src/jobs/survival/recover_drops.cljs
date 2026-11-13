@@ -29,11 +29,11 @@
 (def doc
   "After a death, go back for the drops when they are worth it. Serves the :died entry no :recovered covers (the keyed one, else the open pile best net of the walk); one run is the whole trip and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex or a restart goes on with the same trip (:recover-trip).
   Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). The children run under :checks {:safe? (always)}: the trip prices its own danger.
-  Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, its danger the walk risk of go-to's quote, ::margin); infinite for lava, fire, the void or a walk ending after the despawn.
+  Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, its danger the walk risk of go-to's quote, ::margin); infinite for a pile that burned (died in lava or fire, est/lost) or fell out of the world, or a walk ending after the despawn.
   Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, its walk risk naming the mobs priced, the air the route spends); a hold is no longer than the pile's gain over its safe trip (est/surplus-s: a wait costs its seconds), the window left less the walk, the flight and the collect, and ::danger-memory-ms, and no shorter than the flight (seconds a chaser needs to give up); with no mob seen, or less, no hold: the pile is left (:skip).
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
   Fetch: legs of ::leg-s (weighed again after each), then up to 3 collect passes (jobs.items.collect-drops; armour picked up is put on at the end, jobs.items.equip), a look and a walk round the pile; own seal blocks near it are taken back (jobs.access.cleanup), a deep pile is reached by a stair (jobs.access.tunnel).
-  Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed, :too-far, :lethal-cause condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left; endings carry :next (jobs.lib.next-call): :danger the call with :retry true then the call again, :unreachable only what unblocks the walk, :gone and :not-worth none, others the call again. A walk that did not arrive leaves the death open.
+  Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed, :too-far, :burned and :void condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left; endings carry :next (jobs.lib.next-call): :danger the call with :retry true then the call again, :unreachable only what unblocks the walk, :gone and :not-worth none, others the call again. A walk that did not arrive leaves the death open.
   Events: recover-drops.kit-dropped (a failed kit fetch); warn respawn_away_from_bed once per death when the respawn is over ::bed-away-blocks from the respawn bed.
   Memory: reads :died :respawned :bed :slept :recover-trip :recover-danger, the scaffold ledger; writes :recovered :recover-trip :recover-danger.")
 
@@ -182,7 +182,7 @@
   (let [need-s (* (cfg/stair-step-s) (max below aside))
         left-s (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)
         fetch (cost/fetch-cost {:distance (* need-s (cost/walk-blocks-per-s)) :elapsed-ms (est/pile-age-ms c entry)
-                                :cause (:cause (:data entry)) :stay-s (pl/collect-s c (:data entry))})
+                                :lost (est/lost c (:data entry)) :stay-s (pl/collect-s c (:data entry))})
         give-up! (fn [reason text]
                    (end/finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (:reason fetch)

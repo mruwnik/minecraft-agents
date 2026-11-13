@@ -212,9 +212,18 @@
     {:distance 10 :elapsed-ms 300000} :window-closed
     {:distance 2000 :elapsed-ms 0} :too-far
     {:distance 100 :elapsed-ms 280000} :too-far
-    {:distance 10 :elapsed-ms 0 :cause "lava"} :lethal-cause
-    {:distance 10 :elapsed-ms 0 :cause :out_of_world} :lethal-cause
+    {:distance 10 :elapsed-ms 0 :lost :burned} :burned
     {:distance nil :elapsed-ms 0} :no-position))
+
+(deftest a-pile-is-lost-only-where-its-items-burned-or-fell
+  (are [cause feet lost] (= lost (v/pile-lost cause feet))
+    "lava" ["lava" "stone"] :burned
+    "inFire" ["fire" "stone"] :burned
+    "lava" nil :burned
+    "lava" ["air" "andesite"] nil
+    "onFire" ["air" "stone"] nil
+    :out_of_world nil :void
+    "zombie" ["lava"] nil))
 
 (deftest fetch-cost-lists-its-parts
   (let [c (v/fetch-cost {:distance 100 :danger-s 90 :elapsed-ms 0})]

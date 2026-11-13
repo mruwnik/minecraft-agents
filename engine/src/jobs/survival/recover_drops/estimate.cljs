@@ -122,6 +122,15 @@
   [c entry]
   (settings/ticks->ms (game/ticks-since entry (ctx/view c))))
 
+(defn lost
+  "cost/pile-lost of the :died data: its cause, and the remembered blocks of the feet cell and the one under it (nil while
+  the feet cell is unseen)."
+  [c {:keys [pos cause]}]
+  (let [p (:primitives c)
+        feet (when pos {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
+        names (when feet (map #(u/seen-name p %) [feet (update feet :y dec)]))]
+    (cost/pile-lost cause (when (some? (first names)) (remove nil? names)))))
+
 (defn ^:async quote-trip
   "go-to's quote of the walk to the pile of death `entry` (its planned seconds, its walk risk, and the hp the route drowns),
   nil without a pos: onto the pile itself, where the collect picks it up (the walk's ::arrive-range may end outside a
@@ -150,7 +159,7 @@
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) (/ mean 2)))
         danger-s (pick/risk-s c quoted (:danger wet 0))
         straight-s (when pos (/ (u/dist here pos) (cost/walk-blocks-per-s)))
-        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger-s danger-s :elapsed-ms elapsed :cause cause
+        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger-s danger-s :elapsed-ms elapsed :lost (lost c data)
                                :back? true :stay-s (pl/collect-s c data)})
         refused (when (contract/ending? quoted) (str "the walk's quote ended: " (name (contract/cause-key quoted))))
         drowns (when-not (or refused (:reason fetch)) (no-air-way p wet-at pos drown-hp))

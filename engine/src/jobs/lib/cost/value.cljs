@@ -460,11 +460,16 @@
   "Blocks of straight line a second a walk covers: fight/walk-speed over ::detour-factor."
   []
   (/ fight/walk-speed (settings/get settings ::detour-factor)))
-(def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])
-
-(defn lethal-cause? [cause]
+(defn pile-lost
+  "Why a death's pile is gone at once, else nil: :void for a fall out of the world; :burned for a death by lava or fire
+  with lava or fire where the feet stood (feet-blocks: the names of the feet cell and the one under it, nil when unknown;
+  items burn the moment they land there). A body burned to death beside lava or off the fire drops its pile on the floor."
+  [cause feet-blocks]
   (let [c (str/lower-case (if (keyword? cause) (name cause) (str cause)))]
-    (boolean (some #(str/includes? c %) lethal-causes))))
+    (cond
+      (some #(str/includes? c %) ["void" "out_of_world"]) :void
+      (and (some #(str/includes? c %) ["lava" "fire" "burn"])
+           (or (nil? feet-blocks) (some #{"lava" "fire" "soul_fire"} feet-blocks))) :burned)))
 
 (defn walk-cost
   "{:cost :parts {:walk :danger}} of walking `distance` blocks at the per-block price every trip is costed with, and
@@ -605,15 +610,15 @@
   on the way, `elapsed-ms` after it dropped; `back?` walks the distance twice (the despawn check is for the way there and the stay), `stay-s`
   seconds are spent standing at the pile.
   Or {:cost js/Infinity :reason}: :no-position (distance nil), :window-closed (the 5 min despawn passed), :too-far
-  (the walk would end after the despawn), :lethal-cause (lava, fire or the void took the items)."
-  [{:keys [distance danger-s elapsed-ms cause back? stay-s]}]
+  (the walk would end after the despawn), or `lost` (pile-lost: the items burned or fell out of the world)."
+  [{:keys [distance danger-s elapsed-ms lost back? stay-s]}]
   (let [elapsed (or elapsed-ms 0)
         despawn-ms (game/despawn-ms)
         walk-ms (when (number? distance) (* 1000 (/ distance (walk-blocks-per-s))))
         reason (cond
                  (nil? walk-ms) :no-position
                  (>= elapsed despawn-ms) :window-closed
-                 (and (some? cause) (lethal-cause? cause)) :lethal-cause
+                 lost lost
                  (>= (+ elapsed walk-ms (* 1000 (or stay-s 0))) despawn-ms) :too-far)]
     (if reason
       {:cost js/Infinity :reason reason}

@@ -60,10 +60,10 @@
   "Seconds the pile is worth over the fetch cost without danger and the margin, at most the window left over that cost (0: not worth it), when the walk to it is
   dangerous (go-to's quote of it names the mobs it risks, est/estimate); else 0. A kit is called for when it is positive."
   [c entry]
-  (let [{:keys [pos cause]} (:data entry)
+  (let [{:keys [pos]} (:data entry)
         elapsed (est/pile-age-ms c entry)
         e (est/estimate c (:data entry) elapsed (await (est/quote-trip c entry)))
-        safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :elapsed-ms elapsed :cause cause :back? true :stay-s (pl/collect-s c (:data entry))})
+        safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :elapsed-ms elapsed :lost (est/lost c (:data entry)) :back? true :stay-s (pl/collect-s c (:data entry))})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
     (if (seq (:seen-mobs e)) (max 0 (min (- (:value e) (+ safe-cost (cfg/margin))) (- (window-s c entry) safe-cost))) 0)))
 

@@ -246,17 +246,28 @@
           (is (= :skip (:decision (recovered eng))))
           (is (< (:value (recovered eng)) (:cost (recovered eng)))))))))
 
-(deftest recover-drops-skips-when-the-cause-was-lava
+(deftest recover-drops-skips-a-pile-that-fell-into-lava
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :blocks {"20,64,0" "lava"}})]
           (die! eng {:pos death-pos :inventory diamonds :cause "lava"})
           (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 5))
           (is (= [] (tu/walk-calls p)))
-          (is (= :skip (:decision (recovered eng))))
-          (is (= :infinite (:cost (recovered eng)))))))))
+          (is (= {:decision :skip :cost :infinite :reason :burned} (select-keys (recovered eng) [:decision :cost :reason]))))))))
+
+(deftest recover-drops-fetches-a-pile-that-fell-beside-the-lava-that-killed-the-body
+  ;; the feet stood in air beside the lava: the items dropped on the floor there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities drops :blocks {"20,64,1" "lava"}})]
+          (die! eng {:pos death-pos :inventory diamonds :cause "lava"})
+          (core/submit! eng (tu/order job) {})
+          (await (run-until-empty eng 10))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
+          (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest recover-drops-goes-and-collects-valuable-drops
   (async done
