@@ -1782,6 +1782,19 @@
           (is (<= (count @walks) 3) "not one failed walk per planned cell")
           (is (every? (comp nil? :ways) (rest @walks)) "after a shut-in verdict go-to may dig or build out"))))))
 
+(deftest a-body-walled-in-by-a-closed-room-walks-out-with-every-way-from-its-first-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0]] :want "oak_fence"}]}
+              room (apply dissoc (tu/box 2 63 2 6 66 6 "stone") (for [x (range 3 6) y [64 65] z (range 3 6)] (str x "," y "," z)))
+              walks (atom [])
+              {:keys [eng]} (start {:inventory kit :blocks room :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              _ (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! walks conj o) :partial)
+                         (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 3)))))]
+          (is (seq @walks))
+          (is (nil? (:ways (first @walks))) "no verdict is awaited: a closed room cannot be left by walking, go-to may dig out"))))))
+
 (deftest a-shut-in-verdict-in-a-room-larger-than-a-pocket-is-not-a-stop
   (async done
     (tu/run-async done

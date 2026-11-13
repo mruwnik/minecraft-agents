@@ -48,7 +48,7 @@
   A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
   the whole item. A :clear cell holding a block that is not replaceable and no container is dug (nothing carried
   needed); so is a chest, table or the like the body placed itself (body memory :build-placed-kept; its contents drop as items). Crops and trees are not this job's.
-  Its walks never dig through the build, except from a hole the body stands in (2 or more levels walled): they may climb out.
+  Its walks never dig through the build, except from a hole the body stands in (2 or more levels walled) or a closed room of a pocket's size: they may climb out.
   One call works until the plan is built or nothing more applies (it yields only while a walk or fetch waits). Every
   step re-reads the plan and the world and takes the first that applies: walk out of a footprint cell the body stands in
   (once per cell; a place that would shut the body in is held back the same way), place what is buildable within the

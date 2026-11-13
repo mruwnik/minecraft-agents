@@ -109,10 +109,12 @@
 
 (defn in-pocket?
   "Whether the body stands in a closed room of at most ::pocket-cells walkable cells, over the world go-to's plans read toward
-  the last walk's goal (wworld/unseen-kind of escape/walk-spec): it confirms go-to's shut-in verdict."
-  [c]
-  (let [p (:primitives c)]
-    (reach-room/enclosed? p (wworld/unseen-kind p (escape/walk-spec c (near/last-goal c))) #{} (settings/get settings ::pocket-cells))))
+  goal (default the last walk's; wworld/unseen-kind of escape/walk-spec): it confirms go-to's shut-in verdict, and, asked of
+  the goal about to be walked to, finds a body walled in by what it built before any walk gave a verdict."
+  ([c] (in-pocket? c (near/last-goal c)))
+  ([c goal]
+   (let [p (:primitives c)]
+     (reach-room/enclosed? p (wworld/unseen-kind p (escape/walk-spec c goal)) #{} (settings/get settings ::pocket-cells)))))
 
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the
@@ -284,7 +286,8 @@
   (trace! c :walk-to! (:pos cell))
   (let [{:keys [all inner]} (stand-choices c cells cell)
         every all
-        all (if (or (in-hole? c) (shut-in-walk? c)) all (reachable-stands c all))
+        walled? (or (in-hole? c) (shut-in-walk? c) (in-pocket? c (:pos cell)))
+        all (if walled? all (reachable-stands c all))
         stands (or (seq (seeing c all (:pos cell))) (seq (reaching c all (:pos cell))) inner all)
         priced (sort-by first (map (juxt #(stand-price c cells cell %) identity) stands))
         stand (second (first priced))
@@ -299,7 +302,7 @@
       :else
       (let [above? #(<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second %))
             climbing? (and (above? stand) (some above? (:bad-stands (ctx/mem c))))
-            shut? (or (in-hole? c) (shut-in-walk? c))
+            shut? walled?
             w (await (walk-stand! c cell stand (cond-> {:stay-s (stand-stay-s c cells cell stand)}
                                                (not (or shut? climbing?)) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
         ;; an arrival in reach that does not see the cell, where another stand would, is a bad stand: else the step walks to it again
