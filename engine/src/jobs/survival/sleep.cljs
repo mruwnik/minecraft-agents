@@ -24,12 +24,12 @@
 (def doc
   "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed, else the live :spawn-bed, at any distance (go-to prices the walk).
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
-  (an unexpired entry with the same position, the body not within 3 blocks of it), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
+  (an unexpired entry with the same position, written from the cell the body is in now), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open (unknown, :look, while the body has not looked round this run: the round looks once, then decides). A body already asleep is done.
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never builds or pillars, and digs only out of the shelter it is shut in (:dig-out; at night go-to leaves it when the call's worth buys the walk's night risk), so a bed behind someone's wall is :bed-unreachable. A walk go-to refuses on the dug-in night's price (:night-risk) ends nothing-possible :bed-unreachable at once but remembers nothing: the next call prices it again.
-  The time spent walking is bounded by the first quote's own upper bound (:job-time, go-to's :spend); a walk that outlasts it while the quote has no whole way ends it the same way. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, or spent its node budget (:budget), also ends it (over unseen land that search has no end).
+  The time spent walking is bounded by the first quote's own upper bound (:job-time, go-to's :spend); a walk that outlasts it while the quote has no whole way ends it the same way. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, also ends it (over unseen land that search has no end); one that spent its node budget is not known yet: the round yields :continue and writes no entry (the walk's time bound ends it).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -56,10 +56,9 @@
 (def unreachable-policy {:cap 5 :ttl 600000})
 
 (defn unreachable-bed?
-  "Whether an unexpired :bed-unreachable entry names bed and the body is not beside it (an arrival outweighs the old verdict)."
+  "Whether an unexpired :bed-unreachable entry names bed, written from the cell the body is in (an entry without a cell holds anywhere)."
   [c bed]
-  (and (< 3 (u/dist (u/self-pos c) bed))
-       (boolean (some #(= bed (:pos (:data %))) (ctx/entries c :bed-unreachable)))))
+  (sh-beds/unreachable-entry? (:primitives c) (ctx/entries c :bed-unreachable) bed))
 
 (defn bed-of
   "The bed to sleep in: the :bed argument (nil when it is not a position), else the remembered :bed (so a gone one is
@@ -176,11 +175,16 @@
   [route hi spent-ms]
   (boolean (and route hi (not (true? (:found route))) (< (* 1000 hi) spent-ms))))
 
+(defn remember-unreachable!
+  "Write the :bed-unreachable entry with the cell the body gave up from: a body elsewhere asks again."
+  [c bed]
+  (ctx/remember! c :bed-unreachable {:pos bed :from (sh-beds/cell-of (u/self-pos c))} unreachable-policy))
+
 (defn give-up-unreachable-now!
   "Warn bed_unreachable, remember the bed in :bed-unreachable (so the night stops holding for it) and end nothing-possible, at once."
   [c bed text]
   (ctx/emit! c :bed_unreachable :warn {:text text})
-  (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
+  (remember-unreachable! c bed)
   (when-let [seen (u/seen-name (:primitives c) bed)]
     (when-not (.endsWith seen "_bed") (sh-spawn/lose-spawn! c bed :gone)))
   (ctx/end c :nothing-possible :bed-unreachable {:pos bed :text text}))
@@ -196,7 +200,7 @@
         priced? (priced-refusal? walk)
         r (if priced? (do (ctx/emit! c :bed_unreachable :warn {:text text}) :done) (u/fail! c :bed_unreachable text))]
     (when (and (= :done r) (not priced?))
-      (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
+      (remember-unreachable! c bed)
       (when-let [seen (u/seen-name (:primitives c) bed)]
         (when-not (.endsWith seen "_bed") (sh-spawn/lose-spawn! c bed :gone))))
     (if (= :done r) (ctx/end c :nothing-possible :bed-unreachable (cond-> {:pos bed :text text} priced? (assoc :priced true))) r)))
@@ -275,10 +279,10 @@
       (= :continue walk) :continue
       (not= :done (:kind walk)) (let [_ (ctx/update-mem! c assoc :walk-failed true)
                                   after (:route (await (ctx/quote c 'jobs.movement.go-to quote-args)))]
-                                  (if (and (or (no-way-quote? after) (= :budget (some-> (:reason after) keyword)))
-                                           (not (priced-refusal? walk)))
-                                    (give-up-unreachable-now! c bed (no-walk-text after))
-                                    (give-up-unreachable! c bed walk)))
+                                  (cond
+                                    (and (no-way-quote? after) (not (priced-refusal? walk))) (give-up-unreachable-now! c bed (no-walk-text after))
+                                    (= :budget (some-> (:reason after) keyword)) :continue
+                                    :else (give-up-unreachable! c bed walk)))
       (near-bed-unlooked? c bed) (do (await (look/look-around! c)) :continue)
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})
       :else (await (sleep-at! c bed)))))

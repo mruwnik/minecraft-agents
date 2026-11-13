@@ -183,6 +183,19 @@
      (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (holds? (:data %)) (= @now (:state (:data %))))
                     (mem/entries view :bed-walk-unsafe))))))
 
+(defn cell-of
+  "The cell {:x :y :z} holding pos."
+  [pos]
+  (u/cell-pos (u/cell-vec pos)))
+
+(defn unreachable-entry?
+  "Whether one of the :bed-unreachable entries names pos and holds for a body standing where it is: an entry written from a cell holds only there (a body elsewhere asks again), one without a cell anywhere."
+  [p entries pos]
+  (let [here (cell-of (u/self-pos {:primitives p}))]
+    (boolean (some (fn [e] (let [{:keys [from] :as d} (:data e)]
+                             (and (= pos (:pos d)) (or (nil? from) (= from here)))))
+                   entries))))
+
 (defn beds-to-use
   "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place (a bed set with
   jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds and the live :spawn-bed,
@@ -198,7 +211,7 @@
              (empty? (mem/entries view :sleep-failed)))
     (let [shelter (:data (mem/latest view :shelter))
           overdue? (>= (or (days-awake-in view) 0) (max-days-awake))
-          ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
+          ok? (fn [pos] (and (permit? pos) (not (unreachable-entry? p (mem/entries view :bed-unreachable) pos))
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (not (walk-unsafe? p view pos worth))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))))))]
