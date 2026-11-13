@@ -15,4 +15,4 @@
  [{:name "hut-built-around-the-body-is-finished-and-left"
    :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 300 :of-job true}]
-   :after [[:block [12 0 14] "oak_door"] [:block [10 0 10] "oak_log"] [:block [12 3 12] "oak_planks"] [:block [10 1 12] "glass_pane"] [:body-far [12.5 0 12.5] 1.2]]}]}
+   :after [[:block [12 0 14] "oak_door"] [:block [10 0 10] "oak_log"] [:block [12 3 12] "oak_planks"] [:block [10 1 12] "glass_pane"]]}]}

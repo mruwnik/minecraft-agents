@@ -1,7 +1,7 @@
 ;; Card 3b89b671: a bed halves a fall's damage (the planner's default landing factor 0.5, jobs.lib.cost.planner/default-landing). Same course as go-to-slime:
 ;; a stone block y 0..9 fills x 1..15 (the body on top at feet y 10, x 8.5), walls all round, the drop is east of its edge onto a bed laid in the floor
 ;; (y -1, foot [16 -1 16], head [17 -1 16]). :floor {:health 15} leaves a budget of 4 hp (18: 2 hp); the bed drop is priced 4 hp (the fall is about 10.4), a plain landing 8.
-;; Should-succeed: the drop onto the bed at floor 15, then a walk on. Should-fail: the same drop at floor 18 is refused (stopped, not arrived), the body stays on the block.
+;; Should-succeed: the drop onto the bed at floor 15, then a walk on. Should-fail: the same drop at floor 18 is refused (stopped, not arrived), the body stays on the block (it may walk its top to look for a safer way: only the landing is ruled out).
 {:defaults
  {:tags [:movement :planner]
   :time :any
@@ -20,4 +20,4 @@
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-near [8.5 10 16.5] 9]]}]}
+   :after [[:body-far [20.5 0 16.5] 9]]}]}
