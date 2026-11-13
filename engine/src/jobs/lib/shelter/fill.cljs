@@ -90,16 +90,18 @@
 
 (defn fixture?
   "Whether a block no fill places into or clears stands in the cell: a bed, container or workstation (kind :container,
-  or :solid not sealed?). The cell over it is filled instead."
+  or :solid not sealed?, not an open door, gate or trapdoor: the fill shuts it). The cell over it is filled instead."
   [p cell]
   (let [n (u/seen-name p cell)]
-    (boolean (and n (#{:container :solid} (kind n)) (not (sealed? p cell))))))
+    (boolean (and n (#{:container :solid} (kind n)) (not (sealed? p cell)) (not (open-openable p cell))))))
 
 (defn room-columns
   "The [x z] columns beside the feet whose feet-height cell lies in a closed room (reach-room/room*, the
   body's own feet and head cells counted solid) roofed over every cell (sh-sense/room-roofed?), within sh-sense/spawn-free-radius of
   the feet and with no hostile the body knows of in it (danger/seen-hostiles), while the body's own cells open it (no
-  closed room round the feet): the body stands in its wall or doorway, and that side is the room's, a way no mob comes."
+  closed room round the feet): the body stands in its wall or doorway, and that side is the room's, a way no mob comes.
+  A body inside such a room with a door (closed round the feet; a pit has none) whose every open door is beside its feet: all the room's columns;
+  the shelter shuts the door (an open door is a cell to fill, sealed?) rather than fill the room."
   [p {:keys [x y z] :as feet}]
   (let [base (reach-room/shut-kind-at p)
         kind-at (reach-room/room-kind-at p (fn [cx cy cz] (if (and (== cx x) (== cz z) (<= y cy (inc y))) :solid (base cx cy cz))))
@@ -111,16 +113,22 @@
                      (every? (fn [[cx cy cz]] (let [cell {:x cx :y cy :z cz}]
                                                 (and (sh-sense/room-roofed? p cell) (<= (u/dist feet cell) sh-sense/spawn-free-radius))))
                              cells)))]
-    (reduce (fn [found [dx dz]]
-              (let [col [(+ x dx) (+ z dz)]]
-                (if (or (contains? found col) (not (sh-sense/room-roofed? p {:x (first col) :y y :z (second col)})) (not @gap?))
-                  found
-                  (let [room (reach-room/room* p {:x (first col) :y y :z (second col)} kind-at)]
-                    (if (and room (contains? (:cells room) [(first col) y (second col)]) (safe? room))
-                      (into found (map (fn [[cx _ cz]] [cx cz])) (:cells room))
-                      found)))))
-            #{}
-            (concat sides corners))))
+    (if-not @gap?
+      (let [room (reach-room/room* p feet (reach-room/room-kind-at p base))
+            beside? (fn [{cx :x cy :y cz :z}] (and (== y cy) (== 1 (+ (js/Math.abs (- cx x)) (js/Math.abs (- cz z))))))]
+        (if (and room (seq (:doors room)) (safe? room) (every? #(or (nil? (open-openable p (:cell %))) (beside? (:cell %))) (:doors room)))
+          (into #{} (map (fn [[cx _ cz]] [cx cz])) (:cells room))
+          #{}))
+      (reduce (fn [found [dx dz]]
+                (let [col [(+ x dx) (+ z dz)]]
+                  (if (or (contains? found col) (not (sh-sense/room-roofed? p {:x (first col) :y y :z (second col)})))
+                    found
+                    (let [room (reach-room/room* p {:x (first col) :y y :z (second col)} kind-at)]
+                      (if (and room (contains? (:cells room) [(first col) y (second col)]) (safe? room))
+                        (into found (map (fn [[cx _ cz]] [cx cz])) (:cells room))
+                        found)))))
+              #{}
+              (concat sides corners)))))
 
 (defn open-cells
   "The fill-cells around the feet cell that are not sealed? in the world; the roof support away from threats. A

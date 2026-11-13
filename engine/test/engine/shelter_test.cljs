@@ -1622,6 +1622,14 @@
   (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z -2} {"5,64,-2" "air" "5,65,-2" "air" "5,64,2" "cobblestone" "5,65,2" "cobblestone"}))]
     (is (empty? (filter #(= -1 (:z %)) (fill/open-cells p {:x 5 :y 64 :z -2}))) "the room behind the hole is no fill target, a door or none")))
 
+(deftest open-cells-of-a-body-inside-its-room-by-an-open-door-are-the-door-not-the-room
+  ;; Fenwick j363 (run4 F24): a step inside the open door, the walls filled the room round the body with 8 blocks
+  (let [open {"5,64,2" {:open true :half "lower" :facing "south"} "5,65,2" {:open true :half "upper" :facing "south"}}
+        cells (fn [feet states] (set (fill/open-cells (tu/fake (assoc (hut/hut-world feet {}) :states states)) feet)))]
+    (is (= #{{:x 5 :y 64 :z 2} {:x 5 :y 65 :z 2}} (cells {:x 5 :y 64 :z 1} open)) "the door beside the feet, to shut")
+    (is (some #(= 0 (:z %)) (cells {:x 5 :y 64 :z -1} open)) "two steps from the open door: the room is no shelter yet")
+    (is (empty? (cells {:x 5 :y 64 :z 0} hut/door-states)) "the door shut: nothing to fill")))
+
 (deftest fill-cells-put-the-roof-support-away-from-the-threats
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
