@@ -652,6 +652,20 @@
           (is (< (:x (st/pos-of p)) 4) "out of the hill")
           (is (= ["stone" "stone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "the way in is walled again: no nook open in the hill"))))))
 
+(deftest a-niche-left-by-day-is-walled-with-the-drops-of-its-own-door-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge (into {} (for [x (range -2 9) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"]))
+                           (into {} (for [x (range 4 9) z (range -2 3) y (range 64 67)] [(str x "," y "," z) "stone"]))
+                           {"4,64,0" "cobblestone" "4,65,0" "cobblestone" "5,64,0" "air" "5,65,0" "air"})
+              {:keys [eng p]} (st/setup {:time noon :blocks world :floor [-2 -2 8 2] :self {:pos {:x 5.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})]
+          (write! eng :shelter {:pos {:x 5 :y 64 :z 0} :state :built :pocket true :door [{:x 4 :y 64 :z 0} {:x 4 :y 65 :z 0}]})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
+          (await (st/tick-n eng 60))
+          (is (< (:x (st/pos-of p)) 4) "out of the hill")
+          (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "both door cells walled again, though no drop was picked up while digging them"))))))
+
 (deftest the-nights-result-sums-what-its-niche-placed
   (async done
     (tu/run-async done

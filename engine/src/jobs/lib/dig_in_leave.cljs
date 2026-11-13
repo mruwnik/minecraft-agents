@@ -100,7 +100,7 @@
             beyond {:x (+ (:x d) (- (:x d) x)) :y y :z (+ (:z d) (- (:z d) z))}]
         ;; raw moveTo kept: a step into the cell the job is digging, range 0.5, inside its own pit; the planner has no standable goal there.
         (await (ctx/act c :moveTo (clj->js {:pos (if (sh-sense/solid-at? p (update beyond :y dec)) beyond d) :range 0.5})))
-        (update-leave! c assoc :stepped true)
+        (update-leave! c assoc :stepped true :beyond (sh-sense/feet p))
         :continue))))
 
 ;; Taking the shelter's valuable blocks back (the :take-back cells of the latest :shelter entry).
@@ -187,15 +187,31 @@
           (skip-cell! c cell (keyword (.-status r))))
         :continue))))
 
-(defn ^:async refill-mouth!
-  "A night pocket's way in, dug open to leave by, filled again with the block it was walled with, so the pocket is no dark
-  nook in the wall. One fill-cells call; :continue while it works, else nil (a block not carried any more leaves it open)."
+(defn ^:async fill-mouth!
+  "One fill-cells call of the door cells with the refill block; :continue while it works, else nil."
   [c entry]
   (let [r (waits/waiting-out c (await (ctx/call c :refill 'jobs.blocks.fill-cells
                                                 {:cells (:door entry) :ignore-zones? true :use {:blocks [(:refill-item (leave-mem c))]}})))]
     (if (= :continue r)
       :continue
       (do (update-leave! c assoc :refilled true) nil))))
+
+(defn ^:async refill-mouth!
+  "A night pocket's way in, dug open to leave by, filled again with the block it was walled with, so the pocket is no dark
+  nook in the wall. First the drops of the door cells it dug are collected (a pickup on the walk through is not sure, and
+  a cell filled with what is carried leaves the other open); then one fill-cells call; :continue while it works, else nil
+  (a block not carried any more leaves it open)."
+  [c entry]
+  (if-not (:door-collected (leave-mem c))
+    (let [r (waits/waiting-out c (await (ctx/call c :refill-collect 'jobs.items.collect-drops
+                                                  {:near (first (:door entry)) :items [(:refill-item (leave-mem c))]})))]
+      (when-not (= :continue r)
+        ;; a collect walks into the door cell, where fill-cells cannot place (no headroom): back to where the walk out ended. Raw moveTo as in open-door!.
+        (when-let [b (:beyond (leave-mem c))]
+          (await (ctx/act c :moveTo (clj->js {:pos b :range 0.5}))))
+        (update-leave! c assoc :door-collected true))
+      :continue)
+    (await (fill-mouth! c entry))))
 
 (defn door-of
   "escape/door through the wall from the feet along heading h, or nil."
@@ -326,7 +342,7 @@
   - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones :refused),
     all four are tried again with :ignore-zones?, the survival last resort.
     The cells dug in another's zone or claim are noted as :tidy entries.
-  A night pocket (:pocket) has its way in filled again once the body is out. The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed
+  A night pocket (:pocket) has its way in filled again once the body is out (the drops of its dug door cells collected first). The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed
   (the :take-back cells of its entry, still the placed block) are dug and their drops collected (jobs.items.collect-drops);
   a cell it cannot reach or dig is left, with a debug dig-in.take-back-skipped. Events: dig-in.took-back (info).
   With :any-time? (go-to's escalation, whose route risk priced the exit) the body leaves at night too.
