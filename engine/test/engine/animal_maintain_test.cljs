@@ -619,3 +619,17 @@
           (is (= [{:x 50 :y 64 :z 0}] (filterv #(= 50 (:x %)) (tu/walked-to eng))) "the pass looked at the pen first, then went to the chest")
           (is (< 40 (.-x (.-pos (.self (:p s))))) "the deposit took the body out of listing range of the pen")
           (is (= {:kind :completed :adults 4 :babies 0} (select-keys (done-event s) [:kind :adults :babies]))))))))
+
+(deftest a-body-inside-a-large-box-that-sees-only-some-of-it-walks-to-look-before-breeding
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock p] :as s} (h/setup {:self {:pos {:x 68 :y 64 :z 0}} :inventory [(wheat 4)] :floor [-5 -8 80 8]
+                                                    :entities [(cow 1 66) (cow 2 67) (cow 3 2) (cow 4 3)]} 50)
+              entities (.-entities p)]
+          (aset p "entities" (fn [q] (let [here (.-x (.-pos (.self p)))]
+                                       (.filter (.call entities p q) (fn [e] (<= (js/Math.abs (- (.-x (.-pos e)) here)) 40))))))
+          (core/submit! eng (tu/order (spec {:target 4 :box {:min {:x 0 :y 60 :z -5} :max {:x 70 :y 70 :z 5}}})) {})
+          (await (tu/run-ticks eng clock 60 700))
+          (is (< (.-x (.-pos (.self p))) 60) "it walked to the middle of the box to count")
+          (is (empty? (interacts s)) "four cows in the box are at target; the two listed from its corner are no reason to breed"))))))

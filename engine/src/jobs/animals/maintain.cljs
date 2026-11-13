@@ -46,7 +46,7 @@
   - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :carry
     entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
 
-  A body outside the box that lists fewer animals of the kind in it than the target first walks to the box (go-to, once; the server
+  A body that lists fewer animals of the kind in the box than the target, outside it or inside but not seeing all of it, first walks to the middle of the box (go-to, once; the server
   lists animals only near the body) and counts again; the job starts for that look.
 
   A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :no-strays,
@@ -449,12 +449,20 @@
                                   {:ended (:kind e) :cause (contract/cause-key e)}))
                     :again))))))
 
+(defn pen-in-sight?
+  "Whether the body sees the whole box from where it stands (hunting/pen-seen?): a body inside the box but at its chest or house lists only the animals near it."
+  [c]
+  (let [here (u/self-pos c)
+        box (pen-read/arg-box c)
+        inside (:inside (pen-read/read (:primitives c) {:box box :near [(js/Math.floor (:x here)) (js/Math.floor (:y here)) (js/Math.floor (:z here))]}))]
+    (hunting/pen-seen? c box inside)))
+
 (defn ^:async step
-  "One step: first a look at the box when the body lists no animal in it, else the next step child (step-steps)."
+  "One step: first a look at the box when the body lists fewer animals in it than :target, from where it sees the whole box (walking there when it does not), else the next step child (step-steps)."
   [c]
   (cond
     (not (look-due? c)) (await (step-steps c))
-    (hunting/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
+    (and (hunting/in-bound? c (u/self-pos c)) (pen-in-sight? c)) (do (await (look/survey! c)) :again)
     :else
     (let [r (await (child/call-walk* c :look {:pos (pen-read/look-pos (pen-read/arg-box c)) :range 3}))]
       (cond
