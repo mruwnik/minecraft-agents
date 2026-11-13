@@ -246,7 +246,7 @@
 (defn ^:async step! [c]
   (let [p (:primitives c)
         bed (bed-of c)
-        taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
+        taken? #(not (sh-beds/bed-free? p bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
         sealed? (boolean (or (sh-inside/sheltered-in c) (own-seal-near? c)))
         quote-args {:pos bed :range 2 :ways (if sealed? seal-ways walk-ways)}

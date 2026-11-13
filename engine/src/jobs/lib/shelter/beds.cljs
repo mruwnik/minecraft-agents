@@ -58,16 +58,14 @@
     (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) (when kn (world/zones kn))))))
 
 (defn bed-free?
-  "Whether the bed at pos is free to sleep in: not occupied, or in a zone the body owns (the server refuses an occupied
-  one, which is a failed sleep)."
-  [p kn pos]
-  (or (in-own-zone? p kn pos) (not (bed-occupied? p pos))))
+  "Whether the bed at pos is free to sleep in: not occupied (the server refuses an occupied one, a failed sleep)."
+  [p pos]
+  (not (bed-occupied? p pos)))
 
 (defn bed-permit
-  "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed that is bed-free?. kn is the engine world
-  (nil: no zone known)."
-  [p kn]
-  (fn [pos] (bed-free? p kn pos)))
+  "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed that is bed-free?."
+  [p]
+  (fn [pos] (bed-free? p pos)))
 
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
@@ -299,7 +297,7 @@
   [c]
   (let [p (:primitives c)
         view (ctx/view c)]
-    (and (bed-place-wanted? p view (bed-permit p (:world (:engine c))))
+    (and (bed-place-wanted? p view (bed-permit p))
          (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night))))))
 
 (defn standing-entries

@@ -316,7 +316,7 @@
   (let [p (:primitives c)
         view (ctx/view c)
         feet (sh-sense/feet p)
-        bed (sh-beds/bed-to-use p view (sh-beds/bed-permit p (:world (:engine c))))
+        bed (sh-beds/bed-to-use p view (sh-beds/bed-permit p))
         near? #(<= (u/dist %1 %2) 3)]
     (cond
       (and bed (near? bed goal)) nil

@@ -39,7 +39,7 @@
     (st/looked-round! eng p)
     (seed! eng)
     (let [view (mem/view (:store eng))]
-      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-permit p nil))))))
+      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-permit p))))))
 
 (deftest a-remembered-bed-at-any-distance-is-one-to-use
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed" "60,64,0" "red_bed"}}]
@@ -57,13 +57,14 @@
         plan {"hut" {:id "hut" :parts [{:id "bed" :cells [[20 64 0]] :want "red_bed"}] :metadata {:by "Other"}}}
         permit? (fn [kn & [states entities]]
                   (let [p (tu/fake {:time night :blocks {"20,64,0" "red_bed"} :states states :entities entities})]
-                    ((sh-beds/bed-permit p kn) bed)))]
+                    ((sh-beds/bed-permit p) bed)))]
     (is (true? (permit? (ew/of-data {} {} []))) "a bed no one holds")
     (is (true? (permit? (ew/of-data {} {} (zone "Common")))) "in another owner's zone")
     (is (true? (permit? (ew/of-data plan {} []))) "on another body's plan")
     (is (true? (permit? (ew/of-data {} {} []) nil [{:id 1 :name "villager" :kind "passive" :pos {:x 25 :y 64 :z 0}}]))
         "beside a villager")
-    (is (false? (permit? (ew/of-data {} {} []) {"20,64,0" {:occupied true}})) "an occupied bed")))
+    (is (false? (permit? (ew/of-data {} {} []) {"20,64,0" {:occupied true}})) "an occupied bed")
+    (is (false? (permit? (ew/of-data {} {} (zone "Fake")) {"20,64,0" {:occupied true}})) "an occupied bed in its own zone")))
 
 (deftest the-live-spawn-bed-is-used-unless-seen-not-to-be-a-bed
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}
