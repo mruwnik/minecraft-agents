@@ -14,7 +14,9 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.destroy :as destroy]
             [jobs.lib.child :as child]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -47,7 +49,8 @@
   id: another player's logs are left); the pillar's logs are collected by the pillar way before it comes down.
   Before it ends it looks around once and stops at the first look that shows a drop, so the body ends facing it and the loose-items reflex sees it.
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's own), is
-  not a candidate; a later log that turns out refused makes the tree unreachable (warn fell-tree.declined once, :reason
+  not a candidate, nor a column in the body's own zone or plan whose every log looks placed (own-build?: a hut's post);
+  a later log that turns out refused makes the tree unreachable (warn fell-tree.declined once, :reason
   :refused). :ignore-zones? true skips the check. Logs joined to the tree that the same rule refuses, or that lie more than
   the fell-tree.log/max-spread setting from the trunk's column, stay standing.
 
@@ -131,10 +134,24 @@
   (let [v (access/may? in :dig pos)]
     (and (= :footprint (:reason v)) (contains? (:own-plans in) (:plan v)))))
 
+(defn own-build?
+  "Whether the column of tree t stands in the body's own zone or plan and every seen log of it looks placed
+  (cost.destroy/placed-log?, the body's own scaffold not counted as built): the body's own build, such as a hut's corner
+  post, which a claim keeps."
+  [c t]
+  (let [p (:primitives c)
+        base (:base t)]
+    (and (access/in-own-area? c base)
+         (let [own (set (map vec (ledger/cells (ledger/entries c))))
+               sensed (fn [[x y z :as cell]] (when-not (own cell) (u/sensed p {:x x :y y :z z})))
+               logs (trees/logs-at p base (:species t))]
+           (and (seq logs) (every? #(destroy/placed-log? sensed (access/cell (:pos %))) logs))))))
+
 (defn candidates
   "The trees the job may fell, nearest in a line first (lazily): the one at :at (none once marked unreachable), else
-  those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out, and with
-  :part-cut? one that is not a part-cut trunk or whose column a fell-tree gave up on lately (the trigger skips those too)."
+  those of species within radius not marked unreachable; a tree whose base log the zones refuse, or that is the body's
+  own build (own-build?), is left out, and with :part-cut? one that is not a part-cut trunk or whose column a fell-tree
+  gave up on lately (the trigger skips those too)."
   [c radius species]
   (let [p (:primitives c)
         given-up (when (:part-cut? (:args c)) (into #{} (map (comp :column :data)) (ctx/entries c trees/unreachable-kind)))
@@ -146,7 +163,7 @@
       (when-let [t (tree-at p at)]
         (when-not (or (excluded [(:x at) (:z at)]) (not (log/log-allowed? c (:base t))) (not (wanted? t))) [t]))
       (let [in (access/rules-input c (log/gate-opts c))]
-        (filter #(and (not (own-spared? in (:base %))) (log/log-allowed? c (:base %)) (wanted? %))
+        (filter #(and (not (own-spared? in (:base %))) (log/log-allowed? c (:base %)) (wanted? %) (not (own-build? c %)))
                 (trees-near p radius species excluded (:leafless? (:args c))))))))
 
 (defn commit-tree!

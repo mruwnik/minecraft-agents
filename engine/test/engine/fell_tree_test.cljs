@@ -651,6 +651,18 @@
           (is (= 4 (:logs out)) "the trunk only")
           (is (= [64 65 66 67] (dug-ys p))))))))
 
+(deftest a-hut-post-in-the-body-s-own-zone-is-no-tree-though-leaves-are-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [post (into {} (for [y [64 65 66]] [(str "3," y ",2") "oak_log"]))
+              walls (into {} (for [y [64 65 66] [x z] [[4 2] [3 3]]] [(str x "," y "," z) "oak_planks"]))
+              world {:blocks (merge (lt/tree 6 0 "oak" 4) post walls {"2,67,2" "oak_leaves"}) :inventory []}
+              farm [{:name "farm" :owner "Fake" :min [-5 60 -5] :max [10 70 5]}]
+              {:keys [p out]} (await (fm/with-zones farm #(fell world {:radius 10 :ways #{:carried :pillar}} 100)))]
+          (is (= {:x 6 :y 64 :z 0} (:base out)) "the nearer post is passed over")
+          (is (not-any? #(= 3 (first %)) (fm/digs p)) "no log of the post dug"))))))
+
 (deftest a-chain-of-logs-leaving-the-tree-is-felled-only-within-the-spread
   (async done
     (tu/run-async done
