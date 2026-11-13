@@ -54,7 +54,7 @@
   {:skipped {step reason}}.
 
   Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
-  summary}}. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  summary}}; condition-failed :nothing-to-do with the same data when every step was skipped and the herd is below :target (a look at the box found nothing to do). Summaries: mend {:closed? :reason}, herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box (raised or lowered with the ground when the plan has :surface true), and :mob and :target from its :herd
@@ -350,7 +350,7 @@
 
 (defn finish!
   "End the pass: done (a steps.stopped warn for each step that ended short of done) unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
-  fewer adults than it was to bring ends with the herd's own kind and cause."
+  fewer adults than it was to bring ends with the herd's own kind and cause; every step skipped below :target ends condition-failed :nothing-to-do, so a repeat rests instead of passing again at once."
   [c report]
   (let [{:keys [mob target]} (:args c)
         {:keys [adults babies]} (hunting/census c)
@@ -361,6 +361,9 @@
         (ctx/end c ended cause (assoc out :text (str "maintain stopped: herd ended " (name ended) " " (name cause) (pen-patch/leak-text (:herd report)) ", " (count adults) " adults, " (count babies) " babies"))))
       (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
       (ctx/end c :nothing-possible :failed-steps out)
+      (and (every? :skipped (vals report)) (< (+ (count adults) (count babies)) target))
+      (ctx/end c :condition-failed :nothing-to-do
+               (assoc out :text (str "maintain: nothing to do at the pen, " (count adults) " adults, " (count babies) " babies of " target)))
       :else
       (do (steps/warn-stopped! c "animal maintain" report :ended)
           (ctx/end c :done nil (assoc out :text (str "maintain done: " (count adults) " adults, " (count babies) " babies")))))))

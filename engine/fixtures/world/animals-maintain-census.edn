@@ -1,5 +1,6 @@
 ;; Card d00cfcb6: animals.maintain with the herd at target completes :done and reports the census it counted. Box x 10..14, z 10..14; two adult cows inside, :target 2.
 ;; Should-succeed: the completion names {:adults 2 :babies 0 :target 2}.
+;; repeat-pass-with-nothing-to-do-rests: card 75018d94, a repeated maintain whose pass skips every step below target (both adults fed, in the breeding cooldown) rests :nothing-to-do instead of passing again every round.
 ;; mends-a-blown-fence-cell: card e43936a3, a planned fence cell seen as air is built again by maintain's first step (body outside the ring, 4 fence carried).
 {:defaults
  {:tags [:animals :jobs]
@@ -14,6 +15,13 @@
          [:summon "cow" [13.5 0 13.5]]
          [:job (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [10 0 10] :max #xyz [14 0 14]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :adults 2 :babies 0 :target 2}} :within-s 40 :of-job true}]}
+  {:name "repeat-pass-with-nothing-to-do-rests"
+   :body {:at [12.5 0 12.5] :inventory [["wheat" 4]] :yaw 0 :effects [["resistance" 600 4]]}
+   :act [[:summon "cow" [11.5 0 11.5]]
+         [:summon "cow" [13.5 0 13.5]]
+         [:job (repeat (jobs.animals.maintain {:worth 1200 :mob "cow" :target 4 :box {:min #xyz [10 0 10] :max #xyz [14 0 14]}}))]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :resting :after :nothing-to-do}} :within-s 100}]
+   :limit-s 110}
   {:name "mends-a-blown-fence-cell"
    :plans [{:id "pen" :metadata {:by "$body"}
             :parts [{:id "fence" :outline [#at [9 0 9] #at [15 0 15]] :want "oak_fence"}

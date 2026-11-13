@@ -130,17 +130,33 @@
           (is (= {:skipped :no-food} (get-in (done-event s) [:steps :breed])))
           (is (true? (finished? s))))))))
 
-(deftest adults-remembered-fed-within-the-breeding-cooldown-are-not-fed-and-the-pass-is-done
+(defn cooling-pen
+  "Three cows in the box, two remembered fed within the breeding cooldown, target 4: no step can run."
+  [spec]
+  (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) (cow 3 4)]} 50)]
+    (doseq [k ["u1" "u2"]] (mem/write! (:store (:eng s)) :breed/love {:key k} {:cap 50 :ttl 330000}))
+    (core/submit! (:eng s) (tu/order spec) {})
+    s))
+
+(deftest adults-remembered-fed-within-the-breeding-cooldown-are-not-fed-and-the-pass-has-nothing-to-do
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) (cow 3 4)]} 50)]
-          (doseq [k ["u1" "u2"]] (mem/write! (:store (:eng s)) :breed/love {:key k} {:cap 50 :ttl 330000}))
-          (core/submit! (:eng s) (tu/order (spec {:target 4})) {})
+        (let [s (cooling-pen (spec {:target 4}))]
           (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(tu/run-ticks (:eng s) (:clock s) 12 700)))
           (is (empty? (interacts s)) "the third cow alone is not fed: it has no partner")
           (is (= {:skipped :cooldown} (get-in (done-event s) [:steps :breed])))
-          (is (= :completed (:kind (done-event s)))))))))
+          (is (= :stopped (:kind (done-event s))) "a pass that skipped every step below target is no done")
+          (is (= :nothing-to-do (or (:cause (done-event s)) (get-in (done-event s) [:data :cause])))))))))
+
+(deftest a-repeated-pass-with-every-step-skipped-rests-instead-of-passing-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (cooling-pen (list 'repeat (spec {:target 4})))]
+          (await (tu/run-ticks (:eng s) (:clock s) 20 700))
+          (is (= 1 (count (filter #(= 2 (count (:chain %))) (events-of s :child_ended)))) "one pass, then a rest")
+          (is (some #(= :resting (:reason %)) (events-of s :waiting))))))))
 
 (deftest a-child-that-fails-is-booked-with-its-kind-and-cause
   (async done
