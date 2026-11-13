@@ -13,6 +13,7 @@
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
             [agent-tools.observe.events :as observe-events]
+            [agent-tools.observe.lock :as observe-lock]
             [agent-tools.observe.request :as observe-request]
             [agent-tools.observe.status :as status :refer [clip coded code-of round1]]
             [agent-tools.vitals :as vitals]
@@ -381,9 +382,13 @@
      (if (:error r)
        (http/print-bad-args! output (:error r) usage)
        (let [controller (js/AbortController.)
-             cancel #(.abort controller)]
+             cancel #(.abort controller)
+             lock (.join path (bodies/worlds-dir (get-in r [:base :state])) (get-in r [:base :world]) "observers"
+                         (get-in r [:base :agent]) "progress.lock")
+             displaced (atom false)
+             on-term #(do (reset! displaced (observe-lock/displaced? lock)) (cancel))]
          (.once js/process "SIGINT" cancel)
-         (.once js/process "SIGTERM" cancel)
+         (.once js/process "SIGTERM" on-term)
          (-> (js/Promise.resolve nil)
              (.then (fn []
                       (let [r (remember-plan! r)]
@@ -395,10 +400,14 @@
                                            #(output (wake-text (assoc wake :vitals report :snapshot %))))))
                           (.then (read-view! get! r (.-signal controller)) #(output (str (progress-line %) "\n")))))))
              (.then (constantly 0))
-             (.catch (fn [error] (-> (output (observe/failure-text (:base r) error)) (.then (constantly 2)))))
+             (.catch (fn [error]
+                       (let [error (if (and @displaced (= "ABORT_ERR" (code-of error)))
+                                     (coded "EOBSERVERDISPLACED" "ended by a newer wait on the same observer")
+                                     error)]
+                         (-> (output (observe/failure-text (:base r) error)) (.then (constantly 2))))))
              (.finally (fn []
                          (.removeListener js/process "SIGINT" cancel)
-                         (.removeListener js/process "SIGTERM" cancel)))))))))
+                         (.removeListener js/process "SIGTERM" on-term)))))))))
 
 (defn main-js!
   "The launcher's entry: `render` is renderView of tools/view/render.mjs, drawing the picture of a trouble wake."
