@@ -96,7 +96,7 @@
     (boolean (and n (#{:container :solid} (kind n)) (not (sealed? p cell))))))
 
 (defn room-columns
-  "The [x z] columns beside the feet whose feet-height cell lies in a closed room with a door (reach-room/room*, the
+  "The [x z] columns beside the feet whose feet-height cell lies in a closed room (reach-room/room*, the
   body's own feet and head cells counted solid) roofed over every cell (sh-sense/room-roofed?), within sh-sense/spawn-free-radius of
   the feet and with no hostile the body knows of in it (danger/seen-hostiles), while the body's own cells open it (no
   closed room round the feet): the body stands in its wall or doorway, and that side is the room's, a way no mob comes."
@@ -116,7 +116,7 @@
                 (if (or (contains? found col) (not (sh-sense/room-roofed? p {:x (first col) :y y :z (second col)})) (not @gap?))
                   found
                   (let [room (reach-room/room* p {:x (first col) :y y :z (second col)} kind-at)]
-                    (if (and room (seq (:doors room)) (contains? (:cells room) [(first col) y (second col)]) (safe? room))
+                    (if (and room (contains? (:cells room) [(first col) y (second col)]) (safe? room))
                       (into found (map (fn [[cx _ cz]] [cx cz])) (:cells room))
                       found)))))
             #{}

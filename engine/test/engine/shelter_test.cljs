@@ -1618,6 +1618,10 @@
            (set (fill/open-cells p {:x 5 :y 64 :z -2})))
         "the outside side and corners, the cell over the chest, none in the room")))
 
+(deftest open-cells-leave-a-doorless-closed-room-the-body-stands-in-the-wall-of
+  (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z -2} {"5,64,-2" "air" "5,65,-2" "air" "5,64,2" "cobblestone" "5,65,2" "cobblestone"}))]
+    (is (empty? (filter #(= -1 (:z %)) (fill/open-cells p {:x 5 :y 64 :z -2}))) "the room behind the hole is no fill target, a door or none")))
+
 (deftest fill-cells-put-the-roof-support-away-from-the-threats
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
