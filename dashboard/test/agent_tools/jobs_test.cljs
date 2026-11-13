@@ -356,6 +356,11 @@
     (is (not (str/includes? (note-of {:status :running}) "queued")))
     (is (str/includes? (note-of {:status :queued}) "j7 is queued"))))
 
+(deftest a-queued-job-names-the-job-it-waits-behind
+  (let [note (:note (jobs/wait-result {:ok true} "j7" {:wake :timeout} {:status :queued :behind {:id "j23" :name "jobs.blocks.place"}}))]
+    (is (str/includes? note "j7 is queued behind j23 jobs.blocks.place"))
+    (is (str/includes? note "naming another job are that job's"))))
+
 (deftest a-refused-submit-does-not-wait
   (let [state (state-dir)]
     (async done

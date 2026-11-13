@@ -386,12 +386,15 @@
   "Said when a wait ends before the job does: the job is not lost, what it is doing now (now: job-now's map, nil when
   unknown), and where its result will be."
   [id wake now]
-  (let [holders (->> (:jobs wake) (filter :holding) (keep :name))
+  (let [behind (:behind now)
+        holders (->> (:jobs wake) (filter :holding) (keep :name))
         tail (str ". Result later: ./bin/jobs show " id ", or keep waiting: " (follow-command id))]
     (str id
          (case (:status now)
            :running " is running, not lost"
-           (:queued :resuming :continuing) (str " is " (name (:status now)) " (waiting its turn or cut by a reflex), not lost"
+           (:queued :resuming :continuing) (str " is " (name (:status now))
+                                    (if behind (str " behind " (:id behind) " " (:name behind)) " (waiting its turn or cut by a reflex)")
+                                    ", not lost; :wait and :summary events naming another job are that job's, not this one's"
                                     (when (seq holders) (str " (holding: " (str/join ", " holders) ")"))
                                     "; it runs when the body is free")
            (str " is still queued, running or cut by a reflex, not lost"
@@ -408,13 +411,21 @@
      (assoc :follow (follow-command id) :note (unfinished-note id wake now)))))
 
 (defn job-now
-  "A promise of the job as show prints it (status, waiting reason), so a wait that ended first says what holds the job; nil when unreadable."
+  "A promise of the job as show prints it (status, waiting reason), so a wait that ended first says what holds the job; for a job still waiting its turn, :behind is /status's :current (id, name) when that is another job. nil when unreadable."
   [r id get! opts]
-  (-> (get! (:socketPath r) (str "/job?id=" id) opts)
-      (.then (fn [{:keys [status content-type text]}]
-               (when (and (= 200 status) (http/edn-response? content-type))
-                 (job-detail (data/read-edn text)))))
-      (.catch (fn [_] nil))))
+  (let [read (fn [path] (-> (get! (:socketPath r) path opts)
+                            (.then (fn [{:keys [status content-type text]}]
+                                     (when (and (= 200 status) (http/edn-response? content-type)) (data/read-edn text))))
+                            (.catch (fn [_] nil))))]
+    (.then (read (str "/job?id=" id))
+           (fn [value]
+             (let [now (some-> value job-detail)]
+               (if-not (waiting-turn? (:status now))
+                 now
+                 (.then (read "/status")
+                        (fn [status]
+                          (let [{cid :id :as current} (:current status)]
+                            (cond-> now (and cid (not= cid id)) (assoc :behind (select-keys current [:id :name]))))))))))))
 
 (defn submit-and-wait!
   "Submit, then wait for the job as observe --wait --watch does; print one map. A refused submit prints as without
