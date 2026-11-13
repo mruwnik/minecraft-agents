@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.movement.boat-drive :as boat-drive]))
 
@@ -69,6 +70,17 @@
           (let [{:keys [p]} (lt/setup world)
                 s (boat-drive/can-run? {:primitives p :args args})]
             (is (= expect [(first s) (:reason (nth s 2))]) label)))))))
+
+(deftest a-cell-out-of-reach-of-the-work-area-is-refused-from-inside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (lt/setup {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})
+              area {:jobs.lib.walk.world/area {:min [0 60 0] :max [8 70 8]}}
+              ask (fn [pos] (let [s (settings/with-settings area #(boat-drive/can-run? {:primitives p :args {:pos pos :range 1.5}}))]
+                              [(first s) (:reason (nth s 2))]))]
+          (is (= [:never :outside-area] (ask [15 63 15])))
+          (is (= [:ok :aboard] (ask [6 63 6]))))))))
 
 (deftest on-foot-fails-its-condition-not-aboard
   (async done

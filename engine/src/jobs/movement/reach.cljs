@@ -16,12 +16,14 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.waits :as waits]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as escalation]
             [jobs.lib.own-builds :as own-builds]
-            [jobs.movement.go-to.way-steps :as way-steps]))
+            [jobs.movement.go-to.way-steps :as way-steps]
+            [plan.shape :as shape]))
 
 (def doc
   "Walk to :pos, making a way where the walk finds none: go-to over the ways it does not take itself, a stair down to a
@@ -104,6 +106,21 @@
         options (keep (fn [cell] (when-let [span (span-from cell)] {:step :approach :pos cell :then span})) (stands p))]
     (first (sort-by (juxt #(rank (:then %) (:pos %)) #(far (:pos %))) options))))
 
+(defn span-end
+  "The cell [x y z] span ends at when built from cell: a stair's last step, a bridge's landing."
+  [span cell goal]
+  (if (= :stair (:step span))
+    (last (shape/stair-cells {:from cell :heading (:heading span) :to-y (second goal)}))
+    (:landing span)))
+
+(defn in-area
+  "span-from of the body's feet when it ends inside the work area (a straight span between two cells of the box stays in it), else nil;
+  out? is wworld/outside-area-fn of the body's feet (nil: no area)."
+  [out? goal span-from]
+  (fn [cell]
+    (when-let [span (span-from cell)]
+      (when-not (and out? (apply out? (span-end span cell goal))) span))))
+
 (defn span-way
   "The cheapest span from feet toward goal that the call allows and that is no dearer than the way go-to itself would make
   (dig route, else escape-way/choose's pillar, stair up or dug door); nil when there is none. A stair down that starts too
@@ -114,13 +131,14 @@
         may-dig? (own-builds/may-dig-fn c)
         own? (own-builds/own-placed-fn c)
         opts {:own? own? :skip skip :fetch? (choose/pickaxe-fetch c (fetch-tool? c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
-        stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? skip))
+        out? (wworld/outside-area-fn feet)
+        stair-from (in-area out? goal (fn [cell] (span/down-stair block-at cell goal may-dig? skip)))
         stair (when (allowed? c :stair)
                 (let [here (stair-from feet)
                       stand (when (and (not (skip :approach)) (>= (- (second feet) (second goal)) 2))
                               (approach p feet stair-from (fn [stair _] (:aside stair))))]
                   (if (and stand (or (nil? here) (<= (+ 2 (:aside (:then stand))) (:aside here)))) stand here)))
-        bridge-from (fn [cell] (span/bridge-span block-at (escape/unseen-of p) cell goal opts))
+        bridge-from (in-area out? goal (fn [cell] (span/bridge-span block-at (escape/unseen-of p) cell goal opts)))
         bridge (when (allowed? c :bridge)
                  (or (bridge-from feet)
                      (when-not (skip :approach)

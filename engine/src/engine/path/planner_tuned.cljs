@@ -278,7 +278,10 @@
       (when (and (<= (aget lo 0) x (aget hi 0)) (<= (aget lo 1) y (aget hi 1)) (<= (aget lo 2) z (aget hi 2)))
         (js/Int32Array. #js [(aget lo 0) (aget lo 1) (aget lo 2) (aget hi 0) (aget hi 1) (aget hi 2)])))))
 
-(defn- search-from ^Search [^js snapshot ^js query ^js options]
+(defn- search-from
+  "The search of query; its options.area is decided from area-from (default the query's start): the unmoved start, as start-query moves a body that overlaps a cell outside the box."
+  (^Search [^js snapshot ^js query ^js options] (search-from snapshot query options (.-from query)))
+  (^Search [^js snapshot ^js query ^js options ^js area-from]
   (let [^js table (.-table options)
         ^js from (.-from query)
         ^js set-goals (.-goals query)
@@ -455,7 +458,7 @@
      (when unk (.-changed unknown))
      (if (and unk (some? (.-deathHp unknown))) (.-deathHp unknown) (if (pos? rw) (/ lethal-s rw) 0))
      ;; area
-     (area-of (.-area options) from))))
+     (area-of (.-area options) area-from)))))
 
 ;; the body's box reaches this far from its centre in x and z: the client physics' width, which decides what holds it up
 (def HITBOX-HALF constants/body-half-width)
@@ -578,7 +581,7 @@
         ^Search search (search-from snapshot query options)]
     (.init search)
     (let [q (start-query search query)]
-      (with-start-air (if (identical? q query) search (search-from snapshot q options)) options))))
+      (with-start-air (if (identical? q query) search (search-from snapshot q options (.-from query))) options))))
 
 (defn- clean-options
   "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, no stop at

@@ -106,6 +106,14 @@
     (is (not= "found" (:status (pf/run shut (pf/near 38 64 10) area from))))
     (is (not= "found" (:status (pf/run gapped (pf/near 10 64 0) area from))) "a goal outside the area")))
 
+(deftest a-body-over-a-gap-at-the-edge-keeps-the-area-of-the-cell-it-stands-in
+  (let [hole (pf/world {:fill [[20 64 -2 20 66 -1 "stone"] [20 64 1 20 66 29 "stone"] [20 64 31 20 66 40 "stone"] [0 63 5 0 63 5 "air"]]})
+        ;; the cell [0 64 5] is inside the area but has no floor: the search starts on [0 64 4], outside it
+        over-gap {:x 0 :y 64 :z 5 :px 0.5 :py 64 :pz 4.95}
+        r (pf/run hole (pf/near 38 64 10) area over-gap)]
+    (is (= "found" (:status r)))
+    (is (every? (fn [[_ _ z]] (>= z 5)) (rest (pf/cells r))) "after the first step the way stays in the area")))
+
 (deftest a-route-from-outside-the-area-is-free
   (let [r (pf/run gapped (pf/near 38 64 0) area {:x 0 :y 64 :z 0})]
     (is (= "found" (:status r)))

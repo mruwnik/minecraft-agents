@@ -10,7 +10,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
-            [jobs.lib.vehicle :as vehicle]))
+            [jobs.lib.vehicle :as vehicle]
+            [jobs.lib.walk.world :as wworld]))
 
 (def doc
   "Steer the boat or raft the body is in to the water cell :pos, in bounded strokes (the paddle primitive: a few ticks of turn and forward each).
@@ -19,7 +20,8 @@
   A cell the body has not sensed is looked at first; one it still cannot make out is steered toward all the same, looked at again from each
   new cell on the way, and judged once it is made out (a boat that gets there on a cell never made out is done). Every key is released at the end of a stroke and by a cut.
 
-  Impossible: :bad-args, and between strokes :not-a-boat (another vehicle), :not-water (the cell is seen not to be water).
+  Impossible: :bad-args, and between strokes :not-a-boat (another vehicle), :not-water (the cell is seen not to be water),
+  :outside-area (the cell is out of reach of the body's work area, jobs.lib.walk.world ::area, which the body is inside: the straight drive would leave it).
   Condition: :not-aboard (on foot, at the start or got out on the way: a listed call waits; jobs.movement.boat-launch puts the body in a boat).
   Ends done (data {:left blocks}) or
   nothing-possible: :blocked (land in the way: max-blocked, 2, forward strokes in a row that could not move),
@@ -66,6 +68,12 @@
 
 (def boat-name? #(boolean (re-find #"_(chest_)?(boat|raft)$" (or % ""))))
 
+(defn outside-area?
+  "Whether the cell is out of the work area's reach from the boat (within :range)."
+  [c]
+  (let [{:keys [x y z]} (u/self-pos c)]
+    (wworld/goal-outside-area? (mapv js/Math.floor [x y z]) (cell-of-call c) (:range (:args c)))))
+
 (defn can-run?
   "Between strokes: still aboard (:later, a listed call waits), in a boat, and the cell not seen to be land or another block."
   [c]
@@ -76,6 +84,8 @@
       (nil? ride) (contract/later :not-aboard "on foot" :hint "board a boat first, e.g. mount")
       (not (boat-name? (:name ride))) (contract/never :not-a-boat "the vehicle is not a boat" :vehicle (:name ride))
       (and seen (not= "water" seen)) (contract/never :not-water "the cell is not water" :seen seen)
+      (outside-area? c)
+      (contract/never :outside-area "the cell is outside the body's work area")
       :else (contract/ok :aboard "aboard a boat, the cell is water"))))
 
 (defn left-of

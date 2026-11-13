@@ -5,6 +5,7 @@
             [jobs.lib.cost.ways :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.span :as span]
+            [jobs.lib.walk.world :as wworld]
             [jobs.movement.reach :as reach]
             [engine.test-util :as tu :refer [box]]
             [engine.core :as core]
@@ -183,6 +184,18 @@
               remembered? (fn [[x y z]] (not (.-unknown (.seenBlockAt p #js {:x x :y y :z z}))))]
           (await (dig-look/look-at! (st/stub-ctx p) [4 63 0]))
           (is (remembered? [6 63 3]) "a floor cell two off the cell looked at, in view"))))))
+
+(deftest a-span-ending-outside-the-work-area-is-no-span-from-inside-it
+  (let [at (block-at-of-map (merge edge-floor (box 5 63 -2 8 63 2 "stone")))
+        bridge-from (fn [cell] (span/bridge-span at (constantly false) cell [8 64 0] {:pillar-item {:item "dirt" :count 5} :skip #{} :fetch? false}))
+        stair-from (fn [cell] (span/down-stair (block-at-of-map (box -25 40 -5 20 63 5 "stone")) cell [8 53 0] (constantly true) #{}))
+        spans (fn [area feet]
+                (settings/with-settings {:jobs.lib.walk.world/area area}
+                  #(let [out? (wworld/outside-area-fn feet)]
+                     [((reach/in-area out? [8 64 0] bridge-from) feet) ((reach/in-area out? [8 53 0] stair-from) [0 63 0])])))]
+    (is (= [:bridge :stair] (map :step (spans {:min [0 40 -3] :max [20 70 3]} [1 64 0]))) "landing 5 and stair end inside the box")
+    (is (= [nil nil] (spans {:min [0 40 -3] :max [4 70 3]} [1 64 0])) "landing at x 5 and the stair's end past x 4")
+    (is (= [:bridge :stair] (map :step (spans {:min [20 60 -3] :max [30 70 3]} [1 64 0]))) "from outside the box nothing is refused")))
 
 (deftest a-free-body-bridges-a-gap-the-planner-cannot-cross
   (async done

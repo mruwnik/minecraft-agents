@@ -130,7 +130,7 @@
     (is (not= armed hurt) "health lost: a new search")))
 
 (defn inputs-of
-  "The toll inputs a walk's search key holds (part 10) over the costed world of a body with world spec (merged)."
+  "The toll inputs a walk's search key holds (part 11) over the costed world of a body with world spec (merged)."
   [world]
   (let [c (ready-test/ctx-of (merge {:floor [-5 -20 45 20]} world))]
     (nth (wsearch/search-key c [40 64 0] 1 1 executor/policy nil (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? true})) 11)))

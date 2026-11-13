@@ -43,9 +43,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out zs]} (await (go-in-area! {:pos [16 64 -5] :range 0}))]
+        (let [{:keys [out p]} (await (go-in-area! {:pos [16 64 -5] :range 0}))
+              [x _ z] (get-in @(fake/state p) [:self :pos])]
           (is (= [false :outside-area] [(:arrived out) (:reason out)]) (pr-str out))
-          (is (every? zero? zs) "no step taken"))))))
+          (is (< -1 x 1) "no step taken: still in the start column")
+          (is (< -1 z 1) "no step taken: still in the start row"))))))
 
 (deftest a-goal-inside-the-area-with-no-way-inside-it-gives-up
   (async done

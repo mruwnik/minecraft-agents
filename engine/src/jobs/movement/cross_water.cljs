@@ -12,6 +12,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
+            [jobs.lib.walk.world :as wworld]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -22,7 +23,7 @@
   The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within ::radius of the body, at least ::min-cross blocks away, with water between it and the body
   (not the start bank): the one nearest :goal when given, else the nearest (the crossing's quote grows with its distance).
   A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it).
-  Impossible: :bad-args (:pos or :goal names no cell, :item is no boat). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
+  Impossible: :bad-args (:pos or :goal names no cell, :item is no boat), :outside-area (:pos is out of reach of the body's work area, which it is inside; an auto-chosen shore is never one). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
   or none far enough is in sight), :not-water (no water in sight to launch on, unless already aboard). A crossing under way skips them.
   Ends done (data {:land {:x :y :z} :boat id :recovered bool}), or the failed child's kind with its ending as the :because:
   condition-failed :no-boat (none carried and none could be fetched), :boat-not-seen (the placed boat is not in sight), the launch's other causes (:refused, :no-support,
@@ -69,11 +70,17 @@
               (= "water" (u/seen-name p cell))))
           (range 1 n))))
 
+(defn outside-area?
+  "Whether a shore cell is out of the work area's reach from the body (it is inside the area, wworld/goal-outside-area?)."
+  [from land]
+  (wworld/goal-outside-area? (mapv js/Math.floor [(:x from) (:y from) (:z from)]) land 0))
+
 (defn far-spot
   "The shore spot {:land :water} within ::radius of `from`, at least ::min-cross away and across water from it, or nil:
   the one nearest :goal when given, else the nearest (the crossing's quote grows with its distance). Shores less than ::min-cross from `bank` (the launch bank, if known) are left out."
   [p from {:keys [goal bank]}]
   (->> (shore/spots p from {:radius (radius)})
+       (remove #(outside-area? from (:land %)))
        (map #(assoc % :d (u/dist from (vehicle/centre (:land %)))))
        (filter #(and (>= (:d %) (min-cross))
                     (or (nil? bank) (>= (u/dist bank (vehicle/centre (:land %))) (min-cross)))
@@ -167,6 +174,7 @@
   [c]
   (cond
     (crossing c) (contract/ok :under-way "a crossing under way")
+    (and (given-pos c) (outside-area? (u/self-pos c) (given-pos c))) (contract/never :outside-area "the far shore is outside the body's work area")
     (nil? (spot-of c)) (contract/look :no-far-shore (if (given-pos c) "the given cell is no seen shore" "no far shore in sight"))
     (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c)))
     (contract/look :not-water "no water in sight to launch a boat on")
