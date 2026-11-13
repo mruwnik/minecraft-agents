@@ -190,7 +190,9 @@
                           ["a plank floor under a roof" (merge (box 8 64 -1 12 64 1 "oak_planks") (box 8 68 -1 12 68 1 "oak_planks")) 65]
                           ["a plank path" (box 8 64 0 12 64 0 "oak_planks") 65]
                           ["farmland" (box 8 64 -1 12 64 1 "farmland") 65]
-                          ["a stone-brick terrace" (box 6 64 -2 14 65 2 "stone_bricks") 66]]]
+                          ["a stone-brick terrace" (box 6 64 -2 14 65 2 "stone_bricks") 66]
+                          ["a dock over water" (merge (box 8 60 -1 12 60 1 "stone") (box 8 61 -1 12 63 1 "water") (box 8 64 -1 12 64 1 "oak_planks")) 65]
+                          ["a bridge over a ravine" (merge (box 8 63 -1 12 63 1 "air") (box 8 64 -1 12 64 1 "oak_planks")) 65]]]
     (is (= {:pos {:x 10 :y y :z 0} :resolved true :why :surface} (column/aim (hiding (merge flat blocks) (constantly false)) {:x 10 :z 0} 4 64 true))
         why)))
 

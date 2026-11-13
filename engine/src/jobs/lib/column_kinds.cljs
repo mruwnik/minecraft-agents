@@ -54,14 +54,26 @@
                                 (#{:solid :tall} (kind b))))))
     (constantly false)))
 
+(def safe-fall "Blocks a body drops without hp lost (vanilla); a space under a deck deeper than this is a gap, not a room." 3)
+
+(defn room-under?
+  "Whether the free cells from y down are a room: air over a stand no deeper than safe-fall."
+  [kind-at x y z lo]
+  (loop [y y n 1]
+    (case (kind-at x y z)
+      :open (and (<= n safe-fall) (>= y lo) (recur (dec y) (inc n)))
+      :solid (> n 1)
+      false)))
+
 (defn roof-under
-  "For a built floor at x y z: the y of the cell under its built blocks when they are a roof, not ground (they end on a
-  free cell: a roof or eave over a walkable space; or hold a wall or fence, which no one walks on), else nil."
+  "For a built floor at x y z: the y of the cell under its built blocks when they are a roof, not ground (they cover a
+  room: air over a stand within safe-fall; or hold a wall or fence, which no one walks on), else nil. A deck over
+  water or a gap is ground."
   [kind-at built? x y z lo]
   (loop [y y tall? false]
     (if (and (>= y lo) (built? x y z))
       (recur (dec y) (or tall? (keyword-identical? :tall (kind-at x y z))))
-      (when (or tall? (free? (kind-at x y z))) y))))
+      (when (or tall? (room-under? kind-at x y z lo)) y))))
 
 (defn top
   "The y of the highest stand of the column x z (from lo to hi: default the build height) with no solid or hazard over it
