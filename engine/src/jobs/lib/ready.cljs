@@ -2,7 +2,7 @@
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (priced; the estimate of jobs.lib.spawn-light/exposure is
   above 0; :look while the light there is unseen and a look from here would show it, else priced as unseen (unseen-status); :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
-  (threatened: a mob near while the call's worth does not afford its stay with the danger over it); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
+  (threatened: a mob near while the call's worth does not afford the job's own price with the danger over it); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
             [clojure.string :as str]
             [engine.args :as a]
@@ -31,6 +31,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
             [jobs.lib.threats :as threats]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.walk-risk :as walk-risk]))
 
 (a/defargs settings
@@ -420,21 +421,32 @@
         kept (filterv (fn [[t _]] (contains? ks (:key t))) (map vector (:live in) (:weights in)))]
     (assoc in :live (mapv first kept) :weights (mapv second kept))))
 
+(defn own-price-s
+  "Seconds c's job costs by its own quote (Q164): walk-pick/quoted-s of its def's quote-of asked on c, read once per check
+  window; else price/stay-s. An async quote-of is not asked (a check cannot wait), nor one that ends or has no finite time."
+  [c]
+  (let [q (:quote-of (:def c))
+        s (when (and q (not (::quoting c)) (not= "AsyncFunction" (.. q -constructor -name)))
+            (check-cache/cached c ::own-price
+                                #(let [r (q (assoc c ::quoting true))]
+                                   (when (and (map? r) (not (contract/ending? r))) (walk-pick/quoted-s c r)))))]
+    (if (and (number? s) (js/isFinite s)) s (price/stay-s c))))
+
 (defn hostile-cost
-  "{:cost s :answer k :danger s} of going on beside hostiles hs over c's stay (price/stay-s, the job's own quoted seconds
-  there): the stay and the cheaper of doing nothing about them (hostile-loss/loss-over, :stand) and answering each one
-  that comes (:answered), both pricing the mobs hs alone, each with the spawns met there: go-to's price of that stay (walk-risk/stay-estimate, its
+  "{:cost s :answer k :danger s :own s} of going on beside hostiles hs over the job's own seconds (own-price-s): those
+  seconds and the cheaper of doing nothing about them (hostile-loss/loss-over, :stand) and answering each one
+  that comes (:answered), both pricing the mobs hs alone over those seconds, each with the spawns met there: go-to's price of that stay (walk-risk/stay-estimate, its
   :live [] for the spawns alone, at walk-risk/risk-s); all 0 with none."
   [c hs]
   (if (empty? hs)
-    {:cost 0 :answer :stand :danger 0}
-    (let [s (price/stay-s c)
+    {:cost 0 :answer :stand :danger 0 :own 0}
+    (let [s (own-price-s c)
           in (-> (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) (assoc :secs s) (only-mobs hs))
           price #(walk-risk/risk-s c (walk-risk/stay-estimate c %))
           answered (price in)
           stand (+ (price (assoc in :live [])) (hostile-loss/loss-over c (ctx/view c) hs s))
           [answer danger] (if (<= stand answered) [:stand stand] [:answered answered])]
-      {:cost (+ s danger) :answer answer :danger danger})))
+      {:cost (+ s danger) :answer answer :danger danger :own s})))
 
 (defn waited-s
   "Seconds the call has spent paused so far (ctx/spent: its wall time less the time its rounds ran), 0 before it starts."
@@ -447,10 +459,10 @@
   cheapest answer to the danger), else later :hostile-near, priced again after walk-risk/recheck-ms, until the call has
   waited (waited-s) longer than that cheapest answer costs: then never :hostile-near (Q165, rent or buy). what: the
   text naming the dangers."
-  [c ok-reason what {:keys [cost answer danger]}]
+  [c ok-reason what {:keys [cost answer danger own]}]
   (let [worth (ctx/worth c)
         waited (waited-s c)
-        priced (str what ": " (price/round1 cost) " s, the stay of " (price/round1 (price/stay-s c)) " s and "
+        priced (str what ": " (price/round1 cost) " s, the job's own " (price/round1 own) " s and "
                     (price/round1 danger) " s " (if (= :stand answer) "doing nothing about it" "answering it when it comes"))]
     (cond
       (cost/affords? cost worth)
@@ -499,7 +511,7 @@
 
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry) for a
-  mob seen or remembered and the call's worth does not afford its stay with the cheapest answer to the danger (seen-price); heard-only
+  mob seen or remembered and the call's worth does not afford the job's own price (own-price-s) with the cheapest answer to the danger (seen-price); heard-only
   mobs are priced the same way (heard-price)."
   [c]
   (check-cache/cached c [::threatened (price/stay-s c) (ctx/worth c)]

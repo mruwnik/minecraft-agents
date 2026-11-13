@@ -179,15 +179,16 @@
   (async done
     (tu/run-async done
       (fn [] (ready-test/dear-death (fn ^:async t []
-        (doseq [[world reason] [[{:inventory [{:name "stone" :count 2}] :self {:health 0.5}} :low-health]
-                                [{:inventory [{:name "stone" :count 2}] :entities [zombie] :blocks floor} :hostile-near]]]
-          (let [{:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] [dug])
+        ;; two cells (12 s by its quote) beside the zombie: one cell's 6 s alone is a stand the order's worth affords
+        (doseq [[world reason entries] [[{:inventory [{:name "stone" :count 2}] :self {:health 0.5}} :low-health [dug]]
+                                        [{:inventory [{:name "stone" :count 2}] :entities [zombie] :blocks floor} :hostile-near [dug (assoc dug :cell [0 65 1])]]]]
+          (let [{:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] entries)
                 id (first (:list (core/state eng)))]
             (await (zs/run-until-empty eng 6))
             (is (= reason (:reason (core/waiting eng id))) (pr-str reason))
             (is (= [] (zs/calls p "place")) (pr-str reason))
             (is (= [] (zs/calls p "dig")) (pr-str reason))
-            (is (= 1 (count (tidy-entries eng))) (pr-str reason))))))))))
+            (is (= (count entries) (count (tidy-entries eng))) (pr-str reason))))))))))
 
 (deftest a-hostile-seen-during-the-walk-holds-the-put-back-and-costs-no-try
   ;; place of a cell in reach asks no readiness check, so the run's own look after the walk is all that holds it

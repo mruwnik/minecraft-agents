@@ -586,6 +586,18 @@
     (is (= [:later :hostile-near] (after (* 0.9 danger))) "waited less than the danger costs: wait on")
     (is (= [:never :hostile-near] (after (* 1.1 danger))) "waited longer than the danger costs: the wait ends")))
 
+(deftest threatened-prices-a-seen-mob-over-the-jobs-own-quote
+  ;; Would fail on old code: hostile-cost took price/stay-s, a click for both jobs (neither binds a stay), so both went.
+  (let [quoting (fn [mean] {:quote-of (fn [_] {:uses {:job-time [0 mean mean]}})})
+        verdict (fn [def] (first (ready/threatened (-> (with-entry (merge at-origin {:entities [zombie]}) {})
+                                                       (assoc :worth (constantly small-worth) :def def)))))
+        asked (atom 0)]
+    (is (= :ok (verdict (quoting (risk/work-s :click)))) "a job quoting a click beside the zombie goes")
+    (is (= :later (verdict (quoting dig-night-s))) "the same zombie and worth, a job quoting a night's dig waits")
+    (is (= :ok (verdict {:quote-of (^:async fn [_] (swap! asked inc) {:uses {:job-time [0 dig-night-s dig-night-s]}})}))
+        "an async quote-of is not asked: the job's stay (a click) stands in")
+    (is (zero? @asked) "nor run")))
+
 (deftest hostile-cost-prices-the-mobs-it-is-given-not-every-mob-sensed
   ;; Would fail on 3a7851aaa: :answered read every known threat (stay-inputs), so both calls priced both zombies.
   (let [far (assoc zombie :id 8 :pos {:x -3 :y 64 :z 0})
