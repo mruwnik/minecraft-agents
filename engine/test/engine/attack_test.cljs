@@ -174,7 +174,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (scenario {:targets ["zombie"]}
-                                                 {:inventory h/sword :entities [(ent 8 "zombie" "hostile" 3 {:visible false :seen true :ageMs 1000})]} 9))]
+                                                 {:inventory h/sword :entities [(ent 8 "zombie" "hostile" 3 {:visible false :seen false :sighted true :ageMs 1000})]} 9))]
           (is (= #{8} (set (attacked s))) "walked to its last place and killed")
           (is (not-any? #(= 8 (:id %)) (fake/entities p))))))))
 

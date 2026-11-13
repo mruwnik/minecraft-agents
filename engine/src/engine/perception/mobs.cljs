@@ -9,10 +9,20 @@
 
 (def default-mob-speed "Blocks a second of a hostile not in engine.constants/mob-speeds." 3)
 
+(defn drift-ms
+  "The ms a mob of name takes to move blocks at its chase speed (engine.constants/mob-speeds, from vanilla attributes)."
+  [name blocks]
+  (* 1000 (/ blocks (get constants/mob-speeds name default-mob-speed))))
+
 (defn mob-forget-ms
   "How long a mob of name not sensed again stays known: the time it takes to drift :mob-drift blocks."
   [{:keys [opts]} name]
-  (* 1000 (/ (:mob-drift opts) (get constants/mob-speeds name default-mob-speed))))
+  (drift-ms name (:mob-drift opts)))
+
+(def exact-drift
+  "Blocks a mob out of sight may have moved while its last place still stands for it exactly: one cell, the grain the
+  danger checks place a mob in. The body's events keep no mob tracks to measure this from, so it rests on game speeds."
+  1)
 
 (def mob-middle 0.9)
 
@@ -171,8 +181,9 @@
 (defn known-mobs
   "The hostiles the body knows of after a fresh sample over primitives src, nearest first, as entities() entries: a mob
   sensed now is its live entry; one remembered is {:id :name :kind :pos (where it was last sensed) :distance :visible
-  false}. Each adds seen (seen now or since it was last out of mind), heard (heard now, unseen), remembered (not
-  sensed now) and ageMs (since last sensed)."
+  false}. Each adds seen (seen within the time it takes to drift exact-drift: its place is exact), sighted (seen since it
+  was last out of mind), heard (heard now, unseen), remembered (not sensed now) and ageMs (since last sensed). Past
+  that drift a mob seen once is known only as a heard one is: roughly, by its direction and band."
   [{:keys [raw opts st] :as per} ^js src]
   (let [sensed (sense-mobs! per src)
         ^js eye (.eye ^js raw)
@@ -193,7 +204,8 @@
                      (aset base "equipment" (.-equipment m))
                      (when (= "creeper" (.-name m)) (aset base "creeper" true))
                      (when (some? (.-speed m)) (aset base "speed" (.-speed m)))
-                     (js/Object.assign base #js {:seen (some? (.-seenAt m))
+                     (js/Object.assign base #js {:seen (and (some? (.-seenAt m)) (<= (- now (.-seenAt m)) (drift-ms (.-name m) exact-drift)))
+                                                 :sighted (some? (.-seenAt m))
                                                  :heard (and (some? live) (.-heard m))
                                                  :remembered (nil? live)
                                                  :ageMs (- now (.-at m))}))))]

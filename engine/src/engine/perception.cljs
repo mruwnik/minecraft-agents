@@ -40,13 +40,16 @@
            lit (the cell of its feet or head is bright enough by the block light rule; a mob in the dark is seen
            only within the same near distance), and inside the view cone or heard.
   A sensed mob's entry takes its place and time (seen-at when seen).
+  An entry is seen (its place exact) only while the mob could have moved `exact-drift` (1) block since it was last
+  seen: about 0.4 s for a zombie. After that, heard or remembered, it is placed roughly (direction and band).
   An entry not sensed now stays at its last place while the mob could not have drifted `:mob-drift` (16) blocks
   (time x `mob-speed`): about 6 s for a zombie.
   An entry whose id the client no longer tracks (dead, despawned, far off) is dropped at once.
   A forgotten entry once seen stays a sighting (`fadedMobs`: kind, last seen place and age), the newest
   `:max-sightings`, unless it vanished while sensed at the last sample (died or despawned in sight) or is sensed
   again; the danger checks never read it, jobs price it by the chance it is still there.
-  So an unseen silent creeper behind the body is no danger, but a creeper seen 3 s ago that went round a corner still is.
+  So an unseen silent creeper behind the body is no danger, but a creeper seen 3 s ago that went round a corner still is,
+  at its rough spot.
 
   One cell. `sensed` answers what the body knows of a cell now, first match:
     nil          unloaded, or offline;

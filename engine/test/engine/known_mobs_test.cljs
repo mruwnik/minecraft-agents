@@ -339,7 +339,20 @@
     (let [m (first (known p))]
       (is (some? m))
       (is (true? (.-remembered m)))
-      (is (true? (.-seen m))))))
+      (is (false? (.-seen m)) "a second on, it may have moved a block: its place is no longer exact")
+      (is (true? (.-sighted m))))))
+
+(deftest a-skeleton-seen-then-heard-in-the-dark-is-placed-roughly-once-it-could-have-moved
+  (let [{:keys [p clock]} (rig {:entities [(assoc (mob 1 "skeleton" 0 12) :held "bow")]})]
+    (is (= [1] (danger-ids p)) "seen 12 blocks off with a clear line of fire")
+    (dark-around! p 0 12)
+    (is (true? (.-seen (first (known p)))) "just lost from sight: still exact")
+    (later! clock 1000)
+    (let [m (first (known p))]
+      (is (true? (.-heard m)))
+      (is (false? (.-seen m)))
+      (is (true? (.-sighted m))))
+    (is (= [] (danger-ids p)) "heard only, beyond the near band: no danger, as for any heard shooter")))
 
 ;; ---- cards 99f833e8, 271c2a45: heard melee mobs count; a fusing creeper hisses
 

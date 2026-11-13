@@ -30,11 +30,11 @@
    ::quarters-reach {:default 3 :doc "Blocks within which a roof and walls every way make the body's place closed quarters (closed-quarters?)." :spec (a/int-in 1 nil)}})
 
 (defn seen-mob?
-  "Whether the body has seen or heard hostile e: the seen or heard flag of a known-hostiles entry, else (raw entity)
-  its visible field."
+  "Whether the body has seen or heard hostile e: the seen, sighted or heard flag of a known-hostiles entry, else (raw
+  entity) its visible field."
   [e]
   (let [s (.-seen e)]
-    (if (some? s) (or (true? s) (true? (.-heard e))) (true? (.-visible e)))))
+    (if (some? s) (or (true? s) (true? (.-sighted e)) (true? (.-heard e))) (true? (.-visible e)))))
 
 (defn seen-only?
   "Whether the body has seen hostile e (not merely heard it): the seen flag of a known-hostiles entry, else (raw

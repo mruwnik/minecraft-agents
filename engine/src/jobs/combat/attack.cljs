@@ -128,7 +128,7 @@
   [e]
   (and (= "hostile" (.-kind e))
        (not (.-visible e))
-       (not (and (.-seen e) (<= (.-ageMs e) (* 1000 (settings/get settings ::seen-memory-s)))))))
+       (not (and (.-sighted e) (<= (.-ageMs e) (* 1000 (settings/get settings ::seen-memory-s)))))))
 
 (defn present
   "The entities matching :targets within :radius, nearest first; ones already
