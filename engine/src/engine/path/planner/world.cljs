@@ -107,6 +107,18 @@
                   false
                   (recur (inc y))))))))))
 
+  ;; clear without the collision and NARROW part: unloaded, water, lava and AVOID only (a tight column's masks judge the rest)
+  (hazardFree [s x z lo hi]
+    (let [last-y (bit-shift-right (dec hi) 4)]
+      (loop [y (bit-shift-right lo 4)]
+        (if (> y last-y)
+          true
+          (let [id (.stateAt s x y z)
+                k (aget (.-tbl-kind s) id)]
+            (if (or (== id UNLOADED) (== k WATER) ^boolean (.lavaIn s k x y z) ^boolean (.avoids s id x y z))
+              false
+              (recur (inc y))))))))
+
   ;; what a diagonal's side column holds for a body spanning lo..hi: 0 passable (fluid other than lava is fine, so is a
   ;; hole), 1 collision only (a corner to slide along), 2 lava, AVOID or unloaded: never brushed
   (side [s x z lo hi]

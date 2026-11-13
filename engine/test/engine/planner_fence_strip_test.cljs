@@ -55,13 +55,30 @@
       (is (= "found" (:status r)) (pr-str from (:reason r)))
       (is (not (on-farmland? (get-in r [:path :steps]))) (pr-str from (pf/cells r))))))
 
+(deftest a-drop-past-a-post-is-refused-through-a-hazard
+  ;; the tight drop skips the collision check, not the hazards: a cobweb or fire in both end columns (the cell the body drops into) leaves no way off
+  ;; the strip (the farmland drop is unpriced here), where the open columns have one (the first test)
+  (doseq [hazard ["cobweb" "fire" "soul_fire" "powder_snow"]
+          from froms]
+    (let [r (pf/plan (snapshot [[-367 66 -844 hazard] [-367 66 -839 hazard]]) {:from from :goal gate})]
+      (is (not= "found" (:status r)) (pr-str hazard from (pf/cells r))))))
+
 (deftest the-planner-drops-onto-farmland-only-at-a-price
   (doseq [from froms]
     (let [plan #(pf/plan (snapshot ends-shut) {:from from :goal gate} {:costs %})
-          priced (plan {:trample (cost/field-step-s :till 1)})]
+          priced (plan {:trample (wworld/trample-s)})]
       (is (= "found" (:status priced)) (pr-str from))
       (is (on-farmland? (get-in priced [:path :steps])))
       (is (not= "found" (:status (plan {}))) (str "unpriced, no drop tramples: " (pr-str from))))))
+
+(deftest the-trample-is-priced-by-the-games-chance
+  ;; the game tramples with chance fall - 0.5, farmland's top being 15/16 of its cell: a drop of 2 cells falls 1.0625, so
+  ;; the price is .5625 of costs.trample; one of 1 cell falls .0625, so nothing
+  (doseq [[drop share] [[2 0.5625] [1 0] [3 1]]]
+    (let [snap (fx/fixture-snapshot {:fill [[-5 60 -5 0 (+ 64 drop) 5 "stone"] [1 60 -5 5 64 5 "stone"]] :blocks (for [z (range -5 6)] [1 65 z "farmland"])})
+          price (fn [t] (get-in (pf/plan snap {:from {:x 0 :y (+ 65 drop) :z 0} :goal (near 1 65 0 0)} {:costs {:trample t}})
+                                [:path :cost :priced]))]
+      (is (< (js/Math.abs (- (price 1000) (price 1e-9) (* 1000 share))) 1e-3) (pr-str drop)))))
 
 (deftest a-walk-prices-the-trample
   ;; body-policy prices it (the till of the dirt it leaves); on the old code every drop onto farmland was refused

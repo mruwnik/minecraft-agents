@@ -280,7 +280,7 @@
               ddark (+ (if (some? (.-dark-at s)) (* dsec (.darkOf s x y z)) 0)
                        (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0)
                        (if (and (some? (.-trample-tolls s)) (landing-move? move)) (* dsec (.trampleTollOf s x y z)) 0)
-                       (if (and (pos? (.-c-trample s)) ^boolean (.tramples s x y z move)) (.-c-trample s) 0)
+                       (if (and (pos? (.-c-trample s)) ^boolean (.tramples s x y z move)) (* (.-c-trample s) (.trampleChance s y move parent-node)) 0)
                        (if (some? (.-edge-tolls s)) (.edgeToll s x y z move parent-node) 0)
                        (.-move-unk s)
                        (if (pos? (.-c-descent s)) (* (.-c-descent s) (js/Math.max 0 (- (aget (.-ys s) parent-node) y))) 0))]
@@ -386,6 +386,12 @@
   (outsideArea [s x y z]
     (let [^js a (.-area s)]
       (or (< x (aget a 0)) (< y (aget a 1)) (< z (aget a 2)) (> x (aget a 3)) (> y (aget a 4)) (> z (aget a 5)))))
+
+  ;; the chance that tramples: the game's is the fall less half a block (farmland's top is 15/16 of its cell); a gap jump's fall is unknown, so it counts as sure
+  (trampleChance [s y move parent-node]
+    (if (== move MOVE-GAP)
+      1
+      (js/Math.min 1 (js/Math.max 0 (- (aget (.-ys s) parent-node) y 0.9375 0.5)))))
 
   ;; the factor of its own seconds the caller's toll (options.tolls) adds to entering x,y,z, 0 for none
   (tollOf [s x y z]

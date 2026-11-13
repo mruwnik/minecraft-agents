@@ -12,6 +12,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost.tolls :as cost-tolls]
             [jobs.lib.combat :as combat]
+            [jobs.lib.crops :as crops]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
@@ -672,6 +673,13 @@
                             (<= (js/Math.hypot (- (.-x pos) (:x q)) (- (.-y pos) (:y q)) (- (.-z pos) (:z q))) near))))
                    (ctx/entries c :breathe))))))
 
+(defn trample-s
+  "Seconds a trampled farmland cell costs: the marginal tilling and replanting of one cell (a pass's fixed seconds are paid anyway)
+  and the wheat's regrowth (cost/sown-worth at the dry rate: the cell may hold none, so the low end)."
+  []
+  (let [per-cell #(- (cost/field-step-s % 2) (cost/field-step-s % 1))]
+    (+ (per-cell :till) (per-cell :plant) (cost/sown-worth "wheat" (crops/stages-per-s false nil)))))
+
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs, jobs.lib.cost/hp-seconds)
@@ -681,7 +689,7 @@
   :air-drain and :air-grace follow the helmet (jobs.lib.cost/air-profile), :swim-h Depth Strider on the boots (swim-profile); with the head under water, or the breath not yet full, :air-used is the air
   its oxygen says it has used, and under water there is no turtle grace (it may be spent on this dive), only Water Breathing's seconds left; :health is the hp drowning to which
   is lethal (each hp of it at :damage-weight), :air-seen (known-fn) which air counts;
-  :costs prices a drop onto farmland at the measured till of the dirt it leaves (cost/field-step-s :till);
+  :costs prices a landing on farmland (times the game's chance of a trample) at its tilling and replanting and the crop's regrowth (trample-s);
   c's :budget-near (go-to's) is :budget-near."
   [c]
   (let [self (.self (:primitives c))
@@ -698,7 +706,7 @@
                     :danger-cap (max cost/danger-cap (:max-rate (cost/danger-opts)))}
                    (when-some [landing (cost/walk-landing)] {:landing landing})
                    {:drop-cost (cost/walk-drop-cost)}
-                   {:costs (cond-> (merge {:trample (cost/field-step-s :till 1)} (cost/walk-costs))
+                   {:costs (cond-> (merge {:trample (trample-s)} (cost/walk-costs))
                              (some? (:descent-s c)) (assoc :descent (:descent-s c)))}
                    (when-some [m (y-margin)] {:y-margin m})
                    (when-some [f (:dive-floor c)] {:y-below (max 0 (- (js/Math.floor (.-y (.-pos self))) f))})
