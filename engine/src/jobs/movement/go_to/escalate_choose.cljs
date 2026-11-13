@@ -336,7 +336,8 @@
 (defn rest-dig-s
   "Seconds an unfinished dig search's rest is expected to cost (dig-price's :searching or :budget, so a quote does not
   price it as a walk): route-s of the solid feet and head cells on the straight line from cell from into goal, a cell not
-  sensed or not loaded as rock (access/hidden-guess) at the measured chance it is solid (look/unseen-solid-at-fn)."
+  sensed or not loaded as rock (access/hidden-guess) at the measured chance it is solid (look/unseen-solid-at-fn). Past the
+  blocks whose two reads fit in dig-route/answer-s, each block is priced as the goal's feet and head unseen, with the tool carried."
   [c from goal]
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
@@ -346,8 +347,12 @@
         share #(cond (or (nil? (block-at %)) (dig-look/unknown? p %)) (solid-at %)
                      (escape/solid? (block-at %)) 1
                      :else 0)
-        cells (filter #(pos? (share %)) (mapcat (fn [[x y z]] [[x y z] [x (inc y) z]]) (concat (escape/line-cells from goal) [goal])))]
-    (route-s p rock-at cells own? (pickaxe-fetch c (fetch-tool? c)) share)))
+        read (js/Math.floor (/ dig-route/answer-s (* 2 (cost/search-read-ceiling-s))))
+        far (- (js/Math.ceil (apply js/Math.hypot (map - goal from))) read)
+        pair (fn [[x y z]] [[x y z] [x (inc y) z]])
+        cells (filter #(pos? (share %)) (mapcat pair (take read (concat (escape/line-cells from goal) [goal]))))]
+    (+ (route-s p rock-at cells own? (pickaxe-fetch c (fetch-tool? c)) share)
+       (if (pos? far) (* far (route-s p (constantly access/hidden-guess) (pair goal) nil nil solid-at)) 0))))
 
 (def route-searches
   "The most stands frontier-way tries a route to."
@@ -579,7 +584,9 @@
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig, and the digs and steps inside water it lets in (dig-route/flood-s). A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of reading its feet and head cells (:read-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
-        straight (fn [refused] (let [leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
+        ;; one whose feet and head reads alone pass dig-route/answer-s is none in hand (Q141): reading it would outgrow a search
+        too-long? (> (* 2 (cost/search-read-ceiling-s) (reduce + (map #(js/Math.abs (- %1 %2)) from goal))) dig-route/answer-s)
+        straight (fn [refused] (when-not too-long? (let [leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
                          up (max (:step-s prices) (:stair-s prices))
                          down? (< gy fy)
                          ly (if down? gy fy)
@@ -640,7 +647,7 @@
                                                   ;; a landing's rise: the open cells fallen through before it and its own
                                                   (floor-absent-s [x (dec y) z] (if (and down? (= x fx) (= z fz)) (- -1 (count (take-while zero? (rseq (subvec down-steps 0 i))))) 0))))
                                     (* (:read-s route-opts 0) 2 (count cells)))
-                        :dig dig})))
+                        :dig dig}))))
         straight-s (fn [refused] (or (:seconds (straight refused)) ##Inf))
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
@@ -1049,11 +1056,14 @@
   A running call (route-owner) has its search go on, :searching, at its next quote; a quote of no running call asks one
   slice and gets :budget when that spent its nodes (no search is kept: each quote ask would otherwise grow it for ever, at
   no time spent). A quote asks this when the walk's planner found no walk. walk-s, given when that walk was cut by its
-  budget (a partial to walk on): a dig route dearer than walking on is no use, so the search ends by that price (nil)."
+  budget (a partial to walk on): a dig route dearer than walking on is no use, so the search ends by that price (nil). The
+  walk on alone past the worth is nil unsearched."
   [c goal walk-s]
-  (when (ways/way? c :dig-route)
+  (when-let [[feet rest-s] (when (ways/way? c :dig-route)
+                             (let [feet (end/feet-cell c)
+                                   rest-s (cost-planner/rest-s (js/Math.round (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal))))]
+                               (when (cost/affords? rest-s (ctx/worth c)) [feet rest-s])))]
     (let [p (:primitives c)
-          feet (end/feet-cell c)
           owner (:route-owner (ctx/mem c))
           quote-id (str (:id c) "/quote")
           slice (route-slice (or owner quote-id))
@@ -1064,8 +1074,7 @@
       (when-not owner (forget-routes! quote-id))
       (case (:step e)
         :searching (if owner :searching :budget)
-        :dig-route (let [s (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts))
-                              (cost-planner/rest-s (js/Math.round (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal)))))]
+        :dig-route (let [s (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts)) rest-s)]
                      (when (cost/affords? s (ctx/worth c)) s))
         nil))))
 

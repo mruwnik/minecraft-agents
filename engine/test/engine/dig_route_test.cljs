@@ -291,6 +291,21 @@
   [run]
   (loop [cells 0 reads 0] (let [[a e _ r] (run 500) cells (+ cells e) reads (+ reads r)] (if (or a (> cells 100000)) [a cells reads] (recur cells reads)))))
 
+(deftest a-search-toward-a-goal-20k-blocks-off-plans-a-lane-and-band-one-search-can-expand
+  ;; run4 F2: the lane to a bed 17.5 km off was 47k cells, its band 27 times that, built before any budget: the body ran out of heap
+  (let [w (fn [[_ y _]] (if (< y 64) "stone" "air"))
+        most (dr/search-cells)
+        onlys (atom [])
+        real dr/search]
+    (doseq [goal [[20000 64 0] [20000 100 20000] [-20000 10 0]]
+            :let [{:keys [seed]} (dr/lane [0 64 0] goal {:pillar-s 1 :max-places 4} (constantly true) (constantly false))]]
+      (is (<= (count seed) (* 2 most)) (str (pr-str goal) ": " (count seed) " lane cells")))
+    (with-redefs [dr/search (fn [at from goal opts] (when-let [o (:only opts)] (swap! onlys conj (count o))) (real at from goal opts))]
+      (let [[a] (to-end (dr/priced-search w [0 64 0] [20000 64 0] {:dig-s (constantly 0.5) :step-s 0.2}))]
+        (is (some? a) "the search answers")))
+    (is (= 2 (count @onlys)) "a lane, then its band")
+    (is (every? #(<= % (* 27 (inc most))) @onlys) (pr-str @onlys))))
+
 (defn unseen-opts
   "Prices over rock below y 10 never seen but for the cells of seen (a fn of a cell; never seen taken for stone): seen-steps the fewest steps to a cell
   whose step is seen, seen-cells the fewest cells to one seen (the air over y 10 or seen's)."

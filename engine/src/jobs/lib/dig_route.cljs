@@ -31,6 +31,12 @@
   search-read-ceiling-s), the price :searched-s carries at the means. The proof that no cheaper route is left goes on only within it."
   0.1)
 
+(defn search-cells
+  "The most cells one search expands within answer-s at the ceiling price (cost/search-cell-ceiling-s): a planned way's
+  cells past them are never searched, so none is planned (Q141: setup grows with no distance)."
+  []
+  (js/Math.ceil (/ answer-s (cost/search-cell-ceiling-s))))
+
 (def falling #{"sand" "red_sand" "gravel"})
 
 (defn open?
@@ -856,13 +862,15 @@
 (defn walk-then-stair
   "Feet cells of a planned way from feet cell from to goal: across toward it (x first, then z) while the across left
   outnumbers the steps the height left needs, each step then down drop blocks (or up one), back and forth across z
-  once over the goal; up more than across, a spiral-stair (on floors floor? passes, default all) when there is one."
+  once over the goal; up more than across, a spiral-stair (on floors floor? passes, default all) when there is one. No
+  more than search-cells cells."
   ([from goal drop] (walk-then-stair from goal drop (constantly true)))
   ([[fx fy fz :as from] [gx gy gz :as goal] drop floor?]
     (or (when (> (- gy fy) (+ (js/Math.abs (- gx fx)) (js/Math.abs (- gz fz)))) (spiral-stair from goal floor?))
-        (let [sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))]
+        (let [sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))
+              most (search-cells)]
           (loop [x fx y fy z fz zig 1 out []]
-            (if (and (== x gx) (== y gy) (== z gz))
+            (if (or (and (== x gx) (== y gy) (== z gz)) (>= (count out) most))
               out
               (let [across (+ (js/Math.abs (- gx x)) (js/Math.abs (- gz z)))
                     rise? (>= (if (< gy y) (js/Math.ceil (/ (- y gy) drop)) (- gy y)) (max 1 across))
@@ -876,16 +884,18 @@
 (defn climb-lane
   "Feet cells of the planned ways up from feet cell from to goal searched first (seeded-search): walk-then-stair (rising
   late) and a pillar of up to pillars blocks straight up from it, then, when the rise left is no more than the across, a
-  stair rising early, each step one up till the goal's height, then level, else walk-then-stair from its top."
+  stair rising early, each step one up till the goal's height, then level, else walk-then-stair from its top; each no
+  more than search-cells cells."
   [[fx fy fz :as from] [gx gy gz :as goal] pillars floor?]
-  (let [k (min (or pillars 0) (- gy fy))
+  (let [most (search-cells)
+        k (min (or pillars 0) (- gy fy))
         top [fx (+ fy k) fz]
         sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))
         column (mapv #(vector fx (+ fy %) fz) (range 1 (inc k)))
         early (cond
                 (<= (- gy (top 1)) (+ (js/Math.abs (- gx fx)) (js/Math.abs (- gz fz))))
                 (loop [[x y z] top out column]
-                  (if (and (== x gx) (== z gz))
+                  (if (or (and (== x gx) (== z gz)) (>= (count out) most))
                     out
                     (let [c (if (not= x gx) [(+ x (sgn (- gx x))) (min gy (inc y)) z] [x (min gy (inc y)) (+ z (sgn (- gz z)))])]
                       (recur c (conj out c)))))
@@ -897,7 +907,7 @@
   whose feet or head cell is blocked?: A* across, as many cells as the search cut buys (answer-s at
   cost/search-cell-ceiling-s). [cells expanded]: cells nil when none is found within them."
   [[fx fy fz :as from] [gx _ gz] blocked?]
-  (let [budget (/ answer-s (cost/search-cell-ceiling-s))
+  (let [budget (search-cells)
         h (fn [x z] (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))))
         open? (fn [x z] (not (or (blocked? [x fy z]) (blocked? [x (inc fy) z]))))
         prev (js/Map.)
@@ -948,7 +958,7 @@
   of n as search's, n counting every search's cells."
   [block-at from goal {:keys [seed seed-reads seed-cells max-s read-s searched-s] :as opts}]
   (let [opts (dissoc opts :seed :seed-reads :seed-cells)
-        band (into #{} (for [[x y z] (cons from seed) dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
+        band (into #{} (mapcat (fn [[x y z]] (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))) (cons from seed))
         ;; a lane or band is no larger than its cells: the :margin box that keeps an open search's heap small is not theirs
         stages [(-> opts (assoc :only (cons from seed)) (dissoc :margin)) (-> opts (assoc :only band) (dissoc :margin)) opts]
         last-stage (dec (count stages))

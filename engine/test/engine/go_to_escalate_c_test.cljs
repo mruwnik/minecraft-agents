@@ -1843,6 +1843,23 @@
     (.setOwner (:primitives eng) "tx")
     (is (nil? (choose/dig-price c [38 64 0] 0.1)) "dearer than walking on: priced and dropped, not :budget")))
 
+(deftest a-dig-quote-whose-walk-on-alone-passes-the-worth-searches-nothing
+  ;; run4 F2: a quote to a bed 17.5 km off searched a dig route no worth could pay for, and its setup ran the body out of heap
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
+        searched (atom 0)
+        real choose/dig-way]
+    (.setOwner (:primitives eng) "tx")
+    (with-redefs [choose/dig-way (fn [& args] (swap! searched inc) (apply real args))]
+      (is (nil? (choose/dig-price c [20000 64 0] nil)))
+      (is (zero? @searched)))
+    (let [priced (atom 0)
+          real choose/route-s]
+      (with-redefs [choose/route-s (fn ([p cells own? fetch] (real p cells own? fetch))
+                                         ([p block-at cells own? fetch shares] (swap! priced + (count cells)) (real p block-at cells own? fetch shares)))]
+        (is (< 1000 (choose/rest-dig-s c [0 64 0] [20000 64 0])) "the far rock is priced")
+        (is (<= @priced (+ 2 (/ dig-route/answer-s (cost/search-read-ceiling-s)))) (str @priced " cells priced one by one"))))))
+
 (deftest a-dig-quote-cheaper-than-walking-on-is-found-under-the-bound
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
