@@ -4,7 +4,6 @@
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
   (:require [cljs.test :refer [deftest is are async]]
-            [jobs.lib.world-files :as ew]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -53,18 +52,12 @@
 
 (deftest any-empty-bed-is-one-to-use
   (let [bed {:x 20 :y 64 :z 0}
-        zone (fn [owner] [{:name "z" :owner owner :min [18 60 -2] :max [22 70 2]}])
-        plan {"hut" {:id "hut" :parts [{:id "bed" :cells [[20 64 0]] :want "red_bed"}] :metadata {:by "Other"}}}
-        permit? (fn [kn & [states entities]]
+        permit? (fn [& [states entities]]
                   (let [p (tu/fake {:time night :blocks {"20,64,0" "red_bed"} :states states :entities entities})]
                     ((sh-beds/bed-permit p) bed)))]
-    (is (true? (permit? (ew/of-data {} {} []))) "a bed no one holds")
-    (is (true? (permit? (ew/of-data {} {} (zone "Common")))) "in another owner's zone")
-    (is (true? (permit? (ew/of-data plan {} []))) "on another body's plan")
-    (is (true? (permit? (ew/of-data {} {} []) nil [{:id 1 :name "villager" :kind "passive" :pos {:x 25 :y 64 :z 0}}]))
-        "beside a villager")
-    (is (false? (permit? (ew/of-data {} {} []) {"20,64,0" {:occupied true}})) "an occupied bed")
-    (is (false? (permit? (ew/of-data {} {} (zone "Fake")) {"20,64,0" {:occupied true}})) "an occupied bed in its own zone")))
+    (is (true? (permit?)) "a bed no one holds")
+    (is (true? (permit? nil [{:id 1 :name "villager" :kind "passive" :pos {:x 25 :y 64 :z 0}}])) "beside a villager")
+    (is (false? (permit? {"20,64,0" {:occupied true}})) "an occupied bed")))
 
 (deftest the-live-spawn-bed-is-used-unless-seen-not-to-be-a-bed
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}
