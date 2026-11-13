@@ -19,7 +19,8 @@
             [jobs.lib.threats :as threats]
             [engine.game :as game]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [plan.shape :as shape]))
 
 (def max-climb
   "Stair steps cut one at a time out of a roofed shaft with no recorded :start before leave! gives up."
@@ -50,6 +51,22 @@
           dz (- (:z toward) (:z feet))]
       (vec (sort-by (fn [h] (let [[hx hz] (headings h)] (- (+ (* hx dx) (* hz dz)))))
                     [:north :east :south :west])))))
+
+(defn stair-order
+  "The four headings, the cheapest stair first: each prices the cells a stair :up along it cuts from feet, steps steps
+  (cost/cut-fn: a cell's dig and what it destroys, so a built block costs its put-back and natural ground nothing past its dig;
+  an unseen cell is access/hidden-guess); at one price, heading-order of toward."
+  [p feet toward steps]
+  (let [cut-s (cost/cut-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
+        block-at (access/sensed-at p access/hidden-guess)
+        price (fn [h]
+                (->> (iterate #(shape/add % (shape/delta :up h)) [(:x feet) (:y feet) (:z feet)])
+                     (take steps)
+                     (mapcat #(:cut (shape/step-cells % :up h)))
+                     distinct
+                     (map #(cut-s (block-at %) %))
+                     (reduce + 0)))]
+    (vec (sort-by price (heading-order feet toward)))))
 
 (defn exit-attempts
   "The stairs to try: every heading respecting zones, then every heading with :ignore-zones? (the last resort, taken
@@ -295,11 +312,12 @@
   :start one step at a time until nothing solid is within sh-sense/roof-height above, at most max-climb steps. A
   stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a slot), and it digs on with a worn last pickaxe (a way out),
   instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped. The headings go
-  in order, else the one nearest toward first."
+  in order, else the cheapest stair (stair-order, to the :start height or one step) first, at one price the one nearest toward."
   ([c entry toward] (climb! c entry toward nil))
   ([c {:keys [start]} toward order]
   (let [{:keys [i tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
-        order (or (:order (leave-mem c)) order (heading-order (sh-sense/feet (:primitives c)) toward))
+        feet (sh-sense/feet (:primitives c))
+        order (or (:order (leave-mem c)) order (stair-order (:primitives c) feet toward (if start (max 1 (- (:y start) (:y feet))) 1)))
         _ (update-leave! c assoc :order order)
         attempt (get (exit-attempts order) i)]
     (cond
@@ -337,7 +355,7 @@
     still shut in by a pit :start with the door open, it climbs.
   - A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the start height.
     A shaft goes one step at a time until nothing solid is within 4 above and the walk from the cell reaches out of the hole (at most 32 steps, else :too-deep).
-    The headings go in :order (e.g. cheapest first), else the one nearest :toward first. The stair refuses lava, water, falling blocks and a missing floor,
+    The headings go in :order (e.g. cheapest first), else the cheapest stair first (stair-order: a build costs its put-back), at one price the one nearest :toward. The stair refuses lava, water, falling blocks and a missing floor,
     and then the next heading is tried. With no pickaxe it digs by hand (the drop is lost), as a player would.
   - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones :refused),
     all four are tried again with :ignore-zones?, the survival last resort.

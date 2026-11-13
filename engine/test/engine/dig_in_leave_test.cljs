@@ -520,3 +520,17 @@
             (is (< (count take-back) (count (calls p "place"))) "and only those"))
           (await (leave-at-dawn! s))
           (is (= "air" (block-at p [1 64 0])) "no seal is left on the bed's respawn cells"))))))
+
+(deftest the-stair-out-of-a-pit-goes-round-a-build-on-the-way-to-the-goal
+  ;; run 4 F4 (Fenwick): the stair cut its own hut's wall and floor because the hut stood between the pit and the goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out] :as s} (setup {:blocks (assoc (ground) "1,64,0" "spruce_planks" "1,65,0" "spruce_planks")})]
+          (await (dig-in! s))
+          (is (< (second (feet p)) 64) "in the pit")
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (not= :east (:heading @out)) "the stair goes through the ground, not the wall toward the goal")
+          (is (= ["spruce_planks" "spruce_planks"] (mapv #(block-at p %) [[1 64 0] [1 65 0]])) "the wall stands")
+          (is (<= 64 (second (feet p))) "out of the pit"))))))

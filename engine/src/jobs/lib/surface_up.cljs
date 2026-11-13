@@ -157,9 +157,9 @@
         (transduce (map leg) + 0 (range 1 (inc (rise c))))))))
 
 (defn ^:async climb!
-  "One stair step up from a wall (jobs.lib.dig-in-leave/climb!): :continue while it goes on, :stopped when no stair goes up."
+  "One stair step up from a wall (jobs.lib.dig-in-leave/climb!), into the wall first: :continue while it goes on, :stopped when no stair goes up."
   [c wall]
-  (if (= :continue (await (dig-leave/climb! c {} wall))) :continue :stopped))
+  (if (= :continue (await (dig-leave/climb! c {} wall (dig-leave/heading-order (sh-sense/feet (:primitives c)) wall)))) :continue :stopped))
 
 (defn ^:async step!
   "One round of the way up: :continue while it walks to a wall or climbs a step, :out once the body stands on open ground,

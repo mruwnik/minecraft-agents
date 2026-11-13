@@ -113,3 +113,9 @@
           over (when (and above (not (true? (.-unknown above)))) (.-name above))
           crop (cond (contains? crops/ripe-age n) (sensed cell) (contains? crops/ripe-age over) above)]
       (destroyed-s n over (some-> crop .-age) own?))))
+
+(defn cut-fn
+  "(fn [n cell]) seconds of cutting block n at cell: its dig (table/dig-cost) and what the dig destroys (destroyed-fn over sensed)."
+  [sensed]
+  (let [destroyed (destroyed-fn sensed)]
+    (fn [n cell] (+ (or (when n (table/dig-cost n)) 0) (destroyed n cell false)))))

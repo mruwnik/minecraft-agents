@@ -735,6 +735,25 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= "air" (block p [-2 64 0])) "the seal behind the body is taken back too"))))))
 
+(deftest go-to-takes-back-the-own-blocks-near-the-goal-and-those-that-shut-the-body-in
+  ;; run 4 F4 (Fenwick): the cleanup took back the pit's lid, within the clear radius of the goal, and left its step refill,
+  ;; within the radius of the feet only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tunnel (merge (apply dissoc (box -8 62 -2 8 67 2 "stone") (for [x (range -6 7) y [64 65]] (str x "," y ",0")))
+                            (into {} (for [x [-2 2] y [64 65]] [(str x "," y ",0") "cobblestone"])))
+              own (for [x [-2 2] y [64 65]] {:cell [x y 0] :item "cobblestone" :before "air" :job "j0" :purpose :shelter :state :placed})
+              {:keys [eng p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks tunnel :inventory [{:name "stone_pickaxe" :count 1}]})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [4 64 0] :range 1})))]
+          (ledger/write! (:store eng) own)
+          (core/submit! eng (tu/order '(recording-parent {})) {})
+          (await (tick-out! eng 1000))
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= "air" (block p [2 64 0])) "the seal near the goal is taken back")
+          (is (= "air" (block p [-2 64 0])) "the seal near the feet, farther from the goal than the clear radius, is taken back too"))))))
+
 (def own-pillar "A 3-high column under the body: every way off it is a 3-block drop." {"0,64,0" "cobblestone" "0,65,0" "cobblestone" "0,66,0" "cobblestone"})
 
 (def bedrock-pit

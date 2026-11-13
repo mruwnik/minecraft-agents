@@ -339,12 +339,11 @@
 
 (defn price-input
   "The rules' input with the prices a line is chosen by: a walked step, and a cut cell's dig with what the dig destroys
-  (cost/destroyed-fn: a built block is put back)."
+  (cost/cut-fn: a built block is put back)."
   [c in]
-  (let [p (:primitives c)
-        destroyed (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))]
+  (let [p (:primitives c)]
     (assoc in :step-s (cost/walk-step-s)
-           :cell-s (fn [n cell] (+ (or (when n (cost/dig-cost n)) 0) (destroyed n cell false))))))
+           :cell-s (cost/cut-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))))
 
 (defn ^:async approach-walkable!
   "[line searching?]: the line to cut (ln/approach) with the cheapest price: its dig plus the upper bound of go-to's quote
