@@ -32,8 +32,6 @@
              :job (jobs.survival.go-home {:limit 1000})}
             {:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}
             {:trigger :replant-owed :persistence :cooldown :cooldown-s 60}
-            {:trigger :needs-bed :persistence :cooldown :cooldown-s 600}
-            {:trigger :needs-weapon :persistence :cooldown :cooldown-s 600}
             {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}

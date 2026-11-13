@@ -23,12 +23,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
             [jobs.lib.storage :as storage]
-            [jobs.lib.least :as least]
-            [jobs.lib.combat :as combat]))
-
-(def stowed-policy
-  "The :weapon-stowed entry rests the needs-weapon reflex for this long."
-  {:cap 1 :ttl (* 10 60 1000)})
+            [jobs.lib.least :as least]))
 
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
@@ -53,7 +48,6 @@
   :no-chest-item, no free cell beside (or none left to try), or :make-chests? false, nothing-possible :all-chests-full; a chest that cannot be placed after 3 tries nothing-possible :no-chest-spot. Any other :chest is used alone.
   Found goods (jobs.lib.found: bulk or containers picked up with no work of the body near) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
-  A weapon named in :items is remembered (:weapon-stowed, 10 min) before it goes in, so no reflex sees the swordless body first: the needs-weapon reflex leaves a deliberate put-away alone meanwhile.
   Each transfer emits info deposit.put (chest, item, count).
   Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.stock), so observe chests shows it.")
 
@@ -261,13 +255,9 @@
           w w
           :else
         (let [item (:name (:stack pick))
-              weapon? (and items (some #(.includes item %) combat/default-weapons))
-              _ (when weapon? (ctx/remember! c :weapon-stowed {:item item} stowed-policy))
               r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
                                                       :item item :count (:count pick)})))
-              _ (when (.-items r) (stock/note-stock! c chest (.-items r)))
-              _ (when (and weapon? (pos? (storage/carried (u/inventory (:primitives c)) item)))
-                  (ctx/forget-where! c :weapon-stowed #(= item (:item %))))]
+              _ (when (.-items r) (stock/note-stock! c chest (.-items r)))]
             (if (= "ok" (.-status r))
               (if (and (pos? (or (.-moved r) 0))
                        (< (storage/carried (u/inventory (:primitives c)) (:name (:stack pick))) (storage/carried inventory (:name (:stack pick)))))

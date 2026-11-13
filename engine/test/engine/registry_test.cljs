@@ -96,7 +96,7 @@
                (expr/problem registry/jobs '(jobs.access.stair {:dir :down :stock-torches false})))))
 
 (deftest the-trigger-registry-holds-the-default-trigger-set
-  (is (= #{:suffocating :burning :wedged :hostile-near :poisoned :low-health :hungry :stuck-underground :needs-bed :needs-weapon :night :dawn :dusk-home :died :pen-gate :door-left
+  (is (= #{:suffocating :burning :wedged :hostile-near :poisoned :low-health :hungry :stuck-underground :night :dawn :dusk-home :died :pen-gate :door-left
            :inventory-nearly-full :scaffold-left :tidy-pending :mounted :loose-items :part-cut-tree :replant-owed :ore-seen :dark-work}
          (set (keys triggers/all))))
   (doseq [[id t] triggers/all]

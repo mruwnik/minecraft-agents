@@ -107,13 +107,12 @@
 (def alive-view (memory-with 2000 died-at respawned-at))
 
 (deftest a-dead-body-holds-every-covered-reflex-back
-  (is (every? #(body/recovery-pending? dead-view %) [:night :dusk-home :needs-bed :hungry :loose-items])))
+  (is (every? #(body/recovery-pending? dead-view %) [:night :dusk-home :hungry :loose-items])))
 
 (deftest a-respawned-body-is-sheltered-by-night-reflexes-and-kept-off-errands
   (are [id held] (= held (body/recovery-pending? alive-view id))
     :night false
     :dusk-home false
-    :needs-bed false
     :hungry true
     :loose-items true))
 

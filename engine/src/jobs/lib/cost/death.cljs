@@ -40,7 +40,7 @@
    ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
                       :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
    ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
-                      :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
+                      :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day."}
    ::unknown-respawn-blocks {:default 90 :spec (a/num-in 0 nil)
                              :doc "Blocks of walk back priced for a death of a body that knows no respawn (before the game sends its spawn): near the median of 113 deaths in the trial bodies' events (probes left out), death to respawned: 83 (quartiles 48 and 226). Recount: node tools/event-counts.mjs respawn-distance, 2026-10-29."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)

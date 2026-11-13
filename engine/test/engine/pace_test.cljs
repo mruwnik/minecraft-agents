@@ -13,9 +13,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= :continue (await (run-steps {} [:continue]))) "a listed job yields")
-        (is (= [:done] (await (run-steps {:reflex :needs-weapon} [:continue :continue [:done]]))) "a reflex's :continue is another step")
+        (is (= [:done] (await (run-steps {:reflex :hungry} [:continue :continue [:done]]))) "a reflex's :continue is another step")
         (is (= (contract/ending :condition-failed {:reason :dark} nil)
-               (await (run-steps {:reflex :needs-weapon :child-wait (atom {:reason :dark})} [:continue [:done]])))
+               (await (run-steps {:reflex :hungry :child-wait (atom {:reason :dark})} [:continue [:done]])))
             "a waiting child ends the reflex with its reason")
         (is (= :continue (await (run-steps {:reflex :hostile-near :slots [:cornered]} [:continue [:done]])))
             "a child a reflex calls yields to its caller")))))

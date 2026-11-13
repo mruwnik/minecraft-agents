@@ -46,40 +46,6 @@
 (deftest chest-stock-is-remembered-for-days
   (is (>= (:ttl stock/stock-policy) (* 24 60 60 1000))))
 
-(deftest deposit-of-a-named-weapon-is-remembered-so-the-reflex-leaves-it-in
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (wt/setup {:inventory [{:name "stone_sword" :count 1} {:name "dirt" :count 5}] :containers {"10,64,0" []}})]
-          (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))
-          (is (nil? (mem/latest (mem/view (:store eng)) :weapon-stowed)) "dirt is no weapon")
-          (await (wt/ending-of eng job {:chest chest :items ["stone_sword"]} 8))
-          (is (= "stone_sword" (:item (:data (mem/latest (mem/view (:store eng)) :weapon-stowed))))))))))
-
-(deftest a-named-weapon-is-remembered-before-the-transfer-empties-the-bag
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (wt/setup {:inventory [{:name "stone_sword" :count 1}] :containers {"10,64,0" []}})
-              seen-at-transfer (atom ::never)
-              real ctx/act]
-          (with-redefs [ctx/act (fn [c k a]
-                                  (when (= :transfer k)
-                                    (reset! seen-at-transfer (some? (mem/latest (mem/view (:store eng)) :weapon-stowed))))
-                                  (real c k a))]
-            (await (wt/ending-of eng job {:chest chest :items ["stone_sword"]} 8)))
-          (is (true? @seen-at-transfer)))))))
-
-(deftest a-weapon-the-transfer-did-not-move-is-not-left-remembered-as-stowed
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "stone_sword" :count 1}] :containers {"10,64,0" []}})]
-          (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "ok" :moved 0}))
-          (await (wt/ending-of eng job {:chest chest :items ["stone_sword"]} 12))
-          (is (= {"stone_sword" 1} (wt/inv p)))
-          (is (nil? (mem/latest (mem/view (:store eng)) :weapon-stowed)) "the sword is still carried: the reflex must see it"))))))
-
 (deftest deposit-gives-up-when-the-transfer-says-ok-but-moves-nothing
   (async done
     (tu/run-async done

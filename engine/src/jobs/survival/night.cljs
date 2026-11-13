@@ -70,7 +70,7 @@
   Fleeing (the :flee way; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): the home at any distance, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise. The walk's :worth is flee-worth (the next way's price less the shelter on arrival), so go-to's unseen-floor turn-back does not end it.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
   Every child call carries its own :worth, never the night's open-gain: shut-in the shelter's or niche's shut-worth (the enclose wall-in of a breached room: enclose-worth), light-area the cost of the cheapest wall, pit or pocket less its own, get-food the hunger worth.
-  An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
+  A respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
   Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :edge-spent, :edge-walked, :edge-t0, :enclose, :enclose-worth, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :place-other-s, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
 
@@ -159,14 +159,6 @@
     {:uses {:job-time [0 mean most]}}))
 
 (def worth-of "The loss the night averts (bed-down/worth-of)." bed-down/worth-of)
-
-(def needs-bed-policy {:cap 1 :ttl sh-clock/ms-per-day})
-
-(defn note-needs-bed! [c]
-  (when (empty? (ctx/entries c :needs-bed))
-    (ctx/remember! c :needs-bed {} needs-bed-policy)
-    (ctx/emit! c :needs_bed :warn {:days (sh-beds/days-awake c)
-                                   :text "not slept for too long; phantoms will come; a bed is needed (the :needs-bed trigger fetches one by day when registered)"})))
 
 (defn note-spawn-lost!
   "The respawn bed is seen gone: remember :spawn-lost and warn spawn_lost once (sh-spawn/lose-spawn!)."
@@ -871,7 +863,6 @@
         bed-way (ctx/way? c :bed)
         edge (delay (look-edge/pending c))
         look-worth (atom nil)]
-    (when (and (sh-sense/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
     (note-spawn-lost! c)
     (retract-gone-bed! c)
     (cond

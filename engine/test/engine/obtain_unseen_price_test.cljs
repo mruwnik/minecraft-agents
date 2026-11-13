@@ -221,7 +221,7 @@
         cobble (into pick [{:name "cobblestone" :count 64} {:name "crafting_table" :count 1}])]
     (is (< (:price (buried-call swords cobble)) (:price (buried-call swords pick))) "the stone sword from the cobble carried lacks only a stick's log")
     (is (= :not-worth (:reason (:not-worth (buried-call swords cobble))))
-        "with no :worth given (the needs-weapon reflex's call), the stair up for that log still costs more than a sword is worth")))
+        "with no :worth given (a call with no worth), the stair up for that log still costs more than a sword is worth")))
 
 (deftest the-price-of-a-seen-gather-and-of-a-search-follow-the-ways-the-call-allows
   (let [seen (ctx {:time 6000 :inventory (kit 0) :entities [(spider 5)]})

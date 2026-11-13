@@ -1171,8 +1171,7 @@
           (reset! clock (+ 1000000 (* 4 day-ms)))
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (run-until-empty eng 10))
-          (is (= 1 (count (calls p "sleep"))) "an 80 block walk is worth it after four days awake")
-          (is (= 1 (count (emitted seen :needs_bed)))))))))
+          (is (= 1 (count (calls p "sleep"))) "an 80 block walk is worth it after four days awake"))))))
 
 (deftest shelter-does-not-walk-that-far-when-rested
   (async done
@@ -1456,22 +1455,6 @@
             (await (tick-n eng 8))
             (is (= places (count (calls p "place"))) "the refused cells are not tried again")
             (is (= digs (count (calls p "dig"))) "the failed ways are not tried again"))))))))
-
-(deftest needs-bed-is-warned-once-across-firings
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:time night :inventory wall-stack :blocks floor})
-              eng (update eng :triggers assoc :always-shelter always-shelter)]
-          (refuse-placing! p)
-          (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 7 day-ms)})
-          (swap! clock + (* 4 day-ms))
-          (core/register-reflex! eng {:trigger :always-shelter})
-          (await (tick-n eng 6))
-          (swap! clock + 11000)
-          (await (tick-n eng 6))
-          (is (= [] (declined-events seen :always-shelter)) "it holds rather than declining")
-          (is (= 1 (count (emitted seen :needs_bed)))))))))
 
 (deftest dig-in-treats-an-occupied-non-solid-cell-as-sealed-and-does-not-retry-it
   (async done

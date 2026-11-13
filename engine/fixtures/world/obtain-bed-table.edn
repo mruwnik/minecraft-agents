@@ -4,7 +4,7 @@
 ;; hunted for the fourth string (cheaper than a search for sheep) and the bed made: 3 string alone cannot make it. A spider
 ;; near holds obtain :hostile-near for the hostile reflex, so the case registers it; the spiders stand 12 apart and
 ;; 13 off, so the reflex meets one at a time (three at once it walls itself in with the planks).
-;; Card 0c946c6c: with no sheep about, 12 string carried craft the 3 white wool (the needs-bed trigger's own job).
+;; Card 0c946c6c: with no sheep about, 12 string carried craft the 3 white wool.
 {:defaults
  {:tags [:fetch :crafting] :time :any
   :plot {:height 8}

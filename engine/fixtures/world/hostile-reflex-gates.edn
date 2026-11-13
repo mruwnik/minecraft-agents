@@ -1,6 +1,5 @@
 ;; Which reflex or fight takes a body with a hostile about. Cards 8e7ff6d6 (set alight by a small fireball beside a NoAI zombie: the
-;; burning reflex yields to hostile-near, no extinguish standing still), 4bfba733 (needs-weapon waits 1500 ticks after dawn
-;; and while a hostile is known within 40; put after the time set, else it fires in the settle), 55a1871b (the :hostiles attack's :leash: a hostile beyond it is not chased), 57f49df1
+;; burning reflex yields to hostile-near, no extinguish standing still), 55a1871b (the :hostiles attack's :leash: a hostile beyond it is not chased), 57f49df1
 ;; b74a043c ebac9484 (a provoked enderman, hit by the body through /damage: water first, else a roofed 2-high gap, else a
 ;; seal; never a fight), e6ba3d48 (a phantom near: seal in, no flight; NoAI, fire resistance for daylight). Mobs helmeted.
 {:defaults
@@ -24,24 +23,6 @@
             {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :burning}} :for-s 1.5}]
    :limit-s 50}
-  {:name "needs-weapon-fires-at-dawn-with-no-hostile-known"
-   :time :day :time-why :dawn-decision
-   :register []
-   :act [[:time-set 23500]
-         [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"stone_sword\" \"wooden_sword\"] :count 1 :explore true})" "--by" "world-test"]]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 30}]
-   :limit-s 40}
-  {:name "needs-weapon-holds-while-a-zombie-is-known"
-   :time :day :time-why :dawn-decision
-   :register []
-   :act [[:summon "zombie" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:time-set 23500]
-         [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"stone_sword\" \"wooden_sword\"] :count 1 :explore true})" "--by" "world-test"]]
-         [:wait-s 95]
-         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 95}
-            {:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 170}]
-   :limit-s 180}
   {:name "attack-leash-does-not-chase-past-it"
    :register []
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :yaw 270}

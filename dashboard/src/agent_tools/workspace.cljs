@@ -155,7 +155,7 @@ A stair or tunnel of yours that broke into a cave (a drop, water, deaths there):
 
 ## Reflexes (triggers)
 
-Default triggers start short jobs: danger (hostile-near, low-health, burning, suffocating, wedged, poisoned, died), needs (hungry, needs-bed, needs-weapon, inventory-nearly-full), time (night, dusk-home, dawn), tidying (door-left, scaffold-left, tidy-pending, replant-owed, pen-gate). `./bin/triggers list` shows them. Retune one rather than mute it; put replaces it under its id:
+Default triggers start short jobs: danger (hostile-near, low-health, burning, suffocating, wedged, poisoned, died), needs (hungry, inventory-nearly-full), time (night, dusk-home, dawn), tidying (door-left, scaffold-left, tidy-pending, replant-owed, pen-gate). `./bin/triggers list` shows them. Retune one rather than mute it; put replaces it under its id:
 
     ./bin/triggers put night --trigger night --job '(jobs.survival.log-out)' --persistence cooldown --cooldown-s 10
     ./bin/triggers put low-bread --when '(< (inventory \"bread\") 8)' --job '(jobs.survival.get-food {:worth 1200})' --persistence cooldown --cooldown-s 300

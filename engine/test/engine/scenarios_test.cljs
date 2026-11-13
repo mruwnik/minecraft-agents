@@ -82,7 +82,7 @@
                                                 :inventory [{:name "bread" :count 4} {:name "stone_sword" :count 1}]}
                                                1000)
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :low-health :dawn :dusk-home :hungry :stuck-underground :part-cut-tree :replant-owed :needs-bed :needs-weapon :door-left
+          (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :low-health :dawn :dusk-home :hungry :stuck-underground :part-cut-tree :replant-owed :door-left
                   :inventory-nearly-full :scaffold-left :tidy-pending
                   :pen-gate :mounted :dark-work]
                  (mapv :id (:register (core/state eng)))))
@@ -151,7 +151,7 @@
           (is (= :died (first (fired seen))) "the pile first, with :hungry listed ahead of :died"))))))
 
 (def survival-cooldowns
-  {:suffocating 0 :burning 0 :hungry 90 :needs-bed 600 :needs-weapon 600 :night 10 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
+  {:suffocating 0 :burning 0 :hungry 90 :night 10 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
 
 (deftest survival-triggers-wait-a-cooldown-after-their-job-ends
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})
