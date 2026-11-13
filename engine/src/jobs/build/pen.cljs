@@ -31,7 +31,7 @@
 
 (def doc
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
-  The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
+  The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall, with a :part too.
   A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
   Phase 0 fells each trunk seen inside the box with a jobs.forestry.fell-tree child (:at its base log), then clears
   the logs and leaves left, up to the fence tops, with a jobs.blocks.clear-cells child (:only), so no leaf staircase
@@ -140,19 +140,22 @@
     (filterv #(contains? parts (:part %)) cells)))
 
 (defn planned
-  "{:cells judged} for the plan in the args, or {:trouble text}."
+  "{:cells judged :pen cells} for the plan in the args, or {:trouble text}: :cells the ones to build (the :part's),
+  :pen those of every part holding a barrier, which the walk out, the patches and the check work on (a part alone is
+  never a pen)."
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
         answer (plan/surfaced c (known/plan c plan))
+        judge #(plan/judged p answer % (set (keys (storage/carried-totals (u/inventory p)))) nil)
         cells (when (and answer (not (:broken answer)))
-                (cond-> (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil)
+                (cond-> (judge part)
                   (nil? part) barrier-parts-only))
         trouble (or (plan/plan-trouble answer cells)
                     (when-not (pen-read/barrier-box cells) (no-barrier-text answer part))
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) plan/no-zones))]
     (if-not trouble
-      {:cells cells}
+      {:cells cells :pen (if part (barrier-parts-only (judge nil)) cells)}
       {:trouble trouble :later? (and (not= plan/no-zones trouble) (known/unreadable? answer))})))
 
 (defn pen-opts [c cells]
@@ -267,11 +270,11 @@
 (defn done?
   "Ok when nothing is owed, the pen holds and the body is outside it; else later, with the cells placed and still owed."
   [c]
-  (let [{:keys [cells trouble]} (judged-plan c)
+  (let [{:keys [cells pen trouble]} (judged-plan c)
         plan (:plan (:args c))
-        read (when-not trouble (read-pen c cells))
+        read (when-not trouble (read-pen c pen))
         answer (some-> read pen/summary)
-        holds? (boolean (and (not trouble) (empty? (plan/owed cells)) (:closed? answer) (empty? (:remembered read)) (outside? c cells)
+        holds? (boolean (and (not trouble) (empty? (plan/owed cells)) (:closed? answer) (empty? (:remembered read)) (outside? c pen)
                              (or (:built (ctx/mem c)) (not (checks/running? c)))))]
     (checks/goal holds?
                  [:holds (str "pen of " plan " holds, " (:cells answer) " cells, placed " (get-in (ctx/mem c) [:built :placed] 0) (patched-text c))]
@@ -515,16 +518,16 @@
           :again))))
 
 (defn ^:async step [c]
-  (let [{:keys [cells trouble]} (planned c)
+  (let [{:keys [cells pen trouble]} (planned c)
         phase (or (:phase (ctx/mem c)) :trees)]
     (cond
       trouble :continue
       (= :trees phase) (await (trees-step! c cells))
       (= :tidy phase) (await (tidy-step! c cells))
-      (= :exit phase) (await (exit-step! c cells))
-      (= :patch phase) (await (patch-step! c cells))
+      (= :exit phase) (await (exit-step! c pen))
+      (= :patch phase) (await (patch-step! c pen))
       (= :shut phase) (await (shut-step! c))
-      (= :check phase) (do (await (look/survey! c)) (await (finish! c cells))) ; cells behind the body are not seen until it looks
+      (= :check phase) (do (await (look/survey! c)) (await (finish! c pen))) ; cells behind the body are not seen until it looks
       :else (await (build-step! c)))))
 
 (defn ^:async round

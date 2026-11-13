@@ -170,6 +170,16 @@
           (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (:leaks result)))
           (is (= "air" (h/block-at p 3 64 4)) "nothing is placed that the plan does not ask for"))))))
 
+;; A part alone is never a pen: the check of a :part call reads the box of every barrier part.
+(deftest a-part-call-checks-the-whole-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ p e] (await (build! (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan)} {:part "gate" :ways #{:build}}))]
+          (is (= :nothing-possible (:kind e)) (pr-str (kc e)))
+          (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (:leaks result)) "the gap in the fence part, outside the gate's own cell")
+          (is (= "air" (h/block-at p 3 64 4)) "the fence part is not built for a gate call"))))))
+
 ;; Card 3f51b63a: without :ways #{} the same gap is patched.
 (deftest a-gap-in-the-ring-is-patched-with-a-fence-of-the-plans-kind
   (async done
