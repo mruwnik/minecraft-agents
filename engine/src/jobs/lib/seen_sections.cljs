@@ -144,23 +144,24 @@
               (aset values c v)
               v)))))))
 
-(defn- section-keys
-  "The keys of the sections a box [lo hi] of cells touches."
-  [[lx ly lz] [hx hy hz]]
-  (for [cx (range (bit-shift-right lx 4) (inc (bit-shift-right hx 4)))
-        sy (range (bit-shift-right ly 4) (inc (bit-shift-right hy 4)))
-        cz (range (bit-shift-right lz 4) (inc (bit-shift-right hz 4)))]
-    (store/section-key cx sy cz)))
+(defn- each-section-in!
+  "(f s k) over the remembered sections the box [lo hi] of cells touches: the memory's sections are walked, never the box's
+  keys, as a cut's box grows with its worth past any memory."
+  [^js st [lx ly lz] [hx hy hz] f]
+  (.forEach (sections st)
+            (fn [^js s k]
+              (when (and (<= (bit-shift-right lx 4) (.-cx s) (bit-shift-right hx 4))
+                         (<= (bit-shift-right ly 4) (.-sy s) (bit-shift-right hy 4))
+                         (<= (bit-shift-right lz 4) (.-cz s) (bit-shift-right hz 4)))
+                (f s k)))))
 
 (defn mark
   "What the body remembers in the box of cells lo hi now, for opened: the memory's write count and a copy of each section's
   cells. nil without a memory."
   [p lo hi]
   (when-let [st (st-of p)]
-    (let [secs (sections st)
-          ids (js/Map.)]
-      (doseq [k (section-keys lo hi)]
-        (when-let [^js s (.get secs k)] (.set ids k (.slice (.-ids s)))))
+    (let [ids (js/Map.)]
+      (each-section-in! st lo hi (fn [^js s k] (.set ids k (.slice (.-ids s)))))
       #js {:writes (.-writes st) :ids ids})))
 
 (defn- each-cell!
@@ -179,18 +180,17 @@
   (let [st (st-of p)]
     (if (or (nil? mark) (nil? st) (== (.-writes st) (.-writes mark)))
       []
-      (let [secs (sections st)
-            open? (open-fn)
+      (let [open? (open-fn)
             [lx ly lz] lo [hx hy hz] hi
             out #js []]
-        (doseq [k (section-keys lo hi)
-                :let [^js s (.get secs k)]
-                :when (and s (> (.-wrote s) (.-writes mark)))]
-          (let [^js now (.-ids s) ^js was (.get (.-ids mark) k)]
-            (each-cell! s (fn [x y z i]
-                            (when (and (open? (aget now i)) (not (and was (open? (aget was i))))
-                                       (<= lx x hx) (<= ly y hy) (<= lz z hz))
-                              (.push out [x y z]))))))
+        (each-section-in! st lo hi
+                          (fn [^js s k]
+                            (when (> (.-wrote s) (.-writes mark))
+                              (let [^js now (.-ids s) ^js was (.get (.-ids mark) k)]
+                                (each-cell! s (fn [x y z i]
+                                                (when (and (open? (aget now i)) (not (and was (open? (aget was i))))
+                                                           (<= lx x hx) (<= ly y hy) (<= lz z hz))
+                                                  (.push out [x y z]))))))))
         (vec out)))))
 
 (defn walk-steps
@@ -217,18 +217,17 @@
                            (let [f (id x (dec y) z)] (and (pos? f) (not (open? f))))
                            (or (zero? (id (inc x) y z)) (zero? (id (dec x) y z)) (zero? (id x y (inc z))) (zero? (id x y (dec z)))
                                (zero? (id x (+ y 2) z)))))
-          secs (sections st)
           best #js [##Inf nil]]
-      (doseq [k (section-keys [(- fx r) (- fy r) (- fz r)] [(+ fx r) (+ fy r) (+ fz r)])
-              :let [^js s (.get secs k)]
-              :when (and s (< (steps (gap gx (* 16 (.-cx s))) (gap gy (* 16 (.-sy s))) (gap gz (* 16 (.-cz s))) mf) left))]
-        (let [^js ids (.-ids s)]
-          (each-cell! s (fn [x y z i]
-                          (when (open? (aget ids i))
-                            (let [on (apart x y z gx gy gz) to (apart fx fy fz x y z)
-                                  price (+ (* step-s to) (* (+ step-s extra-s) on))]
-                              (when (and (< on left) (<= to r) (<= (* step-s (+ to on)) max-s) (< price (aget best 0))
-                                         (frontier? x y z))
-                                (aset best 0 price)
-                                (aset best 1 [x y z]))))))))
+      (each-section-in! st [(- fx r) (- fy r) (- fz r)] [(+ fx r) (+ fy r) (+ fz r)]
+                        (fn [^js s _]
+                          (when (< (steps (gap gx (* 16 (.-cx s))) (gap gy (* 16 (.-sy s))) (gap gz (* 16 (.-cz s))) mf) left)
+                            (let [^js ids (.-ids s)]
+                              (each-cell! s (fn [x y z i]
+                                              (when (open? (aget ids i))
+                                                (let [on (apart x y z gx gy gz) to (apart fx fy fz x y z)
+                                                      price (+ (* step-s to) (* (+ step-s extra-s) on))]
+                                                  (when (and (< on left) (<= to r) (<= (* step-s (+ to on)) max-s) (< price (aget best 0))
+                                                             (frontier? x y z))
+                                                    (aset best 0 price)
+                                                    (aset best 1 [x y z]))))))))))
       (aget best 1))))

@@ -62,6 +62,26 @@
     (is (= [] (seen/opened w m [-5 60 -8] hi)) "outside the box")
     (is (= [] (seen/opened w (seen/mark w lo hi) lo hi)) "against a fresh mark")))
 
+(deftest a-mark-and-its-openings-over-a-box-far-wider-than-the-memory-read-only-the-memory-s-sections
+  (let [p (tu/fake-on-floor {})
+        w (seeing p)
+        ^js secs (store/store-of (st w) (.-dim (st w)))
+        n (.-size secs)
+        ;; a cut's box grows with its worth: 4000 blocks a side is half a million section keys, the memory a handful of sections
+        lo [-2000 0 -2000] hi [2000 127 2000]
+        get' (.-get secs)
+        ;; [result, lookups of the memory's sections by key] of f
+        counted (fn [f] (let [c (atom 0)]
+                          (set! (.-get secs) (fn [k] (swap! c inc) (.call get' secs k)))
+                          (let [r (f)] (js-delete secs "get") [r @c])))
+        [m mark-gets] (counted #(seen/mark w lo hi))]
+    (is (= n (.-size (.-ids m))) "every remembered section, each copied once")
+    (fake/remove-block! p {:x -6 :y 63 :z 6})
+    (perception/pass! (aget w "perception"))
+    (let [[o opened-gets] (counted #(seen/opened w m lo hi))]
+      (is (some #{[-6 63 6]} o) "the floor cell taken away")
+      (is (<= (+ mark-gets opened-gets) (* 2 (.-size secs))) "the box's keys are never looked up one by one"))))
+
 (deftest the-frontier-toward-a-goal-is-a-seen-stand-at-sight-s-edge-on-the-goal-s-side
   (let [w (seeing (tu/fake-on-floor {}))
         ;; the body looks west and south
