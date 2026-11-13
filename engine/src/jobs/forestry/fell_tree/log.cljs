@@ -170,7 +170,8 @@
 
 (defn ^:async walk-near!
   "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry): :there, :partial (go-to
-  waits on the world, a leg got nearer, or the body is shut in its shelter and no tree is to blame: call again; such rounds are not counted against the tree) or :blocked (it gave up, or pos is no cell)."
+  waits on the world, a leg got nearer, or the body is shut in its shelter: call again; a wait on the world (a check's
+  later, e.g. a walk an armed trigger would cut) or a shut-in round is not counted against the tree) or :blocked (it gave up, or pos is no cell)."
   [c pos range]
   (let [column? (nil? (:y pos))
         cell (if column? pos (:pos (places/parse-pos pos)))]
@@ -181,7 +182,7 @@
                                                       :one-way :closed :see false :spend {:tries 1}
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (cond
-                (= :continue e) (do (when (inside/sheltered-in c) (ctx/update-mem! c assoc :partials 0)) :partial)
+                (= :continue e) (do (when (or (some-> (:child-wait c) deref) (inside/sheltered-in c)) (ctx/update-mem! c assoc :partials 0)) :partial)
                 (and (= :done (:kind e)) (:arrived (:data e))) (do (ctx/update-mem! c assoc :shut-ins 0) :there)
                 (result/body-side? e) (shut-in-round! c)
                 :else (do (ctx/update-mem! c assoc :walk-why (some-> (:why (:data e)) name))

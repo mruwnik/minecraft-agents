@@ -786,6 +786,23 @@
               (is (not= :tree-unreachable (:reason out)) "the tree is not written off")
               (is (seq (fm/digs p)) "the tree is felled once the body is out"))))))))
 
+(deftest walk-rounds-a-trigger-cut-holds-are-a-wait-not-counted-against-the-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (fm/start {:blocks (lt/tree 6 0 "oak" 3) :self {:pos {:x 40 :y 64 :z 0}}} {})
+              rounds (atom 0)
+              call! ctx/call]
+          (with-redefs [ctx/call (fn [c k job & more]
+                                   (if (and (= :walk k) (= 'jobs.movement.go-to job) (< @rounds 8))
+                                     (do (swap! rounds inc)
+                                         {:kind :condition-failed :cause {:reason :risky :risk 0 :wait :dawn :text "the dusk-home trigger would cut the walk"}})
+                                     (apply call! c k job more)))]
+            (let [out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 40} 400))]
+              (is (= 8 @rounds) "the walk was held more often than the partial limit")
+              (is (not= :tree-unreachable (:reason out)) "the tree is not written off")
+              (is (seq (fm/digs p)) "the tree is felled once the walk is let go"))))))))
+
 (deftest the-final-pick-up-of-the-logs-is-held-back-by-a-threat-only
   (async done
     (tu/run-async done

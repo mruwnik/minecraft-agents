@@ -465,7 +465,8 @@
                       hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for recent deaths or hides near it, " (price/round1 lethal-hp) " hp for the death they risk, " (price/round1 lava-hp) " hp for seen lava near the way")
            over (str "route risk " (price/round1 hurt-hp) " hp hurt (" (price/round1 now-s) " s with its death) over the " (price/round1 allowed) " hp or " (price/round1 worth) " s the call affords: " parts)
            wait (fn [{:keys [secs s] :as w}]
-                  (contract/later :risky (str "route risk " (price/round1 hp) " hp (" parts ") costs " (cond cut? (str (price/round1 now-s) " s now (the " (name cut) " trigger cuts the walk: there and back, then the wait)") now? (str (price/round1 now-s) " s now") :else (str "over the " (price/round1 allowed) " hp or " (price/round1 worth) " s affordable now"))
+                  (contract/later :risky (str (when cut? (str "the " (name cut) " trigger would cut the walk (there and back, then the wait: " (price/round1 now-s) " s now); "))
+                                              "route risk " (price/round1 hp) " hp (" parts ")" (cond cut? "" now? (str " costs " (price/round1 now-s) " s now") :else (str " costs over the " (price/round1 allowed) " hp or " (price/round1 worth) " s affordable now"))
                                               "; waiting " (price/round1 secs) " s " (case (:wait w) :dawn "for dawn" :dusk "for nightfall" :sleep "to sleep the night away" "to heal") " and walking then costs " (price/round1 s) " s")
                                   :risk hurt-hp :allowed allowed :now-s now-s :wait (:wait w) :wait-s s :recheck-after-ms recheck-ms))]
        (cond
