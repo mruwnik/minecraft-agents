@@ -625,14 +625,15 @@
           :again
         (let [{walked :result status :status to :to} round
             status (if (and (= "stair" status) (:searching (:why walked))) "searching" status)
+            off-route? (= :off-route (:reason walked))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
-            aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
+            aided? (when (and (not fetched) (not off-route?) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
             looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
-            surfaced? (when (and (not aided?) (not looked?) (or (= :air (:reason walked)) (air/short-under-water? c status walked pos))) (await (air/surface! c (dissoc opts :progress) pos)))
+            surfaced? (when (and (not aided?) (not looked?) (not off-route?) (or (= :air (:reason walked)) (air/short-under-water? c status walked pos))) (await (air/surface! c (dissoc opts :progress) pos)))
             way-looked? (when (and (not fetched) (= :goal-not-standable (:reason walked))) (await (look-along! c pos)))
             way (when (and (not fetched) (not way-looked?) (= :goal-not-standable (:reason walked))) (guess-waypoint c pos))
-            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)))
+            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not off-route?) (not (#{"arrived" "searching"} status)))
                           (await (look-at-column! c pos)))
             surveyed? (when (and (:unknown c) (= :exhausted (:reason walked)) (breath/head-under? (:primitives c)) (not (look/surveyed? c :near)))
                         (await (look/survey! c :near))
@@ -654,6 +655,9 @@
           ;; a round that ends short of "arrived" on the goal (a plan that failed from there) is still an arrival
           (or (= "arrived" status) (and (here? c pos range) (not (refused-hang c pos))))
           (await (arrive! c pos))
+
+          ;; a :route the walk's own prices disagree with: its caller judged it and judges again
+          off-route? (end/give-up! c pos walked)
 
           (:out-of-time walked)
           (if (search-spent? c) (end/give-up! c pos {:status :no-path :reason :search-spent}) :again)

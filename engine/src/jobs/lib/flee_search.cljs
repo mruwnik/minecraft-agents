@@ -35,7 +35,6 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.plan :as wplan]
-            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
@@ -635,25 +634,11 @@
     (boolean (some (fn [cell] (some #(< (u/dist % cell) r) hazards)) cells))))
 
 (defn with-route
-  "Step cell step with its route's cells from the start to it, [{:x :y :z :g}], as its :route meta (go-to's :route; none
+  "Step cell step with its route's cells from the start to it, [{:x :y :z}], as its :route meta (go-to's :route; none
   when cells do not reach it)."
   [step cells]
   (let [[before [at]] (split-with #(not= (cell-of step) (cell-of %)) cells)]
-    (cond-> step at (with-meta {:route (mapv #(select-keys % [:x :y :z :g]) (concat before [at]))}))))
-
-(defn go-to-route
-  "Route (a step's :route, [{:x :y :z :g}]) from the body's cell on re-priced as go-to's walk prices it: an only-search
-  (walk.search/only-route) of its cells over the world go-to plans in, every known threat tolled (the flee search left the
-  chasers out), to within range of its last cell. The route with these :g, nil when the body is off it or that search finds
-  no way (go-to then plans as usual). Once per chosen step."
-  [c route range]
-  (let [goal (mapv (last route) [:x :y :z])
-        ^js from (.-from (wplan/plan-query c goal range))
-        cells (wsearch/seed-from route [(.-x from) (.-y from) (.-z from)])
-        pw (when cells (costed c nil nil false))
-        ^js r (when pw (wsearch/only-route c pw goal range (walk/default-weight) (wworld/body-policy c) cells))]
-    (when (and r (= "found" (.-status r)))
-      (mapv (fn [^js s] {:x (.-x s) :y (.-y s) :z (.-z s) :g (.-g s)}) (array-seq (.-steps (.-path r)))))))
+    (cond-> step at (with-meta {:route (mapv #(select-keys % [:x :y :z]) (concat before [at]))}))))
 
 (defn step-of
   "The cell a flee step walks to of a picked end entry: of its route's seen part (:seen-n cells, at least the first past

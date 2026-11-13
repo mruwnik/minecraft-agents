@@ -323,6 +323,9 @@
 
 (defn ^:async leg-step!
   "One flee step to target as a jobs.movement.run-away child of at most leg-s seconds (y-margin (16) blocks past body and target bound its route): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt).
+  A target with a judged route (:route meta) is walked along that route only (go-to's :route), to within range of the target
+  or of the route's end; a route go-to cannot walk (:off-route) puts the target in mem :refused, so the next step picks
+  another judged option, never a way go-to plans on its own.
   Emits debug retreat.step-speed {:slot :blocks :seconds :bps :food :chasers [[name id gap]]}, :chasers the hostiles seen as it starts (sighted-gaps; the body faces away from them as it walks)."
   ([c slot target range leg-s] (await (leg-step! c slot target range leg-s (respond.goal/leg-margin))))
   ([c slot target range leg-s y-margin]
@@ -330,12 +333,14 @@
         gaps0 (sighted-gaps c)
         t0 (ctx/now c)
         health0 (.-health (.self (:primitives c)))
+        route (:route (meta target))
+        end (peek route)
         r (await (ctx/call c slot 'jobs.movement.run-away
-                           (cond-> {:pos target :range range :leg-s leg-s}
+                           (cond-> {:pos target :range (if end (max range (js/Math.ceil (u/dist target end))) range) :leg-s leg-s}
                              y-margin (assoc :y-margin y-margin)
-                             (:route (meta target)) (as-> a (if-let [route (search/go-to-route c (:route (meta target)) range)] (assoc a :route route) a)))))
+                             route (assoc :route route))))
         res (when (contract/ending? r) (:data r))
-        _ (when (= :goal-not-standable (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
+        _ (when (#{:goal-not-standable :off-route} (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)
         d (u/dist from (u/self-pos c))
         _ (ctx/update-mem! c assoc :leg-timed-out (and (= :limit-reached (:kind r)) (>= (.-health (.self (:primitives c))) health0)))]

@@ -120,6 +120,16 @@
             (is (= {:arrived true} @out) (str "range " r))
             (is (<= (+ (* (- 10 x) (- 10 x)) (* z z)) (* r r)) (str "within range " r ", at " (at p)))))))))
 
+;; run4 F18: a flee step's go-to planned its own way when it could not walk the route its caller judged
+(deftest go-to-given-a-route-it-cannot-walk-plans-no-way-of-its-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [off-body [{:x 0 :y 64 :z 2 :g 0} {:x 1 :y 64 :z 2 :g 1} {:x 2 :y 64 :z 2 :g 2}]
+              {:keys [out p]} (await (go! {:blocks flat} {:pos [2 64 2] :range 0 :route off-body}))]
+          (is (= :off-route (:why @out)) (str @out))
+          (is (= [0 64 0] (mapv js/Math.floor (at p))) "the body did not walk"))))))
+
 (deftest go-to-a-feet-cell-over-a-short-floor-walks-onto-it
   ;; the planner stands in a farmland or path block's own cell (floor 15/16), so the feet cell above it (the goal a caller
   ;; names) is mapped to that cell. The fake stands a body on top of such a block (y 64), so arrival is not judged here.

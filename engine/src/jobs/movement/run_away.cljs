@@ -21,7 +21,7 @@
   {:pos {:doc "the cell to run to" :spec ::a/pos :default nil}
    :range {:doc "how close counts as there, in blocks" :spec (a/num-in 0 nil) :default 1}
    :leg-s {:doc "seconds the step may take" :spec (a/num-in 0.1 120) :default nil}
-   :route {:doc "the flee search's route to :pos with its prices, go-to's :route: walked without a new search when go-to's own prices agree" :spec (a/coll-of map?) :default nil}
+   :route {:doc "the flee search's route to :pos, go-to's :route: walked along its cells with no search of go-to's own, else not at all (go-to gives up :off-route)" :spec (a/coll-of map?) :default nil}
    :y-margin {:doc "blocks past body and target, up and down, the route may plan; nil: the walk setting" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 

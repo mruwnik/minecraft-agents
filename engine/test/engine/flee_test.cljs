@@ -560,11 +560,12 @@
             (reset! out (:refused (ctx/mem c)))
             (ctx/end c :done nil))})
 
-(deftest a-flee-end-go-to-refuses-as-not-standable-is-remembered-for-the-flight
+(deftest a-flee-end-go-to-refuses-as-not-standable-or-off-its-route-is-remembered-for-the-flight
+  ;; :off-route (run4 F18): go-to could not walk the judged route; the next step takes another judged option, not go-to's own way
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[why want] [[:goal-not-standable #{[7 64 2]}] [:no-progress nil]]]
+        (doseq [[why want] [[:goal-not-standable #{[7 64 2]}] [:off-route #{[7 64 2]}] [:no-progress nil]]]
           (let [out (atom :unset)
                 s (setup {:entities [(zombie 7 2 {})]})
                 s (update-in (assoc-in s [:eng :jobs 'stepper] (stepper out)) [:eng :jobs] merge
@@ -1426,7 +1427,8 @@
               _ (await (run-job! s 'test.flight {:goal west-goal}))
               leg (first (goal-legs calls))]
           (is (some? leg) (str "the first step walks to the goal: " (mapv :pos @calls)))
-          (is (<= (u/dist west-goal (or (last (:route leg)) {:x 0 :y 64 :z 0})) 2) (str "along the judged route to the goal: " (:route leg))))))))
+          (is (<= (u/dist west-goal (or (last (:route leg)) {:x 0 :y 64 :z 0})) 2) (str "along the judged route to the goal: " (:route leg)))
+          (is (u/within? (last (:route leg)) west-goal (:range leg)) "the route's end counts as there: go-to keeps to the route"))))))
 
 (deftest a-flight-soon-after-one-that-gave-its-goal-up-skips-that-goal-at-once
   (async done

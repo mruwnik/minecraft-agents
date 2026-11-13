@@ -1008,8 +1008,8 @@
         c (search/caught-chance [(end 4 5.5) (end -4 3.5)] {:k 0 :n 0} {} nil)]
     (is (= 3.5 (:blast-d c)) "two caught headings, blasts at 5.5 and 3.5: the worse one prices the flight")))
 
-(deftest a-step-carries-its-priced-route-for-go-to
+(deftest a-step-carries-its-judged-route-for-go-to
   (let [cells (mapv (fn [x] {:x x :y 64 :z 0 :t (* 0.25 x) :g (* 0.3 x)}) (range 9))
         step (search/step-of {:end (peek cells) :cells cells :seen-n 9})]
     (is (= {:x 4 :y 64 :z 0} step) "the cell a step-s in")
-    (is (= (mapv #(select-keys % [:x :y :z :g]) (subvec cells 0 5)) (:route (meta step))) "the route from the start to it, with its prices")))
+    (is (= (mapv #(select-keys % [:x :y :z]) (subvec cells 0 5)) (:route (meta step))) "the route from the start to it")))
