@@ -241,6 +241,34 @@
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
           (is (pos? (count (vt/calls p "steer"))) "the body stepped to a cell beside the workstation"))))))
 
+(deftest a-named-villager-out-of-view-at-the-workstation-is-looked-for-where-it-was-last-seen-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 12.5 :y 64 :z 0.5}})]
+                                     :wrap #(let [q (:p %)
+                                                  entities (.-entities q)]
+                                              (aset q "entities" (fn [a] (if (< 8 (first (:pos (fake/self q)))) (.call entities q a) #js [])))
+                                              (aset q "rememberedEntity" (fn [id] (when (= "v-1" id) #js {:x 12.5 :y 64 :z 0.5})))
+                                              %)} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
+
+(deftest a-villager-out-of-view-at-night-is-waited-for-till-day-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (roll {:entities [(librarian [(offer "enchanted_book")])]
+                                     :wrap (fn [{:keys [p clock] :as env}]
+                                             (let [state (fake/state p)
+                                                   dawn (+ @clock 60000)
+                                                   entities (.-entities p)]
+                                               (swap! state assoc :time 14000)
+                                               (add-watch clock :dawn (fn [_ _ _ now] (when (and (>= now dawn) (= 14000 (:time @state)))
+                                                                                         (swap! state assoc :time 1000))))
+                                               (aset p "entities" (fn [a] (if (= 14000 (:time @state)) #js [] (.call entities p a))))
+                                               env))} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
+
 (deftest a-villager-seen-by-one-look-of-the-round-is-found-not-gone
   (async done
     (tu/run-async done

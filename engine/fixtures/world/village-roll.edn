@@ -4,7 +4,8 @@
 ;; "enchanted_book" (a first-tier librarian may or may not offer one: the roll ends found or no-match after ::max-rolls).
 ;; roll-three-times-in-one-call: three rerolls in one call (no villager offers a netherite ingot), then no-match; the report counts every lectern picked up (yields = uses).
 ;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
-;; Should-fail: nitwit, absent villager, a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
+;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
+;; Should-fail: nitwit, absent villager (by day), a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
 ;; roll-sealed-in-dirt-never-digs-its-way-out-for-the-drop: the body sealed in a pocket under dirt that is another's (a plan footprint stands for the zone), the lectern drop out of reach: the roll ends without breaking the dirt (the pillar escape's roof dig obeys zones).
 ;; Unseen-cell cases: the body at [8.5 0 16.5] faces west (yaw 90), the lectern is 7 blocks behind it, so it starts unseen; the roll
 ;; looks first (roll-cell-behind-the-body-is-looked-at); a lectern sealed in obsidian stays unseen (roll-cell-sealed-away-ends-cell-unseen).
@@ -135,6 +136,14 @@
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,7],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :roll.villager :data {:villager "00004f24-0000-0007-0000-000500000007"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30}]
+   :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-villager-walled-in-at-night-is-waited-for-not-gone"
+   :time :night :time-why :villager-schedule
+   :blocks [[:fill [20 0 15] [22 2 17] "obsidian"] [:fill [21 0 16] [21 1 16] "air"]]
+   :act [[:summon "villager" [21.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,32],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000020" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
+   :expect [{:event {:source :job :kind :holding :data {:reason :night-villager-out-of-view}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-villager-behind-the-body-is-looked-for-not-gone"

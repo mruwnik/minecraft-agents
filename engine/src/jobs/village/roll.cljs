@@ -27,7 +27,9 @@
   again the workstation of :profession at :pos.
   Needs: a profession, a wanted item (or enchantment) and a cell the body may break and place at (else impossible, :bad-args); a
   cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
-  most :max-price (nil: no limit). A villager seen before that steps out of view is waited for (three fruitless looks, then :gone). Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
+  most :max-price (nil: no limit). A villager out of view is looked for (round, from the cell beside the workstation, at the spot the body last saw it);
+  at night it is waited for till day (reason :night-villager-out-of-view), then looked for once more; one seen this call
+  is waited for ::away-s by day; then :gone. Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
   the place again are one urgent section (a night or food reflex waits for it). Waits (:continue) for the villager to take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
   :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children; :ways (default all) goes to the place child, so #{:carried} places only a workstation already carried (else it waits :need, nothing is fetched or crafted). Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
@@ -552,6 +554,29 @@
   [c]
   (or (await (to-stand! c)) (await (place! c))))
 
+(defn ^:async look-for!
+  "The villager is out of view: walk to the cell when far from it and none was seen yet, look from where it was seen and
+  round, from the cell beside the workstation, then at where the body last saw it (once a sighting). At night villagers
+  sleep indoors: wait polls till day, then search once more. A villager seen this call is waited for ::away-s by day;
+  then :gone. :again, :continue or the stop."
+  [c pos villager]
+  (let [m (ctx/mem c)]
+    (cond
+      (not (or (:seen m) (:approached m) (:memory-walked m) (u/within? (u/self-pos c) pos (reach)))) (await (approach! c pos))
+      (await (back-to-view! c pos)) :again
+      (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again
+      (and (not (:seen m)) (not (:flanked m))) (await (flank! c pos))
+      :else
+      (or (await (villager/approach-remembered! c villager (reach)))
+          (cond
+            (sh-sense/night? (:primitives c)) (do (ctx/update-mem! c assoc :night-waited true)
+                                                  (await (wait-job! c :night-villager-out-of-view)))
+            (:night-waited m) (do (ctx/update-mem! c dissoc :night-waited :memory-walked :flanked :away-since) :again)
+            (and (:seen m) (< (- (ctx/now c) (:away-since m (ctx/now c))) (* 1000 (away-s))))
+            (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
+                (await (wait-job! c :villager-out-of-view)))
+            :else (stop! c (villager/gone-cause c)))))))
+
 (defn ^:async step!
   "One piece of the search, from what the world and the saved count say now. :again, :continue or :done."
   [c]
@@ -561,7 +586,7 @@
         villager (pick! c)
         e (when villager (villager/find-by-uuid p villager))
         block (u/seen-name p pos)
-        _ (when e (ctx/update-mem! c #(-> % (update :view (fn [v] (or v (u/self-pos c)))) (assoc :view-tries 0))))
+        _ (when e (ctx/update-mem! c #(-> % (update :view (fn [v] (or v (u/self-pos c)))) (assoc :view-tries 0) (dissoc :memory-walked :night-waited))))
         profession (when e (.-profession e))
         out-of-tries? (>= (rolls c) (max-rolls))]
     (cond
@@ -576,17 +601,7 @@
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)
       ;; villagers count only while in view; one seen before may have stepped away while it lost its job
-      (nil? e) (cond
-                 ;; far from the workstation the villager is out of sight: go to the cell first, as a player would
-                 (and (not (:seen (ctx/mem c))) (not (:approached (ctx/mem c))) (not (u/within? (u/self-pos c) pos (reach))))
-                 (await (approach! c pos))
-                 (await (back-to-view! c pos)) :again
-                 (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again
-                 (and (not (:seen (ctx/mem c))) (not (:flanked (ctx/mem c)))) (await (flank! c pos))
-                 (and (:seen (ctx/mem c)) (< (- (ctx/now c) (:away-since (ctx/mem c) (ctx/now c))) (* 1000 (away-s))))
-                 (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
-                     (await (wait-job! c :villager-out-of-view)))
-                 :else (stop! c (villager/gone-cause c)))
+      (nil? e) (await (look-for! c pos villager))
       (and e (not (and (:seen (ctx/mem c)) (nil? (:away-since (ctx/mem c)))))) (do (ctx/update-mem! c #(-> % (assoc :seen true) (dissoc :away-since))) :again)
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
