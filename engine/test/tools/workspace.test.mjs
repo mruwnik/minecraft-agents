@@ -322,9 +322,11 @@ test('adoption rejects mismatches, symlinks and conflicting tools before writing
   assert.equal(fs.existsSync(path.join(body, 'context.edn')), false)
 })
 
-test('the workspace guide points at the seen-blocks listing for workstations, chests, beds and ore', t => {
+test('the workspace guide points at the seen-blocks listing and at the chest contents listing', t => {
   const f = fixture(t)
-  assert.match(fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8'), /`\.\/bin\/observe seen`/)
+  const text = fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8')
+  assert.match(text, /`\.\/bin\/observe seen`/)
+  assert.match(text, /`\.\/bin\/observe chests`/)
 })
 
 test('the tool-owned WORKSPACE.md points at PLAYING.md, so a workspace with an old AGENTS.md learns of it', t => {
