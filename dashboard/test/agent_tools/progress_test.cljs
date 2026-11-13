@@ -105,6 +105,29 @@
 (deftest a-rest-after-a-failed-round-wakes
   (is (= :needs-you (:wake (progress/wake-verdict {:wake :idle :jobs [{:job "j14" :name "repeat" :waiting {:reason :resting :after :leaky}}]} "j14")))))
 
+;; Sorrel's wake: the hold and the farm with nothing to do were routine; only j21's failed round is news, and it is named.
+(def farm-idle {:wake :idle :jobs [{:job "j1" :name "noop" :holding {:reason :idle} :idle-ok true}
+                                   {:job "j19" :name "repeat" :waiting {:reason :resting :after :nothing-to-do :kind :condition-failed}}
+                                   {:job "j20" :name "repeat" :holding {:reason :gate-crowded}}
+                                   {:job "j22" :name "repeat" :waiting {:reason :resting :after :already :kind :done}}]})
+
+(deftest a-farm-holding-and-resting-after-nothing-to-do-is-routine
+  (is (nil? (progress/wake-verdict farm-idle "j20"))))
+
+(deftest an-idle-wake-names-the-failed-rest-first
+  (let [wake (update farm-idle :jobs conj {:job "j21" :name "repeat" :waiting {:reason :resting :after :none :kind :nothing-possible}})
+        verdict (progress/wake-verdict wake "j20")]
+    (is (= :needs-you (:wake verdict)))
+    (is (str/starts-with? (:text verdict) "body idle: j21 waits resting after none") (:text verdict))))
+
+(deftest a-failed-round-names-its-stopped-step-and-why
+  (is (= "breed refused: 3 took no food (on breeding cooldown)"
+         (progress/round-failure-text
+          {:kind :nothing-possible :cause :failed-steps
+           :data {:steps {:mend {:skipped :sound} :breed {:fed 0 :reason :refused :ended :condition-failed :cause :refused}}}
+           :because {:kind :condition-failed :cause :refused :data {:why "3 took no food (on breeding cooldown)" :text "breed done: refused"}
+                     :because {:kind :nothing-possible :cause :no-effect :data {:text "did not use wheat"}}}}))))
+
 (def night-idle {:wake :idle :jobs [{:job "j14" :name "obtain" :waiting {:reason :night-sheltered}}
                                     {:job "r3" :name "night" :holding {:reason :night}}]})
 
@@ -244,6 +267,23 @@
           (.then (fn [result]
                    (is (= :needs-you (:wake result)))
                    (is (str/includes? (:text result) "no-source") (:text result))))))))
+
+(deftest a-rest-after-failed-steps-wakes-with-the-step-that-failed
+  (with-fixture working-status {:wait-ms 2000}
+    (fn [f]
+      (js/setTimeout #((:push! f)
+                        (assoc (job-ev "j20/c0" :child_ended {:slot :c0 :status :stopped
+                                                              :ending {:kind :nothing-possible :cause :failed-steps
+                                                                       :data {:steps {:guard {:reason :need :stopped :condition-failed}}}
+                                                                       :because {:kind :condition-failed :cause {:reason :need :text "needs 1 campfire: no-source"}}}})
+                               :level :debug :context {:job-id "j20/c0" :chain ["j20" "j20/c0"]})
+                        (ev :body :idle {:jobs [{:job "j20" :name "repeat" :waiting {:reason :resting :after :failed-steps :kind :nothing-possible}}]}))
+                     60)
+      (-> (wait! f)
+          (.then (fn [result]
+                   (is (= :needs-you (:wake result)))
+                   (is (str/includes? (:text result) "j20 waits resting after failed-steps: guard need: needs 1 campfire: no-source")
+                       (:text result))))))))
 
 (deftest the-goal-ending-wakes-the-wait
   (with-fixture working-status {:wait-ms 2000}

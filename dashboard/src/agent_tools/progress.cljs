@@ -130,15 +130,19 @@
 (defn word [x] (if (keyword? x) (name x) (str x)))
 
 (defn routine-wait?
-  "A wait the engine ends itself: a routine reason, a rest after a round that ended well (:after :already; a failed
-  round's rest still wakes), or a check that daylight lowers (:lowered-by has :light)."
+  "A wait the engine ends itself: a routine reason, a repeat's rest judged like the ending it follows (a round done,
+  or one that ended for a routine reason such as :nothing-to-do; a failed round's rest still wakes), or a check that
+  daylight lowers (:lowered-by has :light)."
   [waiting]
   (or (contains? routine-reasons (reason-of waiting))
-      (and (= :resting (reason-of waiting)) (map? waiting) (= :already (:after waiting)))
+      (and (= :resting (reason-of waiting)) (map? waiting)
+           (or (= :done (:kind waiting)) (= :already (:after waiting)) (contains? routine-reasons (:after waiting))))
       (and (map? waiting) (boolean (some #(= "light" (word %)) (:lowered-by waiting))))))
 
 (defn wait-text [waiting]
-  (str (word (reason-of waiting)) (when-let [item (and (map? waiting) (:item waiting))] (str " " item))
+  (str (word (reason-of waiting))
+       (when-let [after (and (map? waiting) (:after waiting))] (str " after " (word after)))
+       (when-let [item (and (map? waiting) (:item waiting))] (str " " item))
        (some->> (and (map? waiting) (:next waiting)) job-results/next-text (str ", next: "))))
 
 (defn job-rows [s] (cond->> (vec (get-in s [:jobs :items])) (:current s) (cons (:current s))))
@@ -250,24 +254,64 @@
 
 ;; Wakes
 
+(defn routine-job? [job] (or (:holding job) (and (:waiting job) (routine-wait? (:waiting job)))))
+
+(defn waking-job?
+  "Whether an idle row is one the agent must clear: a failure or a wait the engine does not end itself."
+  [job]
+  (and (not (:idle-ok job)) (or (:failed job) (and (:waiting job) (not (routine-wait? (:waiting job)))))))
+
 (defn routine-idle?
   "Whether a body.idle is the engine working normally: some job holds on purpose or waits for a routine reason, and
   no job failed or waits for another. Jobs with neither (queued behind the running one) do not count; idle-ok jobs
   (a noop) neither."
   [jobs]
-  (let [real (remove :idle-ok jobs)
-        routine? #(or (:holding %) (and (:waiting %) (routine-wait? (:waiting %))))]
-    (boolean (and (some routine? real)
-                  (every? #(and (not (:failed %)) (or (routine? %) (not (:waiting %)))) real)))))
+  (boolean (and (some routine-job? (remove :idle-ok jobs)) (not-any? waking-job? jobs))))
 
-(defn idle-text [jobs]
-  (if (every? :idle-ok jobs)
-    (if (empty? jobs) "no jobs" "no work, only idle jobs")
-    (str/join "; " (map #(str (:job %) " " (cond (:failed %) (str "failed " (clip (:failed %) 60))
-                                                    (:waiting %) (str "waits " (wait-text (:waiting %)))
-                                                    (:holding %) "holding"
-                                                    :else "no act"))
-                        (take 3 jobs)))))
+(defn failed-rest? [job] (and (waking-job? job) (= :resting (reason-of (:waiting job)))))
+
+(defn idle-text
+  "The rows that woke the agent first, at most 3; failures, {job-id text}, says what a failed rest's round hit."
+  ([jobs] (idle-text jobs {}))
+  ([jobs failures]
+   (if (every? :idle-ok jobs)
+     (if (empty? jobs) "no jobs" "no work, only idle jobs")
+     (str/join "; " (map #(str (:job %) " " (cond (:failed %) (str "failed " (clip (:failed %) 60))
+                                                     (:waiting %) (str "waits " (wait-text (:waiting %))
+                                                                       (some->> (get failures (:job %)) (str ": ")))
+                                                     (:holding %) "holding"
+                                                     :else "no act"))
+                         (take 3 (concat (filter waking-job? jobs) (remove waking-job? jobs))))))))
+
+(defn round-failure-text
+  "What a repeat's failed round hit, from its child's :ending: the steps that stopped with their causes, then the
+  first text of the ending and its :because chain."
+  [ending]
+  (let [stopped (keep (fn [[step s]]
+                        (when (and (map? s) (or (:stopped s) (:ended s)))
+                          (str (word step) " " (word (or (:cause s) (:reason s) (:stopped s) (:ended s))))))
+                      (get-in ending [:data :steps]))
+        why (->> (iterate :because ending) (take-while map?)
+                 (some (fn [e] (some #(when (string? %) %) [(get-in e [:data :why]) (get-in e [:cause :why])
+                                                            (get-in e [:cause :text]) (get-in e [:data :text])]))))]
+    (not-empty (str/join ": " (remove str/blank? [(str/join ", " stopped) (some-> why (clip 120))])))))
+
+(defn ^:async round-failures!
+  "{job-id text} for the failed rests among the idle rows: the ending of each one's last round, read from the
+  job.child_ended (debug level) of its child <id>/c0."
+  [r jobs get! now-ms]
+  (let [ids (map :job (take 3 (filter failed-rest? jobs)))
+        texts (await (js/Promise.all
+                      (clj->js (map (fn [id]
+                                      (-> (observe-events/read! get! (get-in r [:base :socket-path])
+                                                                {:job id :kinds ["child_ended"] :level :debug} now-ms)
+                                          (.then (fn [answer]
+                                                   (some->> (:events answer) reverse
+                                                            (filter #(= (str id "/c0") (:job %)))
+                                                            first :data :ending round-failure-text)))
+                                          (.catch (constantly nil))))
+                                    ids))))]
+    (into {} (filter second) (map vector ids texts))))
 
 (defn wake-verdict
   "nil for a wake of observe's wait the agent need not hear (the wait goes on), else {:wake :text}: :died, :chat,
@@ -352,7 +396,9 @@
                           (let [wake (await (inner-wait! r (watch-ids view) (max 10 (min slice-ms (- deadline (now)))) get! signal))
                                 items (vec (take-last max-items (into items (wake-items wake))))]
                             (if-let [verdict (wake-verdict wake goal)]
-                              {:done (finish verdict (try (await (read-view! get! r signal)) (catch :default _ view)) items)}
+                              (let [failures (when (= :idle (:wake wake)) (await (round-failures! r (:jobs wake) get! (now))))
+                                    verdict (cond-> verdict (seq failures) (assoc :text (str "body idle: " (idle-text (:jobs wake) failures))))]
+                                {:done (finish verdict (try (await (read-view! get! r signal)) (catch :default _ view)) items)})
                               {:next [view mark since items]}))))
                       (catch :default error
                         (when (fatal? error) (throw error))
