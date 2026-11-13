@@ -315,6 +315,17 @@
       :blocked)
     :there))
 
+(defn drop-narrower-walk!
+  "Drop the :walk child when ways (nil: all) allows a way its call did not: a call's keys are frozen at its first round,
+  so a walk resumed after a cut would keep the ways it began with (live: begun on open ground with no way out allowed,
+  resumed with the body cut into a pit and every way asked, it gave up shut in). A walk that allows more is kept: it
+  may be part way through a way out."
+  [c ways]
+  (let [old (:args (get-in (ctx/mem c) [:children :walk]))
+        old-ways (or (:ways (:walk old)) (:ways old))]
+    (when (and old-ways (or (nil? ways) (seq (remove (set old-ways) ways))))
+      (ctx/update-mem! c update :children dissoc :walk))))
+
 (defn ^:async go-near!
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
@@ -347,6 +358,7 @@
                           worth (assoc :worth worth)
                           (seq walk-settings) (assoc :settings walk-settings)
                           ways (assoc :ways ways))
+                   _ (drop-narrower-walk! c ways)
                    e (await (if leg-s
                               (child/call-chase* c :walk {:pos cell :range range :leg-s leg-s :walk (dissoc walk :pos :range)})
                               (child/call-walk* c :walk walk)))]

@@ -38,6 +38,31 @@
          (is (<= (js/Math.abs (- 10 (first (e/feet p)))) 2))
          (done))))))
 
+(deftest a-walk-resumed-in-a-pit-with-every-way-asked-is-called-anew-and-pillars-out
+  ;; live (run4 F33): a walk begun on open ground with no way out allowed was cut, the body was moved into a pit, and the
+  ;; resumed walk, its call frozen with those ways, gave up shut in though every way was now asked
+  (async done
+    ((fn ^:async t []
+       (let [{:keys [eng p]} (e/setup {:self {:pos {:x 30.5 :y 64 :z 0.5}} :blocks (merge pit (tu/box 15 60 -3 30 63 3 "stone")) :inventory [{:name "dirt" :count 5}]})
+             out (atom :not-done)
+             narrow? (atom true)
+             job {:round (fn ^:async resumed-round [c]
+                           (let [w (await (near/go-near! c {:x 10 :y 64 :z 0} 1 (when @narrow? {:ways #{:walk :clear-seal}})))]
+                             (if (= :partial w) :continue (do (reset! out w) (ctx/end c :done nil)))))}
+             eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe job))
+             release (.hold (.-world p) "steer")]
+         (core/submit! eng (tu/order '(near-probe)) {})
+         (let [running (core/tick! eng)]
+           (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
+           (core/cut! eng (core/holder eng) :test nil)
+           (await running))
+         (release)
+         (swap! (fake/state p) assoc-in [:self :pos] [0.5 61 0.5])
+         (reset! narrow? false)
+         (await (e/tick-out! eng 1000))
+         (is (= :there @out))
+         (done))))))
+
 (deftest a-target-already-in-range-is-there-without-a-child
   (async done
     ((fn ^:async t []
