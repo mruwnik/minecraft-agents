@@ -185,6 +185,25 @@
           (is (= :no-carpet (:reason result)))
           (is (= 1 (count (:left result)))))))))
 
+(deftest every-lack-is-named-at-once-and-any-carpet-serves
+  (let [lacks (guard/lacks-of {:lacks #{:no-campfire :no-carpet}})]
+    (is (= [:need-campfire :need-carpet] (mapv :slot lacks)))
+    (is (= ["campfire"] (:names (first lacks))))
+    (is (every? apiary/carpet? (:names (second lacks))))
+    (is (= 16 (count (distinct (:names (second lacks))))))))
+
+(deftest a-run-short-of-campfire-and-carpet-reports-both
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "stick" 1)}) (open-side "3,64,0")
+                    (update :blocks merge (:blocks (fire-world {:x 2 :z 5})))
+                    (update :states merge (:states (fire-world {:x 2 :z 5}))))
+              {:keys [eng]} (setup w)
+              result (await (child-outcome eng job {} 80))]
+          (is (= :need (:reason result)))
+          (is (= 2 (count (:missing result)))))))))
+
 (deftest a-box-keeps-the-job-to-its-fires
   (async done
     (tu/run-async done

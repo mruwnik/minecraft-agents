@@ -181,10 +181,12 @@
       (empty? ns) nil
       (and (:sink ns) kind) {:pos pos :action :sink :kind kind}
       (and (:carpet ns) carpet) {:pos pos :action :carpet :item carpet}
-      :else {:pos pos :left (if (:carpet ns) :no-carpet :no-campfire)})))
+      :else {:pos pos :left (if (:carpet ns) :no-carpet :no-campfire)
+            :lacks (cond-> #{} (:carpet ns) (conj :no-carpet) (and (:sink ns) (not kind)) (conj :no-campfire))})))
 
 (defn survey
-  "{:fires n :todo [action maps, nearest first] :left {key reason}} of the fires not skipped."
+  "{:fires n :todo [action maps, nearest first] :left {key reason} :lacks #{reasons}} of the fires not skipped: :lacks has every
+  thing the fires left lack, :left the first one of each fire."
   [c center & [quiet?]]
   (let [p (:primitives c)
         block-at (block-at-fn p)
@@ -196,7 +198,8 @@
                    (keep #(plan-fire block-at inventory %)))]
     {:fires (count all)
      :todo (vec (filter :action plans))
-     :left (into {} (keep (fn [pl] (when (:left pl) [(pos-key (:pos pl)) (:left pl)])) plans))}))
+     :left (into {} (keep (fn [pl] (when (:left pl) [(pos-key (:pos pl)) (:left pl)])) plans))
+     :lacks (into #{} (mapcat :lacks) plans)}))
 
 (defn ripe? [b] (>= (or (get-in b [:properties :honey_level]) 0) facts/ripe-level))
 

@@ -28,7 +28,8 @@
   One call works every fire (:continue only while a walk or the carpet pick-up waits on the world). Fires are
   worked nearest first, until none is left (the job-time spend bounds the run). A fire that cannot be reached or refuses is
   skipped for the rest of the run. The body never stands in a fire's cell.
-  A carpet or campfire the work needs and the body lacks is fetched (jobs.lib.need) unless the ways leave only :carried; a
+  A carpet (any colour but moss) or campfire the work needs and the body lacks is fetched (jobs.lib.need), every lack in one go and
+  every failure's text listed in :missing, unless the ways leave only :carried; a
   failed fetch ends nothing-possible or condition-failed with :reason :need.
   Start facts, found after a quiet look around, make it wait (a skipped job): :nothing-to-guard (no fire in reach; fires
   that all need nothing end done :already), :no-carpet or :no-campfire (the body carries what the work needs, ways #{:carried}), :refused or :no-zones
@@ -329,22 +330,48 @@
 (defn quote-of [_c]
   {:uses {:job-time [0 (settings/get settings ::job-time-s) ##Inf]}})
 
-(def lacked-item {:no-carpet "white_carpet" :no-campfire "campfire"})
+(def carpets
+  "Every carpet that can cover a fire: any colour does, moss burns."
+  (mapv #(str % "_carpet") ["white" "light_gray" "gray" "black" "brown" "red" "orange" "yellow" "lime" "green" "cyan" "light_blue"
+                            "blue" "purple" "magenta" "pink"]))
+
+(defn lacks-of
+  "The things the fires left lack, one per kind: [[slot fetch-fn-args]] as {:slot :what :names}."
+  [seen]
+  (let [reasons (:lacks seen)]
+    (cond-> []
+      (:no-campfire reasons) (conj {:slot :need-campfire :names ["campfire"]})
+      (:no-carpet reasons) (conj {:slot :need-carpet :names carpets}))))
+
+(defn ^:async fetch-lack!
+  "Fetch one lack ({:slot :names}) with jobs.lib.need: its ending (:continue, :done or a failure)."
+  [c opts {:keys [slot names]}]
+  (if (= 1 (count names))
+    (await (need/item! c (first names) 1 (assoc opts :slot slot)))
+    (await (need/blocks! c names 1 (assoc opts :slot slot)))))
 
 (defn ^:async supply!
-  "Fetch what the fires left lack when the ways allow: :again once fetched, :continue while the fetch waits, else the
-  ending of the run (reason :need, the fetch's ending as its cause); nil when nothing is lacking or the ways leave only :carried."
+  "Fetch what the fires left lack when the ways allow, every lack in one go: :again once all are fetched, :continue while
+  a fetch waits, else the ending of the run (reason :need, the first failure its cause, every failure's text in :missing);
+  nil when nothing is lacking or the ways leave only :carried."
   [c seen]
   (let [opts (need/fetch-opts c)
-        lacks (some lacked-item (vals (:left seen)))]
-    (when (and opts lacks)
-      (let [e (await (need/item! c lacks 1 opts))]
-        (cond
-          (= :continue e) :continue
-          (= :done (:kind e)) :again
-          :else (let [m (ctx/mem c)]
-                  (ctx/end c (:kind e) (:cause e) {:sunk (:sunk m 0) :carpeted (:carpeted m 0) :reason :need
-                                                   :left (:left seen {}) :skipped (:skipped m {}) :fires (:fires seen 0)})))))))
+        lacks (lacks-of seen)]
+    (when (and opts (seq lacks))
+      (loop [[l & more] lacks fails []]
+        (if-not l
+          (if (empty? fails)
+            :again
+            (let [m (ctx/mem c)
+                  e (first fails)]
+              (ctx/end c (:kind e) (:cause e) {:sunk (:sunk m 0) :carpeted (:carpeted m 0) :reason :need
+                                               :missing (mapv #(get-in % [:cause :text]) fails)
+                                               :left (:left seen {}) :skipped (:skipped m {}) :fires (:fires seen 0)})))
+          (let [e (await (fetch-lack! c opts l))]
+            (cond
+              (= :continue e) :continue
+              (= :done (:kind e)) (recur more fails)
+              :else (recur more (conj fails e)))))))))
 
 (defn ^:async step
   "One piece of the guarding: resume a sink; else survey the fires and finish when the budget is spent, three fires
