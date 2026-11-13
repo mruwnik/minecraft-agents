@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [cljs.reader :as reader]
             [agent-tools.map :as map-tool]
+            [agent-tools.recipe :as recipe]
             [agent-tools.world-data :as data]
             ["node:fs" :as fs]
             ["node:path" :as path]
@@ -125,7 +126,7 @@ This file is yours: add your own notes here; the tools never overwrite it.
 ")
 
 (def playing-md
-  "# Playing
+  (str "# Playing
 
 Rewritten by the tools on every workspace build: do not edit it.
 
@@ -145,7 +146,7 @@ Then queue the rest at once, without `--wait`; each prints its job id:
     ./bin/jobs submit '(seq (jobs.build.from-plan {:plan \"P\" :part \"house\" :worth 6000}) (jobs.survival.set-spawn {:worth 600}) (jobs.memory.set-place {:name \"home\" :worth 60}))'
     ./bin/jobs submit '(jobs.survival.get-food {:worth 1200})'
     ./bin/jobs submit '(repeat (jobs.farm.maintain {:area {:plan \"P\" :part \"field\"} :worth 1200}))'
-    ./bin/jobs submit '(jobs.items.get-kit {:worth 3600})'
+    ./bin/jobs submit '(jobs.items.get-kit {:worth " recipe/kit-worth "})'
     ./bin/jobs submit '(jobs.build.pen {:plan \"P\" :worth 3000})'
     ./bin/jobs submit '(repeat (jobs.animals.maintain {:plan \"P\" :part \"pen\" :worth 1200}))'
 
@@ -161,7 +162,7 @@ Default triggers start short jobs: danger (hostile-near, low-health, burning, su
     ./bin/triggers put low-bread --when '(< (inventory \"bread\") 8)' --job '(jobs.survival.get-food {:worth 1200})' --persistence cooldown --cooldown-s 300
 
 The first suits a body with no bed yet: it waits the night out offline. `./bin/triggers --help` lists the `--when` words.
-")
+"))
 
 (defn agents-text [{:keys [body world]}]
   (str "# Agent workspace\n\n"

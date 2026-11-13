@@ -8,6 +8,7 @@
             ["fs" :as fs]
             ["path" :as path]
             [cljs.reader :as reader]
+            [agent-tools.recipe :as recipe]
             [world-test.build :as wb]
             [clojure.string :as str]))
 
@@ -30,7 +31,7 @@
 
 (defn- ms [e] (:time-ms e))
 
-(def goal-spec "(jobs.items.get-kit {:worth 3600})")
+(def goal-spec (str "(jobs.items.get-kit {:worth " recipe/kit-worth "})"))
 
 (def kit-pieces
   ["iron_pickaxe" "iron_sword" "iron_axe" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
