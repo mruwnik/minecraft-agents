@@ -23,7 +23,7 @@
             [jobs.lib.places :as places]))
 
 (def doc
-  "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed, else the live :spawn-bed, at any distance (go-to prices the walk).
+  "Walk to a bed and sleep in it: the :bed argument, else the first of the remembered :bed and the live :spawn-bed inside the work area, else the bed sh-beds/bed-to-use picks, at any distance (go-to prices the walk).
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
   (an unexpired entry with the same position, written from the cell the body is in now), else :bed-unreachable {:pos}; nor, from inside the body's work area (jobs.lib.walk.world ::area), out of its reach, else :bed-outside-area {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open (unknown, :look, while the body has not looked round this run: the round looks once, then decides). A body already asleep is done.

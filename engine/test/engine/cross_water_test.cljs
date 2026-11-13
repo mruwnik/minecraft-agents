@@ -278,3 +278,29 @@
                               ["a swimmer within reach of it" [6.5 63 0.5] false]]]
     (let [{:keys [p]} (lt/setup (assoc world :self {:pos pos}))]
       (is (= ashore (cw/on-shore? {:primitives p} far)) label))))
+
+(def area-box
+  "A work area over the body at the origin and the first land between the channels (x 5), not the far shore (x 8, 10)."
+  {:jobs.lib.walk.world/area {:min [-5 60 -5] :max [6 70 5]}})
+
+(defn spot-in
+  "cw/far-spot from the origin toward a goal at x 8 under settings."
+  [p settings]
+  (land-x (settings/with-settings (assoc settings ::cw/min-cross 4) #(cw/far-spot p {:x 0 :y 64 :z 0} {:goal {:x 8 :y 64 :z 0}}))))
+
+(deftest far-spot-from-inside-the-work-area-leaves-out-shores-beyond-it
+  (let [{:keys [p]} (lt/setup {:blocks two-channels})]
+    (is (= 8 (spot-in p {})) "no area: the shore nearest the goal")
+    (is (= 5 (spot-in p area-box)))))
+
+(deftest far-spot-from-outside-the-work-area-leaves-nothing-out
+  (let [{:keys [p]} (lt/setup {:blocks two-channels})]
+    (is (= 8 (spot-in p {:jobs.lib.walk.world/area {:min [-5 60 -5] :max [-1 70 5]}})))))
+
+(deftest a-given-shore-beyond-the-work-area-is-never
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ask (fn ^:async ask [pos] (await (waits-on {:blocks two-channels :inventory [boat-item]} {:pos pos :settings area-box})))]
+          (is (= {:event :stopped :kind :impossible :reason :outside-area} (await (ask [8 64 0]))))
+          (is (not= :outside-area (:reason (await (ask [5 64 0]))))))))))
