@@ -1,7 +1,21 @@
 (ns jobs.lib.steps
   "The step planning the tend and maintain jobs share: a todo list of steps, each decided from facts read live
   ({:skip reason} or {:call {:slot :args}}), the one under way kept in memory as :call-args."
-  (:require [engine.ctx :as ctx]))
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]))
+
+(def idle-causes
+  "Causes of a step child's condition-failed ending that mean the step has nothing worth doing now, as a decided skip
+  does: nothing ripe or due, a pass not worth its walk, animals in love or on their breeding cooldown."
+  #{:nothing-to-do :not-worth :cooldown})
+
+(defn idle-entry
+  "The report entry {:skipped :declined :reason cause} of a step child's ending e that declined for an idle cause, else
+  nil: the pass books it as a skip, not a failed step."
+  [e]
+  (let [cause (contract/cause-key e)]
+    (when (and (= :condition-failed (:kind e)) (contains? idle-causes cause))
+      {:skipped :declined :reason cause})))
 
 (defn plan
   "Walk todo, skipping the steps that decide skips (booked in report, with the decision's :detail map, unless it already holds an entry for the step);

@@ -46,7 +46,7 @@
   lists animals only near the body) and counts again; the job starts for that look.
 
   A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :at-pair,
-  :too-few-adults, :no-food and :no-shears (only with ways #{:carried}), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
+  :too-few-adults, :cooldown (fewer than two adults not fed or refused within the breeding cooldown), :no-food and :no-shears (only with ways #{:carried}), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
   Done (:already before the start) when the box needs no look, no step would run and the herd is at :target. It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box), nor without a :mob and a :plan (:no-mob). Otherwise it
@@ -154,6 +154,7 @@
         stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))]
     {:gaps (missing-barrier c)
      :adults (count adults)
+     :ready (count (remove (comp (animals/cooling c) animals/key-of) adults))
      :babies (count babies)
      :drops (drops-in-box c)
      :shears (boolean (some #(= "shears" (:name %)) inventory))
@@ -182,10 +183,11 @@
     {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target) :radius (herd-radius)} (some? ways) (assoc :ways ways))}}))
 
 (defn decide-breed
-  [{:keys [mob target ways box]} {:keys [adults babies food reach]}]
+  [{:keys [mob target ways box]} {:keys [adults ready babies food reach]}]
   (cond
     (>= (+ adults babies) target) {:skip :at-target}
     (< adults 2) {:skip :too-few-adults}
+    (< ready 2) {:skip :cooldown}
     (and (nil? food) (not (need/fetching? ways))) {:skip :no-food}
     :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :pairs 1 :radius reach :box box} (some? ways) (assoc :ways ways))}}))
 
@@ -378,6 +380,7 @@
         (cond
           (= :continue e) :yield
           (= :done (:kind e)) (do (book! (summary step (:data e))) :again)
+          (steps/idle-entry e) (do (book! (steps/idle-entry e)) :again)
           :else (do (book! (merge (when-let [r (not-empty (merge (when (map? (:cause e)) (select-keys (:cause e) [:leaks])) (:data e)))] (summary step r))
                                   {:ended (:kind e) :cause (contract/cause-key e)}))
                     :again))))))

@@ -181,6 +181,13 @@
     {:kind :condition-failed :cause {:reason :no-zones}} {:skipped :declined :reason :no-zones}
     {:kind :nothing-possible :cause :gave-up :data {:fed {}}} {:fed {} :reason :gave-up :stopped :nothing-possible}))
 
+(deftest a-step-that-declined-for-an-idle-cause-is-a-skip-and-a-stopped-step-keeps-its-reason
+  (are [step e entry] (= entry (maintain/entry-of step e))
+    :tend {:kind :condition-failed :cause :not-worth :data {:steps {} :worth 0.4 :walk-s 6}} {:skipped :declined :reason :not-worth}
+    :tend {:kind :condition-failed :cause {:reason :nothing-to-do :recheck-after-ms 25000} :data {:steps {}}} {:skipped :declined :reason :nothing-to-do}
+    :tend {:kind :condition-failed :cause {:reason :need :item "campfire"} :data {:steps {}}} {:reason :need :stopped :condition-failed}
+    :cut {:kind :nothing-possible :cause :unreachable :data {:dug 0 :skipped {}}} {:dug 0 :reason :unreachable :stopped :nothing-possible}))
+
 (def field-60 {:min {:x 62 :y 63 :z 2} :max {:x 64 :y 64 :z 4}})
 
 (deftest a-maintain-far-from-its-seen-field-tends-it

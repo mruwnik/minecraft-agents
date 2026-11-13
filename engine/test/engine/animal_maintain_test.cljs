@@ -130,6 +130,18 @@
           (is (= {:skipped :no-food} (get-in (done-event s) [:steps :breed])))
           (is (true? (finished? s))))))))
 
+(deftest adults-remembered-fed-within-the-breeding-cooldown-are-not-fed-and-the-pass-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) (cow 3 4)]} 50)]
+          (doseq [k ["u1" "u2"]] (mem/write! (:store (:eng s)) :breed/love {:key k} {:cap 50 :ttl 330000}))
+          (core/submit! (:eng s) (tu/order (spec {:target 4})) {})
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(tu/run-ticks (:eng s) (:clock s) 12 700)))
+          (is (empty? (interacts s)) "the third cow alone is not fed: it has no partner")
+          (is (= {:skipped :cooldown} (get-in (done-event s) [:steps :breed])))
+          (is (= :completed (:kind (done-event s)))))))))
+
 (deftest a-child-that-fails-is-booked-with-its-kind-and-cause
   (async done
     (tu/run-async done
@@ -306,15 +318,16 @@
   (are [expected facts] (= expected (:skip (maintain/decide :breed {:mob "cow" :target 4 :ways #{:carried}} facts)))
     :at-target {:adults 3 :babies 1}
     :too-few-adults {:adults 1 :babies 0}
-    :no-food {:adults 2 :babies 0 :food nil}
-    nil {:adults 2 :babies 0 :food "wheat" :reach 5})
+    :cooldown {:adults 3 :ready 1 :babies 0 :food "wheat"}
+    :no-food {:adults 2 :ready 2 :babies 0 :food nil}
+    nil {:adults 2 :ready 2 :babies 0 :food "wheat" :reach 5})
   (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :pairs 1 :radius 5 :box box :ways #{:carried :chest}}}}
-         (maintain/decide :breed {:mob "cow" :target 4 :box box :ways #{:carried :chest}} {:adults 2 :babies 0 :food nil :reach 5}))
+         (maintain/decide :breed {:mob "cow" :target 4 :box box :ways #{:carried :chest}} {:adults 2 :ready 2 :babies 0 :food nil :reach 5}))
       "no food but ways allow a fetch: breed is called with the pen and fetches")
   (is (= {:call {:slot :shear :job 'jobs.animals.shear :args {:radius 5 :ways #{:carried :chest}}}}
          (maintain/decide :shear {:mob "sheep" :ways #{:carried :chest}} {:shears false :shearable 2 :reach 5}))
       "no shears but ways allow a fetch: shear is called and fetches")
-  (is (= :no-food (:skip (maintain/decide :breed {:mob "cow" :target 4 :ways #{:carried}} {:adults 2 :babies 0 :food nil :reach 5})))
+  (is (= :no-food (:skip (maintain/decide :breed {:mob "cow" :target 4 :ways #{:carried}} {:adults 2 :ready 2 :babies 0 :food nil :reach 5})))
       "ways #{:carried} is no leave to fetch food")
   (is (= :no-shears (:skip (maintain/decide :shear {:mob "sheep" :ways #{:carried}} {:shears false :shearable 2 :reach 5})))
       "ways #{:carried} is no leave to fetch shears")

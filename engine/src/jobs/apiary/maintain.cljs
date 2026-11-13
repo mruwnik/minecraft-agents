@@ -300,10 +300,12 @@
 
 (defn entry-of
   "The report entry of a child's ending e: its summary; a child whose condition failed before its first round (kind
-  condition-failed or impossible, no data) is {:skipped :declined :reason cause}, any other ending carries :stopped kind."
+  condition-failed or impossible, no data) is {:skipped :declined :reason cause}, as is one that declined for an idle
+  cause (steps/idle-entry); any other ending carries :stopped kind."
   [step e]
   (cond
     (= :done (:kind e)) (summary step (:data e))
+    (steps/idle-entry e) (steps/idle-entry e)
     (and (#{:condition-failed :impossible} (:kind e)) (empty? (:data e))) {:skipped :declined :reason (contract/cause-key e)}
     :else (assoc (summary step (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
 

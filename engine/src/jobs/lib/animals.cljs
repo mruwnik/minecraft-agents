@@ -10,6 +10,7 @@
             [jobs.lib.bait :as bait]
             [jobs.lib.child :as child]
             [jobs.lib.food-animals :as food-animals]
+            [jobs.lib.game-facts :as game-facts]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -68,6 +69,19 @@
   reload), else its id."
   [e]
   (or (.-uuid e) (.-id e)))
+
+(def love-kind :breed/love)
+
+(defn note-love!
+  "Remember that the animal with key k took breeding food or refused it: as a player remembers which they fed, the body
+  leaves it be for game-facts/breed-cooldown-ms, its love and breeding cooldown (hidden state no player can read)."
+  [c k]
+  (ctx/remember! c love-kind {:key k} {:cap 50 :ttl game-facts/breed-cooldown-ms}))
+
+(defn cooling
+  "Keys of the animals remembered fed or refused within the breeding cooldown."
+  [c]
+  (into #{} (map (comp :key :data)) (ctx/entries c love-kind)))
 
 (defn named-by?
   "Whether the start of an animal's uuid, or its entity id as the entities tool shows it, names e."

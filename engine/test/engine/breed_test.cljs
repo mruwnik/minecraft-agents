@@ -186,7 +186,7 @@
                 [["no wheat" {:mob "cow"} {:entities [(cow 1 2) (cow 2 3)]} :no-food 0]
                  ["one adult" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2)]} :too-few 0]
                  ["only babies" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:baby true}) (cow 2 3 {:baby true})]} :too-few 2]
-                 ["both on cooldown" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:cooldown true}) (cow 2 3 {:cooldown true})]} :refused 0]]]
+                 ["both on cooldown" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:cooldown true}) (cow 2 3 {:cooldown true})]} :cooldown 0]]]
           (let [s (await (scenario args world 4))]
             (is (finished? s) label)
             (is (= reason (:reason (done-event s))) label)
@@ -409,15 +409,28 @@
           (is (= 2 (count (events-of s :breed.baby))))
           (is (= :warn (:level (first (events-of s :breed.baby))))))))))
 
-(deftest three-refusals-end-refused-without-backoff
+(deftest three-refusals-end-cooldown-without-backoff
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"} {:inventory (wheat 4)
                                                :entities [(cow 1 1 {:cooldown true}) (cow 2 2 {:cooldown true}) (cow 3 3 {:cooldown true})]} 3))]
           (is (finished? s))
-          (is (= :refused (:reason (done-event s))))
+          (is (= :cooldown (:reason (done-event s))))
           (is (empty? (events-of s :job.backoff))))))))
+
+(deftest a-fed-pair-is-remembered-and-left-be-by-the-next-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]} 8))]
+          (is (= :fed (:reason (done-event s))))
+          (reset! (:seen s) [])
+          (let [before (count (interacts s))]
+            (core/submit! (:eng s) (tu/order '(jobs.animals.breed {:mob "cow"})) {})
+            (await (run-ticks s 6 700))
+            (is (= before (count (interacts s))) "no animal fed within the cooldown is offered food again")
+            (is (= :cooldown (:reason (done-event s))))))))))
 
 (deftest refusals-after-one-feeding-end-unpaired
   (async done

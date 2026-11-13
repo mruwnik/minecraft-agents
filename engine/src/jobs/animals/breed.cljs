@@ -34,6 +34,8 @@
   Per animal:
   - Fed: it went into love mode.
   - Refused: nothing happened twice (on its breeding cooldown, or already in love; a lost click is tried once more). It is not tried again.
+  An animal fed or refused is remembered (jobs.lib.animals/note-love!) and not a candidate for the breeding cooldown,
+  as a player remembers which they fed.
   - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
     (the food was eaten without love; a baby the sensing missed, warn breed.baby).
 
@@ -45,7 +47,7 @@
   - :impossible :unknown-mob (no breeding food is known for :mob, checked at the start); bees at night or in rain
     wait :bees-indoors before every round.
   - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :ways #{:carried} waits for food; a failed fetch ends with the fetch's own ending, reason :no-food, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
-    :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
+    :cooldown (some took no food, none ate), :refused or :no-zones (the zone rules refused the adults).
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable, or the walk to :box failed)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
   - every ending but done carries :next (jobs.lib.next-call): a failed fetch's calls, then the breed again.
@@ -155,6 +157,7 @@
    :food-out [:nothing-possible :food-out]
    :too-few [:condition-failed :too-few]
    :refused [:condition-failed :refused]
+   :cooldown [:condition-failed :cooldown]
    :no-zones [:condition-failed :no-zones]
    :no-baby [:nothing-possible :no-baby]})
 
@@ -167,7 +170,7 @@
     (let [r (await (ctx/act c :unequip #js {}))]
       (if (= "full" (.-status r)) :full :emptied))))
 
-(declare leave-pen! mark-bred!)
+(declare leave-pen! mark-bred! cooling-adults)
 
 (defn ^:async cleanup
   "However the run ended: the hand put back as note-hand! found it, then the body walked out of the known pen to where
@@ -220,8 +223,8 @@
       (cond
         (pos? n) (str n " " mob "(s) stand in a fenced pen or zone that is not the body's own; pass :box for a pen you were told about, or ask the owner")
         (= :no-zones reason) "no zone list was read; try again shortly"
-        (seq (:refused m)) (str (count (:refused m)) " took no food (on breeding cooldown or already in love); try again in a few minutes")
         :else "the zone rules refused every adult; move to a free area or pass :ignore-zones? true if the owner allows it")
+      :cooldown (str (count (distinct (concat (:refused m) (cooling-adults c)))) " took no food or were fed lately (in love or on breeding cooldown); try again in a few minutes")
       :too-few (str "fewer than two " mob " adults within " radius " blocks; go to the herd, widen :radius or pass :box")
       :no-food (str "no food for " mob " carried and none fetched; bring some")
       :food-out "the food ran out; bring more"
@@ -275,14 +278,21 @@
   (or (pen-read/arg-box c) (:box (:args (pen-read/pen-of c)))))
 
 (defn candidates
-  "The adults within radius not fed, refused or given up on, nearest first."
+  "The adults within radius not fed, refused or given up on, nor remembered fed or refused within the breeding cooldown, nearest first."
   [c]
   (let [{:keys [mob radius]} (:args c)
         {:keys [fed refused given-up]} (ctx/mem c)
-        skip (into (set fed) (concat refused (keys given-up)))]
+        skip (into (animals/cooling c) (concat fed refused (keys given-up)))]
     (animals/allowed c :breed.declined "breed" :harvest
                      (filterv #(not (contains? skip (animals/key-of %))) (animals/adults (:primitives c) mob radius))
                      {:own-box (pen-box c)})))
+
+(defn cooling-adults
+  "Keys of the adults within radius remembered fed or refused within the breeding cooldown."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        cooling (animals/cooling c)]
+    (filterv cooling (map animals/key-of (animals/adults (:primitives c) mob radius)))))
 
 (defn out-reason
   "Why the job ends with no candidate to feed."
@@ -291,7 +301,7 @@
     (cond
       (some #{:unreachable} (vals given-up)) :unreachable
       (odd? (count fed)) :unpaired
-      (seq refused) :refused
+      (or (seq refused) (seq (cooling-adults c))) :cooldown
       (animals/refusal c) (animals/refusal c)
       :else :too-few)))
 
@@ -304,6 +314,13 @@
   "Whether the food was eaten without love: a baby the sensing missed."
   [raw]
   (and (not (fed? raw)) (pos? (or (:consumed raw) 0))))
+
+(defn refused!
+  "Book animal k as refused: it took no food, so it is in love or on its breeding cooldown."
+  [c k]
+  (animals/note-love! c k)
+  (ctx/update-mem! c update :refused (fnil conj []) k)
+  (animals/bump-row! c))
 
 (defn ^:async feed!
   "Use food on animal once through an items.use child; book the outcome. Resolves to :continue while the child
@@ -318,15 +335,14 @@
       (let [{:keys [status raw]} r]
         (case status
           :used (cond
-                  (fed? raw) (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0)))
+                  (fed? raw) (do (animals/note-love! c k)
+                                 (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0))))
                   (baby? raw) (do (animals/give-up! c k :baby)
                                   (ctx/emit! c :breed.baby :warn {:uuid k :text "fed a baby the sensing missed; given up on"}))
-                  (zero? (or (:consumed raw) 0)) (do (ctx/update-mem! c update :refused (fnil conj []) k)
-                                                     (animals/bump-row! c))
+                  (zero? (or (:consumed raw) 0)) (refused! c k)
                   :else (animals/reset-row! c))
           :no-effect (if (contains? (:retried (ctx/mem c)) k)
-                       (do (ctx/update-mem! c update :refused (fnil conj []) k)
-                           (animals/bump-row! c))
+                       (refused! c k)
                        (ctx/update-mem! c update :retried (fnil conj #{}) k))
           :no-item nil
           (animals/book-failed! c k status))

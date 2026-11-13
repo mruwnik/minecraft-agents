@@ -13,6 +13,7 @@
 (def ripe-level "The honey level at which a hive can be harvested." 5)
 (def popped-item-reach "Blocks from a block's cell its popped drop lies at most: it spawns 0.65 out of the clicked face, moves 0.1 a tick sideways and 0.2 up, so flies and slides about 1 block more." 2)
 (def dusk-tick "The time of day (game ticks) at which dusk comes." 12000)
+(def breed-cooldown-ms "How long an animal that took breeding food, or refused it, may take none: love lasts 600 ticks (30 s) and breeding sets 6000 ticks (300 s)." 330000)
 
 (def smelted-from
   "{output input} of what the furnaces cook, for naming the input of a product. The vanilla recipes are in no
