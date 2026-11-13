@@ -16,6 +16,14 @@
 (def internal-kinds #{:queued :round_started :completed :failed :cancelled :cut
                       :yielded :memory_written :backoff :check_failed :declined :child_started :child_ended})
 
+(defn reflex-end->terminal
+  "A reflex job's one :reflex :ended event as the job terminal event it stands for (its outcome as the engine's end status); other events as they are."
+  [e]
+  (if-not (and (= :reflex (:source e)) (= :ended (:kind e)))
+    e
+    (assoc e :source :job
+             :kind (case (:outcome e) :done :completed :failed :failed (:cut :dropped :cancelled) :cancelled :stopped))))
+
 (defn belongs? [id e]
   (and (= :job (:source e))
        (or (= id (get-in e [:context :job-id]))
@@ -85,7 +93,7 @@
    next-id (optional) is the engine's id counter: an id it never issued is :unknown-job even when history is partial."
   ([id generation events partial?] (project id generation events partial? nil))
   ([id generation events partial? next-id]
-  (let [matching (->> events (filter #(and (= generation (:generation-id %)) (belongs? id %))) (sort-by :seq) vec)
+  (let [matching (->> events (map reflex-end->terminal) (filter #(and (= generation (:generation-id %)) (belongs? id %))) (sort-by :seq) vec)
         terminal (last (filter #(and (= id (get-in % [:context :job-id]))
                                      (terminal-kinds (:kind %))) matching))
         queued? (some #(and (= id (get-in % [:context :job-id])) (= :queued (:kind %))) matching)

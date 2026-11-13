@@ -20,6 +20,13 @@
     (is (= [{:event :search.done :job "j4/c0" :data {:found [{:what "stone" :pos [5 70 3]}] :coverage {:scans 1}}}]
            (:events result)))))
 
+(deftest a-reflex-jobs-ended-event-is-its-terminal
+  (let [ended {:seq 3 :generation-id "g" :source :reflex :kind :ended :outcome :done
+               :context {:job-id "j7" :reflex-id :night} :data {:kind :done}}
+        events [(event 1 "j7" :round_started {}) ended]]
+    (is (= {:status :completed :finished? true} (select-keys (results/project "j7" "g" events false) [:status :finished?])))
+    (is (= :stopped (:status (results/project "j7" "g" [(assoc ended :outcome :declined)] false))))))
+
 (deftest the-terminal-events-data-is-the-jobs-result
   (let [events [(event 1 "j4" :queued {}) (event 2 "j4" :completed {:status :completed :scope :seen :blocks [{:name "iron_ore"}]})]]
     (is (= {:status :completed :scope :seen :blocks [{:name "iron_ore"}]} (:result (results/project "j4" "g" events false))))
