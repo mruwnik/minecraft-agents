@@ -39,7 +39,7 @@
   Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
   places one (a jobs.blocks.fill-cells child) on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
-  Standing in lava it first steps to the best seen cell with no look. Before each other decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
+  In lava (jobs.lib.body/in-lava?: the hitbox overlaps lava, though the feet cell be air) it first steps to the best seen cell, the one beside counting, with no look. Before each other decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      With a real danger near (jobs.lib.danger, the hostile-near radii) it ends :condition-failed :hostile-near instead, never standing still beside it.
      Otherwise it holds still (:burning-wait): eats (a jobs.survival.eat child) when food is under 18 and food is carried
@@ -171,14 +171,14 @@
        (* beside (cost/hp-seconds)))))
 
 (defn best-cell
-  "The standable cell within step blocks of from with the lowest price, never
-  from itself or a cell within a block of it."
+  "The standable cell within step blocks of from with the lowest price, never from itself: a step to the cell beside
+  is the quickest way off a lava edge."
   [p from step hazard-poss]
   (let [cells (for [dx (range (- step) (inc step))
                     dz (range (- step) (inc step))
                     dy (range 0 3)
                     :let [cell (offset from dx dy dz)]
-                    :when (>= (u/dist from cell) 2)
+                    :when (not= from cell)
                     :when (standable? p cell)]
                 cell)]
     (when (seq cells)
@@ -439,7 +439,7 @@
         cell (poured c)
         scooped (when cell (await (scoop-pass c cell)))
         quick (when (and (not scooped) (body/burning? p) (not (:blocked (ctx/mem c))))
-                (quick-exit p (floor-cell (u/pos-of (.-pos me))) (boolean (.-inLava me))))]
+                (quick-exit p (floor-cell (u/pos-of (.-pos me))) (body/in-lava? p)))]
     (cond
       scooped scooped
 
@@ -457,7 +457,7 @@
       :else
       (let [{:keys [water-radius]} (:args c)
             pos (floor-cell (u/pos-of (.-pos me)))
-            lava? (boolean (.-inLava me))
+            lava? (body/in-lava? p)
             _ (await (look/survey! c :cell))
             ;; lava beside the feet under an overhang shows to no glance of the survey: turn to each side cell not yet sensed
             _ (await (sense/look-at-unknown! c (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0]]]

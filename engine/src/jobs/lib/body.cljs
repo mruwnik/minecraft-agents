@@ -43,14 +43,32 @@
 (defn fire-resistant? [p]
   (boolean (some #(= "fire_resistance" (.-name %)) (array-seq (.-effects (.self p))))))
 
+(defn in-lava?
+  "True when the body is in lava: the physics flag, or, on fire, its hitbox overlaps a cell it feels as lava. The server
+  burns a hitbox that overlaps lava by a hair, which the flag (read on a box 0.1 narrower each side) misses: a body whose
+  feet stand in an air cell beside lava burns there. Lava sets the body alight the tick it touches it, so a body not on
+  fire is not looked over."
+  [p]
+  (let [self (.self p)
+        pos (.-pos self)
+        x (.-x pos) y (.-y pos) z (.-z pos)
+        r game/hitbox-half
+        ;; the server's own overlap test shrinks the box by 0.001, so a box flush with a cell's face is not in it
+        span (fn [lo hi] (range (js/Math.floor (+ lo 0.001)) (inc (js/Math.floor (- hi 0.001)))))]
+    (boolean (or (.-inLava self)
+                 (and (.-onFire self)
+                      (some #(= "lava" (u/feel-name p %))
+                       (for [cx (span (- x r) (+ x r)) cz (span (- z r) (+ z r)) cy (span y (+ y game/body-height))]
+                         {:x cx :y cy :z cz})))))))
+
 (defn in-hazard?
-  "True when the body is in lava or in a fire block at its feet or head, and not fire resistant: standing there hurts
+  "True when the body is in lava (in-lava?) or in a fire block at its feet or head, and not fire resistant: standing there hurts
   whatever the body does, so it has to move."
   [p]
   (let [self (.self p)
         pos (.-pos self)
         feet {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}]
-    (boolean (and (or (.-inLava self)
+    (boolean (and (or (in-lava? p)
                       (contains? fires (u/feel-name p feet))
                       (contains? fires (u/feel-name p (update feet :y inc))))
                   (not (fire-resistant? p))))))

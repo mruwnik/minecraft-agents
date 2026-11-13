@@ -233,6 +233,31 @@
             (is (= "moveTo" (first (filter #{"moveTo" "look" "lookAt" "look_at"} names))) (pr-str names))
             (is (not-any? #(re-find #"look" %) (take-while #(not= "moveTo" %) names)))))))))
 
+(deftest a-body-whose-hitbox-overlaps-lava-beside-its-feet-steps-away-before-covering-or-looking
+  ;; feet in an air cell, the box 0.01 into the lava west of it: the physics flag is out, the server burns it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true :pos [0.29 64 0.5]}
+                                      :inventory [{:name "cobblestone" :count 8}]
+                                      :blocks (merge (floor 6) {"-1,64,0" "lava"})})]
+          (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
+          (await (core/tick! eng))
+          (let [names (mapv #(.-name %) (.-calls (.-world p)))]
+            (is (= "moveTo" (first (filter #{"moveTo" "place" "look" "lookAt" "look_at"} names))) (pr-str names))))))))
+
+(deftest in-lava-with-only-the-cell-beside-standable-steps-to-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inLava true}
+                                      :blocks (merge (cells "stone" [64 65 66] (range -3 4) (range -3 4))
+                                                     (cells "stone" [63] (range -3 4) (range -3 4))
+                                                     {"0,64,0" "lava" "0,65,0" "air" "1,64,0" "air" "1,65,0" "air"})})]
+          (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
+          (await (core/tick! eng))
+          (is (= {:x 1 :y 64 :z 0} (:pos (call-args (first (calls p "moveTo")))))))))))
+
 (deftest hazards-are-not-written-twice
   (async done
     (tu/run-async done
@@ -352,7 +377,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [lava (apply dissoc (cells "lava" [64] (range -3 4) (range -3 4)) ["0,64,0" "2,64,-2"])
-              {:keys [eng p]} (setup {:self {:onFire true} :blocks (merge (floor 3) lava)})
+              {:keys [eng p]} (setup {:self {:onFire true :pos [0.5 64 0.5]} :blocks (merge (floor 3) lava)})
               holds (atom [])]
           (on-wait! p (fn [n _]
                         (swap! holds conj (:reason (core/holding eng (:id (core/holder eng)))))
@@ -649,7 +674,7 @@
                      :blocks (merge (floor 8) {"0,64,0" "lava" "1,64,0" "lava" "-1,64,0" "lava" "0,64,1" "lava" "0,64,-1" "lava"})}
               {:keys [eng p seen go-tos]} (setup-blocked (fn [c p _]
                                                            (reset! places-at-go-to (count (calls p "place")))
-                                                           (swap! (fake/state p) update :self assoc :onFire false :inLava false)
+                                                           (swap! (fake/state p) update :self assoc :onFire false :inLava false :pos [3.5 64 3.5])
                                                            (ctx/end c :done nil {:arrived true}))
                                                          world)]
           (await (run-until-empty eng 3))
@@ -789,7 +814,8 @@
           (aset p "sensedAt" (fn [pos] (if (inside? pos) (read pos) #js {:unknown true :pos pos})))
           (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
           (await (core/tick! eng))
-          (is (= [] (calls p "moveTo")) "no walk to a cell behind the wall"))))))
+          (is (seq (calls p "moveTo")) "it steps off the fire")
+          (is (every? #(inside? (clj->js (:pos (call-args %)))) (calls p "moveTo")) "no walk to a cell behind the wall"))))))
 
 (def noop-stub
   "A jobs.time.noop stand-in that records each pause asked of it and ends at once."
