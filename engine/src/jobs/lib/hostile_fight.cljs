@@ -27,6 +27,7 @@
 
 (a/defargs settings
   {::return-s {:default 600 :doc "Seconds a flight from a mob counts as a return of its kind: the next flight from one is priced to come again (flee-answer :returns)." :spec (a/num-in 0 nil)}
+   ::seen-memory-s {:default 5 :doc "Seconds a hostile seen and then out of sight (round a corner) still counts as a target, walked to at its rough place; one only ever heard never does." :spec (a/num-in 0 nil)}
    ::hold-s {:default 15 :doc "Seconds a held fight waits without a swing for a mob to come within reach before it declines." :spec (a/num-in 0 nil)}
    ::chase-timeout-s {:default 10 :doc "Seconds one walk toward a hostile may take: it moves, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
    ::point-blank {:default 1.5 :doc "Blocks within which a hostile (a shooter too, not a creeper or an enderman) is in the body's own cell or beside it: a cornered body fights a shooter this close instead of hiding from it." :spec (a/num-in 0 nil)}
@@ -70,6 +71,16 @@
   (and (not (combat/creeper? e)) (not (combat/enderman? e))
        (<= (danger-q/mob-distance (:primitives c) e) (settings/get settings ::point-blank))))
 
+(defn remembered?
+  "Whether hostile e was seen and is still in mind: sighted and sensed within ::seen-memory-s (round a corner for a moment)."
+  [e]
+  (and (true? (.-sighted e)) (<= (.-ageMs e) (* 1000 (settings/get settings ::seen-memory-s)))))
+
+(defn sighted?
+  "Whether the body has seen hostile e and keeps it in mind: in sight, or remembered?."
+  [e]
+  (or (danger-q/seen-only? e) (remembered? e)))
+
 (defn targets
   "The hostiles in range the body has seen, within the leash and not given up on, nearest first; a creeper only when it is
   the one hostile in range (fought hit-and-back): with company it is left to blow where the fight is (fight-answer)."
@@ -77,12 +88,12 @@
   (let [given-up (:given-up (ctx/mem c) {})
         hs (in-range c)
         lone? (= 1 (count hs))]
-    (->> hs (remove #(and (combat/creeper? %) (not lone?))) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(contains? given-up (.-id %))))))
+    (->> hs (remove #(and (combat/creeper? %) (not lone?))) (filter sighted?) (filter #(in-leash? c %)) (remove #(contains? given-up (.-id %))))))
 
 (defn heard
   "The first hostile in range the body only hears, or nil."
   [c]
-  (first (remove danger-q/seen-only? (in-range c))))
+  (first (remove sighted? (in-range c))))
 
 (defn dark-around?
   "Whether mob e stands in or beside unlit space: its cell, the four cells next to it and the one 2 past it from the body,

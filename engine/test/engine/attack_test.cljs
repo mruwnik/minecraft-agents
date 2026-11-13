@@ -178,6 +178,15 @@
           (is (= #{8} (set (attacked s))) "walked to its last place and killed")
           (is (not-any? #(= 8 (:id %)) (fake/entities p))))))))
 
+(deftest a-hostile-seen-a-moment-ago-behind-a-corner-is-still-fought-not-ended-heard-only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (scenario {:targets :hostiles :radius 8 :ranged-radius 16}
+                                                 {:inventory h/sword :entities [(ent 8 "zombie" "hostile" 3 {:visible false :seen false :sighted true :ageMs 1000})]} 9))]
+          (is (= #{8} (set (attacked s))) "fought, not declined :heard-only")
+          (is (not-any? #(= 8 (:id %)) (fake/entities p))))))))
+
 (deftest a-mixed-list-takes-nearest-first-and-moves-on-when-one-dies
   (async done
     (tu/run-async done

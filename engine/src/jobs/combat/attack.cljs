@@ -68,7 +68,6 @@
    ::vehicle-gap-ms {:default 150 :doc "Least time between swings at a minecart or boat: its damage drains 1 a tick and each hit adds only 10, so slower hits never break it." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
    ::no-damage-hits {:default 16 :doc "Swings in a row that do no damage before a target is given up on (a lagging server drops many swings at the cooldown, so it is many)." :spec (a/int-in 1 nil)}
-   ::seen-memory-s {:default 5 :doc "Seconds a hostile seen and then out of sight (round a corner) still counts as a target, walked to at its last place; one only ever heard never does." :spec (a/num-in 0 nil)}
    ::walk-timeout-s {:default 5 :doc "Seconds one walk towards a target may take." :spec (a/num-in 0 nil)}
    ::forage-walk-timeout-s {:default 30 :doc "Seconds one walk towards an animal may take while the body can not heal and walks over its health budget (that search is slow)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
@@ -124,15 +123,15 @@
       :else (boolean (some match targets)))))
 
 (defn lost?
-  "Whether hostile e is out of mind: not in sight and never seen, or not sensed for ::seen-memory-s."
+  "Whether hostile e is out of mind: not in sight and never seen, or not sensed for hostile-fight/::seen-memory-s."
   [e]
   (and (= "hostile" (.-kind e))
        (not (.-visible e))
-       (not (and (.-sighted e) (<= (.-ageMs e) (* 1000 (settings/get settings ::seen-memory-s)))))))
+       (not (hostile/remembered? e))))
 
 (defn present
   "The entities matching :targets within :radius, nearest first; ones already
-  killed (their id stays after a respawn) are left out, and so is a hostile of a type or name target only heard or not seen for ::seen-memory-s (it
+  killed (their id stays after a respawn) are left out, and so is a hostile of a type or name target only heard or not seen for hostile-fight/::seen-memory-s (it
   is turned toward, never walked to). Name and id targets filter before the 64 cap of the sense."
   [c]
   (let [p (:primitives c)
@@ -307,11 +306,16 @@
 
 (def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
 
+(defn aim-pos
+  "Where the body takes target to be: in a :hostiles fight what it senses (danger/mob-pos: a mob not in sight is only roughly placed), else its place."
+  [c target]
+  (if (hostile/hostiles? c) (danger-q/mob-pos (:primitives c) target) (u/pos-of (.-pos target))))
+
 (defn ^:async walk!
   "Walk within reach of target when further than reach (near/go-near! range 2, doors :shut, each leg bounded by
   ::walk-timeout-s). Resolves to :there (no walk needed), :arrived (the walk got within range), :partial or :blocked."
   [c target]
-  (let [tpos (u/pos-of (.-pos target))]
+  (let [tpos (aim-pos c target)]
     (cond
       (in-reach? c target) :there
       (hostile/held? c target) (do (if (breath/swimming? (:primitives c))
@@ -328,7 +332,7 @@
   "Face and hit target once. walked? says a walk just arrived: an out-of-reach
   swing then means the target moved on, and is not counted as a failure."
   [c target walked?]
-  (let [tpos (u/pos-of (.-pos target))]
+  (let [tpos (aim-pos c target)]
     (ctx/update-mem! c assoc :last-attack (ctx/now c))
     (await (ctx/act c :look #js {:pos #js {:x (:x tpos) :y (+ 1 (:y tpos)) :z (:z tpos)}}))
     (let [a (await (ctx/act c :attack #js {:id (.-id target)}))]
@@ -343,7 +347,7 @@
 (defn ^:async close-in!
   "Walk right up to a target that cannot be hit from here, and count a failure."
   [c target]
-  (await (near/go-near! c (u/pos-of (.-pos target)) 1 (walk-opts c target)))
+  (await (near/go-near! c (aim-pos c target) 1 (walk-opts c target)))
   (fail! c target))
 
 (defn ^:async swing-or-close-in!
