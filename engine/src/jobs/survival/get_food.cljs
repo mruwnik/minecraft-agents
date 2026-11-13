@@ -351,8 +351,8 @@
   (await (cook/cook! c nil {:count (cook-count c)})))
 
 (defn ^:async next-way!
-  "The first allowed way with something to do: :again (try eating, then the ways, again), :continue (yield), or nil when
-  none is left."
+  "The first allowed way with something to do: :again (try eating, then the ways, again), :skipped (a target it could
+  not use, dropped for this job: not a way tried), :continue (yield), or nil when none is left."
   [c]
   (let [source (when (ctx/way? c :source) (sources/known-source c))]
     (when (and (foods/fragile? (.self (:primitives c))) (not (sh-inside/sheltered-in c)))
@@ -617,6 +617,7 @@
         (= ::enough way) (stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                 :food (food-level c))
         (= :again way) (recur (inc n))
+        (= :skipped way) (recur n)
         :else (let [fished (await (fish! c))
                     more (cond fished fished (not (:explore (:args c))) nil :else (await (explore! c)))
                     bad (when-not more (await (eat-bad! c)))]

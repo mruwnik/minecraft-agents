@@ -156,8 +156,8 @@
          (not (meal/carries-food? self)))))
 
 (defn ^:async dig-ripe!
-  "Dig the nearest ripe block in a permitted place (blocks.dig walks there and collects the drops): :again, or nil
-  when there is none. Another's area is dug only when the caller passed :ignore-zones? and last-resort? (hungry,
+  "Dig the nearest ripe block in a permitted place (blocks.dig walks there and collects the drops): :again, :skipped
+  when it could not be dug, or nil when there is none. Another's area is dug only when the caller passed :ignore-zones? and last-resort? (hungry,
   nothing edible carried), after every permitted block; otherwise the block is left and noted in the :foreign-food
   memory for the end text. A block not dug is skipped from then on. With none seen it looks around for them once per
   cell."
@@ -181,7 +181,7 @@
         (cond
           (= :continue e) :continue
           (and (= :done (:kind e)) (:dug (:data e))) :again
-          :else (do (ctx/update-mem! c update :skipped-blocks (fnil conj []) pos) :again))))))
+          :else (do (ctx/update-mem! c update :skipped-blocks (fnil conj []) pos) :skipped))))))
 
 (def farm-radius
   "Blocks around a known farm in which ripe crops are harvested."

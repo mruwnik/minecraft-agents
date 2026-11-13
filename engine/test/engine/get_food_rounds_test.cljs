@@ -244,6 +244,18 @@
           (is (= [{:x 8 :y 64 :z 0}] (call-args p "dig" "pos")) "the hunt's look for animals sees no blocks: the crop way looks for its own")
           (is (= ["melon_slice"] (call-args p "eat" "item"))))))))
 
+(deftest a-crop-it-could-not-dig-is-skipped-without-using-up-a-way
+  ;; run 4 F7: every bush in reach skipped counted as a way, so the ways ran out on bushes alone (:still-hungry)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 0} :blocks {"6,64,0" "melon" "8,64,0" "melon"} :drops {:melon "melon_slice"}})]
+          (.override (.-world p) "dig"
+                     (fn [token a impl] (if (= 6 (.-x (.-pos a))) (js/Promise.resolve #js {:status "failed" :reason "no-path"}) (impl token a))))
+          (await (one-round! eng {:explore false :settings {:jobs.survival.get-food/max-ways 1}}))
+          (is (= {:x 8 :y 64 :z 0} (last (call-args p "dig" "pos"))) "the next crop is dug after the skipped one")
+          (is (= ["melon_slice"] (call-args p "eat" "item"))))))))
+
 (deftest harvest-drops-seen-but-none-taken-end-the-round-stopped-not-looping
   (async done
     (tu/run-async done
