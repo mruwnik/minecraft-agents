@@ -146,12 +146,13 @@
           (is (true? (finished? s))))))))
 
 (defn ^:async herd-ends
-  "The pass of a body with one adult in a pen of target 4, whose herd child ends condition-failed for reason."
-  [reason]
+  "The pass of a body with one adult in a pen of target 4, whose herd child ends condition-failed for reason, more
+  merged into its cause."
+  [reason & [more]]
   (let [call ctx/call]
     (set! ctx/call (fn [c slot job args]
                      (if (= :herd slot)
-                       (js/Promise.resolve (contract/ending :condition-failed {:reason reason :text "stub"} nil))
+                       (js/Promise.resolve (contract/ending :condition-failed (merge {:reason reason :text "stub"} more) nil))
                        (call c slot job args))))
     (try (await (scenario {:target 4} {:entities [(cow 1 2)]} 12))
          (finally (set! ctx/call call)))))
@@ -171,6 +172,15 @@
         (let [s (await (herd-ends :unreachable))]
           (is (= :stopped (:kind (done-event s))))
           (is (= :unreachable (get-in (done-event s) [:steps :herd :cause]))))))))
+
+(deftest a-leaky-herd-names-the-leaks-in-the-report-and-the-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leaks [{:pos {:x 16 :y 64 :z 3} :why :gap}]
+              s (await (herd-ends :leaky {:leaks leaks}))]
+          (is (= leaks (get-in (done-event s) [:steps :herd :leaks])))
+          (is (re-find #"gap at \[16 64 3\]" (str (:text (done-event s)))) (pr-str (done-event s))))))))
 
 (deftest one-adult-cannot-breed-herd-is-asked-for-another
   (async done

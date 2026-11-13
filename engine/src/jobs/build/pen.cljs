@@ -47,7 +47,7 @@
   :gap cell and on top of each :climb or :perch-in cell (a :perch-in stepped from leaves gets the leaves cleared by a jobs.blocks.clear-cells child instead), then the pen is checked again. Nothing else is placed that the plan does not ask for.
   Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
   the call's ways leave out :chest :craft :gather). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
-  :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded (only after 3 walks back to the pen left cells unsensed) or :no-start.
+  :short :given-up :wrong :refused} :patched}; :patched counts the patch fences (not in :placed), also named in the text. :reason is nil when closed, else :leak, :unbounded, :unloaded (only after 3 walks back to the pen left cells unsensed) or :no-start.
   The pen ends with the body outside and the gate shut.
   Endings: done when the pen holds; nothing-possible with the :reason as cause when it does not (the data's :leaks name {:pos :why} (:gap :open-gate :climb :perch-in :open :unloaded; at most 12), and :built what the
   build left: :refused, :given-up, :short); nothing-possible :inside when the body cannot get out of the finished
@@ -252,10 +252,17 @@
   (not (inside? (pen-read/barrier-box cells) (u/self-pos c))))
 
 (defn result-of
-  "The data of the call's ending: the pen's summary, what was built and the shut-gate cause when it did not end done."
+  "The data of the call's ending: the pen's summary, what was built, the fences patched and the shut-gate cause when it did not end done."
   [c answer]
   (cond-> (assoc answer :built (:built (ctx/mem c)))
-    (:shut (ctx/mem c)) (assoc :shut (:shut (ctx/mem c)))))
+    (:shut (ctx/mem c)) (assoc :shut (:shut (ctx/mem c)))
+    (:patched (ctx/mem c)) (assoc :patched (:patched (ctx/mem c)))))
+
+(defn patched-text
+  "\", patched n\" for the fences the patch passes placed outside the plan's count, else \"\"."
+  [c]
+  (let [n (:patched (ctx/mem c) 0)]
+    (if (pos? n) (str ", patched " n) "")))
 
 (defn done?
   "Ok when nothing is owed, the pen holds and the body is outside it; else later, with the cells placed and still owed."
@@ -267,7 +274,7 @@
         holds? (boolean (and (not trouble) (empty? (plan/owed cells)) (:closed? answer) (empty? (:remembered read)) (outside? c cells)
                              (or (:built (ctx/mem c)) (not (checks/running? c)))))]
     (checks/goal holds?
-                 [:holds (str "pen of " plan " holds, " (:cells answer) " cells, placed " (get-in (ctx/mem c) [:built :placed] 0))]
+                 [:holds (str "pen of " plan " holds, " (:cells answer) " cells, placed " (get-in (ctx/mem c) [:built :placed] 0) (patched-text c))]
                  [:owed (str "pen of " plan " is not finished")]
                  {:units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))
                   :result (when answer (result-of c answer))})))
@@ -327,7 +334,7 @@
       (and (seq (open-plan-gates cells (:leaks answer))) (not (:check-shut (ctx/mem c))))
       (do (ctx/update-mem! c assoc :phase :shut :check-shut true) :again)
       (:closed? answer)
-      (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
+      (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built) (patched-text c))))
       (and (ctx/way? c :patch) (seq (apply concat (vals (patch-queues cells (:leaks answer)))))
            (let [{:keys [pass pass-ok]} (ctx/mem c)] (pen-patch/another-pass? pass pass-ok (settings/get settings ::max-passes))))
       (do (ctx/update-mem! c #(into (assoc % :phase :patch :pass (inc (or (:pass %) 0)) :pass-ok 0) (patch-queues cells (:leaks answer))))
@@ -422,7 +429,9 @@
     (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c)) :ways (need/pass-ways c)}))]
       (if (= :continue r)
         :continue
-        (do (ctx/update-mem! c #(-> % (update :patch-queue rest) (update :pass-ok (fnil + 0) (if (= :done (:kind r)) 1 0)))) :again)))
+        (do (ctx/update-mem! c #(let [n (if (= :done (:kind r)) 1 0)]
+                                  (-> % (update :patch-queue rest) (update :pass-ok (fnil + 0) n) (update :patched (fnil + 0) n))))
+            :again)))
     (do (ctx/update-mem! c assoc :phase :check) :again))))
 
 (defn merge-built

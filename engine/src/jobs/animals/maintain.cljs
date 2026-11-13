@@ -14,6 +14,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
             [jobs.lib.pen-gate :as pg]
+            [jobs.lib.pen-patch :as pen-patch]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
@@ -53,7 +54,7 @@
   {:skipped {step reason}}.
 
   Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
-  summary}}. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought}, breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  summary}}. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box (raised or lowered with the ground when the plan has :surface true), and :mob and :target from its :herd
@@ -336,7 +337,7 @@
   [step r]
   (case step
     :mend (select-keys r [:closed? :reason])
-    :herd (select-keys r [:reason :inside :brought])
+    :herd (select-keys r [:reason :inside :brought :leaks])
     :breed {:fed (count (:fed r)) :reason (:reason r)}
     :cull (select-keys r [:killed :remaining :reason])
     :shear {:shorn (count (:shorn r)) :reason (:reason r) :collected (:collected r)}
@@ -353,7 +354,7 @@
     (cond
       (and (:ended (:herd report)) (< (count adults) (min 2 target)))
       (let [{:keys [ended cause]} (:herd report)]
-        (ctx/end c ended cause (assoc out :text (str "maintain stopped: herd ended " (name ended) " " (name cause) ", " (count adults) " adults, " (count babies) " babies"))))
+        (ctx/end c ended cause (assoc out :text (str "maintain stopped: herd ended " (name ended) " " (name cause) (pen-patch/leak-text (:herd report)) ", " (count adults) " adults, " (count babies) " babies"))))
       (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
       (ctx/end c :nothing-possible :failed-steps out)
       :else
@@ -375,7 +376,7 @@
         (cond
           (= :continue e) :yield
           (= :done (:kind e)) (do (book! (summary step (:data e))) :again)
-          :else (do (book! (merge (when (seq (:data e)) (summary step (:data e)))
+          :else (do (book! (merge (when-let [r (not-empty (merge (when (map? (:cause e)) (select-keys (:cause e) [:leaks])) (:data e)))] (summary step r))
                                   {:ended (:kind e) :cause (contract/cause-key e)}))
                     :again))))))
 

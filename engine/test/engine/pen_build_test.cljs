@@ -175,8 +175,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result _ p] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {}))]
+        (let [[result _ p e] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {}))]
           (is (true? (:closed? result)) (pr-str (:leaks result)))
+          (is (= 1 (:patched result)) "the patch fence is counted apart from the plan's placed cells")
+          (is (re-find #"placed 7, patched 1" (str (:text result) (get-in e [:data :text]))) (pr-str e))
           (is (= "oak_fence" (h/block-at p 3 64 4))))))))
 
 ;; A leaf block beside the fence is an animal's step onto its top: the leaves go, no fence is piled on the fence.
