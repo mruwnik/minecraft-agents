@@ -39,7 +39,13 @@
 
 (defn heal-s-per-hp [] (settings/get settings ::heal-s-per-hp))
 
-(def landing-hp "hp a falling block that lands on the body costs: suffocation, 1 hp a half second, for the second a dig out takes." 2)
+(def landing-s
+  "Seconds a falling block that lands on the body keeps it in the block: the reflex's start and breathe's dig of the sand
+  from a body off the ground (5x slower), measured live (Tamsin S7, 2026-11-13: 5.2 s, 10 hp; Bramble's buried death:
+  6.2 s, 12.8 hp)."
+  5.2)
+
+(def landing-hp "hp a falling block that lands on the body costs: suffocation, 1 hp a half second, for landing-s." (* 2 landing-s))
 
 (defn hp-cost "Seconds losing damage hp costs: hp-seconds each, a part hp pro rata." [damage]
   (* (max 0 damage) (hp-seconds)))

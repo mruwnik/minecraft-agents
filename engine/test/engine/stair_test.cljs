@@ -1351,20 +1351,23 @@
 
 (deftest a-stair-up-cuts-its-top-cell-from-beside-under-seen-gravel-or-an-unseen-cell-a-landing-would-kill
   (let [cut [[0 67 0] [1 66 0] [1 65 0]]]
-    (are [over unseen health dir cuts-beside?]
-         (= cuts-beside? (some? (stair/undermine-cell (fn [c] (if (= c [0 68 0]) over "stone")) (fn [c] (and unseen (= c [0 68 0]))) health 1000 [0 65 0] dir cut)))
-      "gravel" false 20 :up true
-      "stone" true 2 :up true
-      "stone" true 6 :up false
-      "stone" true 20 :up false
-      "stone" false 2 :up false
-      "gravel" false 20 :down false)))
+    (are [over above unseen health dir cuts-beside?]
+         (= cuts-beside? (some? (stair/undermine-cell (fn [c] (condp = c [0 68 0] over [0 69 0] above "stone")) (fn [c] (and unseen (= c [0 68 0]))) health 1000 [0 65 0] dir cut)))
+      "gravel" "stone" false 20 :up true
+      "stone" "stone" true 2 :up true
+      "stone" "stone" true 12 :up false
+      "stone" "stone" true 20 :up false
+      "stone" "water" true 20 :up true
+      "stone" "stone" false 2 :up false
+      "gravel" "stone" false 20 :down false)))
 
 (deftest an-unseen-cell-over-the-column-is-cut-from-beside-while-the-side-cut-is-cheaper-than-its-risk
-  (is (true? (stair/undermine-worth? 2 1000)) "2 hp: a landing kills, 0.05 x a 1000 s death is over the 2.1 s the side cut adds")
-  (is (false? (stair/undermine-worth? 6 1000)) "6 hp: a landing's 2 hp at the food that heals them, 0.05 x 20 s, is under the side cut")
-  (is (true? (stair/undermine-worth? 2 50)))
-  (is (false? (with-redefs [stair/undermine-settle-ms 3000] (stair/undermine-worth? 2 50))) "a longer settle makes the side cut dearer"))
+  (let [base (value/roof-fall-share nil)]
+    (is (true? (stair/undermine-worth? base 10 1000)) "10 hp: a landing's hp kill, the base share of a 1000 s death is over the 2.1 s the side cut adds")
+    (is (false? (stair/undermine-worth? base 20 1000)) "20 hp: a landing's seconds and hp at the food that heals them, at the base share, are under the side cut")
+    (is (true? (stair/undermine-worth? (value/roof-fall-share 2) 20 1000)) "under a lake bed the landing is likely")
+    (is (true? (stair/undermine-worth? base 10 500)))
+    (is (false? (with-redefs [stair/undermine-settle-ms 3000] (stair/undermine-worth? base 10 500))) "a longer settle makes the side cut dearer")))
 
 (deftest gravel-over-the-bodys-own-column-is-cut-from-beside-so-it-falls-into-the-empty-column
   (async done

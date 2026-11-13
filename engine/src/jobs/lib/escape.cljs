@@ -101,22 +101,34 @@
   [p feet height]
   (cost/pillar-knock-of p (map #(/ % 4) (pillar-open-sides p feet height))))
 
+(defn roof-fall-share
+  "The chance the unseen cell over roof falls once roof is dug: value/roof-fall-share under seen water d cells up (the first
+  cell up that is seen and not solid, at most value/roof-fall-water-d up), else its base share."
+  [block-at unseen? roof]
+  (value/roof-fall-share
+   (loop [d 2]
+     (when (<= d (value/roof-fall-water-d))
+       (let [cell (up roof d)]
+         (cond (or (unseen? cell) (solid? (block-at cell))) (recur (inc d))
+               (= "water" (block-at cell)) d))))))
+
 (defn roof-landing-fn
   "(fn [roof]) seconds a dig of the cell roof over the body's head risks in a falling block over it landing on the body, which
-  stands in the column below with no side to step to (a pillar's roof): cost/landing-hp at cost/hp-cost (no death priced, as
-  pillar-knock prices none), for sure under a seen falling block, at value/hidden-fall-share under an unseen cell, an unseen
-  roof at the measured chance it is solid; 0 for a roof seen open."
+  stands in the column below with no side to step to (a pillar's roof): cost/landing-cost-s (the death at low health, at its
+  respawn: the world spawn here), for sure under a seen falling block, at roof-fall-share under an unseen cell, an unseen roof at
+  the measured chance it is solid; 0 for a roof seen open."
   [p]
   (let [block-at (block-at-of p)
         unseen? (unseen-of p)
         solid-at (look/unseen-solid-at-fn p)
-        landing-s (cost/hp-cost cost/landing-hp)]
+        self (.self p)
+        landing-s (delay (cost/landing-cost-s {:health (or (.-health self) 20) :absorption (or (.-absorption self) 0)} (cost/death-s p nil)))]
     (fn [roof]
       (let [above (up roof 1)
-            fall (cond (unseen? above) (value/hidden-fall-share) (rules/falling? (block-at above)) 1 :else 0)]
+            fall (cond (unseen? above) (roof-fall-share block-at unseen? roof) (rules/falling? (block-at above)) 1 :else 0)]
         (cond (zero? fall) 0
-              (unseen? roof) (* (solid-at roof) fall landing-s)
-              (solid? (block-at roof)) (* fall landing-s)
+              (unseen? roof) (* (solid-at roof) fall @landing-s)
+              (solid? (block-at roof)) (* fall @landing-s)
               :else 0)))))
 
 (defn protected? [n] (boolean (and n (re-find protected n))))

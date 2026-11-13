@@ -72,7 +72,10 @@
                                             (fn [m] (and (map? m) (every? (fn [k] (let [c (get m k)] (and (map? c) (every? #(and (number? (get c %)) (<= 0 (get c %))) [:loose :other]))))
                                                                           [:h1 :h2 :h3 :h4 :h5]))))
                               :doc "The Beta prior per height h (:h1 to :h5, the run of sand, red sand or gravel cells under the cell, capped) of the cell above a loose cell, when it is not air or a fluid (an unseen cell), being loose ground too (jobs.lib.cost.value/loose-over-loose-chance): 2.31M pairs in 4038 recorded chunk columns (every 20th, the fixture grid left out, 2026-11-07), 0.881, 0.707, 0.672, 0.232, 0.092 of 734k, 612k, 401k, 122k, 25k pairs. Spread fitted by moments over columns, as a call digs in one place (effective n about 44; h4 and h5 scaled to it). One world: layers of loose ground here stop at 3-4 cells. Recount: node tools/event-counts.mjs loose-stack --stride 20."}
-   ::hidden-fall-share {:default 0.05 :doc "Chance an unseen cell over a cut cell holds a falling block (gravel, sand) that drops once the cut opens: a prior, not measured (the logs do not say what an unseen cell over a cut held)." :spec (a/num-in 0 1)}
+   ::roof-fall-shares {:default {:base 0.0053 :water {2 0.254 3 0.072 4 0.049 5 0.023 6 0.012}}
+                       :spec (a/pred "a map {:base share :water {d share}}, shares 0..1"
+                                     (fn [{:keys [base water]}] (and (number? base) (<= 0 base 1) (map? water) (every? (fn [[d v]] (and (int? d) (number? v) (<= 0 v 1))) water))))
+                       :doc "Chance the cell over a dug roof (a solid cell that is not loose ground), when it is neither air nor a fluid, is sand, red sand or gravel that falls once the roof opens (roof-fall-share): :water by d, the roof's distance up to the nearest open cell over it when that is water (a lake bed: 0.254 just under it; about 290k roofs each), :base for any other roof (61.2M roofs, 0.0053; under water past 6 about 0.006, under air 0.003-0.011 at any d). 2068 recorded chunk columns (every 40th, the fixture grid left out), 2026-11-13. Recount: node tools/event-counts.mjs loose-stack --stride 40 (:roofs)."}
    ::detour-factor {:default 1.27 :spec (a/num-in 1 nil)
                     :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s: 30255 blocks of steers over 23766 of straight line in 1235 walks (go-to walk jobs of 4 blocks or more), trial logs to 2026-10-28; a lower bound (steer chords). Recount: tools/event-counts.mjs walk-detour (:ratio)."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
@@ -451,7 +454,15 @@
   (let [{:keys [loose other]} (get (settings/get settings ::loose-over-loose-counts) (keyword (str "h" (max 1 (min h loose-stack-cap)))))]
     (/ loose (max 1e-9 (+ loose other)))))
 
-(defn hidden-fall-share [] (settings/get settings ::hidden-fall-share))
+(defn roof-fall-share
+  "::roof-fall-shares: the chance the cell over a roof falls once the roof is dug, under water water-d cells up (nil:
+  not known to be under water, or farther than the table reads)."
+  [water-d]
+  (let [{:keys [base water]} (settings/get settings ::roof-fall-shares)]
+    (get water water-d base)))
+
+(defn roof-fall-water-d "The farthest distance up to water ::roof-fall-shares tells apart." []
+  (apply max 0 (keys (:water (settings/get settings ::roof-fall-shares)))))
 
 (defn dark-factor
   "The floor of the planner's extra cost of a dark cell as a share of its own seconds: per-dark over per-block

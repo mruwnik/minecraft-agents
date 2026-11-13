@@ -13,8 +13,6 @@
             [jobs.lib.cond :as cond]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.health :as cost-health]
-            [jobs.lib.cost.value :as value]
             [jobs.lib.stair-cells :as geo]
             [jobs.access.stair.judge :as judge]
             [jobs.lib.stair-memory :as smem]
@@ -58,7 +56,7 @@
   :lava-exposed instead); after a seal it waits half a second, looking, before it digs or steps on; a failed seal, or lava flowing back once a reseal is not worth it (jobs.lib.lava/reseal?), backs the body off and stops :lava-unsealed. A cut that
   now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot). :accept
   (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column (a stair up's top cell; also an unseen cell there when the cut from
-  beside is cheaper than what the landing risks, undermine-worth?: a body a landing would kill) would land on the body once the cell under it is cut: the body steps out of the column (the step behind, the cell behind, a side), cuts the column and what drops into it
+  beside is cheaper than what the landing risks, undermine-worth?: at low health, or under seen water) would land on the body once the cell under it is cut: the body steps out of the column (the step behind, the cell behind, a side), cuts the column and what drops into it
   from there, and walks back. With no cell to step to it is cut in place, and one that lands on the body is dug out at
   once (at most 2 landings, then :hazard). The body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged with water still beside it (stair-memory/kept-plugs),
   a crop, or a base block.
@@ -333,21 +331,20 @@
   (+ (/ undermine-settle-ms 1000) (/ 2 cost/walk-speed)))
 
 (defn undermine-worth?
-  "Whether cutting from beside costs less than what an unseen cell over the column risks a body at health: cost.value/hidden-fall-share
-  x a landing, its landing-hp at cost.health/hp-cost or, at health landing-hp or less, the death (death-s), against undermine-s."
-  [health death-s]
-  (> (* (value/hidden-fall-share) (if (<= health cost-health/landing-hp) death-s (cost-health/hp-cost cost-health/landing-hp)))
-     (undermine-s)))
+  "Whether cutting from beside costs less than what a fall at chance share risks a body at health: share x
+  cost/landing-cost-s (the death, death-s, at low health), against undermine-s."
+  [share health death-s]
+  (> (* share (cost/landing-cost-s {:health health :absorption 0} death-s)) (undermine-s)))
 
 (defn undermine-cell
   "The top cut cell of a stair up, in the body's own column, when a falling block stands over it, or the cell over it is
-  unseen and undermine-worth? at health and death-s: cut from where the body stands, the block lands on the body (each landing
-  suffocates it). nil otherwise."
+  unseen and undermine-worth? at its escape/roof-fall-share, health and death-s: cut from where the body stands, the block
+  lands on the body (each landing suffocates it). nil otherwise."
   [block-at unseen? health death-s feet dir cut]
   (let [top (first cut)]
     (when (and (= :up dir) (not (bs/air (block-at top)))
                (or (rules/falls-on-body? block-at top feet)
-                   (and (unseen? (shape/add top [0 1 0])) (undermine-worth? health death-s))))
+                   (and (unseen? (shape/add top [0 1 0])) (undermine-worth? (escape/roof-fall-share block-at unseen? top) health death-s))))
       top)))
 
 (defn undermine-stand

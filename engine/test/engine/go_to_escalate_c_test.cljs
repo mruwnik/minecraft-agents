@@ -601,7 +601,9 @@
     (are [r n] (let [q (body r)
                      roof-s (* n ((escape/dig-share-fn q) [0 67 0]) (/ (tools/clear-ms q "stone") 1000))
                      ;; the unseen [0 68 0] over the roof [0 67 0] (solid at its chance) and [0 67 0] over the seen roof [0 66 0]
-                     landing-s (* n (value/hidden-fall-share) (cost/hp-cost cost/landing-hp) (+ 1 ((escape/dig-share-fn q) [0 67 0])))]
+                     share (value/roof-fall-share nil)
+                     land-s (cost/landing-cost-s {:health 20 :absorption 0} (cost/death-s q nil))
+                     landing-s (* n (+ (* share land-s) (* ((escape/dig-share-fn q) [0 67 0]) share land-s)))]
                  (= (+ (cw/pillar-cost 2) (* n unseen-s) (escape/pillar-knock q [0 64 0] 2) roof-s landing-s) (escape-way/price q [0 64 0] {:step :pillar :height 2})))
       50 0
       2.9 1)))
@@ -671,6 +673,23 @@
                   (set (keep #(when (= :pillar (:step %)) (:from %)) (cons e (:then e))))))]
     (is (contains? (climb "stone") [0 64 0]) "under stone the climb pillars straight up from the feet")
     (is (not-any? (fn [[x y z]] (and (= 0 x z) (< y 67))) (climb "sand")) "under sand no pillar digs up into it from below")))
+
+(deftest a-climb-does-not-pillar-up-under-seen-water-over-unseen-rock
+  ;; live (Tamsin S7): a climb pillared up under a lake bed it had not seen; the sand over its roof landed on the body.
+  ;; Seen water a few cells over unseen roofs makes a falling block over them likely (value/roof-fall-shares).
+  (let [climb (fn [over]
+                (let [p (tu/seeing-within (tu/fake {:blocks (assoc stone-mass "0,72,0" over "0,73,0" over) :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                                    :inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 16}]}) 4.5)
+                      sensed (aget p "sensedAt")
+                      _ (tu/set-sensed! p (fn [pos] (if (and (= 0 (.-x pos) (.-z pos)) (<= 72 (.-y pos) 73)) (.blockAt (tu/oracle p) pos) (sensed pos))))
+                      id (gensym)
+                      e (try (loop [] (let [e (climb-route/climb-way p [0 64 0] [0 70 0] (constantly true) {:skip #{} :pillar-item {:item "dirt" :count 16} :slice (choose/route-slice id)})]
+                                        (if (= :searching (:step e)) (recur) e)))
+                             (finally (choose/end-searches! id)))]
+                  ;; the roofs its pillars dig in the column under the water, 2 to 4 cells under it
+                  (set (for [{[x y z] :from h :height} (cons e (:then e)) :when (= 0 x z) roof (range (+ y 2) (+ y h 2)) :when (<= 68 roof 70)] roof))))]
+    (is (= #{68 69 70} (climb "stone")) "under stone the climb pillars straight up from the feet")
+    (is (= #{} (climb "water")) "under the water it digs those roofs from beside, not from below")))
 
 (deftest climb-way-gives-the-search-the-pillar-block-price-at-the-measured-chance
   (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
