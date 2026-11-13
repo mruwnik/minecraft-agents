@@ -2,8 +2,8 @@
 ;; trigger fires it again after its cooldown. A failed sleep is governed only by the 5-minute :sleep-failed body-memory entry.
 ;; jobs.survival.night is submitted in :act (the runner starts the body with its register before plot and time are set).
 ;; Open ground: stone floor, no torches (light at the feet is safe), no roof and no blocks to build one.
-;; The monsters-near case uses a NoAI zombie next to the bed: the round ends nothing-possible :monsters-near, the zombie is killed and
-;; the next firing sleeps. The bed is set where the body looks (:yaw 90, west): one set behind it is not seen.
+;; The monsters-near case uses a NoAI zombie in the bed's rest box: the server refuses the sleep, so the bed is priced as lost
+;; night (night.answers) and the exposed way wins: the round ends nothing-possible :exposed, the zombie is killed and the next firing sleeps. The bed is set where the body looks (:yaw 90, west): one set behind it is not seen.
 ;; Needs night: run with --allow-time --time-log <the shared time log>, one case per call (--match).
 {:defaults
  {:tags [:night :survival :sleep]
@@ -115,14 +115,14 @@
          [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"]
          [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"]
          [:job (jobs.survival.night {:worth 1200})]
-         [:await {:source :job :kind :stopped :data {:reason :monsters-near}} 60]
+         [:await {:source :job :kind :stopped :data {:reason :exposed}} 60]
          [:rcon "kill @e[type=zombie,$BOX]"]
          [:wait-s 20]
          [:rcon "kill @e[type=spider,$BOX]"]
          [:rcon "kill @e[type=skeleton,$BOX]"]
          [:rcon "kill @e[type=creeper,$BOX]"]
          [:rcon "kill @e[type=zombie,$BOX]"]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :monsters-near}} :within-s 60}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 60}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 400}]
    :after [[:body-near [10.5 0 12.5] 6]]
    :limit-s 420}]}
