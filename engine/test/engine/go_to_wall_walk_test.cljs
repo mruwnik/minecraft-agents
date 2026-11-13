@@ -14,8 +14,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen p]} (await (gs/run-job 'jobs.movement.go-to {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks below-pocket}
-                                                      {:pos [3 60 0] :range 0 :unknown false :ways #{:walk}} lit))
+        (let [{:keys [out seen p]} (await (gs/run-go-to {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks below-pocket}
+                                                      {:pos [3 60 0] :range 0 :ways #{:walk}} lit))
               pos (.-pos (.self p))]
           (is (false? (:arrived out)) (pr-str out))
           (is (seq (filter #(= :go-to.wall-walk (:kind %)) seen)) "the wall walk runs")

@@ -110,7 +110,6 @@
  [jobs.gather.mine :torches]
  [jobs.gather.mine :tunnel-length]
  [jobs.gather.mine :wet]
- [jobs.items.collect-drops :center]
  [jobs.items.craft :blocks]
  [jobs.items.craft :inventory]
  [jobs.items.craft :radius]
