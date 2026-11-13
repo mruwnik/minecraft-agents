@@ -11,7 +11,7 @@
   events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
   for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one), :kit-later jobs.items.get-kit's bill after a :later stop (:kit.later-wait a stop rested on, :kit.later-over a bill round that ended otherwise after one); :pooled all kinds' tries together,
   the prior of a kind with none counted. :walk-round is one round inside a go-to: a go-to.retrying (a fruitless round that plans again) fails, and a go-to result that follows one is the call's last round (won when it arrived); a call is a run of retrying tries ending at a result (a job id holds many); the pooled fit leaves it out.
-  a go-to.escalated (:n) is a try of :escalate (left out of :pooled like :walk-round): it fails when the job's next escalation has a higher :n, wins when the next call began (:n not higher) or the go-to's end after it arrived (`escalations`). a lava seal placed again on a cell (stair.sealed, blocks.dig.sealed \"sealed lava at\") is a try of :reseal: every seal of a cell but the last failed. Pure parts: scan-line, retries, report."
+  a go-to.escalated (:n) is a try of :escalate (left out of :pooled like :walk-round): its end is the next escalation of the call (a higher :n: fails) or the call's go-to end (won when it arrived); one whose call has no end seen is left out (`escalations`). a lava seal placed again on a cell (stair.sealed, blocks.dig.sealed \"sealed lava at\") is a try of :reseal: every seal of a cell but the last failed. Pure parts: scan-line, retries, report."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             [world-test.field-passes :as passes]))
@@ -104,20 +104,20 @@
             rows)))
 
 (defn- escalations
-  "The :escalate rows of the scanned rows (:escalate-mark and :walk ends), per job id and call: an escalation (go-to.escalated)
-  fails when the next one of the job has a higher :n (the same call goes on), wins when it has not (the next call began, nearer)
-  or when the go-to's end that follows arrived; one with no end seen after it is left out. The try after a failed one is the
-  prior's try, so a call's first escalation is its condition."
+  "The :escalate rows of the scanned rows (:escalate-mark and :walk ends), per job id and call. A try is a go-to.escalated; its
+  end is the next escalation of the same call (a higher :n: fails) or the call's go-to end (won when it arrived), and the row's
+  :t is that end, so a try's seconds run from its escalation to its end. An escalation whose next one has a :n not higher (the
+  next call began) has no end seen and is left out, never won by a later call's start."
   [rows]
   (mapcat (fn [[key rs]]
             (:out (reduce (fn [{:keys [prev n out] :as st} r]
-                            (let [emit (fn [fail?] (conj out {:kind :escalate :key (conj key n) :t (:t prev) :edge :end :fail? fail?}))]
+                            (let [emit (fn [fail?] (conj out {:kind :escalate :key (conj key n) :t (:t r) :edge :end :fail? fail?}))]
                               (cond
-                                (nil? prev) (if (= :escalate-mark (:kind r)) (assoc st :prev r) st)
-                                (= :escalate-mark (:kind r)) (if (> (:n r) (:n prev))
-                                                               (assoc st :prev r :out (emit true))
-                                                               {:prev r :n (inc n) :out (emit false)})
-                                :else {:prev nil :n (inc n) :out (emit (:fail? r))})))
+                                (and (nil? prev) (= :escalate-mark (:kind r))) (assoc st :prev r)
+                                (nil? prev) st
+                                (not= :escalate-mark (:kind r)) {:prev nil :n (inc n) :out (emit (:fail? r))}
+                                (> (:n r) (:n prev)) (assoc st :prev r :out (emit true))
+                                :else {:prev r :n (inc n) :out out})))
                           {:prev nil :n 0 :out []}
                           (sort-by :t rs))))
           (group-by :key (filter #(or (= :escalate-mark (:kind %)) (and (= :walk (:kind %)) (= :end (:edge %)))) rows))))

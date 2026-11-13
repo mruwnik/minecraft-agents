@@ -133,13 +133,12 @@
 (defn escalated [job t n]
   (pr-str {:generation-id "g" :time-ms t :source :job :kind :go-to.escalated :context {:job-id job} :data {:why :exhausted :n n}}))
 
-(deftest an-escalation-is-a-try-that-fails-when-the-next-has-a-higher-n-and-wins-when-the-call-restarts-or-arrives
+(deftest an-escalation-ends-at-the-calls-next-escalation-or-its-go-to-end-never-at-a-later-call
   (let [rows (keep r/scan-line [(escalated "j1/go" 0 1) (escalated "j1/go" 1000 2) (escalated "j1/go" 3000 3) (walk "j1/go" 6000 true)
-                                (escalated "j1/go" 10000 1) (escalated "j1/go" 11000 2) (escalated "j1/go" 12000 1) (escalated "j1/go" 13000 2) (walk "j1/go" 14000 false)
-                                (escalated "j1/go" 20000 1)])
+                                (escalated "j1/go" 10000 1) (escalated "j1/go" 11000 2) (escalated "j1/go" 12000 1) (walk "j2/go" 90000 true)])
         {:keys [escalate pooled]} (r/report rows)]
-    (is (= {:won 2 :retries 4 :calls 3} (select-keys escalate [:won :retries :calls]))
-        "call 1: n2 failed (n3 follows), n3 won (arrived); call 2: n2 won (n1 restarts); call 3: n2 failed (not arrived); a last escalation with no end is left out")
+    (is (= {:won 1 :retries 2 :calls 1 :try-s 2.5} (select-keys escalate [:won :retries :calls :try-s]))
+        "call 1: n1 failed (n2 at 1 s), n2 failed (n3 at 3 s, 2 s try), n3 won (arrived at 6 s, 3 s try); call 2: n2 has no end seen (n1 of the next call began), left out, and another job's arrival at 90 s is no win of it")
     (is (nil? pooled) "escalations stay out of the pool")))
 
 (defn sealed [job t cell]
