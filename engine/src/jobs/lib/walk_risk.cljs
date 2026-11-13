@@ -420,7 +420,7 @@
   (price/allowed-hp) and its seconds, the death's price among them, within the worth (bought?). Later :risky, with both prices, while an affordable wait is cheaper than walking now, rechecked
   every recheck-ms. While the armed night trigger (sh/night-armed?) would cut a walk out of the shelter it counts the body
   safe in (sh-inside/walk-leaves-shelter?), walking now never arrives: it costs the walk there and back on top of the
-  cheapest wait, so that wait holds. Ok :acceptable while walking now is affordable; ok :cheaper-than-staying while it costs no more hp than
+  cheapest wait, so that wait holds (with no affordable wait: later until dawn, the calling job's budget decides whether that is worth it). Ok :acceptable while walking now is affordable; ok :cheaper-than-staying while it costs no more hp than
   staying put; later :risky while only a wait is affordable; never :stranded when staying costs and the body cannot heal
   (seal in or go to a nearer refuge), else never :risky. Ok :unplanned with no plan: go-to's round
   prices its plan before it walks a step of it (jobs.movement.go-to.reprice)."
@@ -451,6 +451,7 @@
                                   :risk hurt-hp :allowed allowed :now-s now-s :wait (:wait w) :wait-s s :recheck-after-ms recheck-ms))]
        (cond
          (and best (< (+ (:s best) (:rest-s best 0)) (+ now-s (night-rest-s c goal plan in walk-s 0)))) (wait best)
+         (and cut? (nil? best)) (let [night-s (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))] (wait {:wait :dawn :secs night-s :s (+ night-s walk-s)}))
          now? (contract/ok :acceptable (str "route risk " (price/round1 hurt-hp) " hp hurt, within " (price/round1 allowed) ", " (price/round1 now-s) " s with its death"))
          (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
          best (wait best)

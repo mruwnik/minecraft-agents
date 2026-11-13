@@ -282,16 +282,18 @@
           (is (= inside (st/pos-of p)) "armed, the trigger would cut the walk: it waits in the room")
           (is (= [:risky :dawn] ((juxt :reason :wait) (waiting-of eng id)))))))))
 
-(deftest an-armed-night-trigger-holds-even-a-short-walk-out-of-the-hut-that-risks-nothing
+(deftest an-armed-night-trigger-holds-a-walk-out-of-the-hut-that-risks-nothing-until-dawn
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (night-hut {}))
+        (let [{:keys [eng p]} (setup (assoc (night-hut {}) :light {} :light-default [15 15]))
               id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [15 64 0]})) {})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (ticks eng 20))
-          (is (= inside (st/pos-of p)) "the unarmed test walks this out; armed, the trigger would cut it")
-          (is (= :risky (:reason (waiting-of eng id)))))))))
+          (let [w (waiting-of eng id)]
+            (is (= inside (st/pos-of p)) "the walk is lit and costs no hp; armed, the trigger would cut it")
+            (is (= 0 (:risk w)) "a risk of exactly 0")
+            (is (= [:risky :dawn] ((juxt :reason :wait) w)))))))))
 
 ;; ------------------------------------------------------------------ in-place jobs still run
 
