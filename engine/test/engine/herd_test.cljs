@@ -360,6 +360,12 @@
           (is (= :brought (:reason (done-event s))))
           (is (empty? (filter #(= :out (:where %)) (events-of s :herd.crowded-gate)))))))))
 
+(deftest another-shut-try-is-priced-at-the-worth-given-not-the-calls
+  ;; herd's shut-worth: the pen's loss through an open gate can be worth a try the call's own worth is not
+  (with-redefs [ctx/mem (constantly {:fruitless {:shut-gate 2} :fruitless-s {:shut-gate 5}})]
+    (is (child/exhausted? {} :shut-gate :child-round 1) "worth 1 s: a 5 s try is not worth it")
+    (is (not (child/exhausted? {} :shut-gate :child-round 1e6)) "the same fruitless count at a high worth: tried again")))
+
 (deftest every-gate-click-runs-in-an-urgent-section
   ;; a dusk or hunger reflex waits for the shut instead of cutting the run with the pen open behind the body
   (async done
