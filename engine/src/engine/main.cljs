@@ -14,6 +14,7 @@
             [engine.heap :as heap]
             [engine.hurt :as hurt]
             [engine.notes :as notes]
+            [engine.memory :as mem]
             [engine.path.offsets :as offsets]
             [engine.perception :as perception]
             [engine.registry :as registry]
@@ -208,6 +209,14 @@
           (await (js/Promise. (fn [resolve _] (js/setTimeout resolve 100))))
           (recur))))))
 
+(def seen-file-name "seen.bin")
+
+(defn wipe-body-state!
+  "--fresh: the body's saved engine state, results, memory and seen-world file go; event logs stay."
+  [dir]
+  (doseq [f [(path/join dir "engine.edn") (path/join dir "results.edn") (mem/file dir) (path/join dir seen-file-name)]]
+    (when (fs/existsSync f) (fs/unlinkSync f))))
+
 (defn ^:async start
   "Open the body's files, log in and run, once the one-process guard is held (release frees it).
   Resolves to {:engine eng :stop f}."
@@ -223,9 +232,7 @@
                            :body-file (path/join (bodies/body-dir state-dir (:world cfg) (:agent opts)) "settings.edn")
                            :body (:agent opts)
                            :emit #(swap! settings-events conj %)})
-        results-file (path/join (:engine-dir cfg) "results.edn")
-        _ (when fresh?
-            (doseq [f [engine-file results-file]] (when (fs/existsSync f) (fs/unlinkSync f))))
+        _ (when fresh? (wipe-body-state! (:engine-dir cfg)))
         restoring? (fs/existsSync engine-file)
         create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))
         eng-ref (atom nil)
@@ -256,7 +263,7 @@
         _ (trigger-api/restore-conditions! base-eng)
         _ (boot-scenario! base-eng {:plan plan :stale stale :restoring? restoring? :upgrade? upgrade?})
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
-        seen-file (path/join (:engine-dir cfg) "seen.bin")
+        seen-file (path/join (:engine-dir cfg) seen-file-name)
         seen-io ((createRequire (str root "/")) "./js/seen-file.mjs")
         eng (cond-> (assoc base-eng :seen-entities seen :light-view #((:light/view hooks/all) p %))
               per (assoc :flush-seen #(perception/save! per seen-io seen-file)))

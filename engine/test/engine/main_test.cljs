@@ -265,3 +265,10 @@
         (is (empty? (:attention (core/state third))))
         (is (= {:ok true :op :upgrade :added [] :offered []} (api/upgrade! third)) "nothing stale is added")
         (is (= [:hungry] (ids third)))))))
+
+(deftest fresh-wipes-body-memory-and-keeps-event-logs
+  (let [dir (tu/tmp-dir)
+        names ["engine.edn" "results.edn" "memory.edn" "seen.bin" "events.edn"]]
+    (doseq [n names] (fs/writeFileSync (path/join dir n) "x"))
+    (main/wipe-body-state! dir)
+    (is (= ["events.edn"] (filter #(fs/existsSync (path/join dir %)) names)))))
