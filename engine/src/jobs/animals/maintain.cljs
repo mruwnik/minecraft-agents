@@ -36,7 +36,7 @@
     that stays rests the pen.
   - :herd (jobs.animals.herd, :target at most): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
     adults of the kind are listed outside the box (in no enclosure, on ground the zones let it take from) whose cost/animal-worth beats the
-    walk to each and on to the pen; herd brings the box up to the pair plus those strays, fetching and searching within ::herd-radius (64) of the body.
+    walk (cost/walk-cost) to each and on to the pen; herd brings the box up to the pair plus those strays, fetching and searching within ::herd-radius (64) of the body.
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
     food carried (breed fetches it unless the ways are only #{:carried}).
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
@@ -164,7 +164,7 @@
         worth (cost/animal-worth mob)]
     (count (filter #(let [pos (u/pos-of (.-pos %))]
                       (and (ok (animals/cell-of %))
-                           (< (* (cost/walk-step-s) (+ (u/dist here pos) (u/dist pos mid))) worth)))
+                           (< (:cost (cost/walk-cost {:distance (+ (u/dist here pos) (u/dist pos mid))})) worth)))
                    out))))
 
 (defn facts
