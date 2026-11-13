@@ -245,7 +245,7 @@
   (mem/forget-where! (:store eng) :bed (constantly true))
   (mem/write! (:store eng) :spawn-bed {:pos pos} {:cap 1 :ttl :forever}))
 
-(deftest a-body-on-dark-open-ground-does-not-walk-to-a-far-bed-it-could-shelter-from
+(deftest an-overdue-body-on-dark-open-ground-walls-in-rather-than-walk-to-a-far-bed-it-could-shelter-from
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -257,7 +257,8 @@
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= #{bed} (set (map :pos (st/entries eng :bed-walk-unsafe)))) "the walk's dark costs more than walling in here")
-          (is (empty? (st/calls raw "sleep"))))))))
+          (is (empty? (st/calls raw "sleep")))
+          (is (seq (st/calls raw "place")) "an overdue body walls in: the roof keeps phantoms off too"))))))
 
 (deftest a-body-on-dark-open-ground-with-no-way-to-shelter-walks-to-a-near-bed
   (async done
