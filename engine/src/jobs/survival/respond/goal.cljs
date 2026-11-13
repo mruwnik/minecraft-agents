@@ -98,12 +98,13 @@
   beaten? (a chaser gets there first even against a straight walk: flee-search/beaten-to?), flee-search/safe-why
   (:no-way: not planned whole, :past-hostile, :hostile-nearer), unplanned (default :no-way) when e is nil;
   :home-safer: home (closed-home) lies elsewhere (farther than same-place from it). A plan the meter cut (:unjudged) is
-  unknown, no reason against the goal: the leg's own checks (off!) end the walk that loses ground."
-  [goal e {:keys [home beaten? unplanned] :or {unplanned :no-way}}]
+  unknown, no reason against the goal: the leg's own checks (off!) end the walk that loses ground; with blast? (a creeper
+  within blast reach) it is: those checks come after the leg, the fuse before."
+  [goal e {:keys [home beaten? unplanned blast?] :or {unplanned :no-way}}]
   (let [why (if e (search/safe-why e) unplanned)]
     (cond
       beaten? :hostile-nearer
-      (not (contains? #{nil :unjudged} why)) why
+      (not (contains? (if blast? #{nil} #{nil :unjudged}) why)) why
       (and home (> (u/dist home goal) (same-place))) :home-safer)))
 
 (declare under-floor? margin fire-price choose-opts)
@@ -134,6 +135,7 @@
               (under-floor? c goal) :under-floor
               :else (verdict goal (search/named ends goal)
                              {:home (closed-home {:home home :room room}) :unplanned (unplanned-why ends)
+                              :blast? (boolean (some #(flight/blaster? (:primitives c) %) threats))
                               :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
 (defn block-at-fn
@@ -255,15 +257,17 @@
                          ": away from them instead, the goal again in " (retry-s) " s")}))
 
 (defn leg
-  "The goal of judged (judge!), when nothing speaks against it, as a go-to target: the planner's danger costs route the
-  leg round the hostiles. Once the body is within near of it the goal is done for the flight (:goal-reached): the
-  flight goes on away from the chasers; without that it walked back and forth between the goal and the way away for ever."
+  "The goal of judged (judge!), when nothing speaks against it, as a go-to target with the route the search judged it by
+  as its :route meta (search/with-route, to the end within reach of the goal; none when unplanned): go-to walks that route while its own
+  prices agree, not one of its own past a creeper the verdict never saw. Once the body is within near of it the goal is
+  done for the flight (:goal-reached): the flight goes on away from the chasers; without that it walked back and forth
+  between the goal and the way away for ever."
   [c judged]
   (let [goal (usable judged)]
     (cond
       (nil? goal) nil
       (<= (u/dist (u/self-pos c) goal) (near)) (do (ctx/update-mem! c assoc :goal-reached true) nil)
-      :else goal)))
+      :else (let [e (search/named (:ends judged) goal)] (with-meta goal (some-> (:end e) (search/with-route (:cells e)) meta))))))
 
 (defn start-leg!
   "Note the feet height the walk to the goal began at (:goal-y0), once a walk."

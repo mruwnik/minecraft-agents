@@ -1254,6 +1254,8 @@
                           [:home-safer (run-end goal 4 9 :found? false :cut? true) {:home {:x 10 :y 64 :z 0}}]
                           [:hostile-nearer (run-end goal 4 9 :found? false :cut? true) {:beaten? true}]
                           [:past-hostile (run-end goal 4 9 :found? false :cut? true :caught? true) {}]
+                          [:unjudged (run-end goal 4 9 :found? false :cut? true) {:blast? true}]
+                          [nil (run-end goal 4 9) {:blast? true}]
                           [:home-safer (run-end goal 4 9) {:home {:x 10 :y 64 :z 0}}]
                           [nil (run-end goal 4 9) {:home {:x -14 :y 64 :z 3}}]]]
       (is (= why (respond.goal/verdict goal e opts)) (pr-str e opts)))))
@@ -1412,6 +1414,19 @@
                      #(run-job! (scripted-go-to s calls script) 'test.flight {:goal west-goal})))
             (is (= west-goal (:pos (first @calls))) "the first leg, which fails, goes to the goal")
             (is (= legs (count (goal-legs calls))) (str "retry-s " retry-s ": " (mapv :pos @calls)))))))))
+
+(deftest a-goal-leg-walks-the-route-the-search-judged
+  ;; run4 F18: go-to planned its own leg to the goal, out of a pit past a creeper the verdict's route kept off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 6 {})]})
+              s (scripted-go-to s calls (fn [st _] (swap! st assoc :entities []) {:arrived false :leg false}))
+              _ (await (run-job! s 'test.flight {:goal west-goal}))
+              leg (first (goal-legs calls))]
+          (is (some? leg) (str "the first step walks to the goal: " (mapv :pos @calls)))
+          (is (<= (u/dist west-goal (or (last (:route leg)) {:x 0 :y 64 :z 0})) 2) (str "along the judged route to the goal: " (:route leg))))))))
 
 (deftest a-flight-soon-after-one-that-gave-its-goal-up-skips-that-goal-at-once
   (async done
