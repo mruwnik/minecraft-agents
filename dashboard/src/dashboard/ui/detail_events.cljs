@@ -102,6 +102,18 @@
  (fn [db [_ name error]]
    (if (= name (:detail-body db)) (assoc db :attention-error (str error)) db)))
 
+(rf/reg-event-fx
+ :takeover
+ (fn [{:keys [db]} [_ name]]
+   {:db (assoc db :takeover {:name name :pending? true})
+    :post-edn {:url (str "/api/takeover/" (body-path db name))
+               :body {:kill :all}
+               :on-ok [:takeover-done name]
+               :on-err [:takeover-error name]}}))
+
+(rf/reg-event-db :takeover-done (fn [db [_ name result]] (assoc db :takeover {:name name :result result})))
+(rf/reg-event-db :takeover-error (fn [db [_ name error]] (assoc db :takeover {:name name :error (str error)})))
+
 (rf/reg-event-db :detail-chip (fn [db [_ chip]] (assoc db :detail-chip chip)))
 (rf/reg-event-db :detail-debug? (fn [db [_ on?]] (assoc db :detail-debug? on?)))
 (rf/reg-event-db :detail-text (fn [db [_ text]] (assoc db :detail-text text)))

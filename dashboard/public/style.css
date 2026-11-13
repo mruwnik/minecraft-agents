@@ -455,3 +455,7 @@ button.on { background: #27405f; border-color: #3d6396; }
 .line.job .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .line.goal .wait { flex: none; font-size: 11px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
 .setrow { display: flex; gap: 4px; flex-wrap: wrap; } .setrow input { flex: 1 1 8em; min-width: 0; }
+.takeover { padding: 3px 12px; background: var(--danger); color: #fff; border: 1px solid var(--danger); font-weight: 700; }
+.dtakeover { flex-basis: 100%; font-family: var(--mono); font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+.dtakeover.error { color: var(--danger); }
+.dtakeover.pending { color: var(--dim); }

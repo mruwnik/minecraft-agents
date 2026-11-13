@@ -11,7 +11,7 @@
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :detail-debug? :attention-outstanding :attention-error :detail-notices :notices :chat :worlds :detail-stats? :chat-send :chat-sender :status-filter]]
+(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :detail-debug? :attention-outstanding :attention-error :detail-notices :notices :chat :worlds :detail-stats? :chat-send :chat-sender :status-filter :takeover]]
   (reg-key-sub k))
 
 (rf/reg-sub :whisper-send (fn [d [_ name]] (get-in d [:whisper-send name] cs/initial)))

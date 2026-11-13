@@ -64,3 +64,21 @@
     (not error) nil
     online? {:kind :error :text error}
     :else {:kind :offline :text offline-note-text}))
+
+(defn takeover-lines
+  "The takeover outcome as {:kind :ok|:error|:pending :lines [...]}: one line per killed process."
+  [{:keys [pending? error result]}]
+  (let [proc-line (fn [prefix {:keys [pid role argv]}]
+                    (str prefix " " pid " (" (clojure.core/name role) "): " (clojure.string/join " " argv)))
+        {:keys [killed respawned survivors launcher ok?]} result]
+    (cond
+      pending? {:kind :pending :lines ["killing..."]}
+      error {:kind :error :lines [(str "takeover failed: " error)]}
+      :else {:kind (if ok? :ok :error)
+             :lines (concat [(cond (not ok?) "NOT CLEAN: see below"
+                                   (empty? killed) "no process of this body was running"
+                                   :else (str "killed " (count killed) ", all gone"))]
+                            (map #(proc-line "killed" %) killed)
+                            (map #(proc-line "respawned and killed" %) respawned)
+                            (map #(proc-line "STILL ALIVE" %) survivors)
+                            (when launcher [(str "started from " (:pid launcher) ": " (clojure.string/join " " (:argv launcher)) " (left running)")]))})))

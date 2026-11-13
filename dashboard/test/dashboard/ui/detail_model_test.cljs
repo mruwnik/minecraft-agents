@@ -68,3 +68,15 @@
 (deftest the-goal-wait-reaches-the-model
   (let [mdl (m/detail-model (assoc online :goal {:text "t" :wait "waiting: x" :since (- now 1000)}) now "wait")]
     (is (= "waiting: x" (:goal-wait mdl)))))
+
+(deftest takeover-lines-name-every-pid-and-flag-an-unclean-kill
+  (let [p {:pid 7 :role :body :argv ["node" "out/body-release.cjs"]}]
+    (are [state expected] (= expected (m/takeover-lines state))
+      {:pending? true} {:kind :pending :lines ["killing..."]}
+      {:error "http 403"} {:kind :error :lines ["takeover failed: http 403"]}
+      {:result {:killed [] :ok? true}} {:kind :ok :lines ["no process of this body was running"]}
+      {:result {:killed [p] :ok? true :launcher {:pid 3 :argv ["bash"]}}}
+      {:kind :ok :lines ["killed 1, all gone" "killed 7 (body): node out/body-release.cjs" "started from 3: bash (left running)"]}
+      {:result {:killed [p] :respawned [(assoc p :pid 8)] :survivors [p] :ok? false}}
+      {:kind :error :lines ["NOT CLEAN: see below" "killed 7 (body): node out/body-release.cjs"
+                            "respawned and killed 8 (body): node out/body-release.cjs" "STILL ALIVE 7 (body): node out/body-release.cjs"]})))

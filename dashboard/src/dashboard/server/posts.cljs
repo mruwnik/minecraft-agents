@@ -1,11 +1,12 @@
 (ns dashboard.server.posts
-  "The state-changing routes: chat and whisper send, restart, blueprint preview."
+  "The state-changing routes: chat and whisper send, restart, takeover, blueprint preview."
   (:require [dashboard.blueprint-library :as blueprint-lib]
             [dashboard.chat-send :as chat-send]
             [dashboard.edn :as edn]
             [dashboard.guard :as guard]
             [dashboard.rcon :as rcon]
             [dashboard.restart :as restart]
+            [dashboard.takeover :as takeover]
             [dashboard.server.files :refer [max-preview-bytes]]
             [dashboard.server.responses :refer [guarded-post! send-edn! send-json!]]
             [dashboard.server.engine-state :refer [bodies]]
@@ -67,6 +68,19 @@
        (if (restart/ask-launcher!)
          (send-json! res 202 {:ok true :build-id restart/build-id :message "restart requested; the launcher builds first and keeps this server if the build fails"})
          (send-json! res 409 {:error "no launcher: this server was not started by npm start"}))))))
+
+(defn request-takeover!
+  "Kills every process of the body (dashboard.takeover) and answers with what was killed. Same-host peers only."
+  [req res {:keys [world name]}]
+  (if-not (restart/local-peer? (some-> req .-socket .-remoteAddress) (some-> req .-socket .-localAddress))
+    (send-edn! res 403 {:error "takeover is for clients on this machine only"})
+    (guarded-post!
+     req res guard/max-body-bytes
+     (fn [_]
+       (-> (takeover/takeover! name world)
+           (.then #(send-edn! res 200 %))
+           (.catch #(send-edn! res 500 {:error (str "takeover failed: " (ex-message %))}))))
+     {:content-types ["application/edn"] :send-error send-edn!})))
 
 (defn preview! [req res]
   (guarded-post!

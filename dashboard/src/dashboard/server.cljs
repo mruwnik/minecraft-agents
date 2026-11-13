@@ -22,7 +22,7 @@
             [dashboard.server.events :refer [resolve-attention! send-events!]]
             [dashboard.server.settings :refer [change-settings! send-settings!]]
             [dashboard.server.map :refer [send-plans! send-tile! send-tiles! tile-stats-json]]
-            [dashboard.server.posts :refer [preview! request-restart! send-chat! send-whisper!]]))
+            [dashboard.server.posts :refer [preview! request-restart! request-takeover! send-chat! send-whisper!]]))
 
 (def route-list
   "try /, /villagers, /villages, /blueprints, /api/worlds, /api/state, /api/villagers, /api/villages, /api/chat?limit=200, POST /api/chat/send, /api/jobs, /api/plans, /api/plan/<name>, /api/blueprints, /api/blueprint/<name>, POST /api/blueprint-preview (state, chat, world and villages take ?world=<name>, default the first world)")
@@ -71,6 +71,7 @@
         :chat-send (send-chat! req res)
         :whisper-send (send-whisper! req res (body-key route))
         :restart (request-restart! req res)
+        :takeover (request-takeover! req res (body-key route))
         :build-id (send-json! res 200 {:build-id restart/build-id})
         :jobs-api (send-json! res 200 {:at (js/Date.now) :jobs (read-jobs (js/Date.now))})
         :thumbs-stats (send-thumbs-stats! res)

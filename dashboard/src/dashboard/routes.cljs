@@ -13,6 +13,7 @@
 (def events-re #"^/api/events/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})$")
 (def attention-resolve-re #"^/api/attention/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})/resolve$")
 (def settings-re #"^/api/settings/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})$")
+(def takeover-re #"^/api/takeover/([A-Za-z0-9_-]{1,64})/([A-Za-z0-9_-]{1,64})$")
 (def static-re #"^/[A-Za-z0-9_./-]+\.(?:js|css|map|png|svg|ico|json|html|txt|woff2?)$")
 
 (def exact
@@ -61,6 +62,7 @@
         (body-route attention-resolve-re path :attention-resolve)
         (body-route events-re path :events)
         (body-route settings-re path :settings)
+        (body-route takeover-re path :takeover)
         (body-route whisper-send-re path :whisper-send)
         (when (re-find unsupported-re path) {:kind :unsupported})
         (when (and (re-find static-re path) (not (str/starts-with? path "/api/")) (not (str/includes? path ".."))) {:kind :static :path path})

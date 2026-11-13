@@ -87,6 +87,8 @@
            ["/api/attention/../resolve" {:kind :unknown}]
            ["/api/settings/test/ProbeMove" {:kind :settings :world "test" :name "ProbeMove"}]
            ["/api/settings/ProbeMove" {:kind :unknown}]
+           ["/api/takeover/Leo/Tiberius" {:kind :takeover :world "Leo" :name "Tiberius"}]
+           ["/api/takeover/Leo/Tib%20erius" {:kind :unknown}]
            ["/api/events/" {:kind :unknown}]
            ["/api/events/a/b/c" {:kind :unknown}]
            ["/api/events/w/..%2Fx" {:kind :unknown}]]]

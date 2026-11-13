@@ -16,6 +16,12 @@
   [label & body]
   (into [:span.dfact [:span.lbl label ":"]] body))
 
+(defn takeover-panel [name]
+  (let [state @(rf/subscribe [:takeover])]
+    (when (= name (:name state))
+      (let [{:keys [kind lines]} (detail-model/takeover-lines state)]
+        (into [:div.dtakeover {:class (clojure.core/name kind)}] (map (fn [l] [:div l])) lines)))))
+
 (defn header [{:keys [name status reason severity goal goal-wait goal-age job parked action pos-text dimension world last-seen]}]
   [:div.dhead
    [:h2 name]
@@ -32,7 +38,12 @@
    (when world (fact "World" [:span.val world]))
    (when last-seen (fact "Seen" [:span.val last-seen]))
    [:span.spacer]
-   [:button.dclose {:title "close (Esc)" :on-click #(rf/dispatch [:close-detail])} "close ✕"]])
+   [:button.takeover {:title "SIGKILL every process of this body (and any wrapper or runner that would restart it)"
+                      :on-click #(when (js/confirm (str "Kill every process of " name (when world (str " in " world)) " now (SIGKILL)?"))
+                                   (rf/dispatch [:takeover name]))}
+    "Emergency takeover"]
+   [:button.dclose {:title "close (Esc)" :on-click #(rf/dispatch [:close-detail])} "close ✕"]
+   [takeover-panel name]])
 
 ;; ---------------------------------------------------------------- the view and its chrome
 (defn chrome [online?]
