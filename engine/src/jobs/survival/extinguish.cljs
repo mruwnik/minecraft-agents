@@ -390,7 +390,7 @@
   :hostile-near, so the hostile reflex can act."
   [c]
   (if (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius))
-    (ctx/end c :condition-failed :hostile-near {:text "a hostile is near: not standing still"})
+    (ctx/end c :condition-failed {:reason :hostile-near :text "a hostile is near: not standing still"} nil)
     (await (stand-wait! c))))
 
 (defn stuck!

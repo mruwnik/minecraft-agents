@@ -1,6 +1,7 @@
 (ns engine.extinguish-test
   "jobs.survival.extinguish and the burning trigger against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.zones-survival-test :as zs]
@@ -9,6 +10,7 @@
             [jobs.lib.expiry :as expiry]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
+            [jobs.lib.waits :as waits]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.settings :as settings]
@@ -128,13 +130,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:onFire true} :blocks (floor 8) :entities [(zombie-at 2 0)]})
-              waits (atom 0)]
+        (let [{:keys [eng p]} (setup {:self {:onFire true} :blocks (floor 8) :entities [(zombie-at 2 0)]})
+              waits (atom 0)
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'parent
+                                          {:round (fn ^:async parent-round [c]
+                                                    (let [e (await (ctx/call c :kid 'jobs.survival.extinguish {}))]
+                                                      (reset! out [(contract/cause-key e) (waits/waiting-out c e)]))
+                                                    (ctx/end c :done nil))}))]
           (on-wait! p (fn [_ _] (swap! waits inc)))
-          (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
-          (await (core/tick! eng))
+          (core/submit! eng (tu/order '(parent {})) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
           (is (= 0 @waits) "no wait beside the zombie")
-          (is (= :hostile-near (stopped-reason seen))))))))
+          (is (= [:hostile-near :continue] @out) "a wait a caller sits out (jobs.lib.waits/waiting-out)"))))))
 
 (deftest steps-off-a-fire-block-in-the-rain
   (async done
