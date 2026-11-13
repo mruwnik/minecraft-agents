@@ -54,3 +54,14 @@
     (is (nil? (c 500000)) "the later anchor is not the time 20 ticks a second predicts")
     (is (nil? (c -1)))
     (is (nil? (c 1000000)))))
+
+;; a 1x2 shut-in at x 0 z 0 y 10-11: stone round it and over the head, all dark
+(defn shut-in [x y z]
+  {:name (if (and (= 0 x) (= 0 z) (<= 10 y 11)) "air" "stone") :block 0 :sky 0})
+
+(deftest seconds-shut-in-are-no-exposure-and-a-meet-there-no-meet
+  (is (= {} (d/exposure shut-in noon [(pos 0 10) (pos 5000 10)])))
+  (is (= [nil] (d/meets shut-in noon [(pos 0 10) (rec 100 :decided :mob "zombie" :job "j1")])))
+  (is (= {:under-40 5} (d/exposure (fn [x y z] (cond-> (shut-in x y z) (and (= 0 x) (= 0 z) (= 12 y)) (assoc :name "air")))
+                                   noon [(pos 0 10) (pos 5000 10)]))
+      "an open cell over the head leaves the cell open"))

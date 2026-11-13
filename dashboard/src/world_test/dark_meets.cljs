@@ -9,7 +9,8 @@
   within window-ms (the same meet going on), counted to the band of the body's cell when dark (its last position within
   gap-ms). Hurt: the hp a spawnable mob (or its arrow) dealt at a dark cell. Pure parts: exposure, meets, hurt, report."
   (:require [jobs.lib.cost.threat :as threat]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [jobs.lib.solid :as solid]))
 
 (def gap-ms "Longest gap between two positions whose seconds still count as exposure." 10000)
 (def window-ms "Time after a meet within which a run about a mob is the same meet going on." 30000)
@@ -36,13 +37,29 @@
             (when (<= (js/Math.abs err) (+ 100 (/ span 50)))
               (mod (+ wa (* (- t ta) ticks-per-ms) (* err (/ (- t ta) (- tb ta)))) day-ticks))))))))
 
+(defn enclosed?
+  "Whether the standing room at feet cell x y z is shut in: both its cells are recorded room and every cell round them (four
+  sides of each, and over the head) is recorded solid, so nothing spawns there and nothing walks in. A cell never recorded
+  counts as open."
+  [at x y z]
+  (let [name-at (fn [x y z] (:name (at x y z)))
+        walls [[1 0] [-1 0] [0 1] [0 -1]]]
+    (and (solid/room? (name-at x y z))
+         (solid/room? (name-at x (inc y) z))
+         (solid/solid? (name-at x (+ y 2) z))
+         (every? (fn [[dx dz]] (and (solid/solid? (name-at (+ x dx) y (+ z dz)))
+                                    (solid/solid? (name-at (+ x dx) (inc y) (+ z dz)))))
+                 walls))))
+
 (defn dark-band
-  "The band of position {:x :y :z} at time t when its feet cell is dark by at and tod, else nil (nil too without a time of day)."
+  "The band of position {:x :y :z} at time t when its feet cell is dark by at and tod and not shut in (enclosed?), else nil
+  (nil too without a time of day)."
   [at tod t {:keys [x y z]}]
   (let [x (js/Math.floor x) y (js/Math.floor y) z (js/Math.floor z)
         c (at x y z)
         w (tod t)]
-    (when (and c w (not (look/lit-light? (:block c) (:sky c) (look/sky-subtract-at w 0 0)))) (band y))))
+    (when (and c w (not (look/lit-light? (:block c) (:sky c) (look/sky-subtract-at w 0 0))) (not (enclosed? at x y z)))
+      (band y))))
 
 (defn positions [records] (filter #(#{:pos :at} (:k %)) records))
 
