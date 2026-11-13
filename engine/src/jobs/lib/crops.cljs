@@ -37,8 +37,9 @@
 
 (def fruit-items
   "Per fruit block: the stems that bear it beside them, the item its block drops and whether that is eaten. A fruit has no
-  growth stage: beside a stem of its kind it is ripe, and cutting it leaves the stem to bear again."
-  {"melon" {:stems #{"melon_stem" "attached_melon_stem"} :drop "melon_slice" :food? true}
+  growth stage: beside a stem of its kind it is ripe, and cutting it leaves the stem to bear again. :mean-drops is the
+  game's loot (3 to 7 slices) where minecraft-data's blockLoot gives none that is right."
+  {"melon" {:stems #{"melon_stem" "attached_melon_stem"} :drop "melon_slice" :food? true :mean-drops 5}
    "pumpkin" {:stems #{"pumpkin_stem" "attached_pumpkin_stem"} :drop "pumpkin"}})
 
 (def fruits (vec (keys fruit-items)))

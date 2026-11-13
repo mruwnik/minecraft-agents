@@ -53,18 +53,24 @@
       [x y z])))
 
 (defn crop-sources
-  "Ripe crops of the body's own zones and plans' crop cells, read from memory (seenBlockAt): a cell's name first, its
-  age only for a crop."
+  "Ripe crops of the body's own zones and plans' crop cells (and the cells beside them, where a stem bears its fruit), read from memory
+  (seenBlockAt): a cell's name first, its age only for a crop. A fruit beside its stem counts at the points its block drops."
   [c]
   (when-let [at (aget (:primitives c) "seenBlockAt")]
-    (for [[x y z] (distinct (concat (own-zone-cells c) (known/crop-cells c)))
-          :let [^js b (.call at (:primitives c) #js {:x x :y y :z z})
-                food (some-> b .-name crop-food)
-                age (when food (some-> b .-properties (aget "age") js/Number))
-                pos {:x x :y y :z z}]
-          :when (and age (>= age (crops/ripe-age (.-name b))) (access/in-own-area? c pos))
-          :let [[item share] food]]
-      {:kind :crop :pos pos :name (.-name b) :points (* share (foods/points item))})))
+    (let [plan (known/crop-cells c)
+          beside (for [[x y z] plan p (crops/beside {:x x :y y :z z})] [(:x p) (:y p) (:z p)])]
+      (for [[x y z] (distinct (concat (own-zone-cells c) plan beside))
+            :let [^js b (.call at (:primitives c) #js {:x x :y y :z z})
+                  pos {:x x :y y :z z}
+                  fruit? (some-> b .-name crops/fruit-items (as-> f (when (:food? f) f)))
+                  food (some-> b .-name crop-food)
+                  age (when food (some-> b .-properties (aget "age") js/Number))]
+            :when (and (or fruit? (and age (>= age (crops/ripe-age (.-name b)))))
+                       (or (not fruit?) (crops/borne? (:primitives c) pos))
+                       (access/in-own-area? c pos))
+            :let [[item share] food]]
+        {:kind :crop :pos pos :name (.-name b)
+         :points (if fruit? (* (:mean-drops fruit?) (foods/points (:drop fruit?))) (* share (foods/points item)))}))))
 
 (defn kill-points
   "Food points a kill of a food animal kind gives: its expected meat drops (cost/kill-drops) at the raw meat's points."

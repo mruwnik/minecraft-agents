@@ -115,8 +115,8 @@
     [{:pos [900 64 0] :items {"bread" 64}}] 1200 {"bread" 6}))
 
 (deftest own-zone-crops-count-at-any-distance-and-are-read-again-once-memory-moves
-  (let [crops {"200,64,0" "wheat" "201,64,0" "wheat" "202,64,0" "wheat"}
-        p (tu/seeing-all (tu/fake {:inventory [(item "bread" 20)] :blocks crops :ages (update-vals crops (constantly 7))}))
+  (let [crops {"200,64,0" "wheat" "201,64,0" "wheat" "202,64,0" "wheat" "204,64,0" "melon" "205,64,0" "melon_stem"}
+        p (tu/seeing-all (tu/fake {:inventory [(item "bread" 20)] :blocks crops :ages {"200,64,0" 7 "201,64,0" 7 "202,64,0" 7}}))
         st #js {:writes 0}
         reads (atom 0)
         at (aget p "seenBlockAt")
@@ -124,15 +124,15 @@
         _ (aset p "perception" {:st st})
         _ (aset p "seenBlockAt" (fn [pos] (swap! reads inc) (.call at p pos)))
         c {:primitives p :view (fn [] {:data mem/empty-data :now 1000})
-           :engine {:world (ew/of-data {} {} [{:name "farm" :min [200 64 0] :max [202 64 0] :owner "Fake"}])}}
+           :engine {:world (ew/of-data {} {} [{:name "farm" :min [200 64 0] :max [205 64 0] :owner "Fake"}])}}
         crop-points #(reduce + (map :points (filter (comp #{:crop} :kind) (home-food/field-sources c))))]
-    (is (< (abs (- 5 (crop-points))) 1e-9) "three ripe wheat 200 blocks off, a loaf: past the seen-block query's 64")
+    (is (< (abs (- 15 (crop-points))) 1e-9) "three ripe wheat 200 blocks off, a loaf, and a melon beside its stem, 5 slices of 2: past the seen-block query's 64")
     (let [first-reads @reads]
       (crop-points)
       (is (= first-reads @reads) "memory unchanged: the crops are not read again")
       (swap! (fake/state p) fake/drop-block [200 64 0])
       (set! (.-writes st) 1)
-      (is (< (abs (- (/ 10 3) (crop-points))) 1e-9) "a crop dug since (the memory's writes moved) no longer counts"))))
+      (is (< (abs (- (+ 10 (/ 10 3)) (crop-points))) 1e-9) "a crop dug since (the memory's writes moved) no longer counts"))))
 
 (deftest one-carried-bed-is-held-until-a-home-bed-is-placed
   (let [items [(item "red_bed" 2) (item "white_bed" 1)]]
