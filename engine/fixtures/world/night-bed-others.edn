@@ -1,31 +1,22 @@
-;; Card b9737e9d (Oriel #125): the night slept in another body's bed and set its spawn there. A bed in another owner's zone or
-;; on another body's plan is not one to use (sh-beds/others-bed?); one on the body's own plan is.
-;; Overdue (max-days-awake 0), so a bed in the open counts. The own-plan case starts beside its bed (within 2 blocks, no walk to
-;; price: a walk of 5 blocks and staying put cost the same). Should-succeed: no sleep in the others' beds (the night shelters
-;; instead), sleep in the own-plan bed. Should-fail: a sleep call at the other's bed.
-;; A bed with a villager in sight beside it is the village's. Needs the night (bed use is decided by the clock).
+;; Owner Q170: any empty bed is fine to sleep in. A bed on another body's plan, in another owner's zone or beside a villager is
+;; slept in like any other (sh-beds/bed-permit is only bed-free?).
+;; Overdue (max-days-awake 0), so a bed in the open counts. The body starts beside its bed (no walk to price).
+;; Should-succeed: a sleep at each bed. Should-fail: none. Needs the night (bed use is decided by the clock).
 {:defaults
  {:tags [:night :survival :bed :zones]
   :time :night :time-why :sleep
   :plot {:light :sky :length 24 :width 16 :height 6}
   :blocks [[:set [12 0 8] "red_bed[facing=east,part=foot]"] [:set [13 0 8] "red_bed[facing=east,part=head]"]]
-  :body {:at [6.5 0 8.5] :yaw -90 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
+  :body {:at [10.5 0 8.5] :yaw -90 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
   :limit-s 90}
  :cases
- [{:name "a-bed-on-anothers-plan-is-not-slept-in"
+ [{:name "a-bed-on-anothers-plan-is-slept-in"
    :plans [{:id "hut" :metadata {:by "Miles"} :parts [{:id "bed" :cells [#at [12 0 8] #at [13 0 8]] :want [:any "red_bed"]}]}]
-   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
-   :after [[:body-far [12.5 0 8.5] 2]]}
-  {:name "a-bed-in-anothers-zone-is-not-slept-in"
+   :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 60}]}
+  {:name "a-bed-in-anothers-zone-is-slept-in"
    :zones [{:name "miles-hut" :min [10 0 6] :max [15 3 10] :owner "Miles"}]
-   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
-   :after [[:body-far [12.5 0 8.5] 2]]}
-  {:name "a-bed-beside-a-villager-is-not-slept-in"
+   :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 60}]}
+  {:name "a-bed-beside-a-villager-is-slept-in"
    :act [[:summon "villager" [14.5 0 8.5] "{NoAI:1b}"]]
-   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
-   :after [[:body-far [12.5 0 8.5] 2]]}
-  {:name "a-bed-on-the-bodys-own-plan-is-slept-in"
-   :body {:at [10.5 0 8.5] :yaw -90 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
-   :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "bed" :cells [#at [12 0 8] #at [13 0 8]] :want [:any "red_bed"]}]}]
    :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 60}]}]}

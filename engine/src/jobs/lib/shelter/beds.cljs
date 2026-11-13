@@ -57,29 +57,6 @@
   (let [me (.-username (.self p))]
     (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) (when kn (world/zones kn))))))
 
-(def villager-bed-radius
-  "Blocks within which a villager in sight makes a bed a villager's (its home): a village's beds are theirs."
-  10)
-
-(defn villager-near?
-  "Whether a villager in sight stands within villager-bed-radius of pos."
-  [p pos]
-  (boolean (some #(<= (u/dist {:x (.-x (.-pos %)) :y (.-y (.-pos %)) :z (.-z (.-pos %))} pos) villager-bed-radius)
-                 (look/seen-objs p {:radius (+ 24 villager-bed-radius) :names ["villager"]}))))
-
-(defn others-bed?
-  "Whether the bed at pos is another's build: in another owner's zone or live claim, on the footprint of a plan another body
-  made, or beside a villager in sight (a village bed) unless on the body's own plan. kn is the engine world (nil: none
-  known), now the claims' clock (ms)."
-  [p kn now {:keys [x y z] :as pos}]
-  (let [me (.-username (.self p))
-        cell [x y z]
-        by (get (world/plan-authors kn) (get (world/footprints kn nil) cell))]
-    (boolean (or (and (villager-near? p pos) (not (and by (not (zones/foreign-owner? by me)))))
-                 (some #(and (zones/in-box? cell %) (zones/foreign-owner? (:owner %) me))
-                       (concat (world/zones kn) (world/live-claims (world/area-claims kn) now)))
-                 (and by (zones/foreign-owner? by me))))))
-
 (defn bed-free?
   "Whether the bed at pos is free to sleep in: not occupied, or in a zone the body owns (the server refuses an occupied
   one, which is a failed sleep)."
@@ -87,12 +64,10 @@
   (or (in-own-zone? p kn pos) (not (bed-occupied? p pos))))
 
 (defn bed-permit
-  "A predicate (fn [pos]) for whether the body may use the bed at pos: bed-free? and not others-bed? (sleeping in it would
-  set the body's spawn in another's build). kn is the engine world (nil: no zone known), now the claims' clock (ms)."
-  [p kn now]
-  (fn [pos]
-    (and (bed-free? p kn pos)
-         (or (in-own-zone? p kn pos) (not (others-bed? p kn now pos))))))
+  "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed that is bed-free?. kn is the engine world
+  (nil: no zone known)."
+  [p kn]
+  (fn [pos] (bed-free? p kn pos)))
 
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
@@ -324,7 +299,7 @@
   [c]
   (let [p (:primitives c)
         view (ctx/view c)]
-    (and (bed-place-wanted? p view (bed-permit p (:world (:engine c)) (ctx/now c)))
+    (and (bed-place-wanted? p view (bed-permit p (:world (:engine c))))
          (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night))))))
 
 (defn standing-entries
