@@ -45,16 +45,17 @@
   (some-> (u/seen-name (:primitives c) {:x x :y (dec y) :z z}) (str/ends-with? "_fence_gate")))
 
 (defn leak-text
-  "\": why at [x y z]\" listing the first leaks of result, with how many more; a :perch-in names the block stood on."
-  [{:keys [leaks leaks-total]}]
-  (let [shown (take 3 leaks)
-        more (- (or leaks-total (count leaks)) (count shown))]
-    (when (seq shown)
-      (str ": " (str/join ", " (map (fn [{:keys [pos why stand stand-block]}]
-                                      (str (name why) " at [" (:x pos) " " (:y pos) " " (:z pos) "]"
-                                           (when stand (str " (an animal steps onto the top from the " (or stand-block "block") " at [" (:x stand) " " (:y stand) " " (:z stand) "]; fence higher there or take that block away)"))))
-                                    shown))
-           (when (pos? more) (str " and " more " more"))))))
+  "\": why at [x y z]\" listing the first n leaks of result (default 3), with how many more; a :perch-in names the block stood on."
+  ([result] (leak-text result 3))
+  ([{:keys [leaks leaks-total]} n]
+   (let [shown (take n leaks)
+         more (- (or leaks-total (count leaks)) (count shown))]
+     (when (seq shown)
+       (str ": " (str/join ", " (map (fn [{:keys [pos why stand stand-block]}]
+                                       (str (name why) " at [" (:x pos) " " (:y pos) " " (:z pos) "]"
+                                            (when stand (str " (an animal steps onto the top from the " (or stand-block "block") " at [" (:x stand) " " (:y stand) " " (:z stand) "]; fence higher there or take that block away)"))))
+                                     shown))
+            (when (pos? more) (str " and " more " more")))))))
 
 (defn gate-drop-text
   [{:keys [gate-drops]}]

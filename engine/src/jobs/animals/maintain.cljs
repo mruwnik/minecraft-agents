@@ -35,7 +35,7 @@
   - :mend (jobs.build.pen over the whole :plan, only with :plan): a fence, gate or wall cell of the plan beside the box
     was seen as something else (blown away), so the plan's fence is built again, at the pass's worth (with a :mob). Only cells the body has seen count; a gap
     that stays rests the pen.
-  - :herd (jobs.animals.herd, :target at most): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
+  - :herd (jobs.animals.herd, :target less the babies at most; never with adults plus babies at :target): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
     adults of the kind are listed outside the box (in no enclosure, on ground the zones let it take from) whose cost/animal-worth beats the
     walk (cost/walk-cost) to each and on to the pen; herd brings the box up to the pair plus those strays, fetching and searching within ::herd-radius (64) of the body.
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
@@ -57,7 +57,10 @@
   waits, so the job is cheap under repeat: :nothing-to-do with the census {:adults :babies :target} and
   {:skipped {step reason}}, or the first lack among the skips (:no-food, :no-shears, :too-few-adults) instead.
 
-  Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
+  Every decision counts the pen as pen-census does: live while the body sees the whole box, else the last count the
+  pass took in sight. Each pass emits one maintain.pass info with that count and how each step went (every leak named).
+
+  Ends :done after the pass, with {:mob :target :adults :babies (that count) :steps {step
   summary}}; condition-failed with the same data when every step was skipped and the herd is below :target: the first lack among the skips (:no-food, :no-shears, :too-few-adults, the text naming each), else :nothing-to-do. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
@@ -168,17 +171,34 @@
                            (< (:cost (cost/walk-cost {:distance (+ (u/dist here pos) (u/dist pos mid))})) worth)))
                    out))))
 
-(defn facts
-  "What the decisions are made from, read live; :strays only while the box holds fewer adults than :target."
+(defn pen-census
+  "{:adults n :babies n :in-sight? b} of the pen: the live census while the body sees the whole box (hunting/pen-seen?),
+  else the last one the pass took in sight, with the herd step's :inside as the adults once it ran (a body at the chest
+  or shut in the house lists none), else the live one."
   [c]
   (let [{:keys [adults babies]} (hunting/census c)
+        live {:adults (count adults) :babies (count babies)}
+        here (u/self-pos c)
+        inside (:inside (pen-read/read (:primitives c) {:box (pen-read/arg-box c) :near [(js/Math.floor (:x here)) (js/Math.floor (:y here)) (js/Math.floor (:z here))]}))]
+    (if (hunting/pen-seen? c (pen-read/arg-box c) inside)
+      (assoc live :in-sight? true)
+      (let [m (ctx/mem c)
+            herd-inside (:inside (:herd (:report m)))]
+        (cond-> (assoc (or (:census m) live) :in-sight? false) herd-inside (assoc :adults herd-inside))))))
+
+(defn facts
+  "What the decisions are made from: the pen's count from pen-census, the rest read live; :strays only while the box
+  holds fewer than :target."
+  [c]
+  (let [{:keys [adults]} (hunting/census c)
+        counted (pen-census c)
         inventory (u/inventory (:primitives c))
         stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))]
     {:gaps (missing-barrier c)
-     :adults (count adults)
-     :strays (if (and (:mob (:args c)) (< (count adults) (:target (:args c)))) (strays c) 0)
-     :ready (count (remove (comp (animals/cooling c) animals/key-of) adults))
-     :babies (count babies)
+     :adults (:adults counted)
+     :strays (if (and (:mob (:args c)) (< (+ (:adults counted) (:babies counted)) (:target (:args c)))) (strays c) 0)
+     :ready (max 0 (- (:adults counted) (count (filter (comp (animals/cooling c) animals/key-of) adults))))
+     :babies (:babies counted)
      :drops (drops-in-box c)
      :shears (boolean (some #(= "shears" (:name %)) inventory))
      :shearable (count (remove #(true? (.-sheared %)) adults))
@@ -200,15 +220,16 @@
                           (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
 
 (defn herd-target
-  "The adults herd is to bring the box up to: a breeding pair (or :target if less), more while worthwhile strays are listed, :target at most."
-  [target adults strays]
-  (max (min 2 target) (min target (+ adults (or strays 0)))))
+  "The adults herd is to bring the box up to: a breeding pair (or :target if less), more while worthwhile strays are listed,
+  :target less the babies (they grow) at most."
+  [target adults babies strays]
+  (max (min 2 target) (min (- target (or babies 0)) (+ adults (or strays 0)))))
 
 (defn decide-herd
-  [{:keys [mob box ways target]} {:keys [adults strays]}]
-  (let [want (herd-target target adults strays)]
+  [{:keys [mob box ways target]} {:keys [adults babies strays]}]
+  (let [want (herd-target target adults babies strays)]
     (cond
-      (<= target adults) {:skip :at-target}
+      (<= target (+ adults (or babies 0))) {:skip :at-target}
       (<= want adults) {:skip :no-strays}
       :else {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target want :radius (herd-radius)} (some? ways) (assoc :ways ways))}})))
 
@@ -330,7 +351,7 @@
   would take, what the herd would lose through the fence gaps its mend would close (cost/gap-loss) and the goal-value of
   the produce its deposit would store (none without a :chest)."
   [{:keys [mob target chest]} {:keys [adults babies strays drops shearable gaps stored-items]}]
-  (let [heads (+ (max 0 (- (herd-target target adults strays) adults))
+  (let [heads (+ (max 0 (- (herd-target target adults babies strays) adults))
                  (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
                  (max 0 (- adults (max 2 (- target babies)))))
         items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) (when chest stored-items))
@@ -392,27 +413,36 @@
     :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
 
 (defn census!
-  "{:adults n :babies n} of the pen: the live census while the body sees the whole box (hunting/pen-seen?; kept in the pass's
-  memory), else the last one the pass took in sight, with the herd step's :inside as the adults once it ran (a body at
-  the chest or shut in the house lists none), else the live one."
+  "pen-census, kept in the pass's memory when counted in sight."
   [c]
-  (let [{:keys [adults babies]} (hunting/census c)
-        live {:adults (count adults) :babies (count babies)}
-        here (u/self-pos c)
-        inside (:inside (pen-read/read (:primitives c) {:box (pen-read/arg-box c) :near [(js/Math.floor (:x here)) (js/Math.floor (:y here)) (js/Math.floor (:z here))]}))]
-    (if (hunting/pen-seen? c (pen-read/arg-box c) inside)
-      (do (ctx/update-mem! c assoc :census live) live)
-      (let [m (ctx/mem c)
-            herd-inside (:inside (:herd (:report m)))]
-        (cond-> (or (:census m) live) herd-inside (assoc :adults herd-inside))))))
+  (let [{:keys [in-sight?] :as n} (pen-census c)]
+    (when in-sight? (ctx/update-mem! c assoc :census (dissoc n :in-sight?)))
+    n))
+
+(defn step-text [[step entry]]
+  (str (name step) " "
+       (cond
+         (:skipped entry) (str "skipped " (name (:skipped entry)))
+         (:ended entry) (str "ended " (name (:ended entry)) (some->> (:cause entry) name (str " ")) (when (:text entry) (str " (" (:text entry) ")"))
+                             (pen-patch/leak-text entry (count (:leaks entry))))
+         :else (str "ran" (some->> (:reason entry) name (str " "))))))
+
+(defn pass-event!
+  "One maintain.pass info per pass: the count the steps were decided on and how each step went, every leak named."
+  [c {:keys [adults babies in-sight?]} report]
+  (ctx/emit! c :maintain.pass :info {:adults adults :babies babies :target (:target (:args c)) :in-sight? in-sight? :steps report
+                                     :text (str "maintain pass: " adults " adults, " babies " babies of " (:target (:args c))
+                                                (if in-sight? " (counted in sight)" " (the pen not all in sight now)") "; "
+                                                (str/join "; " (map step-text report)))}))
 
 (defn finish!
   "End the pass, counting the pen with census!: done (a steps.stopped warn for each step that ended short of done) unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
   fewer adults than it was to bring ends with the herd's own kind and cause; every step skipped below :target ends condition-failed (its first lack, else :nothing-to-do), so a repeat rests instead of passing again at once."
   [c report]
   (let [{:keys [mob target]} (:args c)
-        {:keys [adults babies]} (census! c)
+        {:keys [adults babies] :as n} (census! c)
         out {:mob mob :target target :adults adults :babies babies :steps report}]
+    (pass-event! c n report)
     (cond
       (and (:ended (:herd report)) (< adults (min 2 target)))
       (let [{:keys [ended cause]} (:herd report)]
@@ -446,7 +476,8 @@
           (= :done (:kind e)) (do (book! (summary step (:data e))) :again)
           (steps/idle-entry e) (do (book! (steps/idle-entry e)) :again)
           :else (do (book! (merge (when-let [r (not-empty (merge (when (map? (:cause e)) (select-keys (:cause e) [:leaks])) (:data e)))] (summary step r))
-                                  {:ended (:kind e) :cause (contract/cause-key e)}))
+                                  {:ended (:kind e) :cause (contract/cause-key e)}
+                                  (when-let [t (and (map? (:cause e)) (:text (:cause e)))] {:text t})))
                     :again))))))
 
 (defn pen-in-sight?

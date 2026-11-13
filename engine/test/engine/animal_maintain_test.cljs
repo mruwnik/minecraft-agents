@@ -231,15 +231,17 @@
           (is (= (get-in (done-event s) [:steps :herd :cause]) (or (:cause (done-event s)) (get-in (done-event s) [:data :cause])))))))))
 
 (deftest herd-is-asked-for-a-pair-and-the-strays-worth-bringing-up-to-the-target
-  (are [expected target adults strays] (= expected (maintain/decide :herd {:mob "cow" :box box :target target} {:adults adults :strays strays}))
-    {:skip :no-strays} 4 2 0
-    {:skip :at-target} 0 0 0
-    {:skip :at-target} 1 1 3
-    {:skip :at-target} 4 5 2
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 2 :radius 64}}} 4 1 0
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 1 :radius 64}}} 1 0 0
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 3 :radius 64}}} 4 2 1
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 4 :radius 64}}} 4 2 5))
+  (are [expected target adults babies strays] (= expected (maintain/decide :herd {:mob "cow" :box box :target target} {:adults adults :babies babies :strays strays}))
+    {:skip :no-strays} 4 2 0 0
+    {:skip :at-target} 0 0 0 0
+    {:skip :at-target} 1 1 0 3
+    {:skip :at-target} 4 5 0 2
+    {:skip :at-target} 8 5 3 1
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 2 :radius 64}}} 4 1 0 0
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 1 :radius 64}}} 1 0 0 0
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 3 :radius 64}}} 4 2 0 1
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 4 :radius 64}}} 4 2 0 5
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 3 :radius 64}}} 4 2 1 5))
 
 (deftest escaped-adults-outside-the-pen-are-herded-back-up-to-the-target
   (async done
@@ -633,3 +635,23 @@
           (await (tu/run-ticks eng clock 60 700))
           (is (< (.-x (.-pos (.self p))) 60) "it walked to the middle of the box to count")
           (is (empty? (interacts s)) "four cows in the box are at target; the two listed from its corner are no reason to breed"))))))
+
+(deftest a-step-decided-after-the-body-left-the-pen-counts-what-the-pass-saw-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [call ctx/call
+              bred (atom nil)
+              {:keys [eng clock p] :as s} (h/setup {:inventory [(wheat 4)] :entities (conj four-cows (cow 5 12))} 50)]
+          (track-range! s 14)
+          (set! ctx/call (fn [c slot job args]
+                           (case slot
+                             :herd (do (fake/swap-self! p assoc :pos [50 64 0])
+                                       (js/Promise.resolve (contract/ending :done nil {:inside 4 :brought 0})))
+                             :breed (do (reset! bred args) (js/Promise.resolve (contract/ending :done nil {:fed [] :reason :fed})))
+                             (call c slot job args))))
+          (try (core/submit! eng (tu/order (spec {:target 5})) {})
+               (await (tu/run-ticks eng clock 20 700))
+               (finally (set! ctx/call call)))
+          (is (some? @bred) "four counted in the pen below a target of 5: breed runs though the herd left the body out of listing range")
+          (is (= {:adults 4 :babies 0 :in-sight? false} (select-keys (first (events-of s :maintain.pass)) [:adults :babies :in-sight?]))))))))
