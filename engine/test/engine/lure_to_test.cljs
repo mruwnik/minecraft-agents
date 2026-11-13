@@ -227,9 +227,9 @@
             (is (= reason (:reason (done-event s))) (name reason))
             (is (= 1 (count (stopped s))) (name reason))))))))
 
-(deftest an-equip-that-leaves-the-food-out-of-hand-is-retried-at-an-inventory-refusals-price
-  ;; :craft-refused at a worth of 100: a second equip's 1% x 100 is under its 3.7 s (at :child-round's walk-sized price
-  ;; a second would come)
+(deftest an-equip-that-leaves-the-food-out-of-hand-is-retried-at-a-crafts-price
+  ;; a failed equip is a chance failure (:craft's .141/.013 at 3.7 s): at a worth of 100 5 tries come, not the 1 of
+  ;; :craft-refused (a repeating server rule) nor the 2 of :child-round's walk-sized 17 s
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -238,7 +238,7 @@
           (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :worth 100})) {})
           (await (tu/run-ticks eng clock 14 700))
           (is (= :no-hold (:reason (done-event s))))
-          (is (= 1 (count (h/calls p "equip")))))))))
+          (is (= 5 (count (h/calls p "equip")))))))))
 
 (deftest a-lure-out-of-time-ends-on-the-engines-limit-and-its-cleanup-puts-the-food-away
   (async done

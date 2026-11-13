@@ -319,10 +319,9 @@
       (fn ^:async t []
         ;; five saved blocked legs, of their seconds (leg-s x blocked-leg-factor, 18 s) or of a trip saved without them
         ;; (:child-round's 17.1 s): at 1200 s a sixth wins 1%, 12.5 s
-        (loop [[trip & more] [{:fruitless-s {:go (* (cfg/leg-s) fetch/blocked-leg-factor)}} {}]]
+        (doseq [trip [{:fruitless-s {:go (* (cfg/leg-s) fetch/blocked-leg-factor)}} {}]]
           (let [{:keys [eng]} (await ((resume-run (merge {:blocked true :fruitless {:go 5}} trip))))]
-            (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str trip)))
-          (when more (recur more)))))))
+            (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str trip))))))))
 
 (deftest a-trip-cut-once-goes-on
   (async done
