@@ -1,0 +1,18 @@
+;; Card e4c1a552 (Brindle death 2026-11-14): the iron ore beside the body sits over a 5-deep shaft, so its drop falls out of
+;; sight; mine leans toward the dug cell to look down (drops/peek-over-lip!). The lean sneaks: the body never runs on over
+;; the edge and falls (old code: no sneak, the run-on took Brindle off its floor into a cave).
+;; Stone mass x 8..24, z 8..24, y -6..5; body in a 1x2 cell at [16 0 16]; ore at [17 0 16] with air over it and the shaft
+;; [17 -5..-1 16] under it.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [8 -6 8] [24 5 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [17 1 16] "air"]
+           [:set [17 0 16] "iron_ore"] [:fill [17 -5 16] [17 -1 16] "air"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]]}
+  :limit-s 100}
+ :cases
+ [{:name "lean-over-a-dug-cell-with-no-floor-keeps-the-body-up"
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :item "raw_iron" :count 1 :ways #{:seen} :radius 6})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}
+            {:no-event {:kind :hurt} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:not-block [17 0 16] "iron_ore"]]}]}
