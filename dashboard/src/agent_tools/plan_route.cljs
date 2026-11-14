@@ -9,10 +9,6 @@
             [plan.surface :as surface]
             [jobs.lib.surface :as ground]))
 
-(def ^:private line-block
-  "Rails already laid: the line's own cells, not the ground it runs on."
-  #"(^|_)rail$")
-
 (def depth-over-ends "Blocks above and below the ends' levels a column is read in." 6)
 
 (defn cell-arg
@@ -41,7 +37,7 @@
   [name-at [_ fy _] [_ ty _] zones by]
   (let [mid (quot (+ fy ty) 2)
         depth (+ depth-over-ends (abs (- fy ty)))
-        name-fn (fn [pos] (let [n (name-at pos)] (if (and n (or (re-find surface/on-ground n) (re-find line-block n))) "air" n)))
+        name-fn (fn [pos] (let [n (name-at pos)] (if (and n (or (re-find surface/on-ground n) (rail/rail-name? n))) "air" n)))
         memo (volatile! {})]
     (fn [x z]
       (let [k [x z]
