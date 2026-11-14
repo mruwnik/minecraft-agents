@@ -124,6 +124,7 @@
    :craft (entry [:item :count :table] [:item] #{"crafted"} (fails #{"no-item" "full"} #{"cannot" "partial" "unreachable" "out-of-reach"}) (fn [_ {:keys [count]}] (timed (min (js-setting "prim/craft-max-s") (+ 4 (* 6 (or count 1)))))))
    :furnace (fixed [:pos :op :input :fuel :output] [:pos] #{"ok"} (fails #{"missing" "no-item" "busy"} #{"cannot" "rejected" "unreachable"}) 5)
    :enchant (fixed [:pos :op :item :choice :levelCost] [:pos] #{"ok" "enchanted"} (fails #{"missing" "no-item" "no-lapis" "no-levels" "full"} #{"cannot" "unreachable"}) 15)
+   :anvil (fixed [:pos :item :enchant] [:pos] #{"combined"} (fails #{"missing" "no-item" "no-book" "no-levels"} #{"cannot" "unreachable"}) 15)
    :chat (fixed [:message :to] [] #{"sent"} (fails #{"gone"} #{}) 3)
    :eat (entry [:item] [:item] #{"ate"} (fails #{"no-item" "no-food"} #{}) (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
    :fish (entry [:pos :timeoutS] [:pos] #{"caught"} (fails #{"missing" "no-rod" "no-water"} #{"nothing" "unreachable" "lost"})
