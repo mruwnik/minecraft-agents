@@ -43,6 +43,17 @@
    :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:field" :part "row"} :irrigate false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tend {:field {:crops 4 :untilled 0}}}}} :within-s 110 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}
+  ;; Card f7232a8b: a plan farmland cell with no crop planned over it (a margin) trampled to dirt is tilled again; the old code tilled only ground under crop cells.
+  ;; Should-succeed: the margin cell [14 -1 16] is farmland again. Should-fail (control): [15 -1 16], dirt the plan does not name, stays dirt.
+  {:name "maintain-tills-a-bare-plan-farmland-margin-cell"
+   :blocks [[:set [14 -1 16] "dirt"] [:set [15 -1 16] "dirt"] [:set [14 -2 17] "stone"] [:set [14 -1 17] "water"] [:set [10 0 16] "air"]]
+   :plans [{:id "field" :metadata {:by "$body"}
+            :parts [{:id "margin" :cells [#at [14 -1 16]] :want "farmland"}
+                    {:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
+   :body {:inventory [["carrot" 40] ["stone_hoe" 1]]}
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:field"} :irrigate false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 110 :of-job true}]
+   :after [[:block [14 -1 16] "farmland"] [:block [15 -1 16] "dirt"] [:block [10 0 16] "carrots[age=0]"]]}
   ;; Card ebfb053a: a plan of melon and pumpkin stems inside a foreign "common" zone (allows harvest/take/put, no :place) is tilled and sown
   ;; by maintain without :ignore-zones?; the plan's own cells beat the zone. Maintain reads stem crops (4 crop cells, none untilled).
   ;; Should-fail control: none; the old code answered "no crop cells" and sowed nothing.
