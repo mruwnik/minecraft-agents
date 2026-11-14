@@ -7,10 +7,14 @@
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
+            [jobs.lib.vantage :as vantage]
             [jobs.lib.shelter.sense :as sh-sense]))
 
 (a/defargs settings
-  {::search-radius {:default 48 :doc "Blocks within which villagers are looked for." :spec (a/int-in 1 96)}})
+  {::search-radius {:default 48 :doc "Blocks within which villagers are looked for." :spec (a/int-in 1 96)}
+   ::poll-s {:default 2 :doc "Seconds between looks while waiting for a villager's job or for day to look for a villager asleep out of view." :spec (a/int-in 1 60)}})
+
+(defn poll-s [] (settings/get settings ::poll-s))
 
 (defn search-radius [] (settings/get settings ::search-radius))
 
@@ -86,3 +90,26 @@
          (if (= :continue r)
            :continue
            (do (ctx/update-mem! c assoc :memory-walked true) :again)))))))
+
+(defn ^:async hear-step!
+  "By day, a villager heard but not seen: one vantage step toward the sound and a look round there, as a player walks
+  toward a voice (a sound names no villager, so the nearest heard one). :continue while the walk waits, :again after a
+  step, nil when none is heard or the steps are spent."
+  [c id]
+  (let [rows (vantage/heard c ["villager"] (search-radius))
+        r (when (seq rows) (await (vantage/step! c rows #(find-by-uuid (:primitives c) id))))]
+    (case r :partial :continue nil nil :again)))
+
+(defn ^:async search-out-of-view!
+  "A villager named by id (or picked) that is out of view: walk to where the body last saw it (approach-remembered!),
+  else at night, when villagers sleep out of sight, wait polls till day and look once more, else by day step toward
+  where it is heard. :again, :continue, or nil when nothing is left to try (the caller ends it :gone)."
+  [c id reach]
+  (let [m (ctx/mem c)]
+    (or (await (approach-remembered! c id reach))
+        (cond
+          (sh-sense/night? (:primitives c)) (do (ctx/update-mem! c assoc :night-waited true)
+                                                (await (child/pause! c (poll-s) :night-villager-out-of-view))
+                                                :continue)
+          (:night-waited m) (do (ctx/update-mem! c dissoc :night-waited :memory-walked :vantage) :again)
+          :else (await (hear-step! c id))))))

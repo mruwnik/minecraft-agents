@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.trade-window :as tw]
             [jobs.lib.villager :as villager]))
@@ -32,13 +33,15 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn villager-known
-  "Ok when a villager to read is in sight (the named one, else any adult) or the named one is remembered; else a look."
+  "Ok when a villager to read is in sight (the named one, else any adult), the named one is remembered, or one is heard
+  (the call steps toward the sound); else a look."
   [c]
   (let [p (:primitives c)
         id (:villager (:args c))]
-    (if (if id
-          (or (villager/find-by-uuid p id) (some-> (aget p "rememberedEntity") (.call p id)))
-          (seq (villager/adults p)))
+    (if (or (if id
+              (or (villager/find-by-uuid p id) (some-> (aget p "rememberedEntity") (.call p id)))
+              (seq (villager/adults p)))
+            (seq (look/heard-entities p {:names ["villager"] :radius (villager/search-radius)})))
       (contract/ok :villager "a villager is known")
       (contract/look :no-villager "no villager in view"))))
 

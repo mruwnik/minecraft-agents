@@ -4,7 +4,9 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.entity-observations :as obs]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.look-support :as ls]
             [engine.memory :as mem]
             [jobs.lib.reserve :as reserve]
@@ -546,3 +548,54 @@
                                            (aset p "entities" (fn [q] (if (and (pos? (walks)) (not= @after-buy (walks))) (.call entities p q) #js [])))
                                            (aset p "rememberedEntity" (fn [id] (when (= "v-1" id) #js {:x (+ 12.5 (walks)) :y 64 :z 0.5})))))))]
           (is (= {:bought 2 :paid {"emerald" 2} :item "bread"} result)))))))
+
+(defn heard-until-near!
+  "The villager is out of sight (entities() drops it) and only heard, as a direction (heardMobs), until the body stands
+  within 3 blocks of it, as one behind a house wall is seen from round the corner."
+  [p]
+  (let [orig (.-entities p)
+        near? (fn [] (let [me (.-pos (.self p))]
+                       (some (fn [^js e] (> 3 (js/Math.hypot (- (.-x (.-pos e)) (.-x me)) (- (.-z (.-pos e)) (.-z me)))))
+                             (array-seq (.call orig p #js {:radius 48})))))]
+    (set! (.-entities p) (fn [a] (if (near?) (.call orig p a) #js [])))
+    (set! (.-heardMobs p)
+          (fn [_]
+            (let [me (.-pos (.self p))]
+              (if (near?)
+                #js []
+                (into-array (for [^js e (array-seq (.call orig p #js {:radius 16}))
+                                  :let [pos (.-pos e)]]
+                              (clj->js (assoc (obs/rough-hearing {:x (.-x me) :y (.-y me) :z (.-z me)} {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
+                                              :id (.-id e) :name (.-name e) :kind "passive" :distance (.-distance e)))))))))
+    p))
+
+(deftest offers-of-a-named-villager-only-heard-steps-toward-the-sound
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world {:entities [(villager [(bread {})] {:pos {:x 0.5 :y 64 :z 8.5}})]}})
+              _ (heard-until-near! p)
+              result (plain (await (child-outcome eng 'jobs.village.offers {:villager "v-1"} 120)))]
+          (is (= "v-1" (:villager result)) (pr-str result))
+          (is (< 5 (.-z (.-pos (.self p)))) "the body walked toward the sound"))))))
+
+(deftest offers-starts-when-the-villager-is-only-heard
+  (let [p (heard-until-near! (tu/fake-on-floor {:entities [(villager [(bread {})] {:pos {:x 0.5 :y 64 :z 8.5}})]}))]
+    (is (= :ok (first (offers/can-start? {:args {:villager "v-1"} :primitives p}))))))
+
+(deftest a-villager-out-of-view-at-night-is-waited-for-till-day-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 10}]}})
+              state (fake/state p)
+              dawn (+ @clock 20000)
+              entities (.-entities p)
+              _ (swap! state assoc :time 14000)
+              _ (add-watch clock :dawn (fn [_ _ _ now] (when (>= now dawn)
+                                                         (remove-watch clock :dawn)
+                                                         (swap! state assoc :time 1000))))
+              _ (aset p "entities" (fn [q] (if (= 14000 (:time @state)) #js [] (.call entities p q))))
+              _ (core/submit! eng (tu/order (list job {:villager "v-1" :buy "bread" :count 1})) {})
+              _ (await (run-until-empty eng 300))]
+          (is (= {"emerald" 9 "bread" 1} (inv p)) "bought after the night, not ended gone"))))))

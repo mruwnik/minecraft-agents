@@ -17,7 +17,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
-            [jobs.lib.vantage :as vantage]
             [jobs.lib.walk :as walk]
             [jobs.lib.trade-window :as tw]))
 
@@ -62,7 +61,6 @@
 
 (a/defargs settings
   {::max-rolls {:default 20 :doc "Rolls (breaks of the workstation) without a match before the call gives up (:no-match)." :spec (a/int-in 1 200)}
-   ::poll-s {:default 2 :doc "Seconds between looks while waiting for the villager to lose or take its job." :spec (a/int-in 1 60)}
    ::away-s {:default 30 :doc "Seconds a villager seen before may stay out of view (after the workstation is placed) before the call ends :gone." :spec (a/int-in 1 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
@@ -71,7 +69,7 @@
    ::take-job-s {:default 300 :doc "Daytime seconds the villager may stay without a job after the workstation is placed: then the workstation is broken and placed once more, and past that the call ends :no-job." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
-(defn poll-s [] (settings/get settings ::poll-s))
+(defn poll-s [] (villager/poll-s))
 (defn away-s [] (settings/get settings ::away-s))
 (defn reach [] (settings/get settings ::reach))
 (defn leg-s [] (settings/get settings ::leg-s))
@@ -556,15 +554,6 @@
   [c]
   (or (await (to-stand! c)) (await (place! c))))
 
-(defn ^:async hear-step!
-  "By day, a villager heard but not seen: one vantage step toward the sound and a look round there, as a player walks
-  toward a voice (a sound names no villager, so the nearest heard one). :continue while the walk waits, :again after a
-  step, nil when none is heard or the steps are spent."
-  [c villager]
-  (let [rows (vantage/heard c ["villager"] (villager/search-radius))
-        r (when (seq rows) (await (vantage/step! c rows #(villager/find-by-uuid (:primitives c) villager))))]
-    (case r :partial :continue nil nil :again)))
-
 (defn ^:async look-for!
   "The villager is out of view: walk to the cell when far from it and none was seen yet, look from where it was seen and
   round, from the cell beside the workstation, then at where the body last saw it (once a sighting), then by day toward
@@ -584,7 +573,7 @@
                                                   (await (wait-job! c :night-villager-out-of-view)))
             (:night-waited m) (do (ctx/update-mem! c dissoc :night-waited :memory-walked :flanked :away-since :vantage) :again)
             :else
-            (or (await (hear-step! c villager))
+            (or (await (villager/hear-step! c villager))
                 (if (and (:seen m) (< (- (ctx/now c) (:away-since m (ctx/now c))) (* 1000 (away-s))))
                   (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
                       (await (wait-job! c :villager-out-of-view)))
