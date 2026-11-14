@@ -63,6 +63,27 @@
           (is (= 9 (get (ft/inv s) "wheat_seeds")) "no seed was sown")
           (is (empty? (ft/calls s "dig"))))))))
 
+(deftest a-growing-wait-logs-one-holding-event-a-pause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 2 :spend {:job-time 120}} (ft/world (ft/farm "wheat" 2 [[2 2]] [[2 2]]) ft/wheat-drops {:inventory kit}) 60))
+              holds (filter #(= :holding (:kind %)) @(:seen s))]
+          (is (= (count holds) (count (distinct (map :since holds)))) (pr-str (map #(select-keys % [:kind :since :round :reason]) holds))))))))
+
+(deftest a-growing-wait-looks-again-at-crops-remembered-from-long-ago
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (ft/world (ft/farm "wheat" 2 [[2 2]] [[2 2]]) ft/wheat-drops {:inventory kit}))
+              p (:p s)
+              seen-blocks (aget p "seenBlocks")]
+          (aset p "seenBlocks" (fn [q] (let [bs (seen-blocks q)] (doseq [b bs] (aset b "age-ms" 2400000)) bs)))
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.grow {:count 2 :spend {:job-time 120}})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 8 700))
+          (is (some #(= [2.5 2.5] [(.-x (.-pos (.-args %))) (.-z (.-pos (.-args %)))]) (ft/calls s "look"))
+              "it turned to the crop it only remembered"))))))
+
 (deftest a-growing-field-in-a-plan-of-the-bodys-own-is-waited-for
   (async done
     (tu/run-async done

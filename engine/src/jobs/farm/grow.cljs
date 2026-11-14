@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.look :as look]
             [jobs.lib.crops :as crops]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
@@ -20,7 +21,7 @@
   reads the world first, so a cut or restarted run takes up the field it finds (a field already standing is never started
   again):
   1. A crop of :crop seen and ripe (a zone or claim of another owner leaves it): cut it with jobs.farm.harvest, which replants.
-  2. A crop seen, none ripe: wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
+  2. A crop seen, none ripe: look again at each one whose memory is older than a wait (within the harvest radius), then wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
   3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; a failed seed fetch with :count seeds carried sows what is carried; wheat seeds are
      broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body, the field worth a 3-day food reserve: cost/food-search-worth) and work it with jobs.farm.tend (till,
      irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance.
@@ -93,7 +94,7 @@
                  :let [pos {:x x :y y :z z}
                        b (u/seen-block p pos)]
                  :when (and b (= crop (.-name b)))]
-             {:name crop :pos pos :age (some-> (aget (.-properties b) "age") js/Number)})))))
+             {:name crop :pos pos :age (some-> (aget (.-properties b) "age") js/Number) :age-ms (aget b "age-ms")})))))
 
 (defn standing
   "The crops of :crop the body has seen standing (its field's remembered cells first, then those near the body), that its zones allow cutting (its own plans' crops too) and no harvest gave up on (the cells it left)."
@@ -107,6 +108,20 @@
              (concat known (remove (fn [b] (some #(= (:pos %) (:pos b)) known)) near)))))
 
 (defn ripe? [crop b] (some-> (:age b) (>= (crops/ripe-age crop))))
+
+(defn stale
+  "The crops of seen within the harvest radius whose memory is older than one wait: judged from what the body saw before, not from what it sees."
+  [c seen]
+  (let [me (u/self-pos c)]
+    (filterv #(and (some-> (:age-ms %) (> (* 1000 (settings/get settings ::wait-s))))
+                   (<= (u/dist (:pos %) me) crops/cut-radius))
+             seen)))
+
+(defn ^:async relook!
+  "Look at each of the stale crops (a wait's glance at the field, as a player does), so ripeness is judged from sight."
+  [c seen]
+  (doseq [{:keys [x y z]} (map :pos (stale c seen))]
+    (await (look/look-at! c [x y z]))))
 
 (defn hoe? [c] (boolean (some #(.endsWith (:name %) "_hoe") (u/inventory (:primitives c)))))
 
@@ -201,8 +216,11 @@
 
       (seq seen)
       (do (child/progress! c :tend)
-          (await (child/pause! c (settings/get settings ::wait-s) :growing))
-          :continue)
+          (await (relook! c seen))
+          (if (some #(ripe? crop %) (standing c))
+            :again
+            (do (await (child/pause! c (settings/get settings ::wait-s) :growing))
+                :continue)))
 
       :else (await (found-field! c)))))
 

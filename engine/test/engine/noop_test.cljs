@@ -45,6 +45,7 @@
           (await (core/tick! eng))
           (is (= [10000 10000 5000] @waits) "in waits of at most prim/wait-max-ms")
           (is (= [:testing] (distinct (map #(:reason %) (of-kind seen :holding)))) "holding with its reason")
+          (is (= 1 (count (of-kind seen :holding))) "one job.holding event for a pause")
           (let [completed (first (of-kind seen :completed))]
             (is (= :done (:pause completed)))
             (is (= {:job-time 25 :wall-time 25} (select-keys (get-in completed [:report :uses]) [:job-time :wall-time])) "the pause counts as both job time and wall time")))))))

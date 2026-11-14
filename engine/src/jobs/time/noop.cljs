@@ -12,7 +12,7 @@
   inside one round. A job pauses by calling it as a child (jobs.lib.child/pause!): reflexes still cut in, and the time
   counts against both the caller's job time and its wall time. A pause writes its deadline once (job memory :until), so a cut pause waits only
   what is left and a long one adds no events per step. Needs nothing.
-  Its hold stays until the caller's round ends or clears it. Done {:waited-s s}. Quote: :seconds.")
+  The hold is the wait act's :why, so one job.holding event a pause. Done {:waited-s s}. Quote: :seconds.")
 
 (a/defargs args
   {:seconds {:doc "how long to pause" :spec (a/num-in 0 nil) :default 0}
@@ -47,7 +47,6 @@
 
 (defn ^:async round [c]
   (let [why (:why (:args c) :pausing)]
-    (ctx/hold-still! c why)
     (when-not (:until (ctx/mem c))
       (ctx/update-mem! c assoc :until (+ (ctx/now c) (total-ms c))))
     (loop [owed (left-ms c)]
