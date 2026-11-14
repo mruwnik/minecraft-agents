@@ -62,6 +62,13 @@
     (is (= [-1 0] (vp/choose p ws (clj->js {:pos {:x 1.5 :y 64 :z 0.5}}))))
     (is (= [0 1] (vp/choose p ws (clj->js {:pos {:x 6.5 :y 64 :z 4.5}}))) "the pen along +z needs the fewest blocks")))
 
+(deftest the-boxed-stand-of-a-built-pen-has-an-exit-cell-but-a-bare-dead-end-has-none
+  (let [full (merge shut plug box)
+        exit (fn [spec] (vp/exit-cell (tu/fake (merge {:self at-stand} spec)) ws))]
+    (is (some? (exit (world full))))
+    (is (nil? (exit (world (merge plug box)))) "no pen round the lectern: a wall is no way out of a pen")
+    (is (nil? (exit (world full {:slab? false}))))))
+
 (deftest a-villager-is-penned-only-shut-in-under-the-slab-alone-lit-and-the-body-boxed-in-behind
   (let [in (clj->js {:pos {:x 1.5 :y 64 :z 0.5}})
         penned? (fn [spec] (some? (vp/penned (tu/fake (merge {:self at-stand} spec)) ws in)))
@@ -204,8 +211,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [lights (fn [{:keys [p]}]
-                       (add-watch (fake/state p) :torch (fn [_ s _ w] (when (and (some #{"torch" "wall_torch"} (vals (:blocks w))) (not= [0 14] (:light-default w)))
-                                                                        (swap! s assoc :light-default [0 14])))))
+                       (add-watch (fake/state p) :torch
+                                  (fn [_ s _ w]
+                                    (->> (vals (:blocks w))
+                                         (filter #{"torch" "wall_torch"})
+                                         (take 1)
+                                         (filter (constantly (= [0 0] (:light-default w))))
+                                         (run! (fn [_] (swap! s assoc :light-default [0 14])))))))
               [result p] (await (run (assoc (world (merge shut plug box)) :entities [(jobless {:x 1 :y 64 :z 0})]
                                             :time 1000 :light {} :light-default [0 0] :inventory [{:name "torch" :count 2}])
                                      {} 200 lights))]

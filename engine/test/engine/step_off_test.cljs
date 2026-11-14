@@ -1,7 +1,9 @@
 (ns engine.step-off-test
   "jobs.lib.step-off: the cells a body may step to off a cell, against the fake world."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.ctx :as ctx]
             [engine.test-util :as tu]
+            [jobs.lib.child :as child]
             [jobs.lib.step-off :as step-off]))
 
 (def cell {:x 2 :y 64 :z 0})
@@ -55,3 +57,18 @@
   (is (contains? (zone-goals {:zones [foreign] :self "Fake" :ignore-zones? true}) [3 64 0]))
   (is (contains? (zone-goals {:zones [(assoc foreign :owner "Fake")] :self "Fake"}) [3 64 0]))
   (is (contains? (zone-goals {:zones nil :self "Fake"}) [3 64 0]) "no zone list: standing is no act"))
+
+(defn ^:async step-off-with
+  "step-off! off the cell with the go-to child arrived at a neighbour and the final step to its middle answered
+  `status`."
+  [status]
+  (with-redefs [child/call-walk* (fn [_ _ _] (js/Promise.resolve {:kind :done :data {:arrived true}}))
+                ctx/act (fn [_ _ _] (js/Promise.resolve #js {:status status}))]
+    (await (step-off/step-off! {:primitives (world {})} cell {}))))
+
+(deftest a-step-to-the-middle-that-does-not-arrive-is-unreachable-not-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:unreachable :middle} (await (step-off-with "blocked"))))
+        (is (= :arrived (await (step-off-with "arrived"))))))))

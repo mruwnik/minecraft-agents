@@ -89,12 +89,12 @@
   (boolean (some (fn [pair] (every? #(bs/passable? (name-at p %)) pair)) (partition 2 (:box lay)))))
 
 (defn exit-cell
-  "The first solid cell of the box's entry when the body stands boxed in the stand of a pen at workstation cell ws (no
-  side open to walk out by), else nil."
+  "The first solid cell of the box's entry when the body stands boxed in the stand of a built pen at workstation cell ws
+  (its shut cells solid and the top slab on: no side open to walk out by), else nil: a dead end next to a workstation is no pen."
   [p ws]
   (some (fn [side]
           (let [lay (layout ws side)]
-            (when (and (at-stand? p lay) (not (way-in? p lay)))
+            (when (and (at-stand? p lay) (not (way-in? p lay)) (empty? (owed p (:shut lay))) (top-slab? p (:slab lay)))
               (first (filter #(solid? (name-at p %)) (:entry lay))))))
         sides))
 
