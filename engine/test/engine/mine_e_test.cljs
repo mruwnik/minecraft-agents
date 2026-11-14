@@ -124,6 +124,25 @@
           (is (= :dug @out) "the way planned the drop: walled in on every side, the body digs down from where it stands")
           (is (= "air" (block-at s 0 63 0))))))))
 
+;; Brindle 2026-11-14: the lean toward a dug cell with no floor ran on past the edge after the steer let go, and the
+;; body fell 11 blocks into a cave of zombies and died. A player sneaks to look over a hole.
+(deftest the-lean-over-a-dug-cell-with-no-floor-sneaks-and-keeps-the-body-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              held (atom [])
+              job {:round (fn ^:async r [c] (reset! out (await (drops/peek-over-lip! c [1 64 0]))) (ctx/end c :done nil))}
+              hole (into {} (for [y (range 58 66)] [(str "1," y ",0") "air"]))
+              s (start {:world (rock-world hole) :jobs (assoc registry/jobs 'test.peek job)})]
+          (add-watch (fake/state (:p s)) ::held (fn [_ _ _ w] (when (seq (:controls w)) (swap! held conj (:controls w)))))
+          (core/submit! (:eng s) (tu/order '(test.peek {})) {})
+          (await (run-ticks s 20))
+          (is (= :peeked @out))
+          (is (seq @held) "the body steps toward the edge")
+          (is (every? :sneak @held) "every tick of the lean holds sneak, so the game stops the body at the edge")
+          (is (= [0 64 0] (feet s)) "the body stays on its own floor"))))))
+
 (deftest the-tunnel-heading-arg-names-a-way-or-a-cell-to-run-toward
   (async done
     (tu/run-async done

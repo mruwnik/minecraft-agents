@@ -281,15 +281,16 @@
     (when (and n (not (bs/air n))) roof)))
 
 (defn ^:async peek-over-lip!
-  "A dug cell the body stands beside whose drop is still not in sight: once per dug cell, a step to the edge of its own cell
-  toward it (walk/centre!: go-to works in cells and would not leave this one), so the drop at the foot of a pit wall shows.
-  A solid cell over dug is dug first (roof-cell). :peeked after the step, nil when there is none to take."
+  "A dug cell the body stands beside whose drop is still not in sight: once per dug cell, a sneaking step to the edge of its
+  own cell toward it (walk/centre!: go-to works in cells and would not leave this one), so the drop at the foot of a pit
+  wall shows. Sneak, as a player leans over a hole: the dug cell has no seen floor, and the step's run-on would carry the
+  body over the edge. A solid cell over dug is dug first (roof-cell). :peeked after the step, nil when there is none to take."
   [c dug]
   (when-let [pt (and (not= dug (:lip-peeked (ctx/mem c))) (lip-point c dug))]
     (ctx/update-mem! c assoc :lip-peeked dug)
     (when-let [roof (roof-cell c dug)]
       (await (dig-cell! c (zipmap [:x :y :z] roof))))
-    (await (walk/centre! c (:x pt) (:z pt) 0.12))
+    (await (walk/centre! c (:x pt) (:z pt) 0.12 {:sneak true}))
     :peeked))
 
 (defn ^:async look-floor-toward!

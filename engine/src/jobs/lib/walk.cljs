@@ -118,23 +118,26 @@
 
 (defn centre-decider
   "A steer decide function that walks straight at [tx tz], done within tol (default centre-tolerance) of it or after
-  centre-max-ticks."
+  centre-max-ticks; with sneak it holds sneak, so the game keeps the body from going off an edge."
   ([tx tz] (centre-decider tx tz (centre-tolerance)))
-  ([tx tz tol]
+  ([tx tz tol] (centre-decider tx tz tol false))
+  ([tx tz tol sneak]
    (let [ticks (volatile! 0)]
      (fn [js-pose]
        (let [dx (- tx (.-x js-pose)) dz (- tz (.-z js-pose))]
          (if (or (and (<= (js/Math.abs dx) tol) (<= (js/Math.abs dz) tol))
                  (>= (vswap! ticks inc) (centre-max-ticks)))
            #js {:done true}
-           #js {:controls #js {:forward true} :yaw (js/Math.atan2 (- dx) (- dz))}))))))
+           #js {:controls (if sneak #js {:forward true :sneak true} #js {:forward true}) :yaw (js/Math.atan2 (- dx) (- dz))}))))))
 
 (defn ^:async centre!
   "A short walk (no planning, no jump) to within centre-tolerance (or tol) of [tx tz] on the cell the body is in: the step a
-  go-to to a cell cannot make, since a body on the edge of the cell already counts as in it."
+  go-to to a cell cannot make, since a body on the edge of the cell already counts as in it. :sneak true holds sneak, for
+  a step toward an edge with a drop past it."
   ([c tx tz] (centre! c tx tz (centre-tolerance)))
-  ([c tx tz tol]
-   (await (ctx/act c :steer (steer-args (steer-s c 3) (centre-decider tx tz tol))))))
+  ([c tx tz tol] (centre! c tx tz tol nil))
+  ([c tx tz tol {:keys [sneak]}]
+   (await (ctx/act c :steer (steer-args (steer-s c 3) (centre-decider tx tz tol (boolean sneak)))))))
 
 (defn ^:async plan-walk!
   "Plan a walk with plan-within! (yields to the event loop between search slices): what the walks (jobs.lib.near, walk-to!)
