@@ -1,0 +1,24 @@
+;; Card d67abe82: jobs.village.roll ends :unreachable only when the villager is out of reach after a chase leg that got no nearer; a villager
+;; within reach (about 2 blocks off, in a water pit the body cannot stand in) is read again and its offers are read.
+;; A NoAI librarian stands in a one-cell water pit (16 -1 17, dug into the floor, stone under it); the lectern at 16 0 16 is beside it.
+;; Should-succeed: the body 6 blocks off reads the villager's offers (roll.offers) and never ends :unreachable before that.
+;; Should-fail: the same villager shut in a glass box (reach through it, no way in) ends :unreachable in one call without offers.
+{:defaults
+ {:tags [:village :jobs]
+  :time :day :time-why :villager-schedule
+  :plot {:floor "grass_block"}
+  :blocks [[:set [16 0 16] "lectern"] [:fill [16 -1 17] [16 -1 17] "water"] [:set [16 -2 17] "stone"]]
+  :body {:at [10.5 0 17.5] :yaw 270 :settle-s 2}
+  :limit-s 150}
+ :cases
+ [{:name "villager-in-a-water-pit-within-reach-has-its-offers-read"
+   :act [[:summon "villager" [16.5 -1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,70],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000046" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 1}})]]
+   :expect [{:event {:source :job :kind :roll.offers} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :unreachable}} :for-s 100 :until {:source :job :kind :roll.offers}}]}
+  {:name "villager-in-a-glass-box-ends-unreachable-without-offers"
+   :blocks [[:fill [14 0 15] [18 3 19] "glass" :hollow]]
+   :act [[:summon "villager" [16.5 -1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,71],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000047" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 1}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :roll.offers} :for-s 120 :until {:source :job :kind :stopped}}]}]}
