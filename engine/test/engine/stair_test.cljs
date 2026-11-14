@@ -11,6 +11,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.mine-support :as ms]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.test-util :as tu]
@@ -108,6 +109,21 @@
             (await (sstep/look-back! c [14 60 0])))
           (is (= [[13 60 0] [12 60 0]] (take 2 @looks)) "the nearest cell back first")
           (is (apply distinct? @looks) "each cell once"))))))
+
+(deftest the-lean-toward-an-unseen-floor-holds-sneak
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [held (atom [])
+              job {:round (fn ^:async r [c] (await (sstep/lean! c [0 64 0] [1 64 0])) (ctx/end c :done nil))}
+              hole (into {} (for [y (range 58 66)] [(str "1," y ",0") "air"]))
+              s (ms/start {:world (ms/rock-world hole) :jobs (assoc registry/jobs 'test.lean job)})]
+          (add-watch (fake/state (:p s)) ::held (fn [_ _ _ w] (when (seq (:controls w)) (swap! held conj (:controls w)))))
+          (core/submit! (:eng s) (tu/order '(test.lean {})) {})
+          (await (ms/run-ticks s 20))
+          (is (seq @held) "the body steps toward the next cell")
+          (is (every? :sneak @held) "every tick of the lean holds sneak, so the game stops the body at an edge")
+          (is (= [0 64 0] (ms/feet s)) "the body stays on its own floor"))))))
 
 (deftest an-unseen-neighbour-is-tried-only-after-the-cells-with-a-known-face
   (let [floor [4 60 0]

@@ -54,10 +54,10 @@
 
 (defn ^:async lean!
   "Walk the body inside its own cell (feet) toward next, lean-reach from the centre: from the back of the cell the edge
-  of its own floor hides a floor below ahead."
+  of its own floor hides a floor below ahead. Sneaks, so the game stops the body at an edge if it runs on."
   [c [fx _ fz :as feet] [nx _ nz :as next]]
   (when (and feet next)
-    (await (walk/centre! c (+ fx 0.5 (* lean-reach (js/Math.sign (- nx fx)))) (+ fz 0.5 (* lean-reach (js/Math.sign (- nz fz))))))))
+    (await (walk/centre! c (+ fx 0.5 (* lean-reach (js/Math.sign (- nx fx)))) (+ fz 0.5 (* lean-reach (js/Math.sign (- nz fz)))) (walk/centre-tolerance) {:sneak true}))))
 
 (defn ^:async see-over!
   "After the top cut cell is dug: lean toward it and look at the cell over it when that is still unseen. From the back of
