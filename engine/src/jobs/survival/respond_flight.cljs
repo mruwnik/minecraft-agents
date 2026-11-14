@@ -144,6 +144,7 @@
         threats (flight/look! c)
         threat (first threats)
         ;; first of the step's searches, a hut's few cells: a goal leg out of the home needs a judged plan (respond.goal/verdict)
+        _ (cover/hold-for-flee! c)
         _ (room-lib/home-room! c (cover/home-pos c) (cornered/close-radius))
         hit? (or (cornered/hit-on-the-run! c) (pick/beaten? c) (pick/shot-on-the-run? c) (pick/bare-boxed-in? c (cornered/near-hostiles c)))
         door (when threat (respond.doors/door-for c threats))
@@ -153,7 +154,7 @@
         glanced? (boolean (and survey0 (not-any? combat/creeper? threats) (await (room-lib/glance-in! c survey0 threats))))
         survey (if glanced? (cover/survey c threats true) survey0)
         rooms (:rooms survey)
-        verdicts (when survey (let [v (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?)) (room-lib/step-spent-s c) (cover/fire-on c threats))]
+        verdicts (when survey (let [v (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?)) (room-lib/step-spent-s c) (cover/fire-on c threats) (room-lib/flee-hold-s c))]
                                 (room-lib/spent! c (:spent-s v) :verdicts)
                                 (:verdicts v)))
         {:keys [room way inside?]} (room-lib/pick verdicts)

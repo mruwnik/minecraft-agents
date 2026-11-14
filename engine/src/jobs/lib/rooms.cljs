@@ -230,9 +230,22 @@
 (defn search-meter
   "A reach/meter of the one search a flight step's or a quote's searches make (cost/search-budget-s, Q141), spent-s spent:
   a flood's cell at cost/room-read-ceiling-s, a walk search's at cost/walk-cell-ceiling-s, a flee search's planner node at
-  cost/search-cell-ceiling-s; the budget is a wall-time ceiling, so the upper-bound prices (flood-s and way-s price at the means)."
-  [spent-s]
-  (reach/meter (cost/search-budget-s) spent-s (cost/room-read-ceiling-s) (cost/walk-cell-ceiling-s) (cost/search-cell-ceiling-s)))
+  cost/search-cell-ceiling-s; the budget is a wall-time ceiling, so the upper-bound prices (flood-s and way-s price at the means).
+  held-s (default 0) of the budget is kept back from the meter's searches (its spent-s is what they ran)."
+  ([spent-s] (search-meter spent-s 0))
+  ([spent-s held-s]
+   (reach/meter (- (cost/search-budget-s) held-s) spent-s (cost/room-read-ceiling-s) (cost/walk-cell-ceiling-s) (cost/search-cell-ceiling-s))))
+
+(defn flee-hold-s "Seconds of the step's search kept back from its surveys for the flee search (hold-for-flee!), 0 when none." [c] (:flee-hold-s (ctx/mem c) 0))
+
+(defn hold-for-flee!
+  "Keep back for the flee search of this step the CPU of its cheapest plans: a plan to each of targets (positions, nil
+  skipped) expands at least one planner node a block of the straight way (cost/search-cell-ceiling-s each), at most the
+  step's budget. The surveys and looks that run before it (survey-meter) leave that to it, so it always plans."
+  [c targets]
+  (let [me (u/self-pos c)
+        s (* (cost/search-cell-ceiling-s) (reduce + 0 (map #(u/dist me %) (remove nil? targets))))]
+    (ctx/update-mem! c assoc :flee-hold-s (min s (cost/search-budget-s)))))
 
 (defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))
 
@@ -242,7 +255,7 @@
   [c s by]
   (ctx/update-mem! c (fn [m] (-> (assoc m :search-s s) (update :search-log (fnil conj []) [by (- s (:search-s m 0))])))))
 
-(defn new-step! "A new flight step: its searches start a fresh search-meter." [c] (ctx/update-mem! c #(-> % (assoc :search-s 0) (dissoc :search-log))))
+(defn new-step! "A new flight step: its searches start a fresh search-meter." [c] (ctx/update-mem! c #(-> % (assoc :search-s 0) (dissoc :search-log :flee-hold-s))))
 
 (defn step-searches!
   "One debug retreat.step-searches of the step's log, what each search spent of its meter, ms, and what was left
@@ -255,6 +268,8 @@
     (ctx/update-mem! c dissoc :search-log)))
 
 (defn step-meter "The flight step's search-meter, from what its searches have run (step-spent-s)." [c] (search-meter (step-spent-s c)))
+
+(defn survey-meter "step-meter for the searches that run before the flee search: less what it is to keep (flee-hold-s)." [c] (search-meter (step-spent-s c) (flee-hold-s c)))
 
 (defn spent-meter! "Keep what meter m has spent as the flight step's searches' CPU, by (spent!)." [c m by] (spent! c (reach/spent-s m) by))
 
@@ -273,7 +288,7 @@
   flight's steps judge it alike). Defaults: no threats, no fire, keep? true."
   ([c home] (survey c home {}))
   ([c home {:keys [threats fire keep? spent-s] :or {keep? true spent-s 0}}]
-   (binding [reach/*search* (search-meter spent-s)]
+   (binding [reach/*search* (search-meter spent-s (flee-hold-s c))]
      (let [p (:primitives c)
            me (u/self-pos c)
            failed (:refuges-failed (ctx/mem c) #{})
@@ -415,7 +430,7 @@
   expires, so a cut flight's door is shut by the door-left trigger. Not when a melee threat reaches the door first (reaches-first?).
   The door side is glance-at's (glance-through! takes a given one). True when it looked: the caller surveys again."
   [c survey threats]
-  (let [m (step-meter c)
+  (let [m (survey-meter c)
         at (binding [reach/*search* m] (glance-at c survey threats))]
     (spent-meter! c m :glance)
     (await (glance-through! c at))))
@@ -488,7 +503,7 @@
     (cond
       (nil? home) (do (ctx/update-mem! c dissoc :home-room) nil)
       (= [k wk] [(:cell kept) (:key kept)]) (:in? kept)
-      :else (let [m (step-meter c)
+      :else (let [m (survey-meter c)
                   room (binding [reach/*search* m] (reach-room/room-near p feet r))
                   _ (spent-meter! c m :home-room)
                   cut? (pos? @(:cuts m))
@@ -504,16 +519,6 @@
   (let [{:keys [cell in?]} (:home-room (ctx/mem c))]
     (when (= cell (cell-key (sh-sense/feet (:primitives c)))) in?)))
 
-(defn with-flee-share
-  "f run under *search* with half the step's budget held back: a walk search to a door (way-in) is cut where the other half
-  would start, so the flee search that plans the home and goal after the survey keeps it. The floods that judge the rooms
-  run on the whole budget (one costs more than half of it)."
-  [f]
-  (let [m reach/*search*
-        held (/ (cost/search-budget-s) 2)]
-    (when m (vswap! (:left m) - held))
-    (try (f) (finally (when m (vswap! (:left m) + held))))))
-
 (defn way-in
   "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach.room/walk-steps to the room
   cell inside it): {:cell :inside :steps}, nil when it finds none. Its searches run under reach/*search*, a fresh
@@ -524,11 +529,10 @@
     (let [feet (sh-sense/feet p)]
       (reach-room/kept p (str "way-in|" (cell-key feet) "|" (pr-str (map :inside (:doors room))))
                        (fn [_]
-                         (with-flee-share
-                           #(->> (:doors room)
-                                 (keep (fn [d] (when-let [n (reach-room/walk-steps p feet (:inside d))] (assoc d :steps n))))
-                                 (sort-by :steps)
-                                 first)))))))
+                         (->> (:doors room)
+                              (keep (fn [d] (when-let [n (reach-room/walk-steps p feet (:inside d))] (assoc d :steps n))))
+                              (sort-by :steps)
+                              first))))))
 
 (defn race-won?
   "Whether the body, at its own speed (food), walks way-in's steps before any melee threat gets to a door of room:
@@ -546,8 +550,9 @@
   (way-in finds none) or :race-lost (a melee chaser gets to a door first: race-won?); no :why: a run there is on. Its
   walk searches run under one search-meter from spent-s, :spent-s what they all ran."
   ([p rooms threats way?] (verdicts p rooms threats way? 0 nil))
-  ([p rooms threats way? spent-s fire]
-   (binding [reach/*search* (search-meter spent-s)]
+  ([p rooms threats way? spent-s fire] (verdicts p rooms threats way? spent-s fire 0))
+  ([p rooms threats way? spent-s fire held-s]
+   (binding [reach/*search* (search-meter spent-s held-s)]
      (let [creeper? (some combat/creeper? threats)
            me (u/pos-of (.-pos (.self p)))
            here (here-s p threats)

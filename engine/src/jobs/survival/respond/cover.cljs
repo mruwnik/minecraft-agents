@@ -56,6 +56,11 @@
     (when-let [{:keys [covered?]} (respond.goal/fire-price c threats (cover-fn p threats (flight/fire-spots c)))]
       {:exposed? (not (covered? (sh-sense/feet p)))})))
 
+(defn hold-for-flee!
+  "room-lib/hold-for-flee! for the home and the goal the flee search plans to this step."
+  [c]
+  (room-lib/hold-for-flee! c [(home-pos c) (respond.goal/active c)]))
+
 (defn survey
   "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead or the shooters' fire, fire-on,
   pricing its door sides judged afresh), its searches part of the step's one (room-lib/step-spent-s); nil with a creeper
@@ -185,7 +190,7 @@
   without it."
   [c s threats]
   (let [p (:primitives c)
-        m (room-lib/step-meter c)
+        m (room-lib/survey-meter c)
         me (u/self-pos c)
         food (room-lib/food p)
         pace (cost/flee-pace food)

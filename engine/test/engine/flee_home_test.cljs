@@ -751,7 +751,17 @@
               fresh (rooms/verdicts p rooms threats true 0 nil)]
           (is (= [true] (mapv :home? rooms)) "the home")
           (is (= [:unpriced] (mapv :why (:verdicts late))) "three cells left of the step's search: the home's walk search is cut")
-          (is (= [:unpriced] (mapv :why (:verdicts (rooms/verdicts p rooms threats true (/ budget 2) nil)))) "half the step's search spent: the walk search to the door is left, the flee search keeps the other half")
+          (let [held (- budget (* 3 (cost/walk-cell-ceiling-s)))
+                v (rooms/verdicts p rooms threats true 0 nil held)]
+            (is (= [:unpriced] (mapv :why (:verdicts v))) "the flee search's hold leaves three cells: the walk search to the door is cut, the flee search keeps the rest")
+            (is (<= (:spent-s v) (- budget held)) (str (:spent-s v))))
+          (do
+            (rooms/hold-for-flee! c [{:x 5.5 :y 64 :z 30.5} nil])
+            (is (= (* (cost/search-cell-ceiling-s) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a straight plan's nodes, a block each, are held for the flee search")
+            (rooms/hold-for-flee! c [{:x 5.5 :y 64 :z 3000.5}])
+            (is (= (cost/search-budget-s) (rooms/flee-hold-s c)) "never more than the step's search")
+            (rooms/new-step! c)
+            (is (zero? (rooms/flee-hold-s c)) "a new step starts with none held"))
           (is (<= (:spent-s late) budget) (str (:spent-s late)))
           (is (= [nil] (mapv :why (:verdicts fresh))) "a step with its search to spend runs home")
           (is (< 0 (:spent-s fresh) budget) (str (:spent-s fresh))))))))
