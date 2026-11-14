@@ -8,7 +8,8 @@
             [engine.test-util :as tu]
             [jobs.farm.maintain :as maintain]
             [jobs.farm.maintain-stock :as stock]
-            [jobs.farm.stalks :as stalks]))
+            [jobs.farm.stalks :as stalks]
+            [jobs.lib.build.diff :as diff]))
 
 (defn ^:async scenario
   "Submit farm.maintain with args in a world; run n ticks 700 ms apart; the setup map."
@@ -161,6 +162,9 @@
 (deftest each-step-decides-from-its-facts
   (are [expected step args facts] (= expected (:skip (maintain/decide step args facts)))
     nil :tend {:area ft/box} {}
+    :no-plan :repair {:area ft/box} {:broken []}
+    :sound :repair {:area {:plan "p"}} {:broken []}
+    nil :repair {:area {:plan "p"}} {:plan-cells {:cells []} :broken [{:pos [1 64 1] :want "cobblestone"}]}
     :nothing-blocked :tidy {:area {:plan "p"}} {:blocked 0}
     nil :tidy {:area {:plan "p"}} {:blocked 3}
     :no-composter :compost {} {:waste ["wheat_seeds"]}
@@ -177,6 +181,32 @@
            (:args (:call (maintain/decide :tend {:area ft/box :till true :irrigate false :fertilize true} {})))))
     (is (= {:chest given :items :farm-goods :carry keep}
            (:args (:call (maintain/decide :deposit {:chest given} {:stored ["wheat"] :keep keep})))))))
+
+(deftest repair-mends-the-whole-plan-at-the-worth-of-the-broken-cells
+  (let [pc {:parts [] :cells [{:pos [4 63 2] :want "water"} {:pos [3 64 2] :want {:crop "wheat"}}]}
+        broken [{:pos [4 63 2] :want "water"}]]
+    (is (= {:plan "p" :worth (diff/worth pc broken)}
+           (:args (:call (maintain/decide :repair {:area {:plan "p" :part "wheat"}} {:plan-cells pc :broken broken})))))))
+
+(def walled
+  "The wheat of fp/plan-of with a wall cell beside it and the water cell that waters it."
+  (update (fp/plan-of) :parts into [{:id "wall" :cells [[5 64 5]] :want "cobblestone"}
+                                    {:id "water" :cells [[4 63 2]] :want "water"}]))
+
+(deftest a-plan-farm-mends-its-seen-broken-wall-and-water-before-tending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fp/setup (fp/world-of (fp/ground "farmland" fp/wheat-cells) (fp/ground "dirt" [[4 2]])
+                                       {:inventory [(fp/item "cobblestone" 1) (fp/item "water_bucket" 1) (fp/item "stone_hoe" 1)
+                                                    (fp/item "wheat_seeds" 6) (fp/item "bread" 12)]})
+                          {"mix" walled} [])]
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain {:area {:plan "mix" :part "wheat"} :ignore-zones? true})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 100 700))
+          (is (= ["cobblestone" "water"] [(fp/block-at s 5 64 5) (fp/block-at s 4 63 2)]))
+          (is (= {:broken []} (fp/step s :repair)))
+          (is (= ["wheat" "wheat"] [(fp/block-at s 2 64 2) (fp/block-at s 3 64 2)]) "the field is still sown")
+          (is (empty? (fp/calls s "useOn")) "the dirt in the water cell is never tilled"))))))
 
 (deftest tidy-gets-the-plan-and-its-part
   (is (= {:plan "p" :part "wheat"} (:args (:call (maintain/decide :tidy {:area {:plan "p" :part "wheat"}} {:blocked 2}))))))

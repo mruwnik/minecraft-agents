@@ -10,6 +10,7 @@
             [jobs.farm.tend-decide :as tend-decide]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.farm.stalks :as stalks]
+            [jobs.lib.build.diff :as diff]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.farm :as cost-farm]
@@ -33,6 +34,9 @@
 (def doc
   "Keep a farm: its field in order, its stock in its place. One run is one pass over four steps in this order, each a
   child job called once (a child that yields is called again on the next call; a step under way is not re-decided):
+  - :repair (jobs.build.repair over the whole plan): the area is a plan and the body has seen a cell of it differ from its
+    want (jobs.lib.build.diff: walls, water, fences, chests; crop and tree cells are tend's), at the worth of mending them
+    (diff/worth).
   - :tidy (jobs.farm.tidy over the plan and its :part): the area is a plan with no :parts and a tree, dirt or other block
     fills some of its crop cells; a body clears its own field.
   - :cut (jobs.blocks.clear-cells): the plan has sugar cane or bamboo cells (a part wanting the stalk) and a stalk stands
@@ -48,11 +52,11 @@
   a box, or the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
   register holds (jobs.lib.reserve: the food reserve, best food first; agent entries) and the :carry entry. Harvested
   crops above it are stored; seed above it is composted.
-  Skipped steps are booked {:skipped reason}: :nothing-blocked, :nothing-to-cut, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
+  Skipped steps are booked {:skipped reason}: :no-plan, :sound, :nothing-blocked, :nothing-to-cut, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
   :declined when the child declined.
-  It starts when tend would run or a stock step has something to do. Done once a step ran and tend has nothing
+  It starts when tend would run or a repair, cut, tidy or stock step has something to do. Done once a step ran and tend has nothing
   to do and nothing is left to compost or store; a farm in order before the first pass waits :nothing-to-do. Ends :done with {:steps {step summary}} when a step ran to its end,
-  nothing-possible :failed-steps when one stopped early and none ran, else condition-failed :nothing-to-do. Summaries: tidy {:dug}, tend
+  nothing-possible :failed-steps when one stopped early and none ran, else condition-failed :nothing-to-do. Summaries: repair {:broken}, tidy {:dug}, tend
   {:field :parts}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.")
 
 (a/defargs args
@@ -76,9 +80,9 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night work-place/spot))))
 
-(def steps [:tidy :cut :tend :compost :deposit])
+(def steps [:repair :tidy :cut :tend :compost :deposit])
 
-(def jobs {:tidy 'jobs.farm.tidy :cut 'jobs.blocks.clear-cells :tend 'jobs.farm.tend :compost 'jobs.farm.compost :deposit 'jobs.storage.deposit})
+(def jobs {:repair 'jobs.build.repair :tidy 'jobs.farm.tidy :cut 'jobs.blocks.clear-cells :tend 'jobs.farm.tend :compost 'jobs.farm.compost :deposit 'jobs.storage.deposit})
 
 (defn sow-reserve
   "{seed count} the field's sowing keeps carried."
@@ -123,23 +127,38 @@
   [c keep]
   (deposit/spare-items (assoc c :args {:items :farm-goods :carry keep})))
 
+(defn broken
+  "{:plan-cells :broken}: the plan's cells (diff/plan-cells, every part) and those the body has seen broken (diff/diff);
+  none without a plan or when it cannot be read (tend says so)."
+  [c]
+  (let [pc (when-let [id (fa/plan c)] (diff/plan-cells c id nil))]
+    (if (or (nil? pc) (:trouble pc))
+      {:broken []}
+      {:plan-cells pc :broken (diff/diff c (:cells pc))})))
+
 (defn facts
-  "{:keep :waste :stored :blocked :cut}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig, the stalk blocks to cut."
+  "{:keep :waste :stored :blocked :cut :plan-cells :broken}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig, the stalk blocks to cut, the plan cells seen broken."
   [c]
   (let [inventory (u/inventory (:primitives c))
         keep (stock/keeps (sow-reserve c) (rsv/held c :maintain) (:carry (:args c)))]
-    {:keep keep
-     :waste (stock/surplus inventory keep crops/waste-seeds)
-     :stored (filterv (spare c keep) crops/farm-goods)
-     :blocked (if (and (fa/plan c) (empty? (fa/parts c)))
-                (count (tend-plan/clearable-cells c (:crops (tend-plan/planned c))))
-                0)
-     :cut (stalk-cuts c)}))
+    (assoc (broken c)
+           :keep keep
+           :waste (stock/surplus inventory keep crops/waste-seeds)
+           :stored (filterv (spare c keep) crops/farm-goods)
+           :blocked (if (and (fa/plan c) (empty? (fa/parts c)))
+                      (count (tend-plan/clearable-cells c (:crops (tend-plan/planned c))))
+                      0)
+           :cut (stalk-cuts c))))
 
 (defn decide
   "{:skip reason} or {:call {:slot :args}} for a step."
-  [step {:keys [area till irrigate fertilize composter chest ignore-zones?]} {:keys [keep waste stored blocked cut]}]
+  [step {:keys [area till irrigate fertilize composter chest ignore-zones?]} {:keys [keep waste stored blocked cut plan-cells broken]}]
   (case step
+    :repair (cond
+              (nil? (:plan area)) {:skip :no-plan}
+              (empty? broken) {:skip :sound}
+              :else {:call {:slot :repair :args (cond-> {:plan (:plan area) :worth (diff/worth plan-cells broken)}
+                                                  ignore-zones? (assoc :ignore-zones? true))}})
     :tidy (if (pos? (or blocked 0))
             {:call {:slot :tidy :args (cond-> {:plan (:plan area)} (:part area) (assoc :part (:part area)) ignore-zones? (assoc :ignore-zones? true))}}
             {:skip :nothing-blocked})
@@ -168,6 +187,8 @@
 (defn cut-work? [c] (boolean (:call (decide :cut (:args c) (facts c)))))
 
 (defn tend-work? [c] (= :ok (first (tend/problem c))))
+
+(defn repair-work? [c] (boolean (seq (:broken (broken c)))))
 
 (defn tidy-work? [c] (boolean (:call (decide :tidy (:args c) (facts c)))))
 
@@ -218,17 +239,23 @@
       (:value (cost/goal-value (mapv (fn [[name n]] {:name name :count n})
                                      (frequencies (map #(u/seen-name (:primitives c) (u/cell-pos %)) cuts))))))))
 
+(defn repair-worth
+  "Seconds mending the plan cells seen broken is worth (diff/worth)."
+  [c]
+  (let [{:keys [plan-cells broken]} (broken c)]
+    (if (seq broken) (diff/worth plan-cells broken) 0)))
+
 (defn root-worth
   "worth-of without the cache."
   [c]
   (if (= :ok (first (tend/can-run? c)))
     (let [f (tend/check-facts c)]
-      (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (tidy-worth c) (stock-worth c) (cut-worth c)))
-    (+ (stock-worth c) (cut-worth c))))
+      (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (repair-worth c) (tidy-worth c) (stock-worth c) (cut-worth c)))
+    (+ (repair-worth c) (stock-worth c) (cut-worth c))))
 
 (defn worth-of
   "Seconds a root pass is worth: tend's pass-price :worth, what its fertilize step adds (field-steps-worth),
-  the tidy and stock steps' own (tidy-worth, stock-worth) and the cut step's (cut-worth). Never ##Inf: cells never seen are priced by tend's prior. A plan tend cannot work (stalks only) is worth its cut.
+  the repair, tidy and stock steps' own (repair-worth, tidy-worth, stock-worth) and the cut step's (cut-worth). Never ##Inf: cells never seen are priced by tend's prior. A plan tend cannot work (stalks only) is worth its cut.
   A start check (no token) reads it once per cache window and memory epoch."
   [c]
   (if (:token c)
@@ -236,10 +263,11 @@
     (check-cache/cached c [::worth (fa/part c) (sense/known-memory (:primitives c))] #(root-worth c))))
 
 (defn can-start?
-  "Tend's start check, or ok while a cut, tidy or stock step has work; a plan of stalks only waits :nothing-to-do while none is tall enough."
+  "Tend's start check, or ok while a repair, cut, tidy or stock step has work; a plan of stalks only waits :nothing-to-do while none is tall enough."
   [c]
   (let [t (tend/can-start? c)]
     (cond
+      (repair-work? c) (contract/ok :work "plan cells seen broken")
       (cut-work? c) (contract/ok :work "stalks to cut")
       (and (= :never (first t)) (seq (stalk-bases c))) (contract/later :nothing-to-do "no stalk is tall enough to cut" :recheck-after-ms (tend/recheck-ms))
       (#{:ok :never} (first t)) t
@@ -253,7 +281,7 @@
   (let [m (ctx/mem c)
         ran (count (remove (some-fn :skipped :stopped) (vals (:report m))))
         left (count (:todo m))]
-    (if (or (zero? ran) (cut-work? c) (tend-work? c) (tidy-work? c) (stock-work? c))
+    (if (or (zero? ran) (repair-work? c) (cut-work? c) (tend-work? c) (tidy-work? c) (stock-work? c))
       (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
       (contract/ok :in-order "the farm is in order" :units :steps :done ran :left 0 :result {:steps (:report m)}))))
 
@@ -264,6 +292,7 @@
   "What the report keeps of a child's result."
   [step r]
   (case step
+    :repair (select-keys r [:broken])
     :tidy (select-keys r [:dug])
     :cut (select-keys r [:dug])
     :tend (select-keys r [:field :parts])

@@ -1,0 +1,26 @@
+;; farm.maintain over a plan mends what the body has seen broken (its :repair step, build.repair) and still works the crops.
+;; Wheat cells [10..11 0 16] on farmland, a planned water cell [12 -1 16] beside them, a cobblestone wall [10..12 0 18].
+;; Should-succeed: the wall gap [11 0 18] and the water cell filled with dirt are mended, the wheat sown (old code: no repair
+;; step, both stay broken). Control: a sound plan books the repair step {:skipped :sound} and the wheat is sown.
+{:defaults
+ {:tags [:farm :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 -1 16] [11 -1 16] "farmland"] [:set [10 0 18] "cobblestone"] [:set [12 0 18] "cobblestone"]]
+  :plans [{:id "farm" :metadata {:by "$body"}
+           :parts [{:id "wheat" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}
+                   {:id "water" :cells [#at [12 -1 16]] :want "water"}
+                   {:id "wall" :box [#at [10 0 18] #at [12 0 18]] :want "cobblestone"}]}]
+  :body {:at [10.5 0 14.5] :settle-s 2 :inventory [["cobblestone" 4] ["water_bucket" 1] ["wheat_seeds" 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "a-broken-wall-and-a-filled-water-cell-are-mended-and-the-crops-worked"
+   :blocks [[:set [12 -1 16] "dirt"]]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:farm" :part "wheat"}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
+   :after [[:block [11 0 18] "cobblestone"] [:block [12 -1 16] "water[level=0]"] [:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"]]}
+  {:name "a-sound-plan-skips-the-repair"
+   :blocks [[:set [12 -1 16] "water"] [:set [11 0 18] "cobblestone"]]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:farm" :part "wheat"}})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps {:repair {:skipped :sound}}}} :within-s 130 :of-job true}]
+   :after [[:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"]]}]}
