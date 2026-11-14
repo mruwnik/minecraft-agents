@@ -161,3 +161,24 @@
           dim (.-dimension (.self p))]
       (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [{:data {:dim dim :floors [[2 68 0]]}}])]
         (is (nil? (surface/own-top {:primitives p})) why)))))
+
+(deftest a-half-cut-stair-of-the-bodys-own-is-walked-to-when-no-wall-or-open-top-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                                            :blocks (dissoc (box -3 63 -3 3 80 3 "stone") "0,64,0" "0,65,0")})))
+              dim (.-dimension (.self p))
+              m (atom {})
+              walked (atom [])
+              c {:primitives p}]
+          (with-redefs [ctx/mem (fn [_] @m)
+                        ctx/update-mem! (fn [_ f & args] (apply swap! m f args))
+                        ctx/entries (constantly [{:data {:dim dim :floors [[2 70 0]]}}])
+                        surface/wall-of (constantly nil)
+                        surface/stand-by-wall (constantly nil)
+                        child/call-walk* (fn [_ slot args] (swap! walked conj [slot (:pos args)]) (js/Promise.resolve {:kind :nothing-possible :data {:arrived false}}))]
+            (is (= {:x 2 :y 71 :z 0} (surface/stair-top c)) "its top, though rock lies over it")
+            (is (= :continue (await (surface/step! c))))
+            (is (= [[:half-stair-walk {:x 2 :y 71 :z 0}]] @walked))
+            (is (= :stopped (await (surface/step! c))) "a walk that failed is not tried again")))))))
