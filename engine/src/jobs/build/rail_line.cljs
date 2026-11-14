@@ -60,7 +60,7 @@
   Start facts:
   - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails); the plan has no cells to build (:no-cells).
   - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell wanting
-    a redstone block holds another block (:source-blocked, :cells; the builder never digs, so on natural ground put a
+    a redstone block holds another block (:source-blocked, :cells; the builder keeps the sturdy ground under the line, so there put a
     torch or lever in the plan, or use a raised bed); a cell still to build is refused by the access rules
     (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :least :all (the default) and the ways only :carried, items for
     the cells still to build are not all carried (:short {item n}, :up-to; an :any want counts every
@@ -150,7 +150,7 @@
   (lacking cells carried))
 
 (defn blocked-sources
-  "The cells wanting a redstone block that hold another block (the builder never digs), in order."
+  "The cells wanting a redstone block that hold another block (sturdy ground under the line is never dug), in order."
   [cells]
   (vec (sort (keep #(when (and (= "redstone_block" (shape/want-block (:want %))) (= :wrong (:answer %))) (:pos %))
                    cells))))
@@ -177,7 +177,7 @@
         short (short-of owed carried)]
     (cond
       (seq blocked) (let [text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
-                                    ": the cell holds ground and this job never digs; put a torch or lever in the plan, "
+                                    ": the cell holds the ground under the line, which this job keeps; put a torch or lever in the plan, "
                                     "or lay the line on a raised bed")]
                       {:reason :source-blocked :cells blocked :why text})
       (seq no) (let [text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))]
