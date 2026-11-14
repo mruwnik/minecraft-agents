@@ -27,7 +27,8 @@
   "Whether another job keeps a cell with this want: crops and farmland (the farm jobs: tend tills trampled farmland, nothing places it), trees (forestry), and :any (any block will do)."
   [want]
   (or (= :any want) (= "farmland" want)
-      (and (map? want) (or (contains? want :crop) (contains? want :tree) (= "farmland" (:block want))))))
+      (and (map? want) (or (contains? want :crop) (contains? want :tree) (= "farmland" (:block want))))
+      (and (vector? want) (some others-own? (rest want)))))
 
 (defn diff
   "The cells of `cells` (plan cells) the body has seen differ from their want, judged as from-plan judges them

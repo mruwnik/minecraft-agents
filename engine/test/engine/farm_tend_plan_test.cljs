@@ -197,6 +197,18 @@
           (is (= "farmland" (block-at s 2 63 2)))
           (is (= #{[2 64 2] [3 64 2]} (set (keys (placed s))))))))))
 
+(deftest a-planned-farmland-cell-with-no-crop-over-it-is-tilled-when-it-is-trampled-to-dirt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (plan-of) :parts conj {:id "margin" :cells [[5 63 2]] :want "farmland"})
+              s (await (run {:area {:plan "mix"}}
+                            (world-of farmland-all (ground "dirt" [[5 2]]) {:blocks {(k 6 63 2) "water"}}
+                                      {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]})
+                            {"mix" plan} 60))]
+          (is (= "farmland" (block-at s 5 63 2)))
+          (is (not (contains? (placed s) [5 64 2])) "no crop is planned over it"))))))
+
 (deftest ground-the-plan-names-as-something-else-is-not-tilled
   (async done
     (tu/run-async done

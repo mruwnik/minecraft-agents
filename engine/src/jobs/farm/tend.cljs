@@ -131,7 +131,7 @@
   "The cells the run decides from: the box's ground and crop layers, or the plan's crop cells and the ground under them."
   [c]
   (if (fa/plan c)
-    (mapcat (fn [pos] [pos (update pos :y dec)]) (keys (:crops (tend-plan/planned c))))
+    (let [{:keys [answer crops]} (tend-plan/planned c)] (concat (keys crops) (keys (tend-plan/ground-cells answer crops))))
     (let [{lo :min hi :max} (fa/arg-box c)]
       (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi))) y [(:y lo) (inc (:y lo))]]
         {:x x :y y :z z}))))
@@ -140,7 +140,7 @@
   "The ground cells irrigate works over: the plan's under its crop cells, or the box's lowest layer."
   [c]
   (if (fa/plan c)
-    (map #(update % :y dec) (keys (:crops (tend-plan/planned c))))
+    (let [{:keys [answer crops]} (tend-plan/planned c)] (keys (tend-plan/ground-cells answer crops)))
     (let [{lo :min hi :max} (fa/arg-box c)]
       (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] {:x x :y (:y lo) :z z}))))
 

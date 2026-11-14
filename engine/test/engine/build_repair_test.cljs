@@ -60,3 +60,7 @@
           (is (= "oak_fence_gate" (b/block p [3 64 6])) "the open gate is not dug: shutting it is the gate jobs'")
           (is (< (.-x (.-pos (.self p))) 20) "no walk to look at the far cell")
           (is (= :done (:status result)) (pr-str result)))))))
+
+(deftest an-alternative-want-that-includes-farmland-is-the-farm-jobs-not-repair
+  (is (true? (boolean (diff/others-own? [:any "farmland" "dirt"]))))
+  (is (not (diff/others-own? [:any "stone" "dirt"]))))

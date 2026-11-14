@@ -31,16 +31,27 @@
     (vector? want) (boolean (some farmland-want? (rest want)))
     :else false))
 
+(defn farmland-cell?
+  "Whether a plan want names farmland itself (the block, a block map of it, or an alternative that includes it)."
+  [want]
+  (cond
+    (string? want) (= "farmland" want)
+    (map? want) (= "farmland" (:block want))
+    (vector? want) (boolean (some farmland-cell? (rest want)))
+    :else false))
+
 (defn ground-cells
   "{ground-pos crop}: the plan's farmland under the crop cells crops {pos crop}, the cell below each unless the plan
-  (answer) names it with a want that is not soil (stone, a floor)."
+  (answer) names it with a want that is not soil (stone, a floor); plus the plan's farmland cells no crop stands over,
+  with crop nil."
   [answer crops]
-  (let [wants (into {} (map (fn [{:keys [pos want]}] [(u/cell-pos pos) want])) (:cells answer))]
-    (into {} (keep (fn [[pos crop]]
-                     (let [g (update pos :y dec)]
-                       (when (or (not (contains? wants g)) (farmland-want? (wants g)))
-                         [g crop]))))
-          crops)))
+  (let [wants (into {} (map (fn [{:keys [pos want]}] [(u/cell-pos pos) want])) (:cells answer))
+        under (into {} (keep (fn [[pos crop]]
+                               (let [g (update pos :y dec)]
+                                 (when (or (not (contains? wants g)) (farmland-want? (wants g)))
+                                   [g crop]))))
+                    crops)]
+    (into under (comp (filter (comp farmland-cell? val)) (remove (comp under key)) (map (fn [[pos _]] [pos nil]))) wants)))
 
 (defn planned
   "With :plan, {:answer :crops {pos crop}} when the plan can be worked, else {:trouble text};
@@ -157,7 +168,7 @@
         sowing (plant/sowing c crops)
         untilled (untilled-cells c)
         tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) untilled)
-        seeded (filter (fn [[_ crop]] (let [seed (crops/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
+        seeded (filter (fn [[_ crop]] (when crop (let [seed (crops/seed-of crop)] (> (get have seed 0) (get bare-of seed 0))))) tillable)
         seeded-set (set (map key seeded))
         unseeded (remove (comp seeded-set key) tillable)
         wet (filter (fn [[pos _]] (farm/wet? p pos)) unseeded)
