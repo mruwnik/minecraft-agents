@@ -1,0 +1,26 @@
+;; Card 40b9cbbd (Q187): a graded route runs the rail through a bump of ground; jobs.build.rail digs the ground where the
+;; rail and its clear head cells go (work order, before the rail) and lays the line on.
+;; The line is plan.rail/layout [2 0 16] -> [31 0 16] (22 rails, 8 powered rails, 2 torches, fill 36), flat at y 0, no :spans.
+;; Should succeed: a dirt bump x 10..12, y 0..1 across the line is cut and the line is sound (old code: never dug, :gap).
+;; Should fail: the same bump of stone with no pickaxe carried and :ways #{:carried} is not cut, so the line does not end done.
+{:defaults
+ {:tags [:build :rail :jobs] :time :any
+  :plot {:height 14 :length 48 :width 32}
+  :plans [{:id "line" :metadata {:by "$body"} :parts [{:id "bed", :cells [#at [2 -1 16] #at [3 -1 16] #at [4 -1 16] #at [5 -1 16] #at [6 -1 16] #at [7 -1 16] #at [8 -1 16] #at [9 -1 16] #at [10 -1 16] #at [11 -1 16] #at [12 -1 16] #at [13 -1 16] #at [14 -1 16] #at [15 -1 16] #at [16 -1 16] #at [17 -1 16] #at [18 -1 16] #at [19 -1 16] #at [20 -1 16] #at [21 -1 16] #at [22 -1 16] #at [23 -1 16] #at [24 -1 16] #at [25 -1 16] #at [26 -1 16] #at [27 -1 16] #at [28 -1 16] #at [29 -1 16] #at [30 -1 16] #at [31 -1 16] #at [1 -1 16] #at [32 -1 16] #at [5 -1 15] #at [27 -1 15]], :want [:any "cobblestone" "dirt" "stone"]} {:id "buffers", :cells [#at [1 0 16] #at [32 0 16]], :want [:any "cobblestone" "dirt" "stone"]} {:id "power", :cells [#at [5 0 15] #at [27 0 15]], :want "redstone_torch"} {:id "rails", :cells [#at [2 0 16] #at [3 0 16] #at [8 0 16] #at [9 0 16] #at [10 0 16] #at [11 0 16] #at [12 0 16] #at [13 0 16] #at [14 0 16] #at [15 0 16] #at [16 0 16] #at [17 0 16] #at [18 0 16] #at [19 0 16] #at [20 0 16] #at [21 0 16] #at [22 0 16] #at [23 0 16] #at [24 0 16] #at [25 0 16] #at [30 0 16] #at [31 0 16]], :want {:block "rail", :shape :east_west}} {:id "powered", :cells [#at [4 0 16] #at [5 0 16] #at [6 0 16] #at [7 0 16] #at [26 0 16] #at [27 0 16] #at [28 0 16] #at [29 0 16]], :want {:block "powered_rail", :shape :east_west, :powered true}} {:id "head", :cells [#at [2 1 16] #at [3 1 16] #at [4 1 16] #at [5 1 16] #at [6 1 16] #at [7 1 16] #at [8 1 16] #at [9 1 16] #at [10 1 16] #at [11 1 16] #at [12 1 16] #at [13 1 16] #at [14 1 16] #at [15 1 16] #at [16 1 16] #at [17 1 16] #at [18 1 16] #at [19 1 16] #at [20 1 16] #at [21 1 16] #at [22 1 16] #at [23 1 16] #at [24 1 16] #at [25 1 16] #at [26 1 16] #at [27 1 16] #at [28 1 16] #at [29 1 16] #at [30 1 16] #at [31 1 16]], :want :clear}]}]
+  :body {:at [3.5 0 18.5] :yaw 270 :inventory [["rail" 22] ["powered_rail" 8] ["redstone_torch" 2] ["cobblestone" 50]] :effects [["resistance" 600 4]]}
+  :limit-s 420}
+ :cases
+ [{:name "cuts-a-dirt-bump-then-lays-the-line"
+   :blocks [[:fill [10 0 12] [12 1 20] "dirt"]]
+   :act [[:job (jobs.build.rail-line {:worth 1200 :plan "$plan:line"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 400 :of-job true}
+            {:no-event {:source :job :kind #{:waiting :stopped}} :for-s 400 :until {:source :job :kind :completed}}]
+   :after [[:block [10 0 16] "rail[shape=east_west]"] [:block [11 0 16] "rail[shape=east_west]"] [:block [12 0 16] "rail[shape=east_west]"]
+           [:block [11 1 16] "air"] [:block [11 0 14] "dirt"]]}
+  {:name "a-stone-bump-without-a-pickaxe-is-not-cut"
+   :blocks [[:fill [10 0 12] [12 1 20] "stone"]]
+   :act [[:job (jobs.build.rail-line {:worth 1200 :plan "$plan:line" :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind #{:stopped :waiting}} :within-s 300 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 300 :until {:source :job :kind #{:stopped :waiting}}}]
+   :after [[:not-block [11 0 16] "rail"]]
+   :limit-s 330}]}
