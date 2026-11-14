@@ -233,6 +233,24 @@
       (merge (zipmap (recipes/stone-materials version) (repeat cobble)) m)
       m)))
 
+(defn gather-calls
+  "Gather calls that get n of name: n over the items one gather of it got per call (::gather-counts), else over those
+  pooled across every counted item."
+  [name n]
+  (let [counts (settings/get settings ::gather-counts)
+        per (fn [cs] (let [got (reduce + 0 (map :got cs)) calls (reduce + 0 (map :calls cs))] (when (and (pos? got) (pos? calls)) (/ got calls))))]
+    (/ n (or (per (keep #(get counts %) [name])) (per (filter :calls (vals counts))) 1))))
+
+(defn leaves-sd
+  "Seconds of standard deviation of a made-value's :leaves: each item's gather calls (gather-calls, at least one, as a
+  part of a call still risks a whole one) independent, their seconds exponential (sd = mean: ::gather-counts keeps no
+  spread per call, so a broad prior), so an item's variance is its seconds per call squared times its calls, summed."
+  [leaves]
+  (js/Math.sqrt (reduce + 0 (map (fn [[k {:keys [count s]}]]
+                                   (let [c (gather-calls k count)]
+                                     (if (and (pos? c) (js/isFinite s)) (* (/ s c) (/ s c) (max c 1)) 0)))
+                                 leaves))))
+
 (def ^:private group-names #{"ore" "tool" "armor" "food" "block" "unknown"})
 
 (defn counted-chance
@@ -286,7 +304,7 @@
     (+ (:smelt-step basis) (fuel-each table))))
 
 (defn- made
-  "{:s :stations} of n of name made from nothing at the table's worths (m: :version :table :basis, :stations-s the
+  "{:s :stations :leaves} of n of name made from nothing at the table's worths (:leaves {item count}, the items got, not made) (m: :version :table :basis, :stations-s the
   seconds of a set of stations): an item cheaper got than made (its table worth below every way's) n x its worth, else
   the way (recipe or smelt) whose whole crafts, a craft step each, and stations (crafting table, furnace) cost least,
   a smelt costing its step and its fuel per item;
@@ -303,13 +321,14 @@
         made-way (fn [{:keys [r smelt]}]
                    (if smelt
                      (let [in (made m smelt n within)]
-                       {:s (+ (* n smelt-s) (:s in)) :stations (conj (:stations in) "furnace")})
+                       (-> in (update :s + (* n smelt-s)) (update :stations conj "furnace")))
                      (let [ins (map (fn [[k v]] (made m k (* v (js/Math.ceil (/ n (:count r)))) within)) (:needs r))]
                        {:s (+ step (reduce + (map :s ins)))
-                        :stations (cond-> (reduce set/union #{} (map :stations ins)) (:table? r) (conj recipes/table-item))})))]
+                        :stations (cond-> (reduce set/union #{} (map :stations ins)) (:table? r) (conj recipes/table-item))
+                        :leaves (apply merge-with + (map :leaves ins))})))]
     (cond
-      (contains? chain name) {:s js/Infinity :stations #{}}
-      (or (empty? ways) (< unit (* (apply min (map :per ways)) (- 1 1e-9)))) {:s (* n unit) :stations #{}}
+      (contains? chain name) {:s js/Infinity :stations #{} :leaves {}}
+      (or (empty? ways) (< unit (* (apply min (map :per ways)) (- 1 1e-9)))) {:s (* n unit) :stations #{} :leaves {name n}}
       :else (apply min-key #(+ (:s %) (stations-s (:stations %))) (map made-way ways)))))
 
 (def ^:private station-base
@@ -333,7 +352,8 @@
 (defn made-value
   "item-value of items as a goal from a reference start, nothing carried and no station near: each plain stack (no
   durability, enchantments or nbt) at least what making its count takes (made; one nothing makes keeps its item-value), and each crafting table or furnace
-  those crafts and smelts need, and what those need, once, unless the items hold it. Options as item-value's but :prices."
+  those crafts and smelts need, and what those need, once, unless the items hold it. :leaves {item {:count :s}}: the
+  items got, not made, for those, and their seconds. Options as item-value's but :prices."
   [items & {:keys [overrides version basis] :as opts}]
   (let [version (or version @game/version)
         [table basis] (table-basis version (apply dissoc (tbl/normal-overrides overrides) group-names) basis)
@@ -341,13 +361,16 @@
         plain (set (keep (fn [[n es]] (when (every? (fn [e] (not-any? #(some? (get e %)) [:durability :enchants :nbt])) es) n)) named))
         rows (map (fn [{:keys [name count value] :as row}]
                     (if (plain name)
-                      (let [{:keys [s stations]} (made-memo version table basis name count) v (if (js/isFinite s) (max value s) value)]
-                        (assoc row :value v :each (/ v count) :stations stations))
+                      (let [{:keys [s stations leaves]} (made-memo version table basis name count) v (if (js/isFinite s) (max value s) value)]
+                        (assoc row :value v :each (/ v count) :stations stations :leaves leaves))
                       row))
                   (:items (apply item-value items (mapcat identity (dissoc opts :prices)))))
-        stations (stations-closure version table basis (reduce set/union #{} (keep :stations rows)))]
-    {:value (+ (reduce + 0 (map :value rows)) (reduce + 0 (map #(:s (station-base version table basis %)) (remove (set (keys named)) stations))))
-     :items (vec (sort-by :value > (map #(dissoc % :stations) rows)))}))
+        stations (stations-closure version table basis (reduce set/union #{} (keep :stations rows)))
+        built (map #(station-base version table basis %) (remove (set (keys named)) stations))]
+    {:value (+ (reduce + 0 (map :value rows)) (reduce + 0 (map :s built)))
+     :items (vec (sort-by :value > (map #(dissoc % :stations :leaves) rows)))
+     :leaves (into {} (map (fn [[k n]] [k {:count n :s (* n (get table k js/Infinity))}]))
+                   (apply merge-with + (concat (keep :leaves rows) (map :leaves built))))}))
 
 (defn item-value
   "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory or drop shape),

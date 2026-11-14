@@ -6,14 +6,15 @@
             [jobs.lib.cost :as cost]))
 
 (a/defargs settings
-  {::one-unit-s {:default 600 :doc "Seconds a fetch of one unit may run." :spec (a/num-in 0 nil)}})
+  {::one-unit-s {:default 600 :doc "Seconds a fetch of one unit, or of one experience level, may run: the least a fetch of items gets." :spec (a/num-in 0 nil)}})
 
 (defn one-unit-s [] (settings/get settings ::one-unit-s))
 
 (defn items-s
-  "Seconds a fetch of n (default 1) of any one of names may take: one-unit-s over the least goal-value among them (their
-  usual cost from nothing: measured gathers and the recipe tree, so an anvil counts its 31 iron)."
+  "Seconds a fetch of n (default 1) of any one of names may take: the least over them of its goal-value (the usual cost
+  from nothing: measured gathers and the recipe tree, so an anvil counts its 31 iron) plus one sd of it (Q184), and at
+  least one-unit-s: a fetch's own looks, walks and crafts beside the gathers are not in the measured spread."
   ([names] (items-s names 1))
   ([names n]
-   (let [v (if (seq names) (apply min (map #(:value (cost/goal-value [{:name % :count (or n 1)}])) names)) 0)]
-     (+ (one-unit-s) (if (js/isFinite v) v 0)))))
+   (let [s (if (seq names) (apply min (map #(let [{:keys [value sd]} (cost/goal-value [{:name % :count (or n 1)}])] (+ value sd)) names)) 0)]
+     (max (one-unit-s) (if (js/isFinite s) s 0)))))

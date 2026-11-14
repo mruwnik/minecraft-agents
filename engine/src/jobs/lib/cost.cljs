@@ -722,10 +722,12 @@
 
 (defn goal-value
   "value/made-value of items as a goal: each measured item at its measured worth (value/measured-worth), what is made of
-  it after them, whole crafts and their stations from nothing. overrides (item-value's) go over the measured worths."
+  it after them, whole crafts and their stations from nothing, and :sd, the seconds of its spread (value/leaves-sd).
+  overrides (item-value's) go over the measured worths."
   ([items] (goal-value items nil))
   ([items overrides]
-   (value/made-value items :overrides (merge (value/measured-worths @game/version) overrides) :basis (:goal-basis (value/measured-worth @game/version)))))
+   (let [v (value/made-value items :overrides (merge (value/measured-worths @game/version) overrides) :basis (:goal-basis (value/measured-worth @game/version)))]
+     (assoc v :sd (value/leaves-sd (:leaves v))))))
 
 (defn tree-worth
   "Seconds a tree of species with n logs is worth: the goal-value of its logs."

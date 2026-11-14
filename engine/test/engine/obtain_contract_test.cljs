@@ -61,7 +61,12 @@
   (let [t #(obtain/default-time {:item %1 :count %2})]
     (is (< (t "raw_iron" 1) (t "raw_iron" 27)) "27 raw iron are many mines, not one")
     (is (< (t "iron_ingot" 27) (t "anvil" 1)) "an anvil is 31 iron from nothing: its budget counts the recipe tree")
-    (is (= (+ (fetch-time/one-unit-s) (:value (cost/goal-value [{:name "anvil" :count 1}]))) (t "anvil" 1)))
+    (let [{:keys [value sd]} (cost/goal-value [{:name "anvil" :count 1}])]
+      (is (= (+ value sd) (t "anvil" 1)) "the usual cost and one sd of it")
+      (is (< 1000 sd (/ value 3)) "an anvil's ~23 raw iron gathers spread its cost: more slack than a flat 600 s, less than its cost"))
+    (is (= (fetch-time/one-unit-s) (t "cobblestone" 1)) "a cheap fetch gets one unit's time: its looks and walks are not in the gathers' spread")
+    (is (< (js/Math.abs (- (:sd (cost/goal-value [{:name "cobblestone" :count 1}])) (:sd (cost/goal-value [{:name "cobblestone" :count 5}])))) 1e-6)
+        "one cobblestone still risks a whole gather call's spread, as five do")
     (is (= (t "oak_log" 1) (obtain/default-time {:any-of ["anvil" "oak_log"]})) "any of several: the cheapest")
     (is (= (+ (t "jungle_log" 36) (t "stone_sword" 1)) (obtain/default-time {:bill {"jungle_log" 36 "stone_sword" 1}}))
         "a bill runs its items' children, each on its own default, so its own limit is their sum")))
