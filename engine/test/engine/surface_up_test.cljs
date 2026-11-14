@@ -182,3 +182,21 @@
             (is (= :continue (await (surface/step! c))))
             (is (= [[:half-stair-walk {:x 2 :y 71 :z 0}]] @walked))
             (is (= :stopped (await (surface/step! c))) "a walk that failed is not tried again")))))))
+
+(deftest a-body-afloat-swims-for-the-nearest-seen-shore-however-far
+  ;; Brindle S2: afloat at night with the shore ~40 blocks off in view, the night ended "no dry land seen within reach" (12)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}}
+                                         :blocks (merge (box -45 63 -4 45 63 4 "stone") (box -45 64 -4 39 64 4 "water"))}))
+              m (atom {})
+              walked (atom [])
+              c {:primitives p}
+              r (with-redefs [ctx/mem (fn [_] @m)
+                              ctx/update-mem! (fn [_ f & args] (apply swap! m f args))
+                              ctx/emit! (fn ([_ _ _]) ([_ _ _ _]))
+                              child/call-walk* (fn [_ _ args] (swap! walked conj (:pos args)) (js/Promise.resolve :continue))]
+                  (await (surface/leave-water! c)))]
+          (is (= :continue r))
+          (is (= [40] (map :x @walked)) (str "the walk goes to the shore at x 40: " @walked)))))))

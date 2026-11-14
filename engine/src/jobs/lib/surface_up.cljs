@@ -208,11 +208,9 @@
 
 (def max-failed-stands "Dry stands a walk out of water may fail to reach before the body stays." 3)
 
-(def water-radius "Blocks out from the feet a body in water looks for a dry stand." 12)
-
 (defn ^:async leave-water!
-  "A body in water first walks to a dry stand joined to it by seen water and air (the shore.reachable-land within
-  water-radius), as a player climbs out before mining; the stand is chosen once and kept in mem until the walk ends.
+  "A body in water first walks to the nearest dry stand joined to it by seen water and air (shore/swim-to-land), as a
+  player climbs out before mining; the stand is chosen once and kept in mem until the walk ends.
   :continue while it walks, :again after a walk that ended short (the next round picks another, up to max-failed-stands
   in a row), :out when it is dry, arrived or sees no stand."
   [c]
@@ -220,7 +218,7 @@
         m (:leave-water (ctx/mem c))
         failed (:failed m #{})
         stand (when (and (breath/in-water? p) (< (count failed) max-failed-stands))
-                (or (:stand m) (shore/reachable-land p (u/self-pos c) water-radius failed)))]
+                (or (:stand m) (:stand (shore/swim-to-land p (u/self-pos c) 1 ##Inf failed))))]
     (cond
       (nil? stand) :out
       :else (let [_ (when-not (:stand m)

@@ -133,9 +133,11 @@
   the nearest of them is the answer when the flood ends with none, and with no stand at all {:swim the farthest it reached :land 0}; with :chance (land-run's) the chance that land goes on past the :land seen. Water never seen beside the flood leaves a shore unfound, no shore assumed: :chance (stands + 1) / (stands + walls seen beside the flood + 2) (rule of succession) with the swim a lower bound. A body
   swims up through water but not through air: it leaves an air cell sideways or down only, and an air cell is a cell of the
   way only over water (or a stand). The flood reads at most
-  ::swim-cells cells, or to limit blocks of swim (default none: the length the caller prices); with no stand found by then {:swim blocks :land 0 :chance c}: the shore is at least that far."
+  ::swim-cells cells, or to limit blocks of swim (default none: the length the caller prices); with no stand found by then {:swim blocks :land 0 :chance c}: the shore is at least that far.
+  No stand in skip (cells {:x :y :z}) is an answer."
   ([p self-pos need] (swim-to-land p self-pos need ##Inf))
-  ([p self-pos need limit]
+  ([p self-pos need limit] (swim-to-land p self-pos need limit #{}))
+  ([p self-pos need limit skip]
   (let [work (settings/get settings ::swim-cells)
         fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
         names (js/Map.)
@@ -164,7 +166,7 @@
         shore-chance (fn [stands] (/ (inc stands) (+ stands @walls 2)))
         visited (js/Set. #js [(cell-key fx fy fz)])]
     (loop [layer [[fx fy fz 0]] ledge nil far 0]
-      (let [stands (sort-by first (keep (fn [[x y z g]] (when (and (bs/air (name-of x y z)) (standable? {:x x :y y :z z})) [g {:x x :y y :z z}])) layer))
+      (let [stands (sort-by first (keep (fn [[x y z g]] (let [cell {:x x :y y :z z}] (when (and (bs/air (name-of x y z)) (standable? cell) (not (contains? skip cell))) [g cell]))) layer))
             found (map (fn [[g stand]] (let [{:keys [run chance]} (land-run p stand need)] (cond-> {:stand stand :swim g :land run} chance (assoc :chance chance)))) stands)
             good (first (filter #(>= (:land %) need) found))
             ledge (or ledge (first found))]
