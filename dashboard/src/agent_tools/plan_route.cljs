@@ -69,18 +69,22 @@
           y)))))
 
 (defn water-fn
-  "(fn [x z]) -> the least height a rail may have over the column when its top within the ends' levels is seen water
-  (one above the water: its bed goes in the top water cell), else nil."
+  "(fn [x z]) -> the least height a rail may have over a column height-fn knows no ground of, else nil: one above the
+  top water within the ends' levels (its bed goes in the top water cell), or one above the window's bottom when every
+  cell from the ends' level down to it was seen open (a chasm: a player bridges it)."
   [name-at [_ fy _] [_ ty _]]
   (let [mid (quot (+ fy ty) 2)
-        depth (+ depth-over-ends (abs (- fy ty)))]
+        depth (+ depth-over-ends (abs (- fy ty)))
+        low (- mid depth)]
     (fn [x z]
-      (loop [y (+ mid depth)]
-        (when (> y (- mid depth))
-          (let [n (name-at {:x x :y y :z z})]
+      (loop [y (+ mid depth) seen-open? true]
+        (if (> y low)
+          (let [n (name-at {:x x :y y :z z})
+                unseen? (and (nil? n) (<= y mid))]
             (cond
-              (or (nil? n) (ground/open? n) (ground/canopy? n) (re-find surface/on-ground n) (rail/rail-name? n)) (recur (dec y))
-              (= "water" n) (inc y))))))))
+              (or (nil? n) (ground/open? n) (ground/canopy? n) (re-find surface/on-ground n) (rail/rail-name? n)) (recur (dec y) (and seen-open? (not unseen?)))
+              (= "water" n) (inc y)))
+          (when seen-open? (inc y)))))))
 
 (defn route-prices
   "The :prices of plan.rail-route/connect, in seconds as jobs.lib.cost prices them: a cell of line its rail's worth and a

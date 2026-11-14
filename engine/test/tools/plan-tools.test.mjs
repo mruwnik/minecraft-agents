@@ -452,6 +452,19 @@ test('route bridges a seen drop of 2 or more and a lake by default; --bridge 0 f
   } finally { fx.close() }
 })
 
+test('route bridges a chasm seen open below the column window, and not one only partly seen', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells({ chasms: [[18, 24, 57]] }), Date.now() - 1000)
+    const bridged = await invoke('plan', fx, ROUTE)
+    assert.equal(bridged.code, 0, bridged.output)
+    assert.deepEqual(bridged.value.route.spans.map(s => s.kind), [keyword('bridge')])
+    const unseen = groundCells({ chasms: [[18, 24, 57]] }).filter(([x, y]) => !(x >= 18 && x <= 24 && y <= 61))
+    await writeSeen(fx, 'Probe', unseen, Date.now() - 1000)
+    assert.deepEqual((await invoke('plan', fx, [...ROUTE, '--dry-run'])).value.reason, keyword('no-route'))
+  } finally { fx.close() }
+})
+
 test('route cuts a bump of one block and fills a dip of one at rail height rather than climbing them', async () => {
   const fx = fixture()
   try {
