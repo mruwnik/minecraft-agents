@@ -19,7 +19,10 @@
   iron bars, gates, doors and trapdoors."
   #"(_fence|_fence_gate|_wall|_pane|_door|_trapdoor)$|^iron_bars$")
 
-(def loose #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate|sapling)$|^cobweb$")
+(def loose
+  "Things a mob or bolt passes that a placement does not overwrite: dug out of a cell before it is filled. Crops have no
+  collision, so a field cell holding one is open, not a fixture."
+  #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate|sapling)$|^cobweb$|^(wheat|carrots|potatoes|beetroots|nether_wart|(attached_)?(melon|pumpkin)_stem)$")
 
 (defn kind
   "What a block name means for a fill: :open (air, water or replaceable), :container (never touched), :loose (dug first with

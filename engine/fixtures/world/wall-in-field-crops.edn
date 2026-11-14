@@ -1,0 +1,17 @@
+;; jobs.survival.wall-in beside a wheat field: the body stands in a water row at y 0 with farmland (feet height) and wheat (head height) north and south
+;; of it; walls must close the wheat cells too (they are dug out and walled), so no bolt passes the crop rows.
+{:defaults
+ {:tags [:survival :hostile :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [14 -2 14] [20 -1 18] "dirt"]
+           [:fill [15 -1 15] [19 -1 17] "farmland"]
+           [:fill [15 0 15] [19 0 15] "wheat"] [:fill [15 0 17] [19 0 17] "wheat"]
+           [:fill [15 -1 16] [19 -1 16] "water"]]
+  :body {:at [17.5 -1 16.5] :inventory [["cobblestone" 40]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "wheat-cells-beside-the-body-are-walled"
+   :act [[:job (jobs.survival.wall-in {:worth 1200})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [17 0 15] "cobblestone"] [:block [17 0 17] "cobblestone"]]}]}

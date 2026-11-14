@@ -101,6 +101,13 @@
       {:x 3 :y 64 :z 0} true
       {:x 4 :y 64 :z 0} true)))
 
+(deftest a-crop-in-a-side-cell-is-an-open-cell-to-fill-not-a-fixture
+  (let [p (tu/fake {:blocks {"0,63,0" "water" "1,63,0" "farmland" "1,64,0" "wheat" "-1,63,0" "farmland" "-1,64,0" "wheat"}})
+        open (set (map (juxt :x :y :z) (fill/open-cells p {:x 0 :y 64 :z 0})))]
+    (is (= :loose (fill/kind "wheat")))
+    (is (contains? open [1 64 0]) "the wheat beside the feet stays open to a bolt until it is cleared and walled")
+    (is (contains? open [-1 64 0]))))
+
 (def torch-tunnel
   "The cornered-test dead end with a torch at feet and head height in the one open side."
   (merge ct/dead-end {"1,64,0" "torch" "1,65,0" "torch"}))
