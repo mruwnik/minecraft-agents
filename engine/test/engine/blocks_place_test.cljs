@@ -229,12 +229,13 @@
           (is (= "cobblestone" (bd/block-at p {:x 0 :y 64 :z 0})))
           (is (not= [0 0] [(js/Math.floor (:x feet)) (js/Math.floor (:z feet))])))))))
 
-(deftest a-cell-with-nothing-to-place-against-waits-no-support
+(deftest a-cell-with-nothing-to-place-against-ends-no-support
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:reason :no-support :pos {:x 2 :y 67 :z 0}}
-               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
+        (let [r (await (ending-of (bd/setup {:self body :inventory cobble}) {:pos [2 67 0] :item "cobblestone"} 5))]
+          (is (= :condition-failed (:kind r)))
+          (is (= :no-support (:reason (:cause r)))))))))
 
 (deftest a-cell-hidden-from-where-the-body-stands-is-placed-from-where-it-sees-it
   ;; the pit floor is in reach of the cell but the surface stone is in the way; :see false places from the pit

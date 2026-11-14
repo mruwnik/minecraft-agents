@@ -1,4 +1,4 @@
-;; jobs.blocks.place on an occupied cell ends at once :occupied with the block name (card 91cf85a9); a free cell is
+;; jobs.blocks.place on an occupied cell ends at once :occupied with the block name (card 91cf85a9); a cell with no block beside it ends :no-support (never waits); a free cell is
 ;; placed; a block in the head cell hurts as "suffocation".
 {:defaults
  {:tags [:blocks :jobs]
@@ -15,6 +15,10 @@
    :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [18 0 16] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :stopped :data {:placed false :reason :occupied :block "oak_leaves"}} :within-s 10 :of-job true}]
    :after [[:block [18 0 16] "oak_leaves"] [:item "cobblestone" 8]]}
+  {:name "floating-cell-ends-no-support"
+   :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [18 3 18] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-support :placed false}} :within-s 20 :of-job true}]
+   :after [[:block [18 3 18] "air"] [:item "cobblestone" 8]]}
   {:name "free-cell-a"
    :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [18 0 18] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}]

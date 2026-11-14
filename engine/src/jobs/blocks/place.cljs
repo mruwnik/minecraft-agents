@@ -38,7 +38,6 @@
   - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: not carried and the call's :ways is #{:carried}.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
-  - {:reason :no-support :pos}: no solid neighbour to place against (not for boats).
   - {:reason :not-loaded :pos}.
 
   A plant, flower or snow layer in the cell (jobs.lib.block-sets/clearable) is dug first with a jobs.blocks.dig child (no tool
@@ -48,7 +47,7 @@
 
   Returns an ending with data {:placed true|false :pos :item :reason :text}; a placed block carries :block
   {:name :state} as the place act reported it. Done: :reason :placed, or :already (the cell holds the block, nothing
-  done). condition-failed: :occupied (another block fills the cell), :need (the item is missing after the fetch; the fetch's ending is its :because), or a cell reason that appeared during the
+  done). condition-failed: :no-support (no solid neighbour to place against, not for boats; nothing here adds one), :occupied (another block fills the cell), :need (the item is missing after the fetch; the fetch's ending is its :because), or a cell reason that appeared during the
   call (the conditions' causes). Impossible: :bad-args (from can-start?). nothing-possible :unreachable (the walk
   failed twice or the place is out of reach, :why).
   nothing-possible: :clear-failed (the plant could not be dug) or :failed (the primitive refused twice in one call: :primitive its status,
@@ -188,7 +187,14 @@
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-not (fetching? c) (when-let [n (needs c items)] (assoc n :reason :need :pos pos)))
-                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos) (b/stale-support? c pos) (and (fetching? c) (nil? (b/chosen c items)))) {:reason :no-support :pos pos})))))))
+                    nil))))))
+
+(defn unsupported?
+  "Whether the cell has no block beside it to place against, as far as the body has seen (not for boats; not while a face is unseen or
+  stale, or the item is still to fetch)."
+  [c pos items]
+  (let [p (:primitives c)]
+    (not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos) (b/stale-support? c pos) (nil? (b/chosen c items))))))
 
 (defn bad-args [c]
   (if-let [error (:error (parse c))]
@@ -377,6 +383,8 @@
     (cond
       full (stop! c :condition-failed {:placed false :pos pos :item (first items) :reason :occupied :block full})
       already (finish! c :done nil {:placed false :pos pos :item block :reason :already})
+      (unsupported? c pos items) (stop! c :condition-failed {:placed false :pos pos :item (first items) :reason :no-support
+                                                               :why (refusal-why #js {:status "no-support"})})
       (= :done fetched) :again
       fetched fetched
       (clears? c block)
