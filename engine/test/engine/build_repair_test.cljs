@@ -4,6 +4,7 @@
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
             [engine.harvest-test :as h]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.build.diff :as diff]
             [jobs.lib.cost :as cost]
@@ -95,3 +96,17 @@
           (is (= "torch" (b/block p [3 65 2])))
           (is (= "lantern" (b/block p [5 65 2])))
           (is (= :done (:status result)) (pr-str result)))))))
+
+(deftest a-missing-light-is-worth-the-spawns-it-averts-so-the-repair-mends-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update lit-yard :parts #(filterv (comp #{"post" "lights"} :id) %))
+              {:keys [eng p]} (b/start (assoc lit-world :time st/night) {"lit" plan} [])
+              c (core/make-ctx eng {:root "repair" :slots [] :chain [] :token nil :args {}})
+              pc (diff/plan-cells c "lit" nil)
+              worth (diff/worth pc (diff/diff c (:cells pc)))
+              result (await (tu/child-outcome eng 'jobs.build.repair {:plan "lit" :worth worth} 300))]
+          (is (< (cost/put-back-s "torch") worth))
+          (is (= :done (:status result)) (pr-str result))
+          (is (= "torch" (b/block p [3 65 2]))))))))

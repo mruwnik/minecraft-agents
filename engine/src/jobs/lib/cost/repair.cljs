@@ -9,12 +9,14 @@
             [plan.shape :as shape]))
 
 (defn cell-worth
-  "Seconds a broken cell ({:want :found}) was worth to its builder: a wanted block's put-back (destroy/put-back-s), a
-  :clear cell's dig of what fills it (table/dig-cost)."
-  [{:keys [want found]}]
-  (if (= :clear want)
-    (or (table/dig-cost found) 0)
-    (destroy/put-back-s (shape/want-block want))))
+  "Seconds a broken cell ({:want :found :loss}) was worth: to its builder a wanted block's put-back (destroy/put-back-s), a
+  :clear cell's dig of what fills it (table/dig-cost); plus :loss, the use lost while it stays broken (a light's averted
+  spawns, diff/light-loss)."
+  [{:keys [want found loss]}]
+  (+ (or loss 0)
+     (if (= :clear want)
+       (or (table/dig-cost found) 0)
+       (destroy/put-back-s (shape/want-block want)))))
 
 (defn dry-loss
   "Seconds a crop loses growing on dry farmland instead of wet: sown-worth at the wet growth rate less at the dry."

@@ -3,9 +3,16 @@
   (:require [clojure.string :as str]
             [jobs.lib.build.plan :as plan]
             [jobs.lib.build.wood :as wood]
+            [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.crops :as crops]
             [jobs.lib.farm :as farm]
+            [jobs.lib.look :as look]
+            [jobs.lib.price :as price]
+            [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.torch :as torch]
+            [jobs.lib.torch-plan :as tp]
             [jobs.lib.world :as known]
             [plan.shape :as shape]))
 
@@ -30,18 +37,34 @@
       (and (map? want) (or (contains? want :crop) (contains? want :tree) (= "farmland" (:block want))))
       (and (vector? want) (some others-own? (rest want)))))
 
+(defn light-loss
+  "Seconds a plan light ([x y z] wanting light block `block`) missing costs, as light-area's worth-of prices a dark stay: a
+  job's work (risk/work-s :work) at the mean spawn chance under a clear midnight's sky (spawn-light/chance-at, by the light
+  the body knows) of the cells of its floor its light reaches (torch-plan/reach), every spawn-light ::step blocks; its
+  hurt and death (price/stay-risk-s). nil for a block that gives no light."
+  [c [x y z] block]
+  (when (or (torch/torch-blocks block) (torch/light-items block))
+    (let [reach (tp/reach (str/replace block "wall_" ""))
+          step (settings/get spawn-light/settings ::spawn-light/step)
+          offs (range (- (* step (quot reach step))) (inc reach) step)
+          night (look/sky-subtract-at 18000 0 0)
+          chances (for [dx offs dz offs :when (<= (+ (abs dx) (abs dz)) reach)]
+                    (spawn-light/chance-at (:primitives c) {:x (+ x dx) :y y :z (+ z dz)} false night))]
+      (price/stay-risk-s c (/ (reduce + chances) (count chances)) (risk/work-s :work)))))
+
 (defn diff
   "The cells of `cells` (plan cells) the body has seen differ from their want, judged as from-plan judges them
   (plan/judged, plan/loosened): :missing, :wrong or :extra. A cell never seen, or remembered so long it is likelier
   changed than not, is :unknown and never listed. Never a cell others-own?, nor the upper half of a two-block item (its
   lower half places it). A door, gate or trapdoor where the plan wants another block is wrong; a wanted one's swung state is no difference
-  (jobs.maintenance.shut and the pen-gate trigger own it)."
+  (jobs.maintenance.shut and the pen-gate trigger own it). A light cell carries its light-loss as :loss."
   [c cells]
   (->> (plan/judged (:primitives c) {:cells (remove (comp others-own? :want) cells)} nil {} (first wood/species))
        plan/loosened
        (filterv #(and (#{:missing :wrong :extra} (:answer %))
                       (not (plan/companion? (:want %)))
-                      (not (plan/swung? %))))))
+                      (not (plan/swung? %))))
+       (mapv #(if-let [loss (light-loss c (:pos %) (shape/want-block (:want %)))] (assoc % :loss loss) %))))
 
 (defn herd-gaps
   "{:mob :target :gaps n} of each part's :herd with broken cells in its :box or one column round it: a fence or wall
