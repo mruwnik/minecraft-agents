@@ -853,3 +853,19 @@
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= [[:open :roll :urgent] [:dig] [:place] [:close :roll nil]] (distinct marks))
               "no gap where a night or food reflex may cut in with the workstation out"))))))
+
+(deftest a-roll-from-afar-walks-to-the-cell-before-the-urgent-section-and-never-walks-back-inside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")] {:pos {:x 10 :y 64 :z 0}})] :self {:pos {:x 10.5 :y 64 :z 0.5}}
+                                            :scripts [[(offer "enchanted_book")]]} {}))
+              marks (keep #(cond
+                             (= :section (:kind %)) (if (:open %) :open :close)
+                             (= :child_started (:kind %)) (:slot %))
+                          @seen)
+              inside (->> marks (drop-while #(not= :open %)) rest (take-while #(not= :close %)))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= "lectern" (workstation p)))
+          (is (some #{:to-cell} (take-while #(not= :open %) marks)) "the walk to the cell comes before the section")
+          (is (not-any? #{:walk :to-stand} inside) (str "no walk while the workstation is out: " (pr-str inside))))))))

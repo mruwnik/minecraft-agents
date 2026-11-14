@@ -65,7 +65,6 @@
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
-   ::lose-job-s {:default 15 :doc "Seconds after the break the roll polls for the villager to lose its job without yielding, so its urgent section holds; the scheduler's urgent wait cap (engine.core.schedule/urgent-wait-s): past it a held reflex cuts in anyway." :spec (a/num-in 0 nil)}
    ::take-job-s {:default 300 :doc "Daytime seconds the villager may stay without a job after the workstation is placed: then the workstation is broken and placed once more, and past that the call ends :no-job." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
@@ -194,14 +193,23 @@
                                     why)))
   :continue)
 
-(defn ^:async wait-lose-job!
-  "The villager keeps its job after the break: a poll, then :again for the polls ::lose-job-s holds (the urgent section
-  holds; a limit is thrown only once it closes), else wait-job! (:continue)."
+(defn jobless?
+  "Whether the villager rolled is in view and reads jobless."
   [c]
-  (if (< (:lose-polls (ctx/mem c) 0) (/ (settings/get settings ::lose-job-s) (poll-s)))
-    (do (ctx/update-mem! c update :lose-polls (fnil inc 0))
-        (if (= :continue (await (child/pause! c (poll-s) :villager-keeps-job))) :continue :again))
-    (await (wait-job! c :villager-keeps-job))))
+  (some-> (villager/find-by-uuid (:primitives c) (villager/chosen c)) .-profession (= "unemployed")))
+
+(defn ^:async wait-lose-job!
+  "The villager keeps its job after the break. The game takes it a tick after the break from an untraded villager near
+  its workstation, and a jobless villager soon looks for any free one: the first time after a break, look every game
+  tick for one poll and go on (:again) the moment it reads jobless, so the place follows at once; else, as on later
+  rounds (a villager away from the workstation loses the job only once back near it), wait-job! (:continue)."
+  [c]
+  (if (:lose-polled (ctx/mem c))
+    (await (wait-job! c :villager-keeps-job))
+    (let [tick-ms (settings/ticks->ms 1)
+          _ (ctx/update-mem! c assoc :lose-polled true)
+          r (await (child/poll! c #(jobless? c) tick-ms (js/Math.ceil (/ (* 1000 (poll-s)) tick-ms)) :villager-keeps-job))]
+      (if (and r (not= :continue r)) :again :continue))))
 
 (defn ^:async walk!
   "One go-to leg toward the villager e. A leg that got no nearer is one try: the next round aims at where the villager
@@ -357,21 +365,35 @@
   [c]
   (await (ctx/atomic c :urgent :roll #(back-steps! c))))
 
+(defn ^:async to-cell!
+  "Walk (go-to child, slot :to-cell) to where the workstation cell is in reach and in sight, before the urgent section
+  opens: the break, the wait for the job to go and the place then happen from one stand. nil when in reach (or the walk
+  ended there), :continue, or the stop."
+  [c pos]
+  (when-not (b/in-reach? c pos true)
+    (let [r (await (child/call-walk* c :to-cell (await (b/walk-request c pos true (reach)))))]
+      (cond
+        (= :continue r) :continue
+        (:arrived (:data r)) nil
+        :else (stop! c :unreachable)))))
+
 (defn ^:async dig!
-  "Break the workstation and put it back (back-steps!), as one urgent section (ctx/atomic :roll); the break is booked
-  before the dig child runs, so a cut leaves it for the next round and the cleanup."
+  "Walk into reach (to-cell!), then break the workstation and put it back (back-steps!), as one urgent section
+  (ctx/atomic :roll); the break and the stand it is made from are booked before the dig child runs, so a cut leaves it
+  for the next round and the cleanup."
   [c]
-  (await (ctx/atomic c :urgent :roll
-                     (fn ^:async dig-and-put-back []
-                       (let [{:keys [pos]} (:args c)
-                             slot (keyword (str "dig-" (rolls c)))
-                             _ (await (flush-to-cell! c pos))
-                             _ (ctx/update-mem! c #(-> % (assoc :broken true :lose-polls 0 :job-polls 0 :stand (u/self-pos c) :expect-carried (inc (u/carried-count (:primitives c) (item-of (:args c))))) (dissoc :crouched :reach-drops :recovers)))
-                             r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
-                         (if (ending-or-wait? r)
-                           r
-                           (do (ctx/update-mem! c update :rolls (fnil inc 0))
-                               (await (back-steps! c)))))))))
+  (let [{:keys [pos]} (:args c)]
+    (or (await (to-cell! c pos))
+        (await (ctx/atomic c :urgent :roll
+                           (fn ^:async dig-and-put-back []
+                             (let [slot (keyword (str "dig-" (rolls c)))
+                                   _ (await (flush-to-cell! c pos))
+                                   _ (ctx/update-mem! c #(-> % (assoc :broken true :job-polls 0 :stand (u/self-pos c) :expect-carried (inc (u/carried-count (:primitives c) (item-of (:args c))))) (dissoc :lose-polled :crouched :reach-drops :recovers)))
+                                   r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+                               (if (ending-or-wait? r)
+                                 r
+                                 (do (ctx/update-mem! c update :rolls (fnil inc 0))
+                                     (await (back-steps! c)))))))))))
 
 (defn ^:async wait-take-job!
   "The villager has no job with the workstation placed: wait (daytime polls count, night ones do not, villagers claim
