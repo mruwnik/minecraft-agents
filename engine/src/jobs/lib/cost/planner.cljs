@@ -224,6 +224,8 @@
                        :doc "As ::search-cells-ceiling for a refuge room flood (room-read-ceiling-s), per cell the flood charges a meter: p90 over the same bench runs (an open slab, a pillared slab, a walled room; 240 pooled raw runs plus earlier runs not kept, total n not recoverable; holds to about load 15) (median 0.03 to 0.07; the runs' own p90s 0.037 to 0.077). A flood to its 1024-cell cap then costs 56 ms, inside the 100 ms. Recount: RECOUNT=1 on engine.search-recount-test, RECOUNT-ROOM raw lines pooled."}
    ::flood-cells-timed {:default [0.52 30720] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
                         :doc "Measured CPU of go-to's room floods (nearest-stand), [seconds cells] (flood-cell-s is their quotient): 30 floods of 1024 cells over a flat slab, 2026-10-30 (0.52 s = 0.017 ms a cell). Recount: engine.search-recount-test's RECOUNT :flood line."}
+   ::plan-nodes-per-block {:default 4.87 :spec (a/num-in 1 nil)
+                           :doc "Median planner nodes a found walk plan expands per block of its path (plan-nodes-per-block): go-to :planned events (walk, diagonal, corner, jump and drop moves only, 15 to 120 blocks) in every test body's events.edn and events.edn.1 on 2026-11-14, n 14174 (p25 1.72, p75 16.2, p90 38.3). Recount: those events' :nodes over the sum of their :moves counts."}
    ::quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (walk-floor each)." :spec (a/num-in 0 nil)}
    ::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
    ::costs {:default false :doc (str "Map of price name to seconds, overriding the planner's price of a move (" (str/join " " (map name (keys planner-names))) "); a price left out keeps the planner's default. false: none.")
@@ -323,6 +325,8 @@
 (defn search-read-s "Seconds of CPU one cell a dig-route search reads costs (::search-reads-timed)." [] (timed-cell-s ::search-reads-timed))
 
 (defn search-cell-ceiling-s "Upper-bound seconds of CPU one cell of a route search costs (::search-cells-ceiling): what the meter of a wall-time ceiling charges." [] (timed-cell-s ::search-cells-ceiling))
+
+(defn plan-nodes-per-block "Planner nodes a walk plan expands per block of its path (::plan-nodes-per-block)." [] (settings/get settings ::plan-nodes-per-block))
 
 (defn search-read-ceiling-s "Upper-bound seconds of CPU one cell a dig-route search reads costs (::search-reads-ceiling)." [] (timed-cell-s ::search-reads-ceiling))
 

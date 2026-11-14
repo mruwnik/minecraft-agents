@@ -757,13 +757,13 @@
             (is (<= (:spent-s v) (- budget held)) (str (:spent-s v))))
           (do
             (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} nil)
-            (is (= (* (cost/search-cell-ceiling-s) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a straight plan's nodes, a block each, are held for the flee search")
+            (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a plan's measured nodes a block of the straight way are held for the flee search")
             (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} {:x 5.5 :y 64 :z 3000.5})
-            (is (= (* (cost/search-cell-ceiling-s) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a far goal adds nothing: the home leg is the one held")
+            (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a far goal adds nothing: the home leg is the one held")
             (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} {:x 5.5 :y 64 :z 8.5})
-            (is (= (* (cost/search-cell-ceiling-s) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a goal nearer than home does not shrink the home's hold")
+            (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a goal nearer than home does not shrink the home's hold")
             (rooms/hold-for-flee! c nil {:x 5.5 :y 64 :z 8.5})
-            (is (= (* (cost/search-cell-ceiling-s) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 8.5})) (rooms/flee-hold-s c)) "no home: the goal's plan is held")
+            (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 8.5})) (rooms/flee-hold-s c)) "no home: the goal's plan is held")
             (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 3000.5} nil)
             (is (= (cost/search-budget-s) (rooms/flee-hold-s c)) "never more than the step's search")
             (rooms/new-step! c)
@@ -771,6 +771,29 @@
           (is (<= (:spent-s late) budget) (str (:spent-s late)))
           (is (= [nil] (mapv :why (:verdicts fresh))) "a step with its search to spend runs home")
           (is (< 0 (:spent-s fresh) budget) (str (:spent-s fresh))))))))
+
+(deftest surveys-that-would-spend-the-step-leave-the-flee-search-its-home-plan
+  ;; Brindle S9 j1747: the survey's walk searches spent the whole step meter, the flee search got 0 ms and planned nothing.
+  ;; The way-in walk search here eats all the survey's meter; the hut's open door lies 25 blocks off, the goal nearer or farther.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 26.5} open-door []))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 33.5)]
+              step! (fn ^:async s [goal]
+                      (rooms/new-step! c)
+                      (ctx/update-mem! c assoc :goal goal)
+                      (cover/hold-for-flee! c)
+                      (with-redefs [rooms/way-in (fn [_ _] (reach/charge! (reach/metered-cap 1e9 :cell-s) :cell-s true) nil)]
+                        (cover/survey c threats false))
+                      (let [left (- (cost/search-budget-s) (rooms/step-spent-s c))
+                            judged (await (respond.goal/judge! c threats [home] nil nil nil nil))]
+                        [(< left (+ (rooms/flee-hold-s c) (cost/walk-cell-ceiling-s))) (:home-why judged)]))
+              nearer (await (step! [5 64 21]))
+              farther (await (step! [5 64 60]))]
+          (is (= [[true nil] [true nil]] [nearer farther]) "the surveys leave only the hold, and the flee search plans the home on it"))))))
 
 (defn ^:async holds-at-home-room
   "The flee hold (rooms/flee-hold-s) at each home-room! call of job spec's run over a zombie 6 blocks from the hut."

@@ -206,6 +206,7 @@
 (def search-cell-s planner/search-cell-s)
 (def search-read-s planner/search-read-s)
 (def search-cell-ceiling-s planner/search-cell-ceiling-s)
+(def plan-nodes-per-block planner/plan-nodes-per-block)
 (def search-read-ceiling-s planner/search-read-ceiling-s)
 
 (defn search-cpu-s
