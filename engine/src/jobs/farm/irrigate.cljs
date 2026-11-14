@@ -41,11 +41,13 @@
   [dug cells refilled] :holes [dug cells left open]}: done when no cell is dry (and, if none was poured, none is unknown), or the cells
   wetted meet :least (default 1; :all: every dry cell); else condition-failed :need (no bucket), nothing-possible
   :nothing-seen (no field cell seen), :unseen (only unknown cells left) or :no-spot.
+  :prefer (cells that held water once): a spot among them that wets a dry cell is chosen first.
   done? is ok when a field cell is seen, none is dry or unknown after a look and no child is under way; it counts the dry cells left.")
 
 (a/defargs args
   {:area {:doc "the field cells: a box {:min :max} (corners inclusive, any order) or a circle {:pos :radius}, the square |dx|,|dz| <= radius at pos's y (the cells of jobs.farm.till)" :spec fa/spec :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :prefer {:doc "cells of the field that held water once: a spot among them that wets any dry cell is chosen before the rest" :spec (a/coll-of :engine.args/pos) :default nil}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -156,6 +158,7 @@
   (let [p (:primitives c)
         me (u/self-pos c)
         failed (:failed (ctx/mem c) #{})
+        prefer (set (:prefer (:args c)))
         open (->> (field-cells c)
                   (remove failed)
                   (remove (or (crop-ground c) #{}))
@@ -165,7 +168,7 @@
                   (filter #(permitted? c %)))]
     (->> open
          (keep (fn [pos] (let [n (covers dry pos)] (when (pos? n) [n pos]))))
-         (sort-by (fn [[n pos]] [(- n) (u/dist me pos)]))
+         (sort-by (fn [[n pos]] [(if (prefer pos) 0 1) (- n) (u/dist me pos)]))
          first
          second)))
 

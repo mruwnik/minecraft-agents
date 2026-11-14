@@ -4,6 +4,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.field-area :as fa]
             [jobs.lib.util :as u]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.crops :as crops]
             [jobs.farm.field :as fld]
             [jobs.farm.irrigate :as irrigate]
@@ -25,6 +26,34 @@
   (vec (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))
              :let [pos {:x x :y (:y lo) :z z}]]
          {:pos pos :name (u/seen-name p pos) :above (u/seen-name p (update pos :y inc))})))
+
+(defn ground-box
+  "The box's ground layer as the box irrigate and its need work over."
+  [{lo :min hi :max}]
+  {:min lo :max (assoc hi :y (:y lo))})
+
+(def water-kind "Memory of the ground cells of a box field seen as water." :farm-tend/water)
+
+(defn remembered-water
+  "The ground cells of the box (a ground-box) the body once saw as water."
+  [c box]
+  (into #{} (comp (map :data) (map :pos) (filter #(fa/contains-pos? box %))) (ctx/entries c water-kind)))
+
+(defn water-lost
+  "The remembered water cells of the box now seen as a solid block: a repair, never a bed."
+  [c box]
+  (let [p (:primitives c)]
+    (filterv #(let [n (u/seen-name p %)] (and n (not (bs/fluids n)) (not (bs/air n))))
+             (sort-by (juxt :x :z) (remembered-water c box)))))
+
+(defn note-water!
+  "Remember the ground cells of the box seen as water now."
+  [c]
+  (let [box (ground-box (fa/arg-box c))
+        known (remembered-water c box)]
+    (doseq [{:keys [pos name]} (ground-layer (:primitives c) box)
+            :when (and (= "water" name) (not (known pos)))]
+      (ctx/remember! c water-kind {:pos pos} {:cap 2048 :ttl :forever}))))
 
 (defn unripe-in-box
   "The unripe crop cells of the box, read around its centre."
@@ -55,11 +84,6 @@
   (let [in (access/rules-input c)]
     (refusal-names (filter gate/refused? (map #(access/may? in :dig %) poss)))))
 
-(defn ground-box
-  "The box's ground layer as the box irrigate and its need work over."
-  [{lo :min hi :max}]
-  {:min lo :max (assoc hi :y (:y lo))})
-
 (defn irrigate-need
   "How many ground cells of the box (a ground-box) are seen dry, 0 when no spot would wet any (irrigate would end :no-spot)."
   [c {lo :min hi :max}]
@@ -77,7 +101,7 @@
         R (fa/cover-radius box mid)
         inventory (u/inventory p)
         me (u/self-pos c)
-        tried (:till-tried (ctx/mem c) #{})
+        tried (into (:till-tried (ctx/mem c) #{}) (water-lost c (ground-box box)))
         ground (ground-layer p box)
         dry (if (:irrigate (:args c)) (irrigate-need c (ground-box box)) 0)
         raw-untilled (->> ground (filter gr/untilled?) (map :pos) (remove tried))
@@ -85,6 +109,7 @@
     {:field (:area (:args c))
      :ripe (count (box-permitted c :harvest (filter #(fa/contains-pos? box %) (fld/ripe-crops p {:radius R :crops nil} mid []))))
      :dry dry
+     :water-lost (water-lost c (ground-box box))
      :ground-box (ground-box box)
      :hoe (some? (farm/hoe-of p))
      :untilled (->> ground

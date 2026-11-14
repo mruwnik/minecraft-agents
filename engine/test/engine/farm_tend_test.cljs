@@ -175,6 +175,26 @@
           (is (= 2 (count (calls s "useOn"))))
           (is (true? (finished? s))))))))
 
+(deftest a-remembered-water-cell-filled-with-dirt-is-not-tilled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args {:irrigate false}
+              s (await (scenario args (world (ground "dirt" [[2 2]]) {:blocks {(k 3 63 2) "water"}}
+                                             {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 5)]}) 40))]
+          (is (= 1 (count (calls s "useOn"))))
+          (fake/set-block! (:p s) [3 63 2] "dirt")
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.tend (merge {:area box} args))) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (= 1 (count (calls s "useOn"))))
+          (is (= "dirt" (block-at s 3 63 2))))))))
+
+(deftest water-lost-cells-are-handed-to-irrigate-as-preferred
+  (is (= [{:x 3 :y 63 :z 2}]
+         (:prefer (:args (:call (decide/decide :irrigate {:irrigate true :area box}
+                                               {:dry 2 :ground-box {:min (:min box) :max {:x 4 :y 63 :z 4}}
+                                                :water-lost [{:x 3 :y 63 :z 2}]})))))))
+
 (deftest one-call-tills-plants-and-reports
   (async done
     (tu/run-async done

@@ -22,12 +22,12 @@
                     {:area area :replant true})}}))
 
 (defn decide-irrigate
-  [{:keys [irrigate area]} {:keys [dry ground-box]}]
+  [{:keys [irrigate area]} {:keys [dry ground-box water-lost]}]
   (cond
     (not irrigate) {:skip :irrigate-off}
     (not (pos? (or dry 0))) {:skip :not-dry}
     :else {:call {:slot :irrigate :job (jobs :irrigate)
-                  :args (cond-> {:area {:min (:min ground-box) :max (:max ground-box)}} (:plan area) (assoc :for-plan (:plan area)))}}))
+                  :args (cond-> {:area {:min (:min ground-box) :max (:max ground-box)}} (:plan area) (assoc :for-plan (:plan area)) (seq water-lost) (assoc :prefer water-lost))}}))
 
 (defn decide-till
   [{:keys [till area ways]} {:keys [hoe untilled bare seeds till-short till-held]}]

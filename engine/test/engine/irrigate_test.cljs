@@ -44,6 +44,15 @@
           (is (= [] (:dry r)))
           (is (= 1 (count (:poured r)))))))))
 
+(deftest a-preferred-cell-that-wets-a-dry-cell-is-the-spot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory bucket :blocks (strip 9)})
+              _ (await (tu/child-outcome eng job (assoc (args 9) :prefer [{:x 1 :y 63 :z 0}]) 40))
+              water (filterv #(= "water" (block-at p {:x % :y 63 :z 0})) (range 9))]
+          (is (= [1] water)))))))
+
 (deftest a-field-wider-than-the-water-reach-keeps-its-far-cell-dry
   (async done
     (tu/run-async done

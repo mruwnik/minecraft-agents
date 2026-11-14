@@ -28,7 +28,7 @@
             [jobs.farm.irrigate :as irrigate]
             [jobs.lib.crop-worth :as cw]
             [jobs.farm.tend-decide :as decide]
-            [jobs.farm.tend-box :refer [box-facts box-census]]
+            [jobs.farm.tend-box :as tend-box :refer [box-facts box-census]]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.lib.plan-field :as pf]))
 
@@ -64,6 +64,7 @@
   with what it did and the run goes on; tend's own time spend is the only limit it ends on.
   :field is counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
   :skipped :refused :short}, fertilize {:used}.
+  A box field remembers the ground cells it has seen as water; one now seen solid is never tilled (irrigate is told to prefer it as the spot for water).
   Limits: a dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
   keeps the check passing on every run (harvest gives up on it and the run still ends).
   {:plan id} (optionally :part; with neither :part nor :parts every crop part of the plan is worked) makes the plan's crop cells the field. Only crops harvest knows
@@ -576,6 +577,7 @@
 (defn ^:async work
   "One child call, or the report when no step is left: :again after a child ended, :continue while one waits."
   [c]
+  (when-not (fa/plan c) (tend-box/note-water! c))
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0 :irrigate-tried #{} :irrigated 0))
   (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs (assoc c :args (decide-args c)) facts)]

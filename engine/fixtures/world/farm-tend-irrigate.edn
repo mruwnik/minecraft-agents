@@ -20,6 +20,15 @@
    :act [[:job (jobs.farm.tend {:worth 1200 :area {:min #xyz [12 -1 16] :max #xyz [20 0 16]} :irrigate false})]]
    :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:skipped :irrigate-off} :plant {:planted 9}}}} :within-s 100 :of-job true}]
    :after [[:block [16 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 1]]}
+  ;; Card 00d462ee: a box field remembers a channel cell it saw as water; filled with dirt it is not tilled, and the next irrigate pours there (not at the cell that wets most, x 16 or 17 by the body's place).
+  {:name "box-filled-water-cell-gets-its-water-back"
+   :blocks [[:fill [13 -1 16] [13 -1 16] "water"]]
+   :act [[:job (jobs.farm.tend {:worth 1200 :area {:min #xyz [12 -1 16] :max #xyz [17 0 16]}})]
+         [:wait-s 40]
+         [:rcon "execute positioned $X $Y $Z run setblock ~13 ~-1 ~16 dirt"]
+         [:job (jobs.farm.tend {:worth 1200 :area {:min #xyz [12 -1 16] :max #xyz [17 0 16]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:poured 1}}}} :within-s 200 :of-job true}]
+   :after [[:block [13 -1 16] "water"] [:block [16 -1 16] "farmland[moisture=0]"]]}
   {:name "plan-dry-row-is-wetted-then-sown"
    :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [12 0 16] #at [20 0 16]] :want {:crop "wheat"}}]}]
    :act [[:job (jobs.farm.tend {:worth 1200 :area {:plan "$plan:field"}})]]
