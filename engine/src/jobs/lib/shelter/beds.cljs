@@ -307,23 +307,27 @@
 
 (defn bed-place-wanted?
   "Whether to put a carried bed down: night, awake, a bed item carried, no bed-to-use, no sleep tonight, and no
-  :bed-place-failed or :sleep-failed entry. Roofed or in the open."
-  [p view permit?]
+  :bed-place-failed or :sleep-failed entry. Roofed or in the open. chosen? (the caller priced the carried bed against
+  every bed: night's :answer) leaves out the bed-to-use test, so a bed the body walked away from while placing it is not
+  picked again."
+  ([p view permit?] (bed-place-wanted? p view permit? false))
+  ([p view permit? chosen?]
   (boolean (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
                 (some? (carried-bed p))
                 (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms))
                 (not-any? #(near-failed-place? p %) (mem/entries view :bed-place-failed))
                 (empty? (mem/entries view :sleep-failed))
-                (nil? (bed-to-use p view permit?)))))
+                (or chosen? (nil? (bed-to-use p view permit?)))))))
 
 (defn place-wanted?
   "bed-place-wanted? for the body of c, unless the reserve register holds the carried bed (a plan's, or the agent's) for
   something else."
-  [c]
-  (let [p (:primitives c)
-        view (ctx/view c)]
-    (and (bed-place-wanted? p view (bed-permit p))
-         (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night))))))
+  ([c] (place-wanted? c false))
+  ([c chosen?]
+   (let [p (:primitives c)
+         view (ctx/view c)]
+     (and (bed-place-wanted? p view (bed-permit p) chosen?)
+          (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night)))))))
 
 (defn standing-entries
   "By day: the open ledger entries of view with purpose (a night's :bed or :doorway) whose block still stands (seen) and that no

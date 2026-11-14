@@ -571,6 +571,14 @@
     (is (true? (sh-beds/bed-place-wanted? p (view) (constantly true))) "so the carried bed goes down")
     (is (= far-bed (sh-beds/bed-to-use p (view) (constantly true) 1200)) "a call at a higher worth prices it again")))
 
+(deftest a-carried-bed-the-night-chose-is-put-down-though-a-far-bed-is-to-use-again
+  (let [{:keys [eng p]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
+                                :blocks {"40,64,0" "red_bed"} :inventory [{:name "red_bed" :count 1}]})
+        view #(mem/view (:store eng))]
+    (is (= far-bed (sh-beds/bed-to-use p (view) (constantly true))) "the verdict no longer holds: the far bed is to use")
+    (is (false? (sh-beds/bed-place-wanted? p (view) (constantly true))) "unasked, the carried bed waits")
+    (is (true? (sh-beds/bed-place-wanted? p (view) (constantly true) true)) "the caller priced the carried bed against it: goes down")))
+
 (deftest a-bed-refused-on-price-does-not-call-the-night-trigger
   (let [{:keys [eng p]} (setup roof-over-open-sides)
         view #(mem/view (:store eng))]

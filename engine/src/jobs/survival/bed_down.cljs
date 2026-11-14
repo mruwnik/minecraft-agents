@@ -521,9 +521,11 @@
 
 (defn ^:async round [c]
   (let [p (:primitives c)
+        chosen? (some? (:answer (:args c)))
         bed (or (some-> (:bed (:args c)) places/parse-pos :pos)
-                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-permit c) (ctx/worth c)) {:price (sense/fails-to c)})))
-        answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c)) (await (carried-answer c)))]
+                (when-not chosen?
+                  (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-permit c) (ctx/worth c)) {:price (sense/fails-to c)}))))
+        answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c chosen?)) (await (carried-answer c)))]
     (cond
       (:seal (ctx/mem c)) (await (seal-and-sleep! c))
       bed (await (sleep! c bed (await (open-sleep-ok? c bed))))
