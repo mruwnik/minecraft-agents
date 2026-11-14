@@ -241,10 +241,21 @@
              :when (and (not= 0 dx dz) (or (lava? (+ x dx) y (+ z dz)) (lava? (+ x dx) (inc y) (+ z dz))))]
          [dx dz])))
 
+(defn aim-sides
+  "Of a step's lava sides, the ones its stand point steers away from: a corner is cleared on either axis, so not on the axis
+  the body comes in along from prev (the aim flush with that face would hold the box on prev's cell, the ledge of a drop)."
+  [lava prev step]
+  (let [dx? (and prev (not= (:x prev) (:x step)))
+        dz? (and prev (not= (:z prev) (:z step)))
+        across (fn [[dx dz :as side]] (cond (or (zero? dx) (zero? dz) (= dx? dz?)) side dx? [0 dz] :else [dx 0]))]
+    (vec (distinct (map across lava)))))
+
 (defn with-lava-sides
-  "Add :lava, its lava-sides, to each step with lava beside it. lava? is a fn [x y z] -> bool."
+  "Add :lava, its lava-sides, and :lava-away, its aim-sides, to each step with lava beside it. lava? is a fn [x y z] -> bool."
   [steps lava?]
-  (mapv (fn [s] (let [l (lava-sides s lava?)] (cond-> s (seq l) (assoc :lava l)))) steps))
+  (vec (map-indexed (fn [i s] (let [l (lava-sides s lava?)]
+                                (cond-> s (seq l) (assoc :lava l :lava-away (aim-sides l (when (pos? i) (nth steps (dec i))) s)))))
+                    steps)))
 
 (defn lava-clear?
   "The body's box at pose (as the server has it) is clear of the lava beside step (its :lava)."
@@ -265,11 +276,11 @@
         :else p))
 
 (defn stand-point
-  "Where to stand on step: its px pz, moved away from the lava beside it (lava-aim)."
-  [policy {:keys [x z px pz lava]}]
-  (if-not lava
+  "Where to stand on step: its px pz, moved away from the lava beside it (its :lava-away, by lava-aim)."
+  [policy {:keys [x z px pz lava-away]}]
+  (if-not lava-away
     [px pz]
-    (let [side? (fn [k v] (some #(= v (nth % k)) lava))]
+    (let [side? (fn [k v] (some #(= v (nth % k)) lava-away))]
       [(lava-aim policy x px (side? 0 1) (side? 0 -1))
        (lava-aim policy z pz (side? 1 1) (side? 1 -1))])))
 

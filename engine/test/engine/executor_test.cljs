@@ -201,6 +201,14 @@
       (pose 3.5 63.3 3.5 {:on-ground false}) false)
     (is (= [(- 4 (:body-half p)) 3.5] (ex/aim-point p land (pose 3.5 63 3.5))) "flush with the face away from the lava")))
 
+(deftest a-drop-with-lava-past-a-corner-ahead-aims-away-only-across-the-way-in
+  ;; flush with the near x face, the box would stay on the ledge it drops from; clear across, the corner cannot burn it
+  (let [[_ land] (ex/with-lava-sides [(step 1 61 0 :walk) (step 2 60 0 :drop)] #(= [%1 %2 %3] [3 61 1]))
+        aim (ex/aim-point p land (pose 1.5 61 0.5))]
+    (is (= [[1 1]] (:lava land)))
+    (is (= [2.5 (:body-half p)] aim))
+    (is (ex/lava-clear? p land (pose 2.8 60 (second aim))))))
+
 (deftest lava-beside-a-corner-burns-only-a-box-over-both-its-edges
   (let [land (step 3 63 3 :walk {:lava [[1 1]]})]
     (is (ex/lava-clear? p land (pose 3.75 63 3.5)))
