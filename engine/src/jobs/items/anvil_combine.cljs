@@ -17,7 +17,8 @@
             [jobs.lib.spot :as free-spot]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
-            [jobs.lib.waits :as waits]))
+            [jobs.lib.waits :as waits]
+            [jobs.lib.xp :as xp]))
 
 (def doc
   "Put the enchantment of a carried enchanted book on a carried :item at an anvil (a Mending book on an iron pickaxe).
@@ -26,16 +27,19 @@
   down is dug up again when it ends, with a tool that keeps the drop (fetched when the call's ways allow and an anvil
   is worth its price), else left standing. A missing :item is fetched from the ways the call allows. The book is never
   fetched (no job gets a book with a given enchantment: buy it with jobs.village.trade). The level cost is the
-  server's, read at the anvil; it is at least the book's (min-levels), checked before anything is fetched.
-  Quote: the walk and the visit, plus each fetch's price (need/item-price). :spend :job-time: the visit's ::job-time-s
-  plus fetch-time/one-unit-s for each thing the call may fetch (the item, and the anvil unless :anvil is given), as
-  a parent's job time holds its children's.
+  server's, read at the anvil; it is at least the book's (min-levels). Levels short of it are earned first by a
+  jobs.items.get-levels child when the ways fetch (again with the server's cost when the anvil asks more).
+  Quote: the walk and the visit, plus each fetch's price (need/item-price; the levels' jobs.lib.xp/levels-price).
+  :spend :job-time: the visit's ::job-time-s plus fetch-time/one-unit-s for each thing the call may fetch (the item,
+  the levels, and the anvil unless :anvil is given), as a parent's job time holds its children's.
   Ends :done with {:combined true :item :enchant :enchants [{:name :level}] :level-cost :levels-spent :xp-level :text}.
   Impossible: :bad-args (no item or enchantment name). Conditions (a listed root job waits): :no-book (no carried
-  enchanted book holds :enchant), :no-item (not carried, the call's :ways #{:carried}), :too-few-levels (fewer levels than the book's least cost, data :need :have),
+  enchanted book holds :enchant), :no-item (not carried, the call's :ways #{:carried}), :too-few-levels (fewer levels than the book's least cost
+  and the ways fetch none or know no way to earn them, data :need :have),
   :no-anvil (none given, seen or carried, after one look round, and the ways allow no fetch). A failed fetch ends as
   {:reason :need} with its ending as the :because. Condition-failed in the round: :no-book, :no-item, :no-anvil (the
-  anvil is gone and none other is known), :not-an-anvil, :too-few-levels (data :need :have), :not-combinable,
+  anvil is gone and none other is known), :not-an-anvil, :too-few-levels (data :need :have; the get-levels child's
+  ending is the :because), :not-combinable,
   :too-expensive. Nothing-possible: :unreachable, :anvil-failed (the visit failed: :why), :timeout.
   done? is ok once a carried :item holds :enchant.")
 
@@ -57,9 +61,9 @@
 (def fit? ready/ok)
 
 (defn default-time
-  "The call's default :spend :job-time: ::job-time-s, and fetch-time/one-unit-s for the item and for the anvil unless one is given."
+  "The call's default :spend :job-time: ::job-time-s, and fetch-time/one-unit-s for the item, the levels and the anvil unless one is given."
   [{:keys [anvil]}]
-  (+ (settings/get settings ::job-time-s) (* (fetch-time/one-unit-s) (if anvil 1 2))))
+  (+ (settings/get settings ::job-time-s) (* (fetch-time/one-unit-s) (if anvil 2 3))))
 
 (def defaults {:spend {:job-time default-time}})
 
@@ -104,6 +108,18 @@
         levels (for [stack (stacks c book) e (.-enchants stack) :when (= enchant (.-name e))] (or (.-level e) 1))]
     (* (get book-multiplier enchant 1) (if (seq levels) (apply min levels) 1))))
 
+(defn levels-wanted
+  "The levels the combine asks: the book's least (min-levels), or more when the anvil asked more."
+  [c]
+  (max (min-levels c) (:levels-need (ctx/mem c) 0)))
+
+(defn levels-short?
+  "Whether the body has fewer levels than the combine asks and the call cannot earn them: its ways fetch nothing,
+  or no way it knows earns them (jobs.lib.xp/levels-price)."
+  [c]
+  (and (< (xp-level c) (levels-wanted c))
+       (or (empty? (need/fetch-how c)) (not (js/isFinite (xp/levels-price c (levels-wanted c)))))))
+
 (defn find-anvil
   "The nearest anvil the body has seen within the radius and not found gone in this call, or nil."
   [c]
@@ -114,15 +130,15 @@
 (defn anvil-at [c] (or (:anvil (:args c)) (:anvil (ctx/mem c)) (find-anvil c)))
 
 (defn lacking
-  "The cause the round cannot cure: no book, no item while nothing fetches it, no level at all."
+  "The cause the round cannot cure: no book, no item while nothing fetches it, levels it cannot earn."
   [c]
   (let [{:keys [item enchant]} (:args c)]
     (cond
       (goal? c) nil
       (not (book? c)) {:reason :no-book :why (str "no carried enchanted book holds " enchant)}
       (and (not (plain? c)) (empty? (need/fetch-how c))) {:reason :no-item :why (str "no " item " without " enchant " carried")}
-      (< (xp-level c) (min-levels c)) {:reason :too-few-levels :need (min-levels c) :have (xp-level c)
-                                       :why (str "the book asks at least " (min-levels c) " levels, the body has " (xp-level c))})))
+      (levels-short? c) {:reason :too-few-levels :need (levels-wanted c) :have (xp-level c)
+                         :why (str "the book asks at least " (levels-wanted c) " levels, the body has " (xp-level c))})))
 
 (defn no-anvil
   "Look :no-anvil while none is given, seen or carried and no look round has run; then ok when the ways allow a fetch, else later."
@@ -151,8 +167,14 @@
       (not (plain? c)) (conj [(:item (:args c)) :need-item])
       (not (or (anvil-at c) (carried-anvil? c))) (conj ["anvil" :need-anvil]))))
 
-(defn fetch-s "Seconds the fetches cost (need/item-price each), skipping skip (an item name)." [c skip]
-  (reduce + 0 (for [[item slot] (fetches c) :when (not= item skip)] (need/item-price c item 1 (fetch-opts c slot) nil))))
+(defn levels-s
+  "Seconds earning the levels short costs (jobs.lib.xp/levels-price): 0 with none short, the goal held or no fetch."
+  [c]
+  (if (or (goal? c) (not (need/fetch-opts c))) 0 (xp/levels-price c (levels-wanted c))))
+
+(defn fetch-s "Seconds the fetches cost (need/item-price each, levels-s), skipping skip (an item name, or :levels)." [c skip]
+  (+ (if (= :levels skip) 0 (levels-s c))
+     (reduce + 0 (for [[item slot] (fetches c) :when (not= item skip)] (need/item-price c item 1 (fetch-opts c slot) nil)))))
 
 (defn visit-s [c]
   (let [anvil (anvil-at c)
@@ -166,7 +188,7 @@
             :items {book [0 1 1]}}}))
 
 (defn fetch-worth
-  "The worth of the fetch of item: the call's less the rest after it (cost/worth-left): the other fetch and the visit;
+  "The worth of the fetch of item (or :levels): the call's less the rest after it (cost/worth-left): the other fetches and the visit;
   nil when the rest has no price (the fetch inherits the call's worth)."
   [c item]
   (let [rest-s (+ (fetch-s c item) (second (visit-s c)))]
@@ -216,6 +238,20 @@
     (empty? (need/fetch-how c)) (give-up! c :no-item {})
     :else (or (await (fetched c (:item (:args c)) :need-item)) :again)))
 
+(defn ^:async levels!
+  "Earn the levels short with a jobs.items.get-levels child (slot :need-levels, at fetch-worth): nil with none short,
+  :continue while it waits, :again once it is done, else the ending :too-few-levels."
+  [c]
+  (let [n (levels-wanted c)]
+    (when (< (xp-level c) n)
+      (if (empty? (need/fetch-how c))
+        (give-up! c :too-few-levels {:need n :have (xp-level c)})
+        (let [w (when (nil? (get-in (ctx/mem c) [:children :need-levels])) (fetch-worth c :levels))
+              e (await (need/call! c :need-levels 'jobs.items.get-levels (cond-> {:levels n :ways (need/pass-ways c)} w (assoc :worth w))))]
+          (cond (= :continue e) :continue
+                (= :done (:kind e)) :again
+                :else (finish! c (:kind e) {:reason :too-few-levels :need n :have (xp-level c) :why (contract/cause-key e)} {})))))))
+
 (defn ^:async put-down!
   "No anvil known: put a carried one down beside the body (fetching one first when the ways allow). :again once it
   stands, :continue while a child waits, else the ending."
@@ -249,7 +285,9 @@
       "combined" (finish! c :done nil {:combined true :enchants (:enchants r) :level-cost (:levelCost r)
                                        :levels-spent (:levelsSpent r) :xp-level (:xpLevel r)
                                        :text (str "put " enchant " on " item)})
-      "no-levels" (give-up! c :too-few-levels {:need (:need r) :have (:have r) :why (str "the anvil asks " (:need r) " levels, the body has " (:have r))})
+      "no-levels" (if (and (seq (need/fetch-how c)) (number? (:need r)) (> (:need r) (levels-wanted c)))
+                    (do (ctx/update-mem! c assoc :levels-need (:need r)) :again)
+                    (give-up! c :too-few-levels {:need (:need r) :have (:have r) :why (str "the anvil asks " (:need r) " levels, the body has " (:have r))}))
       "no-book" (give-up! c :no-book {})
       "no-item" :again
       "missing" (gone! c pos)
@@ -264,9 +302,10 @@
       (fail-up! c :furnace :anvil-failed {:why (or (:reason r) (:status r))}))))
 
 (defn ^:async step!
-  "One piece: the item, then an anvil (seen, else put down), then walk there (a go-to child) and use it."
+  "One piece: the item, the levels, then an anvil (seen, else put down), then walk there (a go-to child) and use it."
   [c]
   (or (await (supply! c))
+      (await (levels! c))
       (if-let [pos (anvil-at c)]
         (let [r (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
           (case r

@@ -15,6 +15,8 @@
 (def dusk-tick "The time of day (game ticks) at which dusk comes." 12000)
 (def breed-cooldown-ms "How long an animal that took breeding food, or refused it, may take none: love lasts 600 ticks (30 s) and breeding sets 6000 ticks (300 s)." 330000)
 
+(def cook-ticks "Game ticks one item cooks in each kind of furnace." {"furnace" 200 "blast_furnace" 100 "smoker" 100})
+
 (def smelted-from
   "{output input} of what the furnaces cook, for naming the input of a product. The vanilla recipes are in no
   minecraft-data file."

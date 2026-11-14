@@ -8,7 +8,8 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.lib.ready :as ready]))
 
 (def clock (atom 1000000))
 (def spot "1,64,0")
@@ -205,3 +206,22 @@
           (core/submit! eng (tu/order '(asker {})) {})
           (await (run-until-empty eng 5))
           (is (<= 500 (first (get-in @out [:uses :job-time]))) (pr-str @out)))))))
+
+(deftest levels-short-of-the-book-are-earned-from-a-seen-ore-before-the-anvil
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [body (atom nil)
+              dug (atom [])
+              dig (assoc (get registry/jobs 'jobs.blocks.dig)
+                         :can-start? (constantly (contract/ok :stub "a stub")) :safe? ready/ok :fit? ready/ok
+                         :round (fn ^:async dig [c]
+                                  (swap! dug conj (:pos (:args c)))
+                                  (fake/remove-block! @body (:pos (:args c)))
+                                  (fake/swap-self! @body assoc :experience {:level 2 :points 16 :progress 0})
+                                  (ctx/end c :done nil {})))
+              [r p] (await (combine! (assoc-in (assoc anvil-world :blocks {spot "anvil" "4,64,0" "lapis_ore" "5,64,0" "lapis_ore" "6,64,0" "lapis_ore"}) [:self :experience :level] 1)
+                                     {} #(reset! body %) {'jobs.blocks.dig dig}))]
+          (is (true? (:combined r)) (pr-str r))
+          (is (= [[4 64 0]] (mapv (juxt :x :y :z) @dug)) "the 9 points short take three ores as priced; the nearest is dug first, and its pay was enough")
+          (is (= 0 (level p)) "the two levels earned went on the book"))))))

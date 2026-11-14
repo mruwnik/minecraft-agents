@@ -24,7 +24,7 @@
      jobs.village.trade jobs.village.offers
      jobs.village.breed jobs.village.roll
      jobs.items.smelt
-     jobs.items.enchant jobs.items.anvil-combine jobs.items.obtain jobs.items.get-tool jobs.items.get-kit
+     jobs.items.enchant jobs.items.anvil-combine jobs.items.get-levels jobs.items.obtain jobs.items.get-tool jobs.items.get-kit
      jobs.build.from-plan jobs.build.light-area jobs.build.pen jobs.build.rail jobs.build.rail-line
      jobs.access.pillar jobs.access.bridge
      jobs.explore.search jobs.explore.look

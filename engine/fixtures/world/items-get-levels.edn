@@ -1,0 +1,22 @@
+;; Card 3e3b3670: items.get-levels earns experience levels by the cheapest known way.
+;; Should-succeed: level 0 with seen lapis ore and an iron pickaxe digs ore until level 1.
+;; Should-fail: nothing known that gives points and :ways #{:carried} waits :no-way, nothing dug.
+{:defaults
+ {:tags [:items :xp :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["iron_pickaxe" 1]]}
+  :limit-s 120}
+ :cases
+ [{:name "get-levels-digs-seen-lapis-to-level-one"
+   :blocks [[:set [19 0 14] "lapis_ore"] [:set [19 0 18] "lapis_ore"] [:set [20 0 15] "lapis_ore"] [:set [20 0 17] "lapis_ore"]]
+   :act [[:rcon "xp set $BODY 0 levels"]
+         [:rcon "xp set $BODY 0 points"]
+         [:job (jobs.items.get-levels {:worth 1200 :levels 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:levels 1}} :within-s 100 :of-job true}]}
+  {:name "get-levels-with-no-known-way-waits-no-way"
+   :act [[:rcon "xp set $BODY 0 levels"]
+         [:rcon "xp set $BODY 0 points"]
+         [:job (jobs.items.get-levels {:worth 1200 :levels 1 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-way}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :child_started} :for-s 10}]}]}

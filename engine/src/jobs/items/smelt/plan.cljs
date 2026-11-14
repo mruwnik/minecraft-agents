@@ -5,7 +5,7 @@
             [jobs.lib.game-facts :as facts]
             [jobs.lib.storage :as storage]))
 
-(def cook-ticks {"furnace" 200 "blast_furnace" 100 "smoker" 100})
+(def cook-ticks facts/cook-ticks)
 
 (def foods (set (map first game/cooking)))
 (def furnace-only #{"cobblestone" "cobbled_deepslate" "stone" "sand" "red_sand" "clay_ball" "clay" "netherrack"
