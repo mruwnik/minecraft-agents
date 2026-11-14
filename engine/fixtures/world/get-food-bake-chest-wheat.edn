@@ -1,0 +1,17 @@
+;; survival.get-food's chest way takes wheat from a chest and bakes it while other food is carried and the pack is short of :carry.
+;; A chest [14 0 16] holds only 30 wheat (a noted stock), a crafting table [16 0 20] near; the body carries one melon slice and is fed.
+;; Should-succeed: the wheat is taken once, baked to bread (no wheat left carried), and the job completes.
+;; Should-fail: none (a body that took wheat again and again, or never baked, ends without bread).
+{:defaults
+ {:tags [:survival :get-food :bake]
+  :time :any
+  :plot {:height 6}
+  :blocks [[:set [14 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:30}]}"] [:set [16 0 20] "crafting_table"]]
+  :memory [{:kind :fetch/stock :data {:pos #at [14 0 16] :items {"wheat" 30}} :policy {:cap 64 :ttl :forever}}]
+  :body {:at [12.5 0 17.5] :inventory [["melon_slice" 1]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "wheat-from-a-chest-is-baked-while-melon-is-carried"
+   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 15 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "bread" [:>= 3]] [:item "wheat" 0]]}]}
