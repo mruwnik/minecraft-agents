@@ -396,15 +396,18 @@
              (one-way/taken? p rim at small? (ctx/worth c))
              (or small? (not (pit? p (vec at))) (not= {:step :none :why :no-dig} (select-keys (escape-way/choose p (vec at) to) [:step :why]))))))))
 
+(defn one-way-step?
+  "Whether step b after step a lands after a drop of 2 or more, a gap jump down (a step the body cannot undo) or any drop
+  onto a floor not seen (it may be a deeper fall)."
+  [a b]
+  (and (#{:drop :gap} (:move b))
+       (> (:y a) (:y b))
+       (or (:unseen-floor b) (> (- (:y a) (:y b)) (if (= :gap (:move b)) 0 1)))))
+
 (defn drop-index
-  "Index in steps of the first step that lands after a drop of 2 or more, a gap jump down (a step the body cannot undo) or any
-  drop onto a floor not seen (it may be a deeper fall), nil when none."
+  "Index in steps of the first one-way-step?, nil when none."
   [steps]
-  (first (keep-indexed (fn [i [a b]] (when (and (#{:drop :gap} (:move b))
-                                                (> (:y a) (:y b))
-                                                (or (:unseen-floor b) (> (- (:y a) (:y b)) (if (= :gap (:move b)) 0 1))))
-                                       (inc i)))
-                       (partition 2 1 steps))))
+  (first (keep-indexed (fn [i [a b]] (when (one-way-step? a b) (inc i))) (partition 2 1 steps))))
 
 (defn cut-refused
   "steps cut short before its first step that cannot be undone when priced? (a fn of the rim [x y z] it leaves, the landing [x y z]
@@ -431,45 +434,39 @@
 
 (defn left-s-fn
   "A fn of a step {:x :y :z} of steps: the seconds the goal cell [gx gy gz] still costs from there, roughly: the walk of
-  its straight blocks across (cost/walk-cost) and, from under the goal's level, the climb back up to it
-  (cost/climb-back-s) at the chance the plan's lowest step has no walk back up (one-way/chance), that step's climb out
-  to the goal's level with the kit (one-way/climb-out-s) a block's share of each block, dark unless the body has seen
-  that step lit or carries a light."
+  its straight blocks across (cost/walk-cost) and, from under the goal's level, the climb back up to it from the plan's
+  lowest step (one-way/climb-back-fn)."
   [p [gx gy gz] steps]
   (let [level (dec gy)
-        climb (delay (let [low (select-keys (apply min-key :y steps) [:x :y :z])
-                           stair-block-s (/ (one-way/climb-out-s p (assoc low :y level) low) (- level (:y low)))
-                           trap (one-way/chance p low false)
-                           lit? (or (one-way/light-carried? p) (one-way/seen-lit? p low))
-                           kit (wworld/kit-of p nil)]
-                       (fn [blocks] (cost/climb-back-s blocks trap lit? kit (* stair-block-s blocks)))))]
+        climb (delay (one-way/climb-back-fn p (apply min-key :y steps) level))]
     (fn [{:keys [x y z]}]
       (+ (:cost (cost/walk-cost {:distance (js/Math.hypot (- x gx) (- z gz))}))
          (if (< y level) (@climb (- level y)) 0)))))
 
 (defn cut-climb
-  "A plan that goes on over unseen floors and under the goal's level (level, a y) is cut before its first step that goes
-  lower than any step before it, under that level and with an unseen floor at or before it, after the last step from
-  which the goal costs no more than from its start (left-s, a fn of a step): that way down does not pay for the climb
-  back up to the goal's level, and the body would be down in land it knows no way back up from. A plan that ends under
-  the level and below its start past that step ends there instead (no new low, but a farther start for the next plan).
-  Over seen floors the plan's own steps are the way back. {:steps kept :refused [x y z]} (the refused step),
-  {:steps kept} (ended early), else {:steps steps}."
+  "A plan that goes under the goal's level (level, a y) with no way back up is cut before its first step that goes lower
+  than any step before it, under that level and with no way back at or before it (a step onto an unseen floor or a
+  one-way-step?), after the last step from which the goal costs no more than from its start (left-s, a fn of a step):
+  that way down does not pay for the climb back up to the goal's level. A plan that ends under the level and below its
+  start past that step ends there instead (no new low, but a farther start for the next plan). Steps the body can walk
+  back up, over seen floors, are their own way back. {:steps kept :refused [x y z]} (the refused step), {:steps kept}
+  (ended early), else {:steps steps}."
   [steps level left-s]
   (let [steps (vec steps)
         n (count steps)
-        under? #(< (:y %) level)]
-    (if-not (and (some :unseen-floor steps) (some under? steps))
+        under? #(< (:y %) level)
+        lost (mapv (fn [i] (let [s (steps i)] (boolean (or (:unseen-floor s) (and (pos? i) (one-way-step? (steps (dec i)) s)))))) (range n))]
+    (if-not (and (some true? lost) (some under? steps))
       {:steps steps}
       (let [start-s (left-s (first steps))
             paid (or (last (filter #(<= (left-s (steps %)) start-s) (range 1 n))) 0)
             lows (vec (reductions min (map :y steps)))
-            unseen-by (vec (reductions #(or %1 (boolean (:unseen-floor %2))) false steps))
-            i (first (filter #(let [s (steps %)] (and (under? s) (< (:y s) (lows (dec %))) (unseen-by (inc %)))) (range (inc paid) n)))
+            lost-by (vec (reductions #(or %1 %2) false lost))
+            i (first (filter #(let [s (steps %)] (and (under? s) (< (:y s) (lows (dec %))) (lost-by (inc %)))) (range (inc paid) n)))
             end (peek steps)]
         (cond
           i (let [{:keys [x y z]} (steps i)] {:steps (subvec steps 0 i) :refused [x y z]})
-          (and (< paid (dec n)) (under? end) (< (:y end) (:y (first steps))) (some :unseen-floor (subvec steps (inc paid))))
+          (and (< paid (dec n)) (under? end) (< (:y end) (:y (first steps))) (some true? (subvec lost (inc paid))))
           {:steps (subvec steps 0 (inc paid))}
           :else {:steps steps})))))
 

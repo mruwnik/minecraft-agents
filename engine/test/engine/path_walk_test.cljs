@@ -673,8 +673,8 @@
           (is (nil? (:stopped-short far))))))))
 
 ;; Tamsin S6: plans toward a leg goal buried in a hill (y 67) walked the body 69 -> 65 -> 62 -> 55 down a ravine beside it, each
-;; plan's drops cheap against the goal's worth. A plan's way down over unseen floors is priced against the climb back up to the
-;; goal's level; over seen floors its own steps are the way back.
+;; plan's drops cheap against the goal's worth. A plan's way down over unseen floors or one-way steps is priced against the
+;; climb back up to the goal's level; steps it can walk back up over seen floors are their own way back.
 (deftest a-speculative-plan-goes-down-no-farther-than-the-climb-back-pays
   (let [p (tu/fake {:blocks {} :self {:pos {:x 0.5 :y 69 :z 0.5}}})
         step (fn [[x y z]] {:x x :y y :z z})
@@ -698,7 +698,13 @@
           "a plan that came down nearer, then walks away at that depth, ends where the goal last cost no more than from its start"))
     (let [seen (mapv step [[0 66 0] [6 66 0] [7 65 0] [8 65 0] [9 66 0] [16 66 0]])]
       (is (= {:steps seen} (cut [-16256 67 -7904] seen)) "a 1-block dip over seen floors far from the goal is walked: its steps are the way back")
-      (is (= {:steps seen} (cut [30 67 0] seen)) "toward the goal, too"))))
+      (is (= {:steps seen} (cut [30 67 0] seen)) "toward the goal, too"))
+    (let [moved (fn [move [x y z]] {:x x :y y :z z :move move})
+          ravine [(moved :walk [-16266 56 -7912]) (moved :drop [-16265 54 -7912]) (moved :gap [-16262 53 -7912]) (moved :drop [-16261 51 -7912])]
+          stair (into [(moved :walk [0 64 0])] (map #(moved :drop [% (- 64 %) 0])) (range 1 10))]
+      (is (= {:steps (subvec ravine 0 1) :refused [-16265 54 -7912] :kind :descent} (cut [-15827 65 -7782] ravine))
+          "Tamsin S6 (card f95caff7): a ravine floor's drops of 2 and gap jumps down are one-way, seen or not: no way back")
+      (is (= {:steps stair} (cut [100 64 0] stair)) "a seen stair of 1-block drops is its own way back up"))))
 
 (deftest an-unfinished-search-walks-down-only-as-far-as-the-climb-back-pays
   (async done
@@ -717,6 +723,24 @@
               plan (fn [to] (wsearch/unfinished-plan search 1 nil true (constantly false) (constantly true) (constantly true) #(wplan/descent-cut {:primitives p} to %)))]
           (is (= 56 (:y (peek (:steps (plan [11 50 0]))))) "toward a goal below, the walk goes down the whole stair")
           (is (= 64 (:y (peek (:steps (plan [11 70 0]))))) "toward a goal above, it walks no step down the stair: a block across for each block down is no progress"))))))
+
+;; Tamsin S6 (card f95caff7): from a ravine's wall, the seen floor steps down toward a far goal at the wall's level by drops of
+;; 2, which the body cannot climb back up: seen or not, they are no way back
+(deftest an-unfinished-search-takes-no-one-way-drop-under-the-goals-level-over-seen-floors
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [table (blocks/default-state-table)
+              stair (for [x (range 4 12)] [x (- 63 (* 2 (quot (- x 2) 2))) 0])
+              snapshot (fx/fixture-snapshot {:fill (into [[0 63 0 3 63 0 "stone" {}]] (map (fn [[x y z]] [x y z x y z "stone" {}])) stair)})
+              p (tu/fake {:blocks {} :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              walled #js {:snapshot snapshot :table table :space space/space}
+              found (await (wplan/plan-within! {:primitives p} walled [11 56 0] 0 (walk/default-weight) (wworld/body-policy {:primitives p})))
+              search {:walled walled :limited #js {:progress (fn [] #js {:path (.-path (:r found)) :startDistance 100 :distance 80})}}
+              plan (fn [to] (wsearch/unfinished-plan search 1 nil true (constantly false) (constantly true) (constantly true) #(wplan/descent-cut {:primitives p} to %)))]
+          (is (some #(= :drop (:move %)) (:steps found)) "the stair is walked down by drops of 2")
+          (is (= 56 (:y (peek (:steps (plan [11 50 0]))))) "toward a goal below, the walk goes down the whole stair")
+          (is (= 64 (:y (peek (:steps (plan [40 64 0]))))) "toward a far goal at the rim's level, it takes no drop"))))))
 
 (def flooded-corridor
   (merge (box 8 62 0 40 67 2 "stone") (box 9 64 1 36 65 1 "water")))

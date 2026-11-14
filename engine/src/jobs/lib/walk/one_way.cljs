@@ -82,6 +82,18 @@
         pillar (if (<= h (:count (escape/carried-pillar-item p) 0)) (+ (cost/pillar-s (wworld/unseen-share p) h (escape/unseen-pillar-blocks p at h)) (escape/pillar-knock p at h)) ##Inf)]
     (apply min pillar (map stair escape/cardinals))))
 
+(defn climb-back-fn
+  "A fn of blocks: the seconds getting back up that many of the blocks from `low` ({:x :y :z}) to `level` (a y) costs
+  (cost/climb-back-s): at the chance low has no walk back up (chance) its climb out with the kit (climb-out-s) a block's
+  share of each block, dark unless the body has seen low lit or carries a light."
+  [p low level]
+  (let [low (select-keys low [:x :y :z])
+        stair-block-s (/ (climb-out-s p (assoc low :y level) low) (- level (:y low)))
+        trap (chance p low false)
+        lit? (or (light-carried? p) (seen-lit? p low))
+        kit (wworld/kit-of p nil)]
+    (fn [blocks] (cost/climb-back-s blocks trap lit? kit (* stair-block-s blocks)))))
+
 (defn price
   "Seconds of expected loss of the drop from `rim` landing at `at` (both {:x :y :z}); small? for a drop of one block."
   [p rim at small?]

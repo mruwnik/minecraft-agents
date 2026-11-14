@@ -833,6 +833,15 @@
                               (- (esc/way-total p [1 60 0] [5 63 0] leg (constantly true)) (escape-way/price p [1 60 0] leg))))]
     (is (< (walk-on-s [{:name "iron_pickaxe" :count 1}]) (walk-on-s [])) "the rock past the leg is cut quicker with a pickaxe than by hand")))
 
+;; Tamsin S6 (card f95caff7): a leg end over a ravine's air was its floor 20 under the goal's level, priced as the walk on
+;; from there alone; the climb back up to the goal's level is part of its way, as a walk's plan prices it
+(deftest a-leg-ending-under-the-goals-level-pays-the-climb-back-up
+  (let [p (:p (gt/setup {:blocks (box -5 40 -3 45 70 3 "stone") :self {:pos {:x 0.5 :y 64 :z 0.5}} :light [0 15] :seen [[-5 40 -3 45 70 3]]
+                         :inventory [{:name "stone_pickaxe" :count 1}]}))
+        total #(esc/way-total p [0 64 0] [40 64 0] {:step :dig-route :cells [{:cell %}]} (constantly true))]
+    (is (< (total [15 64 0]) (total [37 44 0]))
+        "a leg 25 from the goal at its level is cheaper than one 20 under it 20 from it")))
+
 (deftest a-climb-is-taken-over-a-way-when-it-costs-no-more
   (let [total {:leg 10 :climb 8 :dear 12 :tie 10}
         way (fn [step k] {:step step :k k})

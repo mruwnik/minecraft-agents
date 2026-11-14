@@ -274,13 +274,17 @@
   "Seconds way e from feet takes the body to goal, one sum for a stair, a pillar and a dig leg: the way's own price
   (escape-way/way-s for a stair or pillar, with its climb left; price for a leg) and the walk on from its end to goal
   along the straight line, a solid cell of that line and of the one over it dug (tools/clear-ms, the carried tool) as the walk goes, an unseen one
-  at the chance it is solid (escape/dig-share-fn); no dangers. A climb (climb-route/climb-way) is its whole route's :route-s."
+  at the chance it is solid (escape/dig-share-fn), and from an end under the goal's level the climb back up to it
+  (one-way/climb-back-fn, as a walk's plan prices it); no dangers. A climb (climb-route/climb-way) is its whole route's :route-s."
   [p feet goal e may-dig?]
   (let [walk-s (escape-way/rest-s-fn p goal)
         block-at (escape/block-at-of p)
         share (escape/dig-share-fn p)
+        level (dec (goal 1))
         dig-s (fn [cell] (let [n (block-at cell)] (if (dig-route/open? n) 0 (* (share cell) (/ (tools/clear-ms p n) 1000)))))
+        climb-s (fn [[x y z]] (if (< y level) ((one-way/climb-back-fn p {:x x :y y :z z} level) (- level y)) 0))
         rest-s (fn [cell] (+ (walk-s cell)
+                             (climb-s cell)
                              (transduce (comp (mapcat #(vector % (escape/up % 1))) (map dig-s)) + 0
                                         (take escape-way/read-line-cells (escape/line-cells cell goal)))))]
     (cond
