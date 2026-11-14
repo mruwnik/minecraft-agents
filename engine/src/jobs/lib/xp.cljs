@@ -51,7 +51,7 @@
           "iron_ore" 0.7 "deepslate_iron_ore" 0.7 "gold_ore" 1 "deepslate_gold_ore" 1 "nether_gold_ore" 1
           "copper_ore" 0.7 "deepslate_copper_ore" 0.7 "diamond_ore" 1 "deepslate_diamond_ore" 1
           "emerald_ore" 1 "deepslate_emerald_ore" 1 "lapis_ore" 0.2 "deepslate_lapis_ore" 0.2
-          "redstone_ore" 0.3 "deepslate_redstone_ore" 0.3 "coal_ore" 0.1 "deepslate_coal_ore" 0.1 "nether_quartz_ore" 0.2
+          "redstone_ore" 0.7 "deepslate_redstone_ore" 0.7 "coal_ore" 0.1 "deepslate_coal_ore" 0.1 "nether_quartz_ore" 0.2
           "cactus" 1 "clay_ball" 0.3 "clay" 0.35 "kelp" 0.1 "wet_sponge" 0.15 "chorus_fruit" 0.1 "sea_pickle" 0.1}
          (zipmap ["beef" "porkchop" "chicken" "mutton" "rabbit" "cod" "salmon" "potato"] (repeat 0.35))
          (zipmap ["sand" "red_sand" "cobblestone" "stone" "cobbled_deepslate" "netherrack" "sandstone" "red_sandstone"
@@ -72,7 +72,7 @@
 
 (def mob-points
   "Points a kill of a hostile mob gives, where it is not 5 (most hostiles)."
-  {"blaze" 10 "guardian" 10 "elder_guardian" 10 "evoker" 10 "ravager" 20 "endermite" 3 "slime" 2 "magma_cube" 2
+  {"blaze" 10 "guardian" 10 "elder_guardian" 10 "evoker" 10 "ravager" 20 "piglin_brute" 20 "endermite" 3 "slime" 2 "magma_cube" 2
    "warden" 5})
 
 (defn mob-points-of [name] (get mob-points name 5))

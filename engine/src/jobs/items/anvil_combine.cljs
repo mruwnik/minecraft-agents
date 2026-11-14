@@ -247,7 +247,7 @@
       (if (empty? (need/fetch-how c))
         (give-up! c :too-few-levels {:need n :have (xp-level c)})
         (let [w (when (nil? (get-in (ctx/mem c) [:children :need-levels])) (fetch-worth c :levels))
-              e (await (need/call! c :need-levels 'jobs.items.get-levels (cond-> {:levels n :ways (need/pass-ways c)} w (assoc :worth w))))]
+              e (await (need/call! c :need-levels 'jobs.items.get-levels (cond-> {:levels n :ways (need/pass-ways c) :spend {:job-time (* (fetch-time/one-unit-s) (- n (xp-level c)))}} w (assoc :worth w))))]
           (cond (= :continue e) :continue
                 (= :done (:kind e)) :again
                 :else (finish! c (:kind e) {:reason :too-few-levels :need n :have (xp-level c) :why (contract/cause-key e)} {})))))))
@@ -285,7 +285,7 @@
       "combined" (finish! c :done nil {:combined true :enchants (:enchants r) :level-cost (:levelCost r)
                                        :levels-spent (:levelsSpent r) :xp-level (:xpLevel r)
                                        :text (str "put " enchant " on " item)})
-      "no-levels" (if (and (seq (need/fetch-how c)) (number? (:need r)) (> (:need r) (levels-wanted c)))
+      "no-levels" (if (and (seq (need/fetch-how c)) (number? (:need r)) (> (:need r) (xp-level c)))
                     (do (ctx/update-mem! c assoc :levels-need (:need r)) :again)
                     (give-up! c :too-few-levels {:need (:need r) :have (:have r) :why (str "the anvil asks " (:need r) " levels, the body has " (:have r))}))
       "no-book" (give-up! c :no-book {})

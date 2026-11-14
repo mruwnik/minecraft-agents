@@ -75,24 +75,30 @@
 (defn child-args [c {:keys [job args]}]
   (cond-> args (not= 'jobs.combat.attack job) (assoc :ways (need/pass-ways c))))
 
+(defn judge!
+  "Mark w's key tried when its child gave up (kind not :done) or the points did not rise."
+  [c w kind]
+  (ctx/update-mem! c (fn [m] (cond-> (dissoc m :running :settle)
+                               (or (not= :done kind) (<= (xp/points-of (:primitives c)) (:before w)))
+                               (update :tried (fnil conj []) (:key w))))))
+
 (defn ^:async earn!
   "One round of the way w's child (slot :earn), at the worth left after the rest of the plan; once it ended, w's key is
-  tried when it gave up or earned nothing."
+  tried when it gave up or earned nothing. A kill's orbs land after it: the judgement waits a round (:settle)."
   [c w rest-s]
   (let [r (await (ctx/call c :earn (:job w) (assoc (child-args c w) :worth (cost/worth-left c rest-s))))]
-    (if (= :continue r)
-      :continue
-      (do (ctx/update-mem! c (fn [m] (cond-> (dissoc m :running)
-                                       (or (not= :done (:kind r)) (<= (xp/points-of (:primitives c)) (:before w)))
-                                       (update :tried (fnil conj []) (:key w)))))
-          :again))))
+    (cond (= :continue r) :continue
+          (and (= :fight (:way w)) (= :done (:kind r))) (do (ctx/update-mem! c assoc :settle true) :continue)
+          :else (do (judge! c w (:kind r)) :again))))
 
 (defn ^:async step!
   "The running way's child, else the cheapest way a point (the ways known do not earn the points: give up :no-way;
   their price is above the worth: :not-worth)."
   [c]
   (if-let [w (:running (ctx/mem c))]
-    (await (earn! c w (:rest-s w)))
+    (if (:settle (ctx/mem c))
+      (do (judge! c w :done) :again)
+      (await (earn! c w (:rest-s w))))
     (let [levels (:levels (:args c))
           ws (xp/ways c levels (skip c))
           price (xp/levels-price c levels ws)

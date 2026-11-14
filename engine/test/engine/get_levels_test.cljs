@@ -87,3 +87,58 @@
         (let [[r dug] (await (run! (assoc ores :inventory []) {} 4))]
           (is (= :no-way (:reason r)) (pr-str r))
           (is (empty? dug)))))))
+
+(defn paying
+  "job-sym's registry entry as a stub that notes its args in seen and pays n points."
+  [body job-sym seen n]
+  (assoc (get registry/jobs job-sym)
+         :can-start? (constantly (contract/ok :stub "a stub")) :safe? ready/ok :fit? ready/ok
+         :round (fn ^:async stub [c] (swap! seen conj (:args c)) (pay! @body n) (ctx/end c :done nil {}))))
+
+(defn ^:async run-job! [world job-sym n args]
+  (let [body (atom nil) seen (atom [])
+        p (tu/seeing-all (tu/fake-on-floor world))
+        _ (reset! body p)
+        eng (core/create {:primitives p :jobs (assoc registry/jobs job-sym (paying body job-sym seen n)) :triggers triggers/all :dir (tu/tmp-dir)
+                          :now #(deref clock) :events (events/make {:body "Fake" :sinks [] :now #(deref clock)})})
+        r (await (tu/child-outcome eng 'jobs.items.get-levels (merge {:levels 1 :ways #{:carried}} args) 40))]
+    [r @seen]))
+
+(deftest carried-raw-iron-is-smelted-for-the-points
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r seen] (await (run-job! {:blocks {"3,64,0" "furnace"} :inventory [{:name "raw_iron" :count 10} {:name "coal" :count 4}]}
+                                        'jobs.items.smelt 7 {}))]
+          (is (= :done (:status r)) (pr-str r))
+          (is (= [{:item "raw_iron" :count 10}] (mapv #(select-keys % [:item :count]) seen))))))))
+
+(def zombie {:id 7 :name "zombie" :kind "hostile" :pos [4 64 0] :health 20})
+(def half-way {:level 0 :points 3 :progress 0.5})
+(def sword {:name "iron_sword" :count 1})
+
+(deftest a-sensed-hostile-is-fought-by-a-body-fit-for-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r seen] (await (run-job! {:self {:health 20 :experience half-way} :entities [zombie] :inventory [sword]
+                                         :equipment {:hand sword}} 'jobs.combat.attack 5 {:levels 1}))]
+          (is (= :done (:status r)) (pr-str r))
+          (is (= [[7]] (mapv :targets seen))))))))
+
+(deftest a-hurt-unarmed-body-does-not-pick-a-fight-for-points
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r seen] (await (run-job! {:self {:health 3 :experience half-way} :entities [zombie] :inventory []} 'jobs.combat.attack 5 {:levels 1}))]
+          (is (empty? seen) (pr-str r))
+          (is (not= :done (:status r))))))))
+
+(deftest a-kill-s-orbs-are-given-a-round-before-the-way-is-judged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:health 20 :experience half-way} :entities [zombie] :inventory [sword] :equipment {:hand sword}}
+              [r seen] (await (run-job! world 'jobs.combat.attack 5 {:levels 1}))]
+          (is (= 1 (count seen)) "paid at once: the kill is not taken again")
+          (is (empty? (:tried r)) (pr-str r)))))))
