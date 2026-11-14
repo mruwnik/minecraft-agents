@@ -125,6 +125,14 @@
       :else
       (let [w (cond-> w (not keep-hand?) (assoc-in [:self :held] item))]
         (cond
+          (and (= item "minecart") (re-find #"(^|_)rail$" here))   ; a cart is set on the rail, an entity
+          (let [[x y z] pos id (:next-entity-id w)]
+            (done (-> w (take-one item)
+                      (update :entities conj {:id id :uuid (str "u-" id) :name "minecart" :kind "other" :health 1
+                                              :pos [(+ x 0.5) (+ y 0.0625) (+ z 0.5)] :drops [{:name "minecart" :count 1}]})
+                      (update :next-entity-id inc))
+                  "used" 1))
+
           (and (re-find #"_fence$" here) (or (= item "lead") hand?))
           (let [[w' tied] (tie-to-post w pos)] (done w' (if (pos? tied) "used" "unchanged")))
 

@@ -29,7 +29,7 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Build the rail line a plan wants (:plan, optionally only its :part) and prove a ridden cart can run it.
+  "Build the rail line a plan wants (:plan, optionally only its :part) and judge (plan.rail/judge-line) that a ridden cart would run it end to end; jobs.movement.ride-rail rides it.
   The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line). plan.rail/layout writes
   such plans, with corners and slopes.
   Four phases:

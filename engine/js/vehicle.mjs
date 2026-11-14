@@ -17,6 +17,7 @@ import seats from '../src/jobs/lib/vehicle-seats.json' with { type: 'json' }
 
 const BOAT = /_(boat|raft)$/
 const CHEST_BOAT = /_chest_(boat|raft)$/
+const isBoat = name => BOAT.test(name ?? '') || CHEST_BOAT.test(name ?? '')
 
 // seats of a mountable entity by name; 0 when the body cannot ride it
 export const seatsOf = name => {
@@ -39,8 +40,9 @@ export const mountRefusal = (name, riders) => {
 
 // Mineflayer 4.39 never moves a passenger with its mount (the server sends a rider only rotation), so a rider's
 // position is set from the mount's: mount position + seat height - the rider's riding offset. Small tables, vanilla
-// values; unknown names fall back to 0.75 of the mount's height and 0.14.
-const SEAT_Y = { skeleton_horse: 1.31875, zombie_horse: 1.31875, horse: 1.31875, donkey: 1.2, mule: 1.2, camel: 2.0, strider: 1.4, spider: 0.8, chicken: 0.5, pig: 0.7 }
+// values; unknown names fall back to 0.75 of the mount's height and 0.14. A minecart's seat is its passenger attachment
+// 0.1875 less what a 26.1 player hangs below a seat (0.6) past the table's 0.14: a rider sits 0.4125 under the cart.
+const SEAT_Y = { skeleton_horse: 1.31875, zombie_horse: 1.31875, horse: 1.31875, donkey: 1.2, mule: 1.2, camel: 2.0, strider: 1.4, spider: 0.8, chicken: 0.5, pig: 0.7, minecart: 0.1875 - 0.6 + 0.14 }
 const RIDING_OFFSET = { skeleton: 0.7, stray: 0.7, parched: 0.7, wither_skeleton: 0.7, bogged: 0.7, zombie: 0.14, drowned: 0.14, husk: 0.14, player: 0.14 }
 const BOAT_SEAT_Y = -0.1
 export const seatPosition = (mount, rider) => {
@@ -64,7 +66,8 @@ export function trackVehicles (bot) {
   bot.on('entityMoved', mount => {
     for (const id of lists.get(mount.id) ?? []) {
       const rider = bot.entities?.[id]
-      if (!rider || rider === bot.entity || !mount.position) continue
+      // a boat is the client's to move (paddleBoat), so the body in one is not moved from the server's echo
+      if (!rider || !mount.position || (rider === bot.entity && isBoat(mount.name))) continue
       rider.position = seatPosition(mount, rider)
     }
   })
@@ -186,13 +189,34 @@ export const boatStep = ({ x, y, z, yaw }, { turn = null, forward = false } = {}
 
 const onWater = (bot, { x, y, z }) => bot.blockAt(vec3(Math.floor(x), Math.floor(y), Math.floor(z)))?.name === 'water'
 
+// A minecart runs on the server: the rider only asks it along. Vanilla gives a near-still cart a little speed toward
+// the rider's forward input as the server last saw the rider face, so a stroke sends the body's own look raw and holds
+// forward for `ticks` ticks; the cart's place is the server's, read back ('ok' {pos, ticks, moved}).
+async function pushCart (bot, ctx, cart, ticks, { timeScale = 1 } = {}) {
+  const from = cart.position.clone()
+  const result = done => ({ status: 'ok', pos: { x: cart.position.x, y: cart.position.y, z: cart.position.z }, ticks: done, moved: cart.position.distanceTo(from) })
+  if (ticks === 0) return result(0)
+  const release = () => bot._client.write('player_input', { inputs: {} })
+  ctx.onAbort(release)
+  try {
+    writeLook(bot, mcYawOf(bot.entity.yaw), -bot.entity.pitch * 180 / Math.PI)
+    bot.moveVehicle(0, 1)
+    await sleepMs(ticks * (bot.physicsClock?.intervalMs() ?? 50) * timeScale)
+    ctx.alive()
+    return result(ticks)
+  } finally {
+    release()
+  }
+}
+
 // One stroke: a.ticks (0..PADDLE_MAX_TICKS) ticks with a.turn and a.forward held. Ends 'ok', or 'blocked' when the next tick would
-// leave the water; zero ticks reads the pose. Every key is released on every exit, and by a cut.
+// leave the water; zero ticks reads the pose. A minecart takes forward only (pushCart). Every key is released on every exit, and by a cut.
 export async function paddleBoat (bot, ctx, a, { timeScale = 1 } = {}) {
   const boat = bot.vehicle
   if (!boat) return { status: 'not-mounted' }
-  if (!BOAT.test(boat.name ?? '') && !CHEST_BOAT.test(boat.name ?? '')) return { status: 'not-a-boat' }
   const ticks = Math.min(Math.max(Math.floor(a.ticks ?? 0), 0), setting('vehicle/paddle-max-ticks'))
+  if (boat.name === 'minecart') return pushCart(bot, ctx, boat, a.forward ? ticks : 0, { timeScale })
+  if (!isBoat(boat.name)) return { status: 'not-a-boat' }
   const keys = { turn: a.turn ?? null, forward: Boolean(a.forward) }
   let pose = { x: boat.position.x, y: boat.position.y, z: boat.position.z, yaw: mcYawOf(boat.yaw ?? Math.PI) }
   const release = () => bot._client.write('player_input', { inputs: {} })

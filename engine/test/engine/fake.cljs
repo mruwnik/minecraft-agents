@@ -769,7 +769,7 @@
 (def paddle-max-ticks "The most ticks one stroke lasts (js/settings.mjs vehicle/paddle-max-ticks)." 40)
 
 (defn paddle
-  "One stroke of steering the boat the body is in: boatStep (the JS model, js/vehicle.mjs) per tick over water; :blocked where the next
+  "One stroke of steering the boat the body is in (a minecart: a push, see the branch): boatStep (the JS model, js/vehicle.mjs) per tick over water; :blocked where the next
   forward tick would leave the water. The boat's heading is its :yaw (Minecraft degrees, default 0); the body rides along."
   [w {:keys [ticks turn forward] :or {ticks 0}}]
   (let [id (get-in w [:self :vehicle])
@@ -778,6 +778,12 @@
         pose-of (fn [pose] {:pos [(.-x pose) (.-y pose) (.-z pose)] :yaw (.-yaw pose)})]
     (cond
       (nil? id) [w {:status "not-mounted"}]
+      (= "minecart" (:name e))   ; a push: forward sends the cart (and the body) to its :rollsTo, if it has one
+      (let [to (when (and forward (pos? ticks)) (:rolls-to e))
+            from (:pos e)
+            at (or to from)]
+        [(cond-> w to (-> (animals/update-entity id #(assoc % :pos to)) (assoc-in [:self :pos] to)))
+         {:status "ok" :pos at :ticks (if forward (min ticks paddle-max-ticks) 0) :moved (dist from at)}])
       (not (re-find #"_(boat|raft)$" (str (:name e)))) [w {:status "not-a-boat"}]
       :else
       (let [n (min (max (js/Math.floor ticks) 0) paddle-max-ticks)

@@ -52,8 +52,28 @@ test('paddleBoat', async t => {
     assert.deepEqual(await paddleBoat(bot, ctx(), { ticks: 3, forward: true }, opts), { status: 'not-mounted' })
   })
   await t.test('a vehicle that is not a boat', async () => {
-    const { bot } = rig({ name: 'minecart' })
+    const { bot } = rig({ name: 'pig' })
     assert.deepEqual(await paddleBoat(bot, ctx(), { ticks: 3, forward: true }, opts), { status: 'not-a-boat' })
+  })
+  await t.test('a minecart gets the body\'s look raw, then forward held, then released; the server moves the cart', async () => {
+    const { bot, boat } = rig({ name: 'minecart' })
+    const inputs = []
+    bot.entity.yaw = Math.PI / 2 // Mineflayer radians: facing west, Minecraft yaw 90
+    bot.moveVehicle = (left, forward) => { inputs.push([left, forward]); boat.position = vec3(2.5, 63, 0.5) }
+    const r = await paddleBoat(bot, ctx(), { ticks: 4, forward: true }, opts)
+    assert.deepEqual(inputs, [[0, 1]])
+    assert.equal(bot.written[0][0], 'look')
+    assert.equal(bot.written[0][1].yaw, 90)
+    assert.deepEqual(bot.written.at(-1), ['player_input', { inputs: {} }])
+    assert.equal(bot.written.filter(([n]) => n === 'vehicle_move').length, 0)
+    assert.deepEqual({ status: r.status, ticks: r.ticks, moved: r.moved }, { status: 'ok', ticks: 4, moved: 2 })
+  })
+  await t.test('a minecart stroke without forward only reads where the cart is', async () => {
+    const { bot } = rig({ name: 'minecart' })
+    bot.moveVehicle = () => assert.fail('no input without forward')
+    const r = await paddleBoat(bot, ctx(), { ticks: 4 }, opts)
+    assert.deepEqual(r, { status: 'ok', pos: { x: 0.5, y: 63, z: 0.5 }, ticks: 0, moved: 0 })
+    assert.deepEqual(bot.written, [])
   })
   await t.test('zero ticks reads the pose and sends nothing', async () => {
     const { bot } = rig()
