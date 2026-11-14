@@ -14,4 +14,10 @@
  [{:name "wheat-cells-beside-the-body-are-walled"
    :act [[:job (jobs.survival.wall-in {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
-   :after [[:block [17 0 15] "cobblestone"] [:block [17 0 17] "cobblestone"]]}]}
+   :after [[:block [17 0 15] "cobblestone"] [:block [17 0 17] "cobblestone"]]}
+  {:name "body-on-farmland-roofs-above-its-head"
+   :blocks [[:fill [15 -1 16] [19 -1 16] "farmland"]]
+   :body {:at [17.5 0 16.5]}
+   :act [[:job (jobs.survival.wall-in {:worth 1200})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [18 1 16] "cobblestone"] [:block [17 2 16] "cobblestone"]]}]}
