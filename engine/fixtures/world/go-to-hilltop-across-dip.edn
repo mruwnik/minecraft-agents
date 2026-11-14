@@ -1,6 +1,5 @@
-;; Card 3ded098d: a goal 10 above the start across a dip whose floor is unseen at the start (the rim hides it). Over unseen floors a
-;; walk may dip the speculative cap below the highest floor it stood on in the call; counting that cap from the goal's level instead
-;; refused the first step into the dip.
+;; Card 3ded098d: a goal 10 above the start across a dip whose floor is unseen at the start (the rim hides it). A plan's way down
+;; is priced against the climb back up to the goal's level; the dip is on the way up, so it is walked.
 ;; Stone x 0..40, y 0..9 (surface feet y 10). Trench x 14..16 across the plot, floor feet y 7, steps out at x 15 (8) and x 16 (9);
 ;; stair up x 18..26 (feet 11..19), hilltop x 27..31 (feet 20).
 ;; Should-succeed: go-to arrives at the hilltop.

@@ -487,21 +487,6 @@
     (is (nil? (check (plan "budget" dead-end) true)) "already touring the edge")
     (swap! gcut/approaches dissoc (:id c))))
 
-;; the highest floor stood on bounds each plan's dip over unseen floors (wplan/cut-descent): a restart of the call (a child's
-;; wait, a cut) must not forget it, or each attempt from a lower start lets the body down another cap
-(deftest the-highest-floor-stood-on-outlasts-an-attempt-toward-the-same-goal
-  (let [mem* (atom {})
-        c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 0.5 :y 62 :z 0.5}}}) mem* {:unknown true}))
-        pos {:x 9 :y 67 :z 0}]
-    (gcut/note-restart! c pos)
-    ((gcut/approach-recorder c pos) {:x 0.5 :y 69 :z 0.5 :on-ground true})
-    ((gcut/approach-recorder c pos) {:x 0.5 :y 62 :z 0.5 :on-ground true})
-    (gcut/note-restart! c pos)
-    (is (= 69 (gcut/stood-top c)) "the next attempt's walk record is fresh; memory keeps the top")
-    (gcut/note-restart! c (assoc pos :x 30))
-    (is (nil? (gcut/stood-top c)) "another goal starts again")
-    (swap! gcut/approaches dissoc (:id c))))
-
 ;; live: KitOak94 (8c28a4a4). With no torch carried each budget-cut plan was walked only up to its first dark step
 ;; (reprice's cut): the whole plan ended nearer the ore, the cut farther than the body had been, and the body drifted off
 (deftest a-plan-cut-at-a-dark-step-is-judged-where-the-cut-ends
@@ -1433,7 +1418,8 @@
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
           (is (= [] @spent) "no walk ends learn-spent"))))))
 
-;; a floor ending in the dark short of the goal, the void past it unseen: each walk learns its edge column by column.
+;; a floor ending in the dark short of the goal, the void past it unseen: each walk learns its edge column by column. The goal
+;; lies under the floor's level, so a drop off the edge is no climb back to price (plan/cut-climb).
 ;; A walk that learned nothing nearer the goal than the body has been is a failed try, so the call gives up on the
 ;; unseen floors (old: it looked round and walked the next stretch of edge every round, lighting it until the torches ran out)
 (deftest go-to-past-a-dark-edge-gives-up-once-the-columns-it-learns-come-no-nearer
@@ -1442,7 +1428,7 @@
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 39.5 :y 64 :z -7.5}} :blocks (box -30 63 -10 40 63 10 "stone") :radius 8
                                                     :inventory [{:name "torch" :count 16}]}
-                                                   {:pos [40 64 -24] :range 1 :unknown true}
+                                                   {:pos [40 58 -24] :range 1 :unknown true}
                                                    (looking {:light-default [0 0]})))]
           (is (= {:arrived false :why :unseen-floors} (select-keys out [:arrived :why])) (pr-str out))
           (is (seq (filter #(and (= :go-to.retrying (:kind %)) (= :unseen-floors (:reason %))) seen)) "each such walk is a try, and says so"))))))

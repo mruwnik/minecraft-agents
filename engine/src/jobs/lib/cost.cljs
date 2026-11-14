@@ -17,7 +17,7 @@
     food     food-reserve: the food a body keeps carried, 3 days of it; outlasts, trip-points, carry-points: the food a trip carries, priced against the chance the trip outlasts it, at least that reserve less the home food; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, survived-worth (a find's worth times the chance the trip does not end in death), chance-times (p x s, 0 at p 0 though s be ##Inf), affords? (a price within a worth, never ##Inf), quote-gain (the seconds a walk quote is expected to save), reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, pile-lost (a pile burned or fallen out of the world), walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, turn-back-cost (an unseen floor's look and, not there, the walk back), food-worth, animal-worth (its meat's food points at food-point-worth), worth-left / others-share-s (a child's worth: the call's less the rest of its plan), crop-worth (a ripe crop's food points at food-point-worth): a tour of
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; wear-saved: the wear of a dear tool a spare's digs save; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
-             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; dark-or-lit: a dark stay against lighting it; spawn-chance: the chance a mob spawns at a cell or
+             per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; climb-back-s: back up from land with no known way up; dark-or-lit: a dark stay against lighting it; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark) and spawn-rate at its height, spawn-share its share of cells that spawn.
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block, least-route-s a straight way to within a range; search-cell-s, search-read-s, flood-cell-s: the CPU seconds of one cell a route search expands, of one it reads (dig-route's price), of one cell go-to's room flood visits; walk-cell-s, room-read-s: of one cell a refuge walk search expands, a refuge room flood reads (measured means, engine.search-recount-test), walk-cell-ceiling-s, room-read-ceiling-s their upper bounds for the 100 ms meter; landing-problem, planner-landing, landing-factor: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on, under ground a flat measured rate (the planner's :cell); unseen-cell-share: that price where the way is shut at a given chance (a flight's cell by cell); unseen-route-s: that price of a route's unseen steps, unseen-step-s of one, walk-step-s a walked block; flood-dig-s: a dig that lets water beside it into the way (flood-under-s the time it is crossed under water), wet-dig-s and wet-dig-pace, wet-step-s: a dig and a step inside that flood, wet-s: time under water over dry, drowning (drown-s) included; stair-leg-pricer, pillar-s: a stair step's and a pillar's seconds with the unseen step on top (go-to's escalations, surface-up, the one-way climb-out); unseen-fall-s: the fall and climb out when an unseen floor a step down is not there; gap-look-cost: a refused gap jump over unseen floors filled now or looked at first; dead-end-cost, dead-end-race: what an unseen dead end costs a flight and the chance it catches it; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
     tolls    farm-tolls, zone-tolls, flood-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; gate-tolls: a
@@ -65,6 +65,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.stair-time :as stair-time]
             [jobs.lib.torch-plan :as torch-plan]
             [jobs.lib.util :as u]))
 
@@ -700,6 +701,15 @@
   (dark-factor), and the hurt a spawn costs the body of kit over its s seconds (the kit's share of dark-factor, a rate)."
   [s n kit]
   (+ s (* (dark-factor) (:cost (walk-cost {:distance n}))) (* (- (dark-factor kit) (dark-factor)) s)))
+
+(defn climb-back-s
+  "Seconds getting back up `blocks` blocks costs a body that went down into land it does not know the way back from: at
+  chance `trap` no walk leads up and it cuts a stair (stair-time/steps-s), else it walks up (walk-cost); each way dark
+  (dark-way-s of kit) unless `lit?`."
+  [blocks trap lit? kit]
+  (let [way #(if lit? % (dark-way-s % blocks kit))]
+    (+ (chance-times (- 1 trap) (way (:cost (walk-cost {:distance blocks}))))
+       (chance-times trap (way (stair-time/steps-s :up blocks))))))
 
 (defn respawn-of
   "Where a death of the body of p would wake: the live spawn bed (sh-spawn/spawn-bed-pos; view nil: none), else where it

@@ -862,14 +862,9 @@
 (deftest a-chain-of-short-drops-over-unseen-floors-is-cut-at-the-speculative-cap
   (let [step (fn [y & [m]] (merge {:x 0 :y y :z 0} m))
         steps [(step 64) (step 61 {:unseen-floor true}) (step 57) (step 56)]]
-    (is (= {:steps [(step 64) (step 61 {:unseen-floor true})] :refused [0 57 0]} (wplan/cut-descent steps 64 nil)) "the chain is cut before the first step deeper than the cap below the start")
-    (is (= {:steps (mapv #(dissoc % :unseen-floor) steps)} (wplan/cut-descent (mapv #(dissoc % :unseen-floor) steps) 64 nil)) "a descent with no unseen floor goes on")
-    (is (= {:steps steps} (wplan/cut-descent steps 50 nil)) "a goal at the foot of the descent keeps it")
-    (let [below [(step 62) (step 62 {:unseen-floor true}) (step 60) (step 59)]]
-      (is (= {:steps (subvec below 0 2) :refused [0 60 0]} (wplan/cut-descent below 67 69))
-          "a body that came down from 69 toward a goal at 67 goes no deeper than the cap below the goal's level: each plan from a lower start would let it down another cap")
-      (is (= {:steps below} (wplan/cut-descent below 67 62)) "a body that never stood higher than its start, below a goal 5 up, dips the cap below its start")
-      (is (= {:steps below} (wplan/cut-descent below 67 nil)) "with no floor stood on in the call (an aimed goal's guessed level) each plan keeps its own cap"))))
+    (is (= {:steps [(step 64) (step 61 {:unseen-floor true})] :refused [0 57 0]} (wplan/cut-descent steps 64)) "the chain is cut before the first step deeper than the cap below the start")
+    (is (= {:steps (mapv #(dissoc % :unseen-floor) steps)} (wplan/cut-descent (mapv #(dissoc % :unseen-floor) steps) 64)) "a descent with no unseen floor goes on")
+    (is (= {:steps steps} (wplan/cut-descent steps 50)) "a goal at the foot of the descent keeps it")))
 
 (def fence-pen
   "A gateless oak-fence ring (x/z -3..3 at y 64) on a stone floor x -10..12, z -6..6 (feet y 64)."

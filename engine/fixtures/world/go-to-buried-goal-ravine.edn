@@ -1,7 +1,7 @@
 ;; Card 3ded098d: a leg goal buried in a dirt hill (the cell [15 22 10], 3 under the hilltop) beside a ravine 17 deep under the sky. The
-;; hill's inside is unseen, so the mask reads it as air and the search seeks a way in from the ravine; each plan's descent cap
-;; counted from its own start let the body down the ravine's stair a few blocks a plan (Tamsin, 69 -> 62 -> 55 -> 44).
-;; Should-fail (buried): go-to stops not arrived and the body stays by the hill, never deeper than the cap below the goal's level.
+;; hill's inside is unseen, so the mask reads it as air and the search seeks a way in from the ravine; plans whose drops were cheap
+;; against the goal's worth let the body down the ravine's stair a few blocks a plan (Tamsin, 69 -> 62 -> 55 -> 44).
+;; Should-fail (buried): go-to stops not arrived and the body stays by the hill: no way down pays for the climb back.
 ;; Should-succeed (stair): a goal cell 4 down the stair's top is arrived at.
 {:defaults
  {:tags [:movement :go-to]
