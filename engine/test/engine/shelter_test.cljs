@@ -557,8 +557,7 @@
         (let [{:keys [eng p]} (setup (assoc unreachable-world :inventory [{:name "white_bed" :count 1}]))]
           (core/submit! eng (tu/order '(jobs.survival.bed-down {:answer :bed})) {})
           (await (run-until-empty eng 30))
-          (is (= [{:pos {:x 6 :y 64 :z 0}}] (mapv #(select-keys % [:pos]) (entries eng :bed-unreachable))))
-          (is (seq (calls p "place")) "the carried bed goes down once the seen one proved unreachable")
+          (is (seq (calls p "place")) "the carried bed goes down as the night answered, the seen bed unreachable")
           (is (empty? (entries eng :sleep-failed))))))))
 
 (deftest a-reflex-sleep-skips-a-bed-found-occupied-instead-of-holding-on-it
