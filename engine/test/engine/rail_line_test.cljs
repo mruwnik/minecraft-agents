@@ -740,6 +740,12 @@
     [["rail" 600 ["rail"]]] 0 [["rail" 64 ["rail"]]]
     [["rail" 1 ["rail"]] ["cobblestone" 1000 ["cobblestone"]]] 2 [["rail" 1 ["rail"]] ["cobblestone" 64 ["cobblestone"]]]))
 
+(deftest a-builder-short-of-items-is-restocked-though-it-gave-up-a-cell
+  (let [c {:args {:plan "line"} :quote-call {}}
+        e {:kind :nothing-possible :data {:placed 5 :short {"rail" 8} :given-up {[12 63 0] :unseen}}}]
+    (is (true? (rail-line/restock? c e)) "S23r2-6: one cell given up :unseen sent a short line to the proof")
+    (is (false? (rail-line/restock? c (assoc-in e [:data :placed] 0))) "a builder that placed nothing is not sent round again")))
+
 (deftest a-line-longer-than-the-bag-holds-is-restocked-from-the-chest-and-built-whole
   (async done
     (tu/run-async done

@@ -264,11 +264,11 @@
 (def builder-args [:plan :part :accept :worth :ignore-zones?])
 
 (defn restock?
-  "Whether the builder's ending e is only a carried stock run out, with more to fetch: it placed something, gave nothing up
-  and is short of items, and the call may fetch them whole."
+  "Whether the builder's ending e is a carried stock run out, with more to fetch: it placed something and is short of
+  items, and the call may fetch them whole. Cells it gave up stay given up; the proof names them."
   [c e]
-  (let [{:keys [placed short given-up]} (:data e)]
-    (boolean (and (whole? c) (fetch-opts c) (pos? (or placed 0)) (seq short) (empty? given-up)))))
+  (let [{:keys [placed short]} (:data e)]
+    (boolean (and (whole? c) (fetch-opts c) (pos? (or placed 0)) (seq short)))))
 
 (defn ^:async build-step!
   "One round of the head-first builder (jobs.build.rail child); its result is kept when it ends and the phase moves on. A
