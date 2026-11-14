@@ -1,0 +1,25 @@
+;; Card a360dd25: a go-to escalation :approach that fails marks its cell approached, so the next round picks another edge cell instead of
+;; the same one at the same feet cell (it looped 52 times in 68 s with the body never moving).
+;; Plateaus x 14..18 and x 24..28 (z 14..18, y 0..3, top feet y 4), a 5-wide gap between them, nothing carried: no way across.
+;; Should-fail: the body on the west plateau, the goal on the east one: the call ends stopped, not arrived, and the failed approaches stay
+;; within one per cell of the 5x5 plateau's edge (16 cells; the same cell chosen again would exceed it).
+;; Should-succeed: the same with a stone bridge at y 3 between the plateaus: it arrives and no approach fails.
+{:defaults
+ {:tags [:movement :access]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [14 0 14] [18 3 18] "stone"] [:fill [24 0 14] [28 3 18] "stone"]]
+  :body {:at [16.5 4 16.5] :settle-s 2}
+  :limit-s 150}
+ :cases
+ [{:name "plateau-with-no-way-across-ends-without-repeating-an-approach"
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}
+            {:count-event {:source :job :kind :go-to.escalation-stopped :data {:step :approach}} :for-s 140 :at-most 16 :of-job true}]
+   :after [[:not-block [26 4 16] "stone"]]}
+  {:name "plateaus-joined-by-a-bridge-arrive-with-no-failed-approach"
+   :blocks [[:fill [19 3 16] [23 3 16] "stone"]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalation-stopped :data {:step :approach}} :for-s 120 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [26.5 4 16.5] 2]]}]}
