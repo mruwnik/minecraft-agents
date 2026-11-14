@@ -52,17 +52,21 @@
   [c e]
   (<= (u/dist (start-of c) (u/pos-of (.-pos e))) (settings/get settings ::leash)))
 
+(defn fightable?
+  "Whether a fight counts hostile e of p: not a calm enderman (a swing provokes it), nor a ranged mob without a line of
+  fire now (jobs.lib.danger/danger?)."
+  [p e]
+  (not (or (danger-q/calm-enderman? e) (and (combat/ranged? e) (not (danger-q/danger? p e))))))
+
 (defn in-range
-  "The hostiles within :radius (ranged ones within :ranged-radius, a heard one by its band): the visible ones nearest
-  first, then the hidden melee ones (a ranged mob without a line of fire, by jobs.lib.danger/danger? as the hostile-near
-  trigger, is dropped). The killed and the :skip ids are left out, and so is a calm enderman: a swing provokes it."
+  "The hostiles within :radius (ranged ones within :ranged-radius, a heard one by its band) a fight counts (fightable?):
+  the visible ones nearest first, then the hidden melee ones. The killed and the :skip ids are left out."
   [c]
   (let [{:keys [radius ranged-radius skip]} (:args c)
         dead (into (set skip) (:killed (ctx/mem c)))
         all (->> (danger-q/known-hostiles (:primitives c) radius {:ranged-radius ranged-radius})
                  (remove #(contains? dead (.-id %)))
-                 (remove danger-q/calm-enderman?)
-                 (remove #(and (combat/ranged? %) (not (danger-q/danger? (:primitives c) %)))))]
+                 (filter #(fightable? (:primitives c) %)))]
     (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)))
 
 (defn point-blank?
@@ -81,14 +85,18 @@
   [e]
   (or (danger-q/seen-only? e) (remembered? e)))
 
+(defn going-for
+  "The hostiles of hs (the ones a fight counts) a fight goes for, nearest first: a creeper only when it is the one of hs
+  (fought hit-and-back): with company it is left to blow where the fight is (fight-answer). One only heard is turned to."
+  [hs]
+  (let [lone? (= 1 (count hs))]
+    (remove #(and (combat/creeper? %) (not lone?)) hs)))
+
 (defn targets
-  "The hostiles in range the body has seen, within the leash and not given up on, nearest first; a creeper only when it is
-  the one hostile in range (fought hit-and-back): with company it is left to blow where the fight is (fight-answer)."
+  "The hostiles in range a fight goes for (going-for) the body has seen, within the leash and not given up on."
   [c]
-  (let [given-up (:given-up (ctx/mem c) {})
-        hs (in-range c)
-        lone? (= 1 (count hs))]
-    (->> hs (remove #(and (combat/creeper? %) (not lone?))) (filter sighted?) (filter #(in-leash? c %)) (remove #(contains? given-up (.-id %))))))
+  (let [given-up (:given-up (ctx/mem c) {})]
+    (->> (going-for (in-range c)) (filter sighted?) (filter #(in-leash? c %)) (remove #(contains? given-up (.-id %))))))
 
 (defn heard
   "The first hostile in range the body only hears, or nil."
@@ -197,9 +205,9 @@
   (+ (get-in q [:risk :walk-hp] 0) (second (get-in q [:uses :health] [0 0 0]))))
 
 (defn fought
-  "The mobs of near (nearest first) a fight goes for: a lone creeper, else all but the creepers."
-  [near]
-  (if (and (= 1 (count near)) (combat/creeper? (first near))) near (remove combat/creeper? near)))
+  "The mobs of near (nearest first) the fight (jobs.combat.attack's targets) goes for: going-for of those it counts (fightable?)."
+  [p near]
+  (going-for (filter #(fightable? p %) near)))
 
 (defn body-of
   "What the answers' prices read of the body of c (hostile-loss/body-at)."
@@ -279,22 +287,22 @@
   (and (breath/swimming? (:primitives c)) (not (danger-q/seen-only? e))))
 
 (defn fight-answer
-  "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
+  "The answer of fighting the mobs of near the fight goes for (fought, nearest first; nil when none) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
   none: its lower bound) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
   felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows, :caught its fight gone bad (at the prior of the health its blasts leave) with the
   same walk, felt blows and blasts. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
   the fight is followed at once by the walk away from those it leaves (flee-answer, caught by its way as caught, the flee
-  search's caught-chance; nil the prior alone; cost/followed). A lone creeper is
+  search's caught-chance; nil the prior alone; cost/followed). A creeper fought alone is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
   swell start) is added, in :blasts; so is that of one seen and lost (sighted-blasting), coming by the chance it is still there (cost/chance-blast)."
   [c near struck-of & [walk-q caught]]
   (let [p (:primitives c)
-        lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
-        fought (fought near)
+        fought (fought p near)
+        lone-creeper? (and (= 1 (count fought)) (combat/creeper? (first fought)))
         others (remove combat/creeper? (way-mobs p fought))]
-    (when (and (seq fought) (or (not lone-creeper?) (hit-and-back-ok? c near)))
+    (when (and (seq fought) (or (not lone-creeper?) (hit-and-back-ok? c fought)))
       (let [es (vec (concat fought others))
             fight (update (fight-of c es struck-of) :mobs #(mapv (fn [m e] (assoc m :reach? (and (reaches? c e) (not (heard-afloat? c e))))) % es))
             left (keep (fn [[m e]] (when (false? (:reach? m)) e)) (map vector (:mobs fight) es))

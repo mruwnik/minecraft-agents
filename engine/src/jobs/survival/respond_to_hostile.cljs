@@ -399,7 +399,7 @@
         _ (room-lib/new-step! c)
         _ (room-lib/home-room! c (cover/home-pos c) (options/close-radius))
         felt (walk-felt c)
-        target (when-not (some combat/enderman? near) (first (hostile/fought near)))
+        target (when-not (some combat/enderman? near) (first (hostile/fought p near)))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
         specs (when-not (some combat/enderman? near) (cover-specs c near sealing))
         caught (when-not (some combat/enderman? near) (await (cover/caught-chance! c specs)))

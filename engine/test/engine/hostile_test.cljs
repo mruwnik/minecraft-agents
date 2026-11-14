@@ -1219,6 +1219,19 @@
     (is (= (prior (- 20 (first blasts))) (:chance caught)) "the zombie is fought at the health the blast leaves")
     (is (< (prior 20) (:chance caught)))))
 
+;; Card b50b2ca0 (Brindle S20): an unarmed body priced "fight: creeper" (194 s against the flee's 212) with a skeleton that had
+;; no line of fire (seen a moment ago, now walled off); jobs.combat.attack counts no such skeleton, so the creeper was its lone target and it declined :creeper-unsafe
+(deftest an-unarmed-fight-beside-a-creeper-whose-only-company-has-no-line-of-fire-is-no-answer
+  (let [answer (fn [blocks]
+                 (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :blocks blocks
+                                                           :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 2.6 :y 64 :z 0}}
+                                                                      {:id 9 :name "skeleton" :kind "hostile" :held "bow" :seen true :pos {:x 3 :y 64 :z 6}}]}))
+                       c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}]
+                   (hostile-fight/fight-answer c (danger-q/known-hostiles p 16 {:ranged-radius 16}) (constantly nil))))
+        wall (into {} (for [x [2 3 4] y [64 65 66] z [5 6 7] :when (not (and (= x 3) (= z 6) (< y 66)))] [(str x "," y "," z) "stone"]))]
+    (is (some? (answer {})) "with a line of fire the skeleton is fought, the creeper left to blow beside it")
+    (is (nil? (answer wall)) "walled in, the creeper is the fight's lone mob, which an unarmed body does not fight")))
+
 ;; Card 9bc046bb: a creeper seen 9 blocks off left the body's mob memory (it could have drifted) while it fought a zombie; the fight priced no blast and the creeper blew
 (deftest a-creeper-seen-and-lost-by-the-fight-adds-its-blast-by-the-chance-it-is-still-there
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :entities [(zombie 9 4 1)]}))
