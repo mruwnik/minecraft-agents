@@ -2,7 +2,8 @@
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [jobs.lib.shelter.fill :as fill]
             [engine.settings :as settings]
-            [jobs.survival.respond-choose :refer [escape-order by-price with-zone-pillar]]
+            [jobs.survival.respond-choose :refer [escape-order by-price with-zone-pillar zone-prices]]
+            [jobs.survival.plug-way :as plug-way]
             [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! hold! back-off-search! back-off-of back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
@@ -216,7 +217,7 @@
   (some? (rc/pillar-cover c (near-hostiles c))))
 
 (defn ^:async cornered!
-  "Nowhere worth walking to: the first option of escape-order (its covers and back-off by price, by-price) that it can
+  "Nowhere worth walking to: the first option of escape-order, cheapest first (by-price; a way through another's area at its trespass price, zone-prices), that it can
   take and has not failed since the last start over (blocked!); a pillar only while it is still priced (pillar-open?). home?: the body is in its home room. ends: the step's
   flee search (flee-search/search!), its back-off taken from its near ring (back-off-of); with none the back-off
   searches (back-off-search!)."
@@ -250,7 +251,7 @@
         beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
                           (and (not fire?) (not pillar-first?) (mob-in-corner-cell? c hostiles))
                           (boolean (some #(and (combat/ranged? %) (hostile/point-blank? c %)) hostiles)))
-        order (by-price (escape-order {:win? win?
+        order (escape-order {:win? win?
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? enderman?
                              :flyer? (boolean (some combat/flyer? hostiles))
@@ -264,9 +265,9 @@
                              :lean? (pillar/lean? c)
                              :pillar-first? pillar-first?
                              :pillar-cheaper? cheap-pillar?})
-                        prices)]
-    (ctx/emit! c :retreat.cornered :debug {:prices (update-vals prices js/Math.round) :weighed (mapv #(str (.-name %) " " (js/Math.round (danger-q/mob-distance (:primitives c) %))) weighed-mobs) :order order})
-    (loop [[option & more] (with-zone-pillar order)]
+        tries (by-price (with-zone-pillar order) (zone-prices prices (plug-way/trespass-s)))]
+    (ctx/emit! c :retreat.cornered :debug {:prices (update-vals prices js/Math.round) :weighed (mapv #(str (.-name %) " " (js/Math.round (danger-q/mob-distance (:primitives c) %))) weighed-mobs) :order tries})
+    (loop [[option & more] tries]
       (let [r (when-not (flight/tried? c option)
                 (case option
                   :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?

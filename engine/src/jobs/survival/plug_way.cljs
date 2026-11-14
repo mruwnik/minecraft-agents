@@ -41,10 +41,12 @@
   (if (= :night (:for (:args c))) (settings/get settings ::night-place-s) (cw/place-s)))
 
 
+(defn trespass-s [] (settings/get settings ::trespass-s))
+
 (defn zone-penalty
   "Seconds to add to a way's quote for the cells in {:dig :place :plug} that the zone rules refuse, 0 when none."
   [c cells]
-  (if (refused? c cells) (settings/get settings ::trespass-s) 0))
+  (if (refused? c cells) (trespass-s) 0))
 
 (defn enclosed?
   "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?) and, in a pit, no open fill cell (pocket-open?); else a roof within ::roof-height over no open cell round the feet, or, with the call's

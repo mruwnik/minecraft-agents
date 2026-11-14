@@ -671,16 +671,17 @@
           (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "no strike ahead of the jump: the zombie would press back first")
           (is (= [7] (first-strike p)) "the jump strikes the pressed zombie as it starts"))))))
 
-(deftest a-pillar-through-anothers-zone-is-built-only-after-every-other-way-failed
+(deftest a-pillar-through-anothers-zone-is-built-when-the-trespass-is-priced-under-the-fight
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]}
-              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+              (await (hidden-round '(test.real-flight {:settings {:jobs.survival.plug-way/trespass-s 0}})
+                                   {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(zombie 0 64 1)]
                                             :zones [{:name "vault" :min [0 64 0] :max [0 67 0] :owner "Miles"}]}
                                    1000 (constantly nil)))]
-          (is (= 3 (count (calls p "jumpPlace"))) "nothing else was left, so the pillar went up")
+          (is (= 3 (count (calls p "jumpPlace"))) "the pillar in its own space failed, the one through the zone is still priced under the fist fight")
           (is (= 1 (count (filterv #(= :retreat.trespass-last-resort (:kind %)) @seen))) "and said it trespassed"))))))
 
 (deftest walls-that-need-anothers-zone-wait-for-a-pillar-that-keeps-off-it
@@ -696,17 +697,19 @@
           (is (= 3 (count (calls p "jumpPlace"))) "the pillar, which keeps off the zone, went up instead")
           (is (empty? (filterv #(= :shut-in.trespass-last-resort (:kind %)) @seen))))))))
 
-(deftest the-covers-and-the-back-off-are-tried-cheapest-first-in-the-places-the-rules-give-them
-  (is (= [:fight :pillar :plug-dig :plug] (choose/by-price [:fight :plug :pillar :plug-dig] {:fight 1 :plug 90 :pillar 30 :plug-dig 60}))
-      "the pressed fight keeps its place; the covers go cheapest first")
+(deftest the-cornered-options-are-tried-cheapest-first
+  (is (= [:stand :pillar :fight :plug] (choose/by-price [:fight :stand :plug :pillar] {:fight 60 :stand 1 :plug 90 :pillar 30}))
+      "the fight and the stand take their places by price like the covers")
   (is (= [:back-off :plug :pillar :fight] (choose/by-price [:plug :pillar :back-off :fight] {:back-off 5 :plug 40}))
-      "one not priced (no pillar fits) goes last of them"))
+      "one not priced (no pillar fits) goes last, ties in order"))
 
-(deftest a-pillar-through-anothers-area-comes-after-every-other-way-and-before-a-last-fight
-  (is (= [:plug :pillar :back-off :plug-dig :plug-zone :plug-dig-zone :pillar-zone :fight] (choose/with-zone-pillar (choose/escape-order {}))))
-  (is (= [:fight :plug :pillar :plug-dig :plug-zone :plug-dig-zone :pillar-zone] (choose/with-zone-pillar (choose/escape-order {:pressed? true :faster? true}))))
+(deftest a-way-through-anothers-area-costs-its-own-way-and-the-trespass
+  (is (= [:plug :plug-dig :plug-zone :plug-dig-zone] (choose/with-zone-pillar [:plug :plug-dig])))
   (is (= [:fight] (choose/with-zone-pillar [:fight])) "no plug or pillar in the order, none added")
-  (is (= [:plug :plug-zone :fight :stand] (choose/with-zone-pillar [:plug :fight :stand])) "standing stays the last option"))
+  (is (= [:plug :plug-zone :fight] (choose/by-price (choose/with-zone-pillar [:plug :fight]) (choose/zone-prices {:plug 10 :fight 500} 400)))
+      "the walls through the area are still cheaper than the fight")
+  (is (= [:plug :fight :plug-zone] (choose/by-price (choose/with-zone-pillar [:plug :fight]) (choose/zone-prices {:plug 10 :fight 500} 1000)))
+      "the trespass makes them dearer than the fight"))
 
 (deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-walked-from-the-pillar-is-respond-s-priced-choice
   (async done
@@ -1003,19 +1006,43 @@
   [p]
   (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}}))))
 
-(deftest a-body-that-cannot-walk-away-from-a-creeper-walls-it-off-instead-of-swinging
+(deftest a-body-without-a-sword-that-cannot-walk-away-from-a-creeper-walls-it-off-before-it-comes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "iron_sword" :count 1} {:name "dirt" :count 16}]
-                                      :entities [(creeper 2.5 64 0.5)]})]
+        (let [{:keys [eng p seen]} (setup {:self {:health 8} :inventory [{:name "dirt" :count 16}]
+                                           :entities [(creeper 6.5 64 0.5)]})]
           (stuck-walks! p)
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng (order eng retreat) {})
           (await (core/tick! eng))
-          (is (zero? (count (calls p "attack"))) "no melee with a creeper")
-          (is (pos? (count (calls p "place"))) "blocks between it and the creeper"))))))
+          (let [{:keys [prices]} (first (filter #(= :retreat.cornered (:kind %)) @seen))]
+            (is (< (:plug prices) (:stand prices)) "at 8 health its blast may kill: the walls shut before it swells"))
+          (is (zero? (count (calls p "attack"))) "no fist fight with a creeper")
+          (is (pos? (count (calls p "place")))))))))
+
+(defn ^:async first-cornered
+  "The first :retreat.cornered event of a retreat by a body carrying dirt, every walk blocked, among entities."
+  [entities]
+  (let [{:keys [eng p seen]} (setup {:inventory [{:name "dirt" :count 16}] :entities entities})]
+    (stuck-walks! p)
+    (.override (.-world p) "place" (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+    (.override (.-world p) "wait" (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+    (core/submit! eng (order eng retreat) {})
+    (await (core/tick! eng))
+    (first (filter #(= :retreat.cornered (:kind %)) @seen))))
+
+;; Brindle S9: walls priced 4282 s went before a stand priced 314 s by rule, and that 314 s left out a zombie and two skeletons
+(deftest a-cornered-stand-is-priced-against-every-mob-that-hits-it-and-taken-by-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [alone (await (first-cornered [(creeper 2.5 64 0.5)]))
+              beset (await (first-cornered [(creeper 2.5 64 0.5) (assoc (zombie 0.5 64 -1.5) :id 8)]))]
+          (is (< (:stand (:prices alone)) (:plug (:prices alone))) "beside a creeper already in its swell range the walls do not stop the blast")
+          (is (< (.indexOf (:order alone) :stand) (.indexOf (:order alone) :plug)) "so standing comes before the walls")
+          (is (< (* 2 (:stand (:prices alone))) (:stand (:prices beset))) "a zombie in reach hits a body that stands too"))))))
 
 (deftest a-hurt-armed-body-walls-in-from-a-zombie-3-off-when-the-walls-are-priced-under-the-fight
   (async done
@@ -1787,8 +1814,9 @@
 
 ;; an arrow from a skeleton the body never saw: the damage packet names it, nothing else does
 (defn shot!
-  [{:keys [eng]}]
-  (mem/write! (:store eng) :hurt {:amount 3 :health 8 :damageType "arrow" :attacker {:id 99 :name "skeleton"}} {:cap 50 :ttl 60000}))
+  ([s] (shot! s {:x -1 :z 0}))
+  ([{:keys [eng]} dir]
+   (mem/write! (:store eng) :hurt (cond-> {:amount 3 :health 8 :damageType "arrow" :attacker {:id 99 :name "skeleton"}} dir (assoc :dir dir)) {:cap 50 :ttl 60000})))
 
 ;; Brindle S9 death: the order was set before the walls failed under arrows, and the pillar it held went up into their line of fire
 (deftest a-pillar-in-the-order-is-skipped-once-a-shot-is-felt
@@ -1803,13 +1831,17 @@
               (is (pos? (+ (count (calls p "place")) (count (calls p "attack")))) "the next option was taken"))
             (finally (set! choose/by-price by-price))))))))
 
-(deftest an-armed-body-shot-by-an-unseen-skeleton-seals-before-it-fights-the-mob-at-its-side
+(deftest an-armed-body-shot-by-an-unseen-skeleton-prices-its-arrows-in-the-fight-and-takes-the-cheapest
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (beset-round [(zombie 2.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] shot! shot!))]
-          (is (pos? (count (calls p "place"))) "the line of fire is broken first")
-          (is (zero? (count (calls p "attack"))) "no blows traded in the open under arrows"))))))
+        (let [cornered (fn ^:async cornered [dir]
+                         (let [{:keys [seen]} (await (beset-round [(zombie 2.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] #(shot! % dir) #(shot! % dir)))]
+                           (first (filter #(= :retreat.cornered (:kind %)) @seen))))
+              placed (await (cornered {:x -1 :z 0}))
+              lost (await (cornered nil))]
+          (is (< (:fight (:prices lost)) (:fight (:prices placed))) "a shot whose way shows a line of fire: the shooter shoots on through the fight")
+          (is (= (key (apply min-key val (:prices placed))) (first (:order placed))) "the cheapest option comes first"))))))
 
 (deftest a-body-shot-by-an-unseen-skeleton-does-not-walk-up-to-a-melee-mob-to-fight-it
   (async done

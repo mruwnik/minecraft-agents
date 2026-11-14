@@ -1,6 +1,6 @@
 (ns jobs.survival.respond-choose
   "What a response to a hostile does next, from facts it sensed: the step of a flight (choose) and the cornered options in
-  order (escape-order, by-price, with-zone-pillar). Pure: no reads, no calls.")
+  order (escape-order, by-price, with-zone-pillar, zone-prices). Pure: no reads, no calls.")
 
 (defn choose
   "The option of a flight step, {:option kw :why str} (why: said to the cornered options; :cornered: where home is judged by the room the body stands in or near, :cornered-inside: by the room it is inside only), in the order the
@@ -22,7 +22,7 @@
     :else {:option :walk}))
 
 (defn escape-order
-  "Pure: the cornered options to try, safest first. {:win? the fight is the cheapest cornered answer (never true
+  "Pure: the cornered options open, in the order ties of price keep (by-price orders them). {:win? the fight is the cheapest cornered answer (never true
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, water, which it avoids, a 2-high roof, which it cannot enter, and the covers (the pillar's price has the enderman's blows), by price, then the fight), :ranged? the threat shoots, or the body is under fire (under-fire?), :climber? it is a spider (it climbs the pillar), :faster? a mob
   the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
   room: it digs no pit or pocket in its own floor or walls, :lean? the pillar would leave the body too few blocks to roof in on its top (respond.pillar/lean?): the dig-down comes before it (a pit regains its blocks), :arriving? an armed body, a melee mob reaches the body within ::arrival-s: no pit or pocket is dug beside it (it takes longer than the mob needs), :pillar-first? a mob in a diagonal cell the walls must fill, no weapon, and a pillar fits: the pillar comes first (a fist fight there only trades hits), :pillar-cheaper? an armed body loses the fight and a pillar is priced under it (respond.options/pillar-cover): pressed, it tries a pillar before the fight, :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
@@ -44,21 +44,19 @@
                                 %))
     (or home? (and arriving? (not creeper?) (not enderman?))) (filterv #(not= :plug-dig %))))
 
-(def priced-options "The cornered options escape-order places by rule and by-price orders among themselves: the covers, the back-off and the holds from an enderman." #{:plug :pillar :plug-dig :back-off :water :roof})
-
 (defn by-price
-  "order with its priced-options, in the places they hold in it, cheapest first by prices ({option seconds}; one not
-  priced last, ties in order)."
+  "order cheapest first by prices ({option seconds}); one not priced last, ties in order."
   [order prices]
-  (let [sorted (sort-by #(get prices % ##Inf) (filter priced-options order))]
-    (first (reduce (fn [[out [s & more :as ss]] o] (if (priced-options o) [(conj out s) more] [(conj out o) ss])) [[] sorted] order))))
+  (vec (sort-by #(get prices % ##Inf) order)))
+
+(def zone-ways "Each cornered way with its twin through another's area (walls, a pit or pocket, a pillar)." {:plug :plug-zone :plug-dig :plug-dig-zone :pillar :pillar-zone})
 
 (defn with-zone-pillar
-  "order with :plug-zone, :plug-dig-zone and :pillar-zone (walls, a pit or pocket, a pillar through another's area) after every way that keeps off, before a last :fight and :stand."
+  "order with the zone-ways twin of each way in it, after it."
   [order]
-  (let [order (vec order)
-        tail (vec (reverse (take-while #{:fight :stand} (reverse order))))
-        extra (cond-> [] (some #{:plug} order) (conj :plug-zone) (some #{:plug-dig} order) (conj :plug-dig-zone) (some #{:pillar} order) (conj :pillar-zone))]
-    (-> (subvec order 0 (- (count order) (count tail)))
-        (into extra)
-        (into tail))))
+  (into (vec order) (keep zone-ways) order))
+
+(defn zone-prices
+  "prices with each zone-ways twin at its way's price and trespass-s more (a last resort)."
+  [prices trespass-s]
+  (into prices (for [[o z] zone-ways :when (contains? prices o)] [z (+ (prices o) trespass-s)])))

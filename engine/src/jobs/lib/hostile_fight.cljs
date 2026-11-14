@@ -299,7 +299,8 @@
   search's caught-chance; nil the prior alone; cost/followed). A creeper fought alone is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
-  swell start) is added, in :blasts; so is that of one seen and lost (sighted-blasting), coming by the chance it is still there (cost/chance-blast)."
+  swell start) is added, in :blasts; so is that of one seen and lost (sighted-blasting), coming by the chance it is still there (cost/chance-blast).
+  A shooter not seen (hostile-loss/unseen-shooters) shoots on over the whole fight."
   [c near struck-of & [walk-q caught]]
   (let [p (:primitives c)
         fought (fought p near)
@@ -320,9 +321,10 @@
             blasts (concat (map #(blast-at (danger-q/mob-pos p %)) creepers)
                            (map (fn [{:keys [pos weight]}] (cost/chance-blast (blast-at pos) weight)) sighted))
             blast-hp (reduce + 0 (map cost/blast-mean blasts))
+            shots (cost/stand-answer {:equipment (:equipment fight) :mobs (hostile-loss/unseen-shooters p (ctx/view c) near) :seconds seconds})
             a (if (seq blasts) (cost/fight-answer (update fight :health #(max 1 (- % blast-hp)))) a)]
-        (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) blast-hp)
-                                   :hit (max (:hit x) hardest)
+        (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) blast-hp (:damage shots))
+                                   :hit (max (:hit x) hardest (:hit shots))
                                    :blasts (vec (filter (comp pos? cost/blast-hp) blasts))}
                             (:shape x) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (cost/small x) (* rate (:seconds a))) (:shape x)]]))))]
           (cond-> (assoc (felt a) :seconds seconds :creepers (vec creepers))
@@ -488,12 +490,12 @@
                   (back-cell-of c creeper)))))
 
 (defn cornered-answers
-  "cost/cornered-answers of c's body to hostiles: the fight (fight-answer), each of covers {way {:open-s :seconds}} and,
+  "cost/cornered-answers of c's body to hostiles and the shooters not seen (hostile-loss/mobs-of): the fight (fight-answer), each of covers {way {:open-s :seconds}} and,
   with walk?, the walk away (:flee, flee-answer caught by its way as caught; nil when a mob keeps up)."
   [c hostiles covers walk? caught]
   (let [p (:primitives c)
         fight (fight-answer c hostiles (constantly nil))]
-    (cond-> (cost/cornered-answers {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(mob-near p %) hostiles)
+    (cond-> (cost/cornered-answers {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (hostile-loss/mobs-of p (ctx/view c) hostiles)
                                     :fight fight :covers covers})
       walk? (assoc :flee (flee-answer c hostiles fight nil caught)))))
 

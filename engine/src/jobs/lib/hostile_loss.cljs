@@ -108,13 +108,17 @@
                    :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))
       (some #(= "creeper" (.-name %)) (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (assoc :blast-s (blast-s c view)))))
 
-(defn mobs-of
-  "Hostiles hs (JS entities) of p as the answers take them (mob-near) and, while no shooter of hs is seen, one of each kind
-  (shot/shooter-of) whose shot from a shooter not seen has a line of fire (shot/view-spots), where the shot came from."
+(defn unseen-shooters
+  "While no shooter of hostiles hs (JS entities) is seen, one mob (as the answers take them) of each kind (shot/shooter-of)
+  whose shot from a shooter not seen has a line of fire (shot/view-spots), where the shot came from."
   [p view hs]
-  (cond-> (mapv #(mob-near p %) hs)
-    (not-any? #(and (danger-q/seen-only? %) (threat/ranged? {:name (.-name %) :held (.-held %)})) hs)
-    (into (map (fn [k] {:name k :distance (settings/get shot/settings ::shot/reach)})) (distinct (map :shooter (shot/view-spots p view))))))
+  (when (not-any? #(and (danger-q/seen-only? %) (threat/ranged? {:name (.-name %) :held (.-held %)})) hs)
+    (mapv (fn [k] {:name k :distance (settings/get shot/settings ::shot/reach)}) (distinct (map :shooter (shot/view-spots p view))))))
+
+(defn mobs-of
+  "Hostiles hs (JS entities) of p as the answers take them (mob-near) and the unseen-shooters."
+  [p view hs]
+  (into (mapv #(mob-near p %) hs) (unseen-shooters p view hs)))
 
 (defn loss-over
   "Seconds doing nothing about hostiles hs (JS entities) of c's body for seconds (a number, or a spread as cost/stand-loss

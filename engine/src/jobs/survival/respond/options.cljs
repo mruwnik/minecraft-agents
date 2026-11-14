@@ -20,6 +20,7 @@
             [jobs.lib.seal :as seal]
             [jobs.lib.escape :as escape]
             [jobs.lib.hostile-fight :as hostile]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pl]
             [jobs.lib.ready :as ready]
@@ -306,8 +307,9 @@
   swim to dry land and walk on (hostile/flee-answer, caught at the prior: no search runs from the shore); with enderman?
   (an angry one near) :water and :roof not yet tried, and with a creeper near :stand, a hide's seconds (hide-out/hide-s, the window its stay chance is
   counted over) held where hostiles but the enderman reach the body (cost/hold-answer), each whole hide this flight held
-  (memory :held-s) counted as one the danger outlasted: the hold lasts while it is the cheapest; home?: the body is in
-  its home room."
+  (memory :held-s) counted as one the danger outlasted: the hold lasts while it is the cheapest. The stand is priced
+  against every hostile that hits a body standing there: each melee mob by its arrival, each creeper's blast, each
+  shooter with a line of fire (danger?) or not seen (hostile-loss/unseen-shooters). home?: the body is in its home room."
   ([c hostiles home? back-off swim? enderman?] (cornered-answers c hostiles home? back-off swim? enderman? nil))
   ([c hostiles home? back-off swim? enderman? walks]
   (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off))
@@ -317,7 +319,8 @@
                                             :seconds (hide-out/hide-s) :stayed (quot (:held-s (ctx/mem c) 0) (hide-out/hide-s))}))
         mobs (mapv #(hostile/mob-near p %) hostiles)]
     (->> (cond-> (dissoc a :flee)
-      (contains? a :stand) (assoc :stand (hold :stand (filterv #(= "creeper" (:name %)) mobs)))
+      (contains? a :stand) (assoc :stand (hold :stand (into (mapv #(hostile/mob-near p %) (filter #(or (not (combat/ranged? %)) (danger-q/danger? p %)) hostiles))
+                                                            (hostile-loss/unseen-shooters p (ctx/view c) hostiles))))
       (contains? a :flee) (assoc :back-off (:flee a))
       swim? (assoc :swim-out (hostile/flee-answer c hostiles (:fight a) nil nil))
       enderman? (into (for [o [:water :roof] :when (not (flight/tried? c o))] [o (hold o mobs)])))
