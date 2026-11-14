@@ -35,7 +35,7 @@
 
 (deftest every-primitive-has-a-target-a-quote-and-an-ending
   (let [p (tu/fake {})]
-    (is (= 29 (count primitive/table)))
+    (is (= 30 (count primitive/table)))
     (doseq [[k {:keys [target args quote-of ending]}] primitive/table]
       (is (vector? target) k)
       (is (and (vector? args) (every? (set args) target)) (str k ": its args name the act's keys, the target's among them"))

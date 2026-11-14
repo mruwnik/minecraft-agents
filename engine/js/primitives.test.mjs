@@ -3259,6 +3259,12 @@ test('self().equipment carries the enchantments of a worn piece as [{name, level
   assert.deepEqual(eq.head, { name: 'iron_helmet', count: 1, durability: 165 })
 })
 
+test('self().inventory shows a carried book with the enchantments it stores (26.1 keeps them in stored_enchantments)', () => {
+  const mending = { name: 'enchanted_book', count: 1, slot: 36, enchants: [], componentMap: new Map([['stored_enchantments', { data: { enchantments: [{ name: 'mending', level: 1 }] } }]]) }
+  const inv = withBot(() => {}, { ...world, items: [mending] }).self().inventory
+  assert.deepEqual(inv.map(i => i.enchants), [[{ name: 'mending', level: 1 }]])
+})
+
 test('self().equipment is empty slots when nothing is worn, and worn items are not in the carried list', () => {
   const bare = withBot(() => {}, { ...world, items: [] })
   assert.deepEqual(bare.self().equipment, noGear)

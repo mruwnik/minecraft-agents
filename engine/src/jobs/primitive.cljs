@@ -11,7 +11,7 @@
 
 (def also-required
   "Args beside the table's target that the act cannot go without."
-  {:place [:item] :steer [:decide] :jumpPlace [:item] :trade [:id :op]})
+  {:place [:item] :steer [:decide] :jumpPlace [:item] :trade [:id :op] :anvil [:item :enchant]})
 
 (defn bucket? [item] (boolean (and (string? item) (re-find #"(^|_)bucket$" item))))
 
@@ -71,6 +71,7 @@
      :output (spec-entry "false to leave the output" boolean? 'boolean?)
      :choice (spec-entry "the offer, 0 to 2" #{0 1 2} #{0 1 2})
      :levelCost (spec-entry "the levels the offer costs" (a/int-in 0 nil) '(a/int-in 0 nil))
+     :enchant (spec-entry "an enchantment name" text 'string?)
      :message (spec-entry "the chat line" text 'string?)
      :to (spec-entry "the player to whisper to" text 'string?)
      :offer (spec-entry "the index of the trade" (a/int-in 0 nil) '(a/int-in 0 nil))

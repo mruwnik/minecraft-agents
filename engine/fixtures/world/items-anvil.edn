@@ -1,0 +1,48 @@
+;; Card 14eedd08: items.anvil-combine puts a Mending book on an iron pickaxe at an anvil.
+;; Should-succeed: a seen anvil and 5 levels; a carried anvil put down beside the body, used and dug up again (no count check: a use may chip it).
+;; Should-fail: one level stops :too-few-levels (the anvil asks 2) with book and pickaxe kept; no level at all waits
+;; :too-few-levels at the start check; a Sharpness book only waits :no-book.
+{:defaults
+ {:tags [:items :anvil :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["iron_pickaxe" 1]]}
+  :limit-s 90}
+ :cases
+ [{:name "anvil-puts-mending-on-the-pickaxe"
+   :blocks [[:set [19 0 16] "anvil"]]
+   :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:mending\":1}] 1"]
+         [:rcon "xp set $BODY 5 levels"]
+         [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
+   :expect [{:event {:source :job :kind :completed :data {:combined true :enchant "mending"}} :within-s 60 :of-job true}]
+   :after [[:item "iron_pickaxe" 1] [:item "enchanted_book" 0]]}
+  {:name "anvil-carried-is-put-down-used-and-picked-up"
+   :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:mending\":1}] 1"]
+         [:rcon "give $BODY anvil 1"]
+         [:rcon "xp set $BODY 5 levels"]
+         [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
+   :expect [{:event {:source :job :kind :completed :data {:combined true :spent {"anvil" 1}}} :within-s 80 :of-job true}]
+   :after [[:item "iron_pickaxe" 1] [:item "enchanted_book" 0]]}
+  {:name "anvil-with-one-level-stops-too-few-levels"
+   :blocks [[:set [19 0 16] "anvil"]]
+   :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:mending\":1}] 1"]
+         [:rcon "xp set $BODY 1 levels"]
+         [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :too-few-levels}} :within-s 60 :of-job true}]
+   :after [[:item "iron_pickaxe" 1] [:item "enchanted_book" 1]]}
+  {:name "anvil-with-no-level-waits-too-few-levels"
+   :blocks [[:set [19 0 16] "anvil"]]
+   :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:mending\":1}] 1"]
+         [:rcon "xp set $BODY 0 levels"]
+         [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-levels}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10}]
+   :after [[:item "enchanted_book" 1]]}
+  {:name "anvil-without-the-book-waits-no-book"
+   :blocks [[:set [19 0 16] "anvil"]]
+   :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:sharpness\":1}] 1"]
+         [:rcon "xp set $BODY 5 levels"]
+         [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-book}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10}]
+   :after [[:item "enchanted_book" 1]]}]}

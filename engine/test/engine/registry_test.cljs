@@ -24,7 +24,7 @@
      jobs.village.trade jobs.village.offers
      jobs.village.breed jobs.village.roll
      jobs.items.smelt
-     jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.get-kit
+     jobs.items.enchant jobs.items.anvil-combine jobs.items.obtain jobs.items.get-tool jobs.items.get-kit
      jobs.build.from-plan jobs.build.light-area jobs.build.pen jobs.build.rail jobs.build.rail-line
      jobs.access.pillar jobs.access.bridge
      jobs.explore.search jobs.explore.look
@@ -44,7 +44,7 @@
   (is (= migrated (set (remove primitive-names (keys registry/jobs))))))
 
 (deftest every-primitive-is-a-job-by-name
-  (is (= 29 (count primitive-names)))
+  (is (= 30 (count primitive-names)))
   (is (every? #(contains? registry/jobs %) primitive-names))
   (is (contains? registry/jobs 'jobs.primitive.move-to))
   (is (= [:pos] (get-in registry/jobs ['jobs.primitive.dig :target]))))

@@ -1,10 +1,11 @@
 // Why JavaScript: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
-// Containers and held items for the primitives: inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, fish, interact, trade, unequip.
+// Containers and held items for the primitives: inspectContainer, transfer, equip, toss, craft, furnace, enchant, anvil, eat, fish, interact, trade, unequip.
 
 import { interactWith } from './interact.mjs'
 import { emptyHand, emptySlot, emptiable } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
+import { anvilVisit } from './anvil.mjs'
 import { craftItem } from './craft.mjs'
 import { hold } from './hold.mjs'
 import { tradeWith } from './trade.mjs'
@@ -188,6 +189,13 @@ export function createItems (env) {
     need(a.levelCost === undefined || Number.isInteger(a.levelCost), 'enchant levelCost must be an integer')
     return act(token, { boundS: 15 }, ctx => enchantVisit(env.bot, ctx, { ...a, pos: cell(a.pos) }, { reach: setting('prim/reach'), distanceTo: p => dist(eye(), center(p)), timeScale }))
   }
+  const anvil = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isPos(a.pos), 'anvil needs pos {x, y, z}')
+    need(typeof a.item === 'string' && a.item !== '', 'anvil needs item, the name of what to put the book on')
+    need(typeof a.enchant === 'string' && a.enchant !== '', 'anvil needs enchant, the enchantment the book holds')
+    return act(token, { boundS: 15 }, ctx => anvilVisit(env.bot, ctx, { ...a, pos: cell(a.pos) }, { reach: setting('prim/reach'), distanceTo: p => dist(eye(), center(p)), timeScale }))
+  }
   const eat = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(typeof a.item === 'string' && a.item !== '', 'eat needs item, the name of what to eat')
@@ -288,5 +296,5 @@ export function createItems (env) {
     need(a.dest == null || a.dest === 'hand' || emptiable(a.dest), 'unequip only empties the hand, the off-hand or an armour slot')
     return act(token, { boundS: 2 }, ctx => (emptiable(a.dest) ? emptySlot(env.bot, ctx, a.dest) : emptyHand(env.bot, ctx)))
   }
-  return { inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, fish, interact, trade, unequip }
+  return { inspectContainer, transfer, equip, toss, craft, furnace, enchant, anvil, eat, fish, interact, trade, unequip }
 }

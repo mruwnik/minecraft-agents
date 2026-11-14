@@ -17,7 +17,7 @@
      :view-chunks n (spec :viewChunks; the pathWorld loads only the chunk columns within n chunks of the body's, as a
      server's view distance does: land the body walked away from unloads; nil loads every column) ...}
   The helpers state, set-block!, remove-block!, add-entity!, entities, self, swap-self! and add-item! are how tests
-  read and change it. The mechanics (interact, leads, tempt, steer, furnace, enchant, trade, use-on, rails, placing,
+  read and change it. The mechanics (interact, leads, tempt, steer, furnace, enchant, anvil, trade, use-on, rails, placing,
   doors) are the engine.fake.* namespaces; this one holds the rest (walk, dig, place, craft, ...), the owner token,
   hold/override and the offline timing, and converts to and from the JS contract. Test-only."
   (:require ["minecraft-data" :as minecraft-data]
@@ -25,6 +25,7 @@
             [clojure.walk :as walk]
             [engine.fake.animals :as animals]
             [engine.fake.enchant :as enchant]
+            [engine.fake.anvil :as anvil]
             [engine.fake.furnace :as furnace]
             [engine.fake.rail :as rail]
             [engine.fake.raw-world :as raw-world]
@@ -277,7 +278,7 @@
         [(if (zero? left) (into (subvec items 0 i) (subvec items (inc i))) (assoc-in items [i :count] left)) taken]))))
 
 (defn carried [items item] (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 items))
-(defn with-slots [items] (vec (map-indexed (fn [slot i] (cond-> {:name (:name i) :count (:count i) :slot slot} (:durability i) (assoc :durability (:durability i) :maxDurability (:max-durability i)))) items)))
+(defn with-slots [items] (vec (map-indexed (fn [slot i] (cond-> {:name (:name i) :count (:count i) :slot slot} (:durability i) (assoc :durability (:durability i) :maxDurability (:max-durability i)) (seq (:enchants i)) (assoc :enchants (:enchants i)))) items)))
 
 (defn give [w item n] (update w :inventory add-to item n))
 (defn take-one [w item] (update w :inventory #(first (take-from % item 1))))
@@ -948,6 +949,7 @@
                "paddle" (act! paddle)
                "furnace" (guarded (act! furnace/furnace))
                "enchant" (guarded (act! enchant/enchant))
+               "anvil" (guarded (act! anvil/anvil))
                "steer" (fn [token a]
                          (let [{:keys [timeoutS] :or {timeoutS 60}} (js->clj a :keywordize-keys true)
                                decide (.-decide a)

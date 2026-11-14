@@ -9,6 +9,7 @@ import { mobFields } from './interact.mjs'
 import { leashFields } from './leash.mjs'
 import { liveEntities, itemSpawn } from './live-entities.mjs'
 import { vehicleFields, selfVehicle } from './vehicle.mjs'
+import { enchantsOf } from './enchants.mjs'
 import { DEFAULT_RADIUS, xyz, dist, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
 
 export function createSense (env) {
@@ -102,7 +103,8 @@ export function createSense (env) {
       equipment: equipment(),
       inventory: inventory().map(i => {
         const max = env.bot.registry?.itemsByName?.[i.name]?.maxDurability
-        return { name: i.name, count: i.count, slot: i.slot, ...(max > 0 && { durability: max - (i.durabilityUsed ?? 0), maxDurability: max }) }
+        const enchants = enchantsOf(env.bot.registry, i)
+        return { name: i.name, count: i.count, slot: i.slot, ...(max > 0 && { durability: max - (i.durabilityUsed ?? 0), maxDurability: max }), ...(enchants.length > 0 && { enchants }) }
       })
     }
   }

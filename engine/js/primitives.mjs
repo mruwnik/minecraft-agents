@@ -23,6 +23,7 @@ import { traceSteps } from './step-trace.mjs'
 import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
+import { enchantsOf } from './enchants.mjs'
 import vec3 from 'vec3'
 import { BODY_HALF_WIDTH, crouchBox, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, learnHostile, clearDeathState, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
@@ -93,7 +94,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const gearView = item => {
     if (!item) return null
     const max = bot.registry?.itemsByName?.[item.name]?.maxDurability
-    const enchants = (item.enchants ?? []).map(e => ({ name: e.name, level: e.lvl ?? e.level }))
+    const enchants = enchantsOf(bot.registry, item)
     return { name: item.name, count: item.count, ...(max > 0 && { durability: max - (item.durabilityUsed ?? 0) }), ...(enchants.length > 0 && { enchants }) }
   }
   const equipment = () => ({
@@ -144,7 +145,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const { self, worldAge, serverRules, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded } = env
   Object.assign(env, createMove(env), createDig(env), createItems(env))
   const { moveTo, swim, jumpPlace, attack, sleep, look, mount, dismount, paddle, dig, place, collect, digTime, clearTime, harvestTools } = env
-  const { inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, fish, interact, trade, unequip } = env
+  const { inspectContainer, transfer, equip, toss, craft, furnace, enchant, anvil, eat, fish, interact, trade, unequip } = env
 
   // the message arrives validated and cleaned by engine.chat (gate!, direct!); say asserts the last line
   const chat = async (token, a = {}) => {
@@ -579,7 +580,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     try { return await fn(token, a) } finally { noteOwnWork() }
   }
 
-  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig: marking(dig), place: marking(place), jumpPlace: marking(jumpPlace), collect, inspectContainer, transfer: working(transfer), equip, toss, craft, furnace, enchant, chat, eat, fish, attack, interact, trade, unequip, sleep, look, swim, useOn: marking(useOn), steer: onFoot(steer), mount, dismount, paddle })
+  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig: marking(dig), place: marking(place), jumpPlace: marking(jumpPlace), collect, inspectContainer, transfer: working(transfer), equip, toss, craft, furnace, enchant, anvil, chat, eat, fish, attack, interact, trade, unequip, sleep, look, swim, useOn: marking(useOn), steer: onFoot(steer), mount, dismount, paddle })
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })

@@ -5,6 +5,7 @@ import vec3 from 'vec3'
 import { mobFields } from './interact.mjs'
 import { professionOf, villagerData } from './villager.mjs'
 import { setting } from './settings.mjs'
+import { enchantsOf } from './enchants.mjs'
 import constants from '../src/engine/constants.json' with { type: 'json' }
 
 export { professionOf }
@@ -35,24 +36,9 @@ async function openWindow (bot, target, timeScale) {
   }
 }
 
-// The enchantments an item carries, [{name, level}]: a book keeps them in the stored_enchantments component, which
-// prismarine-item's enchants getter does not read
-const enchantsOf = (bot, item) => {
-  const stored = item.componentMap?.get?.('stored_enchantments')?.data
-  if (stored) {
-    const raw = Array.isArray(stored) ? stored : stored.enchantments ?? []
-    return raw.map(e => ({ name: e.name ?? bot.registry?.enchantments?.[e.id]?.name ?? `enchantment#${e.id}`, level: e.level ?? e.lvl }))
-  }
-  try {
-    return (item.enchants ?? []).map(e => ({ name: e.name, level: e.lvl ?? e.level }))
-  } catch {
-    return []
-  }
-}
-
 // cost[0] is the adjusted price (realPrice), not the base count the stack carries
 const offerRow = (bot, t, index) => {
-  const enchants = enchantsOf(bot, t.outputItem)
+  const enchants = enchantsOf(bot.registry, t.outputItem)
   const left = Math.max(0, t.maximumNbTradeUses - t.nbTradeUses)
   return {
     index,
