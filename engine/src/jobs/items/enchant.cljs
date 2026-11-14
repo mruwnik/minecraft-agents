@@ -19,7 +19,7 @@
   "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within the table-radius setting), reads
   the three offers with the item lying in the table, chooses one and enchants. Needs the item, lapis and levels; a missing item or
   lapis is fetched (jobs.lib.need) from the ways the call allows. Quote: a walk and a visit, plus each fetch's price
-  (need/item-price). :spend :job-time: the visit's ::job-time-s plus fetch-time/one-unit-s for each of the item and
+  (need/item-price). :spend :job-time: the visit's ::job-time-s plus fetch-time/items-s of the item and of
   the lapis, as a parent's job time holds its children's.
   An offer costs its slot number in lapis, and in levels at least its level cost and its slot number. The
   choice: :slot 1-3 takes that offer alone. Otherwise :choice \"best\" takes the dearest offer the body can pay and
@@ -63,9 +63,11 @@
 (def fit? ready/ok)
 
 (defn default-time
-  "The call's default :spend :job-time: ::job-time-s, and fetch-time/one-unit-s for each of the item and the lapis."
-  [_]
-  (+ (settings/get settings ::job-time-s) (* 2 (fetch-time/one-unit-s))))
+  "The call's default :spend :job-time: ::job-time-s, and fetch-time/items-s of the item and of the lapis (the :slot's, else 3)."
+  [{:keys [item slot]}]
+  (+ (settings/get settings ::job-time-s)
+     (fetch-time/items-s (remove nil? [item]))
+     (fetch-time/items-s ["lapis_lazuli"] (or slot 3))))
 
 (def defaults {:spend {:job-time default-time}})
 

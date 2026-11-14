@@ -30,8 +30,8 @@
   server's, read at the anvil; it is at least the book's (min-levels). Levels short of it are earned first by a
   jobs.items.get-levels child when the ways fetch (again with the server's cost when the anvil asks more).
   Quote: the walk and the visit, plus each fetch's price (need/item-price; the levels' jobs.lib.xp/levels-price).
-  :spend :job-time: the visit's ::job-time-s plus fetch-time/one-unit-s for each thing the call may fetch (the item,
-  the levels, and the anvil unless :anvil is given), as a parent's job time holds its children's.
+  :spend :job-time: the visit's ::job-time-s plus each fetch's default (fetch-time/items-s of the item and of the anvil
+  unless :anvil is given, fetch-time/one-unit-s for the levels), as a parent's job time holds its children's.
   Ends :done with {:combined true :item :enchant :enchants [{:name :level}] :level-cost :levels-spent :xp-level :text}.
   Impossible: :bad-args (no item or enchantment name). Conditions (a listed root job waits): :no-book (no carried
   enchanted book holds :enchant), :no-item (not carried, the call's :ways #{:carried}), :too-few-levels (fewer levels than the book's least cost
@@ -61,9 +61,12 @@
 (def fit? ready/ok)
 
 (defn default-time
-  "The call's default :spend :job-time: ::job-time-s, and fetch-time/one-unit-s for the item, the levels and the anvil unless one is given."
-  [{:keys [anvil]}]
-  (+ (settings/get settings ::job-time-s) (* (fetch-time/one-unit-s) (if anvil 2 3))))
+  "The call's default :spend :job-time: ::job-time-s, fetch-time/items-s of the item and of the anvil unless one is given, and fetch-time/one-unit-s for the levels."
+  [{:keys [item anvil]}]
+  (+ (settings/get settings ::job-time-s)
+     (fetch-time/items-s (remove nil? [item]))
+     (fetch-time/one-unit-s)
+     (if anvil 0 (fetch-time/items-s ["anvil"]))))
 
 (def defaults {:spend {:job-time default-time}})
 

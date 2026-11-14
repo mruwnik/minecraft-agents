@@ -9,6 +9,9 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.items.anvil-combine :as ac]
+            [jobs.items.obtain :as obtain]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ready :as ready]))
 
 (def clock (atom 1000000))
@@ -192,6 +195,13 @@
               cell (js->clj (.-pos (.-args placed)) :keywordize-keys true)]
           (is (true? (:combined r)))
           (is (= "anvil" (block p cell)) "not dug by hand, its drop lost"))))))
+
+(deftest the-default-job-time-holds-an-anvil-made-from-nothing
+  (let [t (ac/default-time {:item "iron_pickaxe" :enchant "mending"})]
+    (is (< (:value (cost/goal-value [{:name "anvil" :count 1}])) t) "31 iron from nothing, not one unit's fetch")
+    (is (<= (+ (obtain/default-time {:item "anvil"}) (obtain/default-time {:item "iron_pickaxe"})) t))
+    (is (> 1e-6 (js/Math.abs (- t (obtain/default-time {:item "anvil"}) (ac/default-time {:item "iron_pickaxe" :enchant "mending" :anvil {:x 0 :y 64 :z 0}}))))
+        "a given anvil is not fetched")))
 
 (deftest the-quote-holds-the-price-of-each-fetch
   (async done

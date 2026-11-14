@@ -16,6 +16,7 @@
             [engine.registry :as registry]
             [jobs.lib.access :as access]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.need :as need]
             [jobs.lib.stock :as stock]
             [jobs.items.obtain :as obtain]
@@ -56,13 +57,14 @@
           (is (nil? (contract/quote-problem q)))
           (is (= ##Inf (get-in q [:uses :job-time 2])) "a gather has no most"))))))
 
-(deftest the-default-time-limit-grows-with-the-count
-  (are [n s] (= s (obtain/default-time {:count n}))
-    nil 600
-    1 600
-    27 2160)
-  (is (= 5400 (obtain/default-time {:bill {"jungle_log" 36 "stone_sword" 1}}))
-      "a bill runs its items' children, each with ::bill-item-s, so its own limit is their sum"))
+(deftest the-default-time-limit-counts-the-items-usual-cost
+  (let [t #(obtain/default-time {:item %1 :count %2})]
+    (is (< (t "raw_iron" 1) (t "raw_iron" 27)) "27 raw iron are many mines, not one")
+    (is (< (t "iron_ingot" 27) (t "anvil" 1)) "an anvil is 31 iron from nothing: its budget counts the recipe tree")
+    (is (= (+ (fetch-time/one-unit-s) (:value (cost/goal-value [{:name "anvil" :count 1}]))) (t "anvil" 1)))
+    (is (= (t "oak_log" 1) (obtain/default-time {:any-of ["anvil" "oak_log"]})) "any of several: the cheapest")
+    (is (= (+ (t "jungle_log" 36) (t "stone_sword" 1)) (obtain/default-time {:bill {"jungle_log" 36 "stone_sword" 1}}))
+        "a bill runs its items' children, each on its own default, so its own limit is their sum")))
 
 (deftest planks-crafted-from-a-carried-log-are-done-with-what-was-got
   (async done

@@ -66,9 +66,9 @@
 
 
 (defn default-time
-  "The call's default :spend :job-time: the lead's fetch (fetch-time/one-unit-s), one look round, the walk across :radius, and the use's worst quote (a caller's remainder can lower it)."
+  "The call's default :spend :job-time: the lead's fetch (fetch-time/items-s), one look round, the walk across :radius, and the use's worst quote (a caller's remainder can lower it)."
   [{:keys [radius]}]
-  (+ (fetch-time/one-unit-s)
+  (+ (fetch-time/items-s ["lead"])
      (cost/look-s (look/round-size))
      (/ (or radius default-radius) fight/walk-speed)
      (use-entity/worst-job-time)))
