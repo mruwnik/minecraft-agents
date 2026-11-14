@@ -22,7 +22,7 @@
             [jobs.lib.trade-window :as tw]))
 
 (def doc
-  "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, in sight)
+  "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, in sight, or one that walks into the pen in its place)
   until one gives :want (with :enchant, an enchanted book of that enchantment, e.g. \"mending\"; :enchant may be a map
   name -> minimum level, {\"mending\" 1 \"unbreaking\" 3}: the first offer with any of them stops the roll, and the done text names it), by breaking and placing
   again the workstation of :profession at :pos.
@@ -192,8 +192,25 @@
 (def villager-keys "Memory about the villager picked, dropped when another is picked."
   [:chosen :seen :away-since :view :view-tries :last-seen :flanked :memory-walked :night-waited :vantage :job-at :job-ticks :claim-reset])
 
+(defn adopt!
+  "With no :villager named, any villager the call may roll will do: one that walked into the pen's cell (it took the
+  lure) is rolled in place of the one picked while that one stands elsewhere. The id rolled."
+  [c id]
+  (let [ins (when (and id (nil? (:villager (:args c))))
+              (filter (rollable c) (vp/walked-in (:primitives c) (b/cell (:pos (b/parse (:args c)))))))]
+    (if (or (empty? ins) (some #(= id (villager/ident %)) ins))
+      id
+      (let [e (first ins)
+            in (villager/ident e)]
+        (ctx/update-mem! c #(-> (apply dissoc % villager-keys) (assoc :chosen in)))
+        (ctx/emit! c :roll.villager :info
+                   {:villager in :pos (u/pos-of (.-pos e)) :profession (.-profession e) :instead-of id
+                    :text (str "rolls villager " in ": it walked into the pen, not " id)})
+        in))))
+
 (defn pick!
-  "The villager rolled: :villager, else the nearest adult that is no nitwit (saying which one it picked, once)."
+  "The villager rolled: :villager, else the nearest adult that is no nitwit (saying which one it picked, once), or one
+  that walked into the pen in its place (adopt!)."
   [c]
   (let [before (villager/chosen c)
         id (villager/pick! c (rollable c))]
@@ -202,7 +219,7 @@
         (ctx/emit! c :roll.villager :info
                    {:villager id :pos (some-> e (.-pos) u/pos-of) :profession (some-> e (.-profession))
                     :text (str "rolls villager " id ": the nearest adult that is no nitwit")})))
-    id))
+    (adopt! c id)))
 
 (defn rule-out!
   "The villager cannot be rolled (reason :other-job or :locked): a named one ends the call; a picked one is left for the

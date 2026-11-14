@@ -436,6 +436,41 @@
                       (run! (fn [_] (remove-watch s :claim) (rolls-offers! p scripts))))))
     env))
 
+(defn walks-in-and-takes-the-job
+  "v-1 walks into the open pen's cell 10 s of clock after the run starts, and takes the job (offers) once the near end
+  is plugged behind it with the lectern standing."
+  [offers]
+  (fn [{:keys [p clock] :as env}]
+    (let [at (+ @clock 10000)
+          s (fake/state p)
+          v1 #(first (keep-indexed (fn [i e] (when (= "v-1" (:uuid e)) i)) (:entities @s)))]
+      (add-watch clock :walk-in (fn [_ _ _ ms] (->> [ms] (filter #(>= % at))
+                                                    (run! (fn [_] (remove-watch clock :walk-in)
+                                                            (swap! s assoc-in [:entities (v1) :pos] [3.5 64 0.5]))))))
+      (add-watch s :job (fn [_ _ _ w]
+                          (let [e (get-in w [:entities (v1)])]
+                            (->> [e] (filter #(and (= [3.5 64 0.5] (:pos %)) (= "unemployed" (:profession %))
+                                                   (= "lectern" (get-in w [:blocks ws-pos])) (= "cobblestone" (get-in w [:blocks [4 65 0]]))))
+                                 (run! (fn [_] (remove-watch s :job)
+                                         (swap! s update-in [:entities (v1)] assoc :profession "librarian" :offers offers)))))))
+      env)))
+
+(deftest a-roll-with-no-villager-named-rolls-the-one-that-walked-into-the-pen-not-the-one-picked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [picked (jobless {:id 2 :uuid "v-2" :pos {:x 6 :y 64 :z 3}})
+              walker (jobless {:pos {:x 9 :y 64 :z 6}})
+              [result p seen] (await (roll {:entities [picked walker] :keeps-job? true
+                                            :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone"}
+                                            :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
+                                            :wrap (comp (walks-in-and-takes-the-job [(offer "enchanted_book")]) (ticking! 1000)
+                                                        #(do (tu/seeing-all (:p %)) %))}
+                                           {:villager nil}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
+          (is (= ["v-2" "v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen))))
+          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
+
 (deftest a-penned-villager-kept-from-its-free-workstation-by-anothers-claim-takes-it-after-one-break
   (async done
     (tu/run-async done

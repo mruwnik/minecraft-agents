@@ -116,6 +116,15 @@
                 lay)))
           sides)))
 
+(defn walked-in
+  "The adult villagers standing in the cell of a pen built at workstation cell ws (its shut cells solid, the top slab on)."
+  [p ws]
+  (for [lay (map #(layout ws %) sides)
+        :when (and (empty? (owed p (:shut lay))) (top-slab? p (:slab lay)))
+        e (villager/adults p)
+        :when (inside? lay e)]
+    e))
+
 (defn solids
   "The cells standing solid (to dig: a plug of an empty pen, the box's entry)."
   [p cells]

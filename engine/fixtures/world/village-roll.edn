@@ -10,6 +10,9 @@
 ;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
 ;; roll-villager-heard-behind-a-wall-by-day-is-walked-toward-not-gone: by day a named villager heard behind a wall is walked toward round it (roll.offers), not :gone.
 ;; roll-pens-a-jobless-villager-before-it-waits-for-the-job: a jobless NoAI villager 6 blocks off: a jobs.village.pen child (slot :pen) builds the pen and waits; the villager never walks in, so the roll ends with the pen's :not-walked-in.
+;; roll-with-no-villager-named-rolls-the-one-that-walked-into-the-pen: the near-end-open pen, a NoAI jobless villager nearer (picked first)
+;; and an AI jobless one farther that walks into the pen to the free lectern: the roll rolls that one (roll.villager names it).
+;; Should-fail: roll-named-villager-ends-not-walked-in-when-another-walks-into-the-pen (same world, the NoAI one named).
 ;; roll-with-a-spare-places-it-before-the-pickup-with-a-free-composter-near: with a spare lectern carried, the spare goes in the moment the job is gone and the drop is picked up after (:owed child), so the villager has no time to claim the composter 10 blocks off.
 ;; Should-fail: a named farmer ends :other-job with no dig; nitwit, absent villager (by day), a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
 ;; roll-sealed-in-dirt-never-digs-its-way-out-for-the-drop: the body sealed in a pocket under dirt that is another's (a plan footprint stands for the zone), the lectern drop out of reach: the roll ends without breaking the dirt (the pillar escape's roof dig obeys zones).
@@ -239,4 +242,25 @@
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,36],VillagerData:{profession:\"minecraft:farmer\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000024" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :other-job}} :within-s 40 :of-job true}]
-   :after [[:block [16 0 16] "lectern"]]}]}
+   :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-with-no-villager-named-rolls-the-one-that-walked-into-the-pen"
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"] [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2]]}
+   :act [[:summon "villager" [15.5 0 19.5] "{NoAI:1b,UUID:[I;20260,7,5,46],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:summon "villager" [16.5 0 23.5] "{UUID:[I;20260,7,5,47],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 1 :jobs.lib.villager/take-job-ticks 400}})]]
+   :expect [{:event {:source :job :kind :roll.villager :data {:villager "00004f24-0000-0007-0000-00050000002f"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}
+  {:name "roll-named-villager-ends-not-walked-in-when-another-walks-into-the-pen"
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"] [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2]]}
+   :act [[:summon "villager" [15.5 0 19.5] "{NoAI:1b,UUID:[I;20260,7,5,48],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:summon "villager" [16.5 0 23.5] "{UUID:[I;20260,7,5,49],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000030" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 1 :jobs.lib.villager/take-job-ticks 400}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-walked-in}} :within-s 230 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}]}
