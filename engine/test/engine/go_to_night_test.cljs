@@ -254,7 +254,7 @@
 
 ;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
 
-(deftest a-queued-walk-too-risky-does-not-lead-the-body-out-of-its-mended-room-at-night
+(deftest a-queued-walk-too-risky-does-not-lead-the-body-out-of-its-lit-room-at-night
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -263,9 +263,8 @@
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (ticks eng 20))
           (is (= inside (st/pos-of p)) "the body stays in its room all night")
-          (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))) "one block mends the roof, no dig-in after")
-          (is (= :risky (:reason (waiting-of eng id))))
-          (is (= 1 (count (st/calls p "place")))))))))
+          (is (empty? (st/calls p "place")) "nothing spawns in a lit room: the roof hole is left, no dig-in")
+          (is (= :risky (:reason (waiting-of eng id)))))))))
 
 (deftest a-walk-with-an-acceptable-risk-goes-out-at-night-with-the-night-trigger-muted
   (async done
