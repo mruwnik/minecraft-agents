@@ -435,11 +435,11 @@
     (cond-> output (:geometry req) (assoc :geometry (:cells result)))))
 
 (defn planned-cells
-  "Every cell a saved plan other than id wants (plan.shape/expand), a set of [x y z]."
+  "The cells each saved plan other than id wants (plan.shape/expand): a vector of sets of [x y z]."
   [ctx id]
   (let [bps (:values (checks/parse-docs (current-docs ctx :blueprint) parse/parse-blueprint :blueprint))
         plans (:values (checks/parse-docs (current-docs ctx :plan) parse/parse :plan))]
-    (into #{} (comp (remove (fn [[other _]] (= other id))) (mapcat (fn [[_ plan]] (map :pos (:cells (shape/expand plan bps)))))) plans)))
+    (into [] (comp (remove (fn [[other _]] (= other id))) (map (fn [[_ plan]] (into #{} (map :pos) (:cells (shape/expand plan bps)))))) plans)))
 
 (defn route-plan!
   "plans route: the seen ground between the two cells becomes the plan :id (see agent-tools.plan-route), clear of the

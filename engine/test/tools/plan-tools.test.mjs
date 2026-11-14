@@ -490,6 +490,22 @@ test('route treats a zone as no ground, the maker\'s own too, unless another own
   } finally { fx.close() }
 })
 
+// 0f59c1af: an end inside the maker's own zone lost its launch run to the zone's refusal
+test('route may use the launch run of an end inside the maker\'s own zone, and no other zone', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells(), Date.now() - 1000)
+    const zones = path.join(fx.state, 'worlds', 'fixture', 'zones.edn')
+    const around = owner => `[{:name "home" :owner "${owner}" :min [0 60 0] :max [9 70 10]}]\n`
+    fs.writeFileSync(zones, around('Other'))
+    assert.deepEqual((await invoke('plan', fx, [...ROUTE, '--dry-run'])).value.reason, keyword('no-route'))
+    fs.writeFileSync(zones, around('Router'))
+    const made = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    assert.equal(made.code, 0, made.output)
+    assert.deepEqual(made.value.route.waypoints, [[2, 64, 5], [38, 64, 5]])
+  } finally { fx.close() }
+})
+
 // e321de28: the line ran through the maker's own house, its blocks priced as plain digs
 test('route goes round the cells another plan wants, the maker\'s own plan too', async () => {
   const fx = fixture()
