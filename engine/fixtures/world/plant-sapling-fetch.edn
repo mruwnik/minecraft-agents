@@ -15,6 +15,14 @@
             {:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [20 0 14] "oak_sapling"]]}
+  {:name "chest-sapling-beats-leaves-beside-the-body"
+   ;; card 7a0611db: a leaf drops a sapling 1 in 20, so the chest 6 blocks off is cheaper than the leaves 2 blocks off (both in view)
+   :blocks [[:fill [15 0 18] [15 1 19] "oak_leaves[persistent=true]"]
+            [:set [17 0 22] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
+         [:job (jobs.forestry.plant-sapling {:worth 1200 :at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [20 0 14] "oak_sapling"] [:block [15 0 18] "oak_leaves"] [:block [15 1 18] "oak_leaves"] [:block [15 0 19] "oak_leaves"] [:block [15 1 19] "oak_leaves"]]}
   {:name "leaves-broken-for-a-sapling"
    :limit-s 170
    :blocks [[:fill [14 0 19] [18 1 21] "oak_leaves[persistent=false]"]]

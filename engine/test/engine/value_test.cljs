@@ -22,7 +22,6 @@
     {:name "gravel" :count 10}
     {:name "rotten_flesh" :count 5}
     {:name "wheat_seeds" :count 20}
-    {:name "oak_sapling" :count 2}
     {:name "stick" :count 8}
     {:name "mystery_thing" :count 1}))
 

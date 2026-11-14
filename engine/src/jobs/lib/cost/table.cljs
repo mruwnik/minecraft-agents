@@ -41,7 +41,9 @@
    :food-point-s 2
    :farm-s 4
    :min-drop-chance 0.05
-   :drop-chance {"apple" 0.005 "wheat_seeds" 0.125 "stick" 0.02} ;; vanilla's, where minecraft-data lists 1 (leaves' sticks)
+   :drop-chance (merge {"apple" 0.005 "wheat_seeds" 0.125 "stick" 0.02 "jungle_sapling" 0.025}
+                      (zipmap ["oak_sapling" "spruce_sapling" "birch_sapling" "acacia_sapling" "dark_oak_sapling" "cherry_sapling" "azalea" "flowering_azalea"] (repeat 0.05)))
+   ;; vanilla's, where minecraft-data lists 1 (leaves' sticks) or 0.5 (leaves' saplings)
    :dig {:hardness-s 1.5 :unfit-s 5 :min-s 0.25 :default-tier 2} ;; seconds of dig per hardness at speed 1: 30 ticks with the block's tool tier, 100 without (vanilla)
    :find {:terrain 0.1
           :crop 0 ;; the walk to a ripe crop: none at the margin (the field is the farm's); a goal's is value/measured-worth's
@@ -186,6 +188,17 @@
         loot (when b (aget (.-blockLoot md) name))]
     (when b
       (mapv (fn [[item n]] {:name item :count n}) (block-yields md (deep-merge default-basis basis) b loot (crop? b loot))))))
+
+(defn block-drops
+  "Items of item a break of block name is expected to drop (block-yields, rare drops counted: a leaf's sapling 1 in 20),
+  nil when it drops none or minecraft-data does not know the block. Options :version and :basis as item-value's."
+  [name item & {:keys [version basis]}]
+  (let [md (facts/data (or version @game/version))
+        b (when name (aget (.-blocksByName md) name))
+        loot (when b (aget (.-blockLoot md) name))]
+    (when b
+      (some (fn [[i n]] (when (and (= item i) (pos? n)) n))
+            (block-yields md (deep-merge (assoc default-basis :min-drop-chance 0) basis) b loot (crop? b loot))))))
 
 (defn block-rows
   "[[seconds tier [[item expected drops] ..]] ..] of the blocks block-sources prices: each one's seconds without the pickaxe

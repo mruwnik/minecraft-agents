@@ -418,3 +418,11 @@
                        (:chest (plan/by-chest c need))))]
     (is (nil? (by {})) "the seen source is cheaper than the chest walk")
     (is (some? (by {:fruitless {:gather 1} :fruitless-s {:gather 20}})) "a round that took 20 s and brought nothing makes the chest the cheaper")))
+
+(deftest saplings-in-a-chest-six-blocks-off-beat-the-twenty-leaves-a-sapling-beside-the-body-takes
+  (let [c (ctx {:time 6000})
+        need (first (table/gather-needs {"oak_sapling" 4} (game/version-of (:primitives c))))
+        chest {:x 0 :y 64 :z 6}]
+    (with-redefs [seen/seen-of (constantly {:pos {:x 1 :y 65 :z 0} :name "oak_leaves"})
+                  plan/stocked-chest (constantly {:pos chest :cost (plan/walk-s c chest)})]
+      (is (= chest (:chest (plan/by-chest c need)))))))

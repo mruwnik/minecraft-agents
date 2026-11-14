@@ -183,7 +183,7 @@
 
 (defn need-cost
   "Seconds to gather a need whose nearest block is seen, a lower bound (the walk's danger is go-to's to price): the
-  straight walk there (none to a crop still to be sown: grow-s), the digs (see dug-block), a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
+  straight walk there (none to a crop still to be sown: grow-s), the digs (see dug-block; as many per item as cost/block-drops says a break takes: 20 leaves a sapling), a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
   loot holds none), a growable crop's wait for the grow (grow-s), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
   the body's kit); for a need taken from a chest (by-chest), the walk there and back (walk-s)."
   [c need]
@@ -200,7 +200,9 @@
                   (if-let [drops (cost/kill-drops mob (:key need) :version (game/version-of p))]
                     (* (js/Math.ceil (/ (:count need) drops)) (cost/kill-price (threats/death-body c) mob self))
                     js/Infinity))
-          dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost (dug-block need name)) 0)))]
+          block (dug-block need name)
+          dig (+ (or kills 0) (/ (* (:count need) (or (cost/dig-cost block) 0))
+                                 (or (cost/block-drops block (:key need) :version (game/version-of p)) 1)))]
       (if (and (:ore? need) (below? c need) (unlit? p pos))
         (+ dig (cost/dark-way-s walk d (threats/body-of p)))
         (+ walk dig (grow-s c need))))))

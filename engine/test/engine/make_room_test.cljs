@@ -228,8 +228,8 @@
 (deftest toss-order-spares-the-shelter-materials-of-a-full-bag
   (let [keep (ord/keep-counts linden-bag {:carry-food 16 :carry-blocks 64 :carry-seeds 16} nil)
         order (names-of (ord/toss-order linden-bag keep {} 3.2))]
-    (is (= #{"dandelion" "cornflower" "poppy" "oxeye_daisy" "leaf_litter" "granite" "oak_sapling" "diorite"} (set order)))
-    (is (not-any? #{"dirt" "cobblestone" "wheat_seeds"} order))))
+    (is (= #{"dandelion" "cornflower" "poppy" "oxeye_daisy" "leaf_litter" "granite" "diorite"} (set order)))
+    (is (not-any? #{"dirt" "cobblestone" "wheat_seeds" "oak_sapling"} order))))
 
 (deftest toss-order-throws-surplus-of-kept-materials-after-everything-without-a-keep
   (let [inventory [{:name "cobblestone" :count 64 :slot 0} {:name "cobblestone" :count 64 :slot 1}
