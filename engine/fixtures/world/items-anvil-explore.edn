@@ -1,0 +1,23 @@
+;; Card a6f29f69: items.anvil-combine passes :explore (default true) to the fetch of its anvil, so with no iron in sight it walks off to look
+;; (obtain.exploring) instead of ending no-source after a log try. Empty grass plot on the surface, as get-tool-explore.edn; a Mending book,
+;; an iron pickaxe and 5 levels, no anvil in sight. The walk itself is larger than the plot and is only started here, then cancelled with the run.
+;; Should-succeed: obtain.exploring within 60 s. Should-fail: :explore false never explores.
+{:defaults
+ {:tags [:items :anvil :explore :jobs]
+  :plot {:height 8 :floor "grass_block" :light :sky}
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 70}
+ :cases
+ [{:name "no-anvil-and-no-iron-in-sight-starts-exploring"
+   :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:mending\":1}] 1"]
+         [:rcon "xp set $BODY 5 levels"]
+         [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
+   :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}]}
+  {:name "explore-false-never-walks-off-to-look"
+   :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:mending\":1}] 1"]
+         [:rcon "xp set $BODY 5 levels"]
+         [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending" :explore false})]]
+   :expect [{:no-event {:source :job :kind :obtain.exploring} :for-s 40}
+            {:no-event {:source :job :kind :completed} :for-s 40}]
+   :after [[:item "enchanted_book" 1]]
+   :limit-s 50}]}
