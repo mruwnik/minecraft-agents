@@ -13,6 +13,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.world-files :as world]
             [jobs.lib.stock :as stock]
+            [jobs.storage.deposit :as deposit]
             [engine.withdraw-test :as wt]
             [engine.test-util :as tu :refer [child-outcome]]))
 
@@ -255,6 +256,18 @@
           (swap! (fake/state p) assoc :inventory [{:name "dirt" :count 5}])
           (await (wt/ending-of eng job {:items ["dirt"]} 30))
           (is (= 1 (count (filter #(= :deposit.chest-full (:kind %)) @seen)))))))))
+
+(deftest a-put-into-a-chest-said-full-lets-its-next-fill-be-said-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup-zoned {:inventory [{:name "dirt" :count 5}]
+                                          :blocks {"10,64,0" "chest"}
+                                          :containers {"10,64,0" []}} [])]
+          (wt/know-place! eng :chest chest)
+          (mem/write! (:store eng) deposit/full-said-kind {:cell [10 64 0]} {:cap 16 :ttl :forever})
+          (await (wt/ending-of eng job {:items ["dirt"]} 30))
+          (is (empty? (mem/entries (mem/view (:store eng)) deposit/full-said-kind))))))))
 
 (deftest deposit-says-so-when-every-chest-is-full-and-making-is-off
   (async done

@@ -149,6 +149,12 @@
       (ctx/emit! c :deposit.chest-full :warn
                  {:chest cell :attention :notice :text (str "the chest at " (pr-str cell) " is full, trying another")}))))
 
+(defn forget-full!
+  "A put into the chest worked: it has room again, so a later fill is said again."
+  [c chest]
+  (let [cell (storage/cell-of chest)]
+    (ctx/forget-where! c full-said-kind #(= cell (:cell %)))))
+
 (defn stop!
   "End with kind and cause: {:gave-up true :moved n}, n the items put in so far."
   [c kind cause]
@@ -275,6 +281,7 @@
               (if (and (pos? (or (.-moved r) 0))
                        (< (storage/carried (u/inventory (:primitives c)) (:name (:stack pick))) (storage/carried inventory (:name (:stack pick)))))
                 (do (ctx/update-mem! c #(-> % (update :deposited (fnil inc 0)) (update :moved (fnil + 0) (.-moved r))))
+                    (forget-full! c chest)
                     (ctx/emit! c :deposit.put :info
                                {:chest (storage/cell-of chest) :item (:name (:stack pick)) :count (.-moved r)
                                 :text (str "put " (.-moved r) " " (:name (:stack pick)) " in the chest at " (pr-str (storage/cell-of chest)))})
