@@ -63,7 +63,7 @@
           (await (tu/run-until-empty eng 3))
           (is (= 1 (count (st/calls p "offline")))))))))
 
-(deftest a-log-out-stint-lasts-till-morning
+(deftest a-log-out-stint-is-the-sleep-count-not-the-night-left
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -71,7 +71,7 @@
           (sleep-count! p 1 2)
           (core/submit! eng (tu/order '(jobs.survival.log-out {})) {})
           (await (tu/run-until-empty eng 3))
-          (is (= [175050] (st/ms-of-offline p)) "one stint to morning, no 30 s check-back"))))))
+          (is (= [7000] (st/ms-of-offline p)) "a skipped night would leave the body offline through the day; one 7 s stint"))))))
 
 (deftest coming-back-costs-more-the-weaker-and-the-barer-the-body-and-more-with-a-known-hostile
   (let [cost (fn [entities world]

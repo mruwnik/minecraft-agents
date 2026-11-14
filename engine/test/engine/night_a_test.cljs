@@ -402,7 +402,7 @@
           (sleep-count! p 1 2)
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 10))
-          (is (= [475050] (st/ms-of-offline p)) "one stint to morning, no check-back")
+          (is (= [7000] (st/ms-of-offline p)) "one stint of the sleep count")
           (is (= ["logged-out-for-sleeping-player"] (offline-why p)))
           (is (= [] (st/calls p "place")) "not dug in")
           (is (= [] (:list (core/state eng))) "ended at morning"))))))

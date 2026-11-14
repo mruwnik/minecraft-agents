@@ -20,12 +20,11 @@
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
   night; impossible once a log-out
-  was unsupported (:log-out-unsupported). Called with no stay it goes offline at any hour: till morning at night, by day the
-  primitive's default stint. The night job calls it only at night and while another player sleeps.
+  was unsupported (:log-out-unsupported). Called with no stay it goes offline at any hour for the sleep count's stint (sh-clock/sleep-skip-ticks plus a margin). The night job calls it only at night and while another player sleeps.
   With :stay-ms and/or :until (wall-clock epoch ms; both: the later) it works at any hour and stays offline that long
   (the stint's end is kept in the job's memory, so a restart does not start it over): chained offline stints of the
   primitive's cap each, one per round, then back; :spend :job-time is the stay. No night rule, no sleep-count wait.
-  Stays away until morning (the skip wakes everyone then). Back while it is still night, it waits :news-ms for the server's sleep
+  Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
   A listed job that finds another job logged the body out since it was queued is done at once without acting.
   Ends with the result {:ms :how}. How is ok, cut, unsupported or closed.
@@ -124,9 +123,10 @@
   (let [{:keys [chance death]} (back-death c)] (if (pos? chance) (* chance death) 0)))
 
 (defn away-ms
-  "How long the stint lasts: till morning, so the sleepers' night is not cut by a short check-back."
-  [c]
-  (max 0 (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))))
+  "How long the stint lasts: the sleep count's 100 ticks plus a margin. The night skips once everyone sleeps, whenever
+  that is; staying out till morning would keep the body away through the day the others woke into."
+  [_c]
+  (+ (settings/ticks->ms sh-clock/sleep-skip-ticks) sh-clock/morning-margin-ms))
 
 (defn ^:async quote-of [c]
   (let [s (if (staying? c)
@@ -137,9 +137,7 @@
 (defn ^:async log-out! [c]
   (let [assumed (not (sh-sleepers/asleep-known? (:primitives c) (ctx/view c)))
         ms (away-ms c)
-        r (await (ctx/act c :offline (if (pos? ms)
-                                       #js {:ms ms :why "logged-out-for-sleeping-player"}
-                                       #js {:why "logged-out-for-sleeping-player"})))
+        r (await (ctx/act c :offline #js {:ms ms :why "logged-out-for-sleeping-player"}))
         how (.-status r)
         out {:ms (.-ms r) :how how}]
     (when (and (= "ok" how) (sh-sense/night? (:primitives c)))

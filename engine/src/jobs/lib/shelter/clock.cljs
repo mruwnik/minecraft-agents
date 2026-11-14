@@ -40,6 +40,10 @@
      {:uses {:job-time [0 (ticks->s (max 0 (- day-tick t)))
                         (if (settings/frozen?) ##Inf (ticks->s (max 0 (- night-end-tick t))))]}})))
 
+(def sleep-skip-ticks
+  "Ticks every player must lie in bed before the server skips the night."
+  100)
+
 (def morning-margin-ms
   "Extra time away, so a body that logged out until morning comes back after the night has ended."
   2000)

@@ -34,6 +34,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.hut-shelter-test :as hut]
             [engine.reach-test :as reach-test]
+            [engine.night-support :refer [on-return!]]
             [engine.shelter-support :refer [walls-cheap day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted no-way-stops emitted-by floor bed-room dirt-stack wall-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
 
@@ -282,10 +283,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :blocks {"0,66,0" "stone"}})]
+        (let [{:keys [eng p clock]} (setup {:time night :entities [sleeper] :blocks {"0,66,0" "stone"}})]
+          (on-return! p clock (fn [_] (.setTime (.-world p) noon)))
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (await (tick-n eng 3))
-          (is (= 1 (count (calls p "offline"))) "the roof does not matter; out until morning while the sleeper sleeps")
+          (is (= 1 (count (calls p "offline"))) "the roof does not matter; out while the sleeper sleeps, the night skipped on return")
           (is (= 1 (count (entries eng :log-out))) "the stint booked"))))))
 
 (def own-shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built})
@@ -598,16 +600,16 @@
 
 ;; ----------------------------------------------------------------- log-out
 
-(deftest log-out-goes-offline-till-morning
+(deftest log-out-goes-offline-for-the-sleep-count-not-till-morning
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night})]
           (core/submit! eng (tu/order '(jobs.survival.log-out {})) {})
           (await (run-until-empty eng 3))
-          (is (= [475050] (mapv #(.-ms (.-args %)) (calls p "offline"))))
+          (is (= [7000] (mapv #(.-ms (.-args %)) (calls p "offline"))))
           (is (= ["logged-out-for-sleeping-player"] (mapv #(.-why (.-args %)) (calls p "offline"))))
-          (is (= [{:ms 475050 :status "ok" :assumed true}] (entries eng :log-out)))
+          (is (= [{:ms 7000 :status "ok" :assumed true}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
 
 (deftest log-out-with-a-stay-chains-capped-stints-at-any-hour
@@ -631,7 +633,7 @@
   (is (> (lo/default-time {:stay-ms 21600000}) 21600))
   (is (< (lo/default-time {}) 3600)))
 
-(deftest a-plain-log-out-goes-offline-by-day
+(deftest a-plain-log-out-goes-offline-by-day-for-the-sleep-count
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -642,7 +644,7 @@
                        (swap! asked conj (.-ms a))
                        #js {:status "ok" :ms 1000}))
           (let [out (await (tu/child-outcome eng 'jobs.survival.log-out {} 4))]
-            (is (= [nil] @asked) "no till-morning ms by day: the primitive's default stint")
+            (is (= [7000] @asked) "by day the same sleep-count stint")
             (is (= :done (:status out)))))))))
 
 (deftest log-out-unsupported-is-impossible-without-acting
