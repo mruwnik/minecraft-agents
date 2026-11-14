@@ -106,6 +106,7 @@
 (def stand-loss answer/stand-loss)
 (def stand-answer answer/stand-answer)
 (def hold-answer answer/hold-answer)
+(def stays-chance answer/stays-chance)
 (def cover-answer answer/cover-answer)
 (def cover-answers answer/cover-answers)
 (def cornered-answers answer/cornered-answers)

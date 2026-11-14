@@ -2,10 +2,12 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -26,7 +28,7 @@
   once ::hide-s (60 s) have passed in the refuge with no real danger on the body as it stands (danger/danger-near?, the
   hostile-near trigger's test), though a hostile stays; a melee hostile within ::foot-reach waiting at the foot holds it to
   ::hide-max-s. Sealed in a plug, pit or dug pocket with such a hostile at the foot past ::hide-s it (not a climber, which follows up the stair) first digs a stair up and away from
-  it (jobs.access.stair, ::dig-out-steps steps; the next heading when one stops), then ends done {:hold :spent :dug-out true}.
+  it (jobs.access.stair, ::dig-out-steps steps; the next heading when one stops), then ends done {:hold :spent :dug-out true}; it stays on instead while that costs less (stays-for-waiting?).
   Nothing-possible :hurt {:ids [mobs within ::reach-radius]} when the body loses health in the refuge (a mob reaching it
   round a corner of the seal), :breached {:id :name} when a creeper (its blast breaks any refuge; a plug or pit is kept when leaving
   costs more, stays-for-creeper?) or, against a pillar, a climber is within ::breaker-reach and ::leave-for-breakers is on. Needs nothing; places nothing; the refuge itself stays.
@@ -47,7 +49,7 @@
    ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
    ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}
    ::opened-s {:default 1 :doc "Seconds a body in a plug or pit is exposed to the other hostiles about once a creeper's blast has opened the refuge, until it shuts it again: the price of staying for a creeper." :spec (a/num-in 0 nil)}
-   ::leave-s {:default 3 :doc "Seconds a body leaving a refuge is in the open among the other hostiles about: the price of leaving it for a creeper, against the price of staying (::opened-s)." :spec (a/num-in 0 nil)}
+   ::leave-s {:default 3 :doc "Seconds a body leaving a refuge is in the open among the other hostiles about: the price of leaving it for a creeper (against ::opened-s) or, carrying the blocks to seal again, digging out past a melee mob at the foot (stays-for-waiting?)." :spec (a/num-in 0 nil)}
    ::reach-radius {:default 3 :doc "Blocks within which a hostile counts as the one that hurt a hidden body." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 900 :doc "Seconds a hide may take." :spec (a/num-in 0 nil)}})
 
@@ -145,6 +147,21 @@
         stay (if shielded? (loss others (settings/get settings ::opened-s)) (loss on-top leave-s))]
     (< stay (loss others leave-s))))
 
+(defn stays-for-waiting?
+  "Whether hiding another ::hide-s costs less than digging out now. Leaving is in the open among the hostiles about (sensed
+  or heard; shooters within their fire range): ::leave-s while the body carries the blocks to seal again (as many as the
+  refuge's cells), else a whole respond call (hostile-loss/loss). Staying is the wait, then that same leaving by the
+  chance they are still about when it ends (cost/stays-chance: the hides of held-ms they outlasted counted, a mob the
+  sun does not burn stays for certain)."
+  [c held-ms]
+  (let [p (:primitives c)
+        view (ctx/view c)
+        near (flight/near-known p (dead c) (danger-q/hostile-radius) :fire-range)
+        reseal? (>= (reduce + 0 (map :count (blocks/carried c (flight/blocks c)))) (count (:cells (:args c))))
+        leave (if reseal? (hostile-loss/loss-over c view near (settings/get settings ::leave-s)) (hostile-loss/loss c view near))
+        stays (cost/stays-chance (hostile-loss/mobs-of p view near) (js/Math.floor (/ held-ms (* 1000 (hide-s)))))]
+    (< (+ (hide-s) (* stays leave)) leave)))
+
 (defn breaker
   "The known hostile that would breach the refuge: a creeper (unless staying is cheaper: stays-for-creeper?) or, against a pillar, a climber, within breaker-reach; nil when none or leave-for-breakers is off."
   [c]
@@ -182,7 +199,8 @@
                      (and (#{:plug :pit :plug-dig} (:kind (:args c)))
                           (>= held-ms (* 1000 (hide-s)))
                           (let [waiting (waiting-melee c)] (and (seq waiting) (not-any? combat/climber? waiting)))
-                          (not (danger-on-body?))))]
+                          (not (danger-on-body?))
+                          (not (stays-for-waiting? c held-ms))))]
     (cond
       hurt? (ctx/end c :nothing-possible :hurt
                      {:ids (mapv #(.-id %) (flight/near-known p #{} (reach-radius) (reach-radius)))

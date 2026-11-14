@@ -353,8 +353,8 @@
   (vec (keep #(or (:hold %) (get-in % [:ending :data :hold])) (filter #(and (#{:completed :child_ended} (:kind %)) (not= :hide (:slot %))) @seen))))
 
 (defn ^:async hide-steps
-  "Submit spec over world and run its round. Once it hides, each [entities jump-ms] of steps replaces the mobs and
-  moves the clock; after a short real wait the job list is noted. Then the mobs go and the round is awaited.
+  "Submit spec over world and run its round. Once it hides, each [entities jump-ms inventory] of steps replaces the mobs
+  (and the inventory, when given) and moves the clock; after a short real wait the job list is noted. Then the mobs go and the round is awaited.
   The setup map plus :listed (the lists noted) and :waits (wait calls made by the end)."
   [spec world steps]
   (let [{:keys [eng p seen clock] :as s} (setup world)
@@ -370,8 +370,8 @@
                    (if (and (hiding? seen) @holding)
                      (js/Promise. (fn [go] (reset! release #(go (impl t a))) (when-let [f @arrive] (f))))
                      (impl t a))))
-      (doseq [[ents jump-ms] steps]
-        (swap! (fake/state p) assoc :entities [])
+      (doseq [[ents jump-ms inventory] steps]
+        (swap! (fake/state p) #(cond-> (assoc % :entities []) inventory (assoc :inventory inventory)))
         (doseq [e ents] (fake/add-entity! p e))
         (swap! clock + jump-ms)
         (let [held (js/Promise. (fn [r] (reset! arrive r)))]
@@ -420,6 +420,22 @@
           (is (seq (calls p "dig")) "a stair is cut (the old code held on, up to :hide-max-s)")
           (is (every? #(<= (.. % -args -pos -x) 0) (calls p "dig")) "away from the zombie at x 3, none towards it")
           (is (= [:spent] (hidden-holds seen))))))))
+
+(deftest a-hurt-unarmed-sealed-body-with-a-pack-at-its-foot-past-hide-s-keeps-hiding-instead-of-digging-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pack (into [(skeleton 7 64 0)] (map #(assoc (zombie-at %) :id (+ 20 %)) [3 4 5]))
+              spent [{:name "stone" :count 1} {:name "stone_pickaxe" :count 1}]
+              {:keys [p seen]}
+              (await (hide-steps '(test.flight) {:blocks long-dead-end :self {:health 15.7}
+                                                 :inventory [{:name "cobblestone" :count 20} {:name "stone_pickaxe" :count 1}]
+                                                 :entities [(zombie-at 4)]}
+                                 [[pack 61000 spent] [pack 1000]]))]
+          (is (not-any? #(> (.. % -args -pos -y) 65) (calls p "dig"))
+              "Brindle S20: dug out at 60 s past 3 zombies and a skeleton, too few blocks left to seal again, and was killed")
+          (is (= [:spent] (hidden-holds seen)) "it hid on until they left")
+          (is (not-any? #(or (:dug-out %) (get-in % [:ending :data :dug-out])) @seen) "handed back, not dug out"))))))
 
 (deftest a-sealed-body-with-a-spider-at-its-foot-past-hide-s-keeps-hiding-instead-of-digging-up
   (async done

@@ -1,6 +1,7 @@
 ;; Card abea4cb7 (b91af0a4): a body sealed in a tunnel with a melee mob kept off at its foot digs a stair up and away from
 ;; it once hide-s has passed, instead of handing back to a walk through the tunnel the mob waits in. A NoAI helmeted zombie
-;; 3 east of the closed tunnel end gets the body sealed in; the stair goes west into the rock and rises.
+;; 3 east of the closed tunnel end gets the body sealed in; the stair goes west into the rock and rises. Card a365c5f2:
+;; with a pack at the foot and no blocks left to seal again, staying costs less than leaving, so it stays sealed.
 {:defaults
  {:tags [:hostile :survival :cornered]
   :time :any
@@ -8,15 +9,26 @@
   :blocks [[:fill [2 0 10] [30 8 22] "stone"] [:fill [12 0 16] [29 1 16] "air"]
            [:set [16 1 16] "torch"] [:set [22 1 16] "torch"]]
   :body {:spawnpoint :far :at [12.5 0 16.5] :inventory [["cobblestone" 20] ["stone_pickaxe" 1]]}
-  :register [{:trigger :hostile-near :why "a short hide so the case ends inside its window" :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.survival.hide-out/hide-s 5}})}]
+  :register [{:trigger :hostile-near :why "the mob stays in the tunnel" :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8}})}]
   }
  :cases
  [{:name "sealed-body-with-a-mob-at-its-foot-digs-up-and-away"
    :act [[:summon "zombie" [15.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
-         [:until-pos {:y-min 3 :x-max 11} 90]]
+         [:until-pos {:y-min 3 :x-max 11} 120]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}]
    :after [[:body-near [9.5 5 16.5] 6]]
+   :limit-s 180}
+  {:name "sealed-body-with-a-pack-at-its-foot-and-no-blocks-to-seal-again-stays-sealed"
+   :body {:inventory [["cobblestone" 2]]}
+   :act [[:summon "zombie" [15.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [16.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [17.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:wait-s 80]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:no-event {:source :job :kind :stair.step} :for-s 80}]
+   :after [[:body-near [12.5 0 16.5] 2.5]]
    :limit-s 150}
   {:name "sealed-body-with-a-spider-at-its-foot-stays-sealed"
    :act [[:summon "spider" [15.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
