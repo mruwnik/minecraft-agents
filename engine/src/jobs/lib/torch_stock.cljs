@@ -3,9 +3,11 @@
   pickaxe. Both are optional: a get that fails only warns, and the dig goes on (while its cells are lit, or with the worn tool)."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.torch :as torch]
-            [jobs.lib.trip :as trip]))
+            [jobs.lib.trip :as trip]
+            [jobs.lib.util :as u]))
 
 (defn fetch-allows?
   "Whether the call lets it get torches. They need coal, so only when the ways include :gather (a mine run by obtain never
@@ -35,7 +37,8 @@
   "Before a dig down or a tunnel sets out: with fewer than trip/torch-low torches carried, get them up to trip/torch-stock
   with a jobs.items.obtain child (slot :torches; chest, craft from coal or charcoal, charcoal by smelt, gather), and with
   coal or charcoal carried only what that fuel makes (4 each). Resolves nil to go on, :continue while the get waits.
-  Once per call (:torches-tried): info torch.stocked, or warn torch.no-stock with the get's cause (nothing when a caller is already getting torches: :duplicate-call). The body walks back to
+  A get that ended :job-time (its chain ran longer than the quote its budget is, the logs and stone it made still carried) goes on as a fresh get,
+  :continue, while another try is worth its price (cost/try-again? :child-round); any other end sets :torches-tried: info torch.stocked, or warn torch.no-stock with the get's cause (nothing when a caller is already getting torches: :duplicate-call). The body walks back to
   where it began (need :return?). Skipped without :gather in the call's ways."
   [c]
   (let [p (:primitives c)
@@ -46,8 +49,11 @@
     (when (and (fetch-allows? c) (< held (trip/torch-low)) (not (:torches-tried (ctx/mem c))))
       (let [e (await (need/fetch! c 'jobs.items.obtain {:item "torch" :count n :avoid (trip/line-ahead c)} :need {:item "torch" :count n}
                                   {:slot :torches :return? true}))]
-        (if (= :continue e)
+        (cond
+          (= :continue e) :continue
+          (and (= :job-time (need/cause-why e)) (<= (torch/torches-held p) held) (do (u/failed! c) (cost/try-again? c :child-round)))
           :continue
+          :else
           (let [now (torch/torches-held p)]
             (ctx/update-mem! c assoc :torches-tried true)
             (when (and (pos? fuel) (<= now held)) (ctx/update-mem! c assoc :craft-failed true))

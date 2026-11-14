@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.mine-support :as mt]
             [engine.test-util :as tu]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]))
 
@@ -66,3 +67,14 @@
 (deftest the-no-stock-text-of-a-body-with-no-torches-says-the-stair-or-tunnel-stops-at-a-dark-cell
   (is (re-find #"stops :no-torches at the first dark one" (stock/no-stock-text 0 {:data {}})) "the stair torch step ends the dig :no-torches where a cell is unlit, so the text must not say it goes on dark")
   (is (not (re-find #"goes on dark" (stock/no-stock-text 0 {:data {}})))))
+
+(deftest a-torch-get-that-runs-out-of-job-time-with-its-chain-half-made-goes-on-instead-of-giving-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [items-s fetch-time/items-s
+              s (with-redefs [fetch-time/items-s (fn ([names] (items-s names)) ([names n] (if (= ["torch"] names) 25 (items-s names n))))]
+                  (await (mine-with-cooking!)))]
+          (is (seq (mt/events-of s :limit_reached)) "the first get ran out of job time")
+          (is (empty? (mt/events-of s :torch.no-stock)) "it did not give up with the pack worth more than when it began")
+          (is (seq (own :torch.stocked s))))))))
