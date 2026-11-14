@@ -125,6 +125,16 @@
           (is (= {"bread" 8} (ft/chest-items s)) "12 bread are the 60 points of the reserve")
           (is (= {"bread" 12} (ft/inv s))))))))
 
+(deftest food-held-at-the-food-reserve-calls-no-deposit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:chest ft/chest}
+                                 (ft/world (ft/farm "wheat" 7 [[2 2]] [[2 2]]) ft/wheat-drops
+                                        {:inventory [(ft/item "bread" 12)] :containers {"10,64,0" []}}) 40))]
+          (is (= {:skipped :nothing-to-store} (ft/step s :deposit)) "the deposit's own keep holds all 12 bread, so the step is skipped, not called")
+          (is (= 12 (get (ft/inv s) "bread"))))))))
+
 (deftest crops-are-stored-down-to-the-food-reserve
   (async done
     (tu/run-async done

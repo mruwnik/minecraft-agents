@@ -22,6 +22,7 @@
             [jobs.lib.reserve :as rsv]
             [jobs.lib.sense :as sense]
             [jobs.lib.storage :as storage]
+            [jobs.storage.deposit :as deposit]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.lib.work-place :as work-place]
@@ -42,7 +43,7 @@
     its conditions hold. It always runs; a field with nothing to do books it declined.
   - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
   - :deposit (jobs.storage.deposit with :items :farm-goods): a :chest is given and farm goods (seeds, crops, melon,
-    pumpkin, hay, cocoa, bread, baked potatoes) are carried above the keep. Tools and other food are never stored.
+    pumpkin, hay, cocoa, bread, baked potatoes) are carried above the keep and the deposit's own holds (the food reserve). Tools and other food are never stored.
   The keep, per name, is the largest of: the sowing reserve (one replant: the number of beds, farmland or untilled ground cells of
   a box, or the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
   register holds (jobs.lib.reserve: the food reserve, best food first; agent entries) and the :carry entry. Harvested
@@ -117,6 +118,11 @@
         (map (juxt :x :y :z))
         (fruit-cuts c)))
 
+(defn spare
+  "{name n} a deposit of the farm goods would put away now over keep: the deposit job's own pick, so a step that is called always has something to move."
+  [c keep]
+  (deposit/spare-items (assoc c :args {:items :farm-goods :carry keep})))
+
 (defn facts
   "{:keep :waste :stored :blocked :cut}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig, the stalk blocks to cut."
   [c]
@@ -124,7 +130,7 @@
         keep (stock/keeps (sow-reserve c) (rsv/held c :maintain) (:carry (:args c)))]
     {:keep keep
      :waste (stock/surplus inventory keep crops/waste-seeds)
-     :stored (stock/surplus inventory keep crops/farm-goods)
+     :stored (filterv (spare c keep) crops/farm-goods)
      :blocked (if (and (fa/plan c) (empty? (fa/parts c)))
                 (count (tend-plan/clearable-cells c (:crops (tend-plan/planned c))))
                 0)
@@ -191,9 +197,9 @@
   "Seconds the stock steps are worth, each only while it would run: the goal-value of the farm goods a deposit stores and
   of the bone meal the waste seed composted makes."
   [c]
-  (let [{:keys [keep waste stored] :as f} (facts c)
+  (let [{:keys [keep waste] :as f} (facts c)
         meal (/ (transduce (map :count) + 0 (carried-over c waste keep)) (/ compost-levels seed-compost-chance))]
-    (+ (if (:call (decide :deposit (:args c) f)) (:value (cost/goal-value (carried-over c stored keep))) 0)
+    (+ (if (:call (decide :deposit (:args c) f)) (:value (cost/goal-value (mapv (fn [[n k]] {:name n :count k}) (spare c keep)))) 0)
        (if (:call (decide :compost (:args c) f)) (:value (cost/goal-value [{:name "bone_meal" :count meal}])) 0))))
 
 (defn tidy-worth
