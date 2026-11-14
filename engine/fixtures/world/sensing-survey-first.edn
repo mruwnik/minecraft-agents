@@ -144,7 +144,7 @@
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
          [:job (jobs.explore.search {:worth 1200 :target "cow" :within 60 :use-notes true})]]
-   :expect [{:event {:source :job :kind :completed :data {:reason :found :found [{:noted true}] :text [:contains "found 1 cow at"]}} :within-s 70 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :found :found [{:noted true}] :text [:contains "found 1: cow at"]}} :within-s 70 :of-job true}]
    :limit-s 90}
 
   ;; Night: the body is shut in a stone room with a torch and a glass window at night; a search for a target outside waits for day in the room

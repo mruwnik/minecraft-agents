@@ -351,8 +351,8 @@
         seen-at (fn [{:keys [id]}] (when id (some->> ns (filter #(and (= :seen (:kind %)) (= id (:id %)))) (map :t) seq (apply max))))]
     (mapv (fn [f] (let [t (seen-at f)] (cond-> f (and t (> (- now t) stale-ms)) (assoc :ago-s (quot (- now t) 1000))))) found)))
 
-(defn finding-text [{:keys [pos ago-s]}]
-  (str (str/join "," pos) (when ago-s (str " (last seen " (max 1 (js/Math.round (/ ago-s 60))) " min ago)"))))
+(defn finding-text [{:keys [what pos ago-s]}]
+  (str what " at " (str/join "," pos) (when ago-s (str " (last seen " (max 1 (js/Math.round (/ ago-s 60))) " min ago)"))))
 
 (defn refused-text
   "When the legs that ended a :stuck search were all refused by the call's own floor, the sentence saying so, else nil."
@@ -373,7 +373,7 @@
         found (aged c (:found m []))
         result (cond-> {:reason reason :found found :coverage (coverage m)
                         :text (if (= :found reason)
-                                (str "found " (count found) " " what " at " (str/join ", " (map finding-text found)))
+                                (str "found " (count found) ": " (str/join ", " (map finding-text found)) " (looking for " what ")")
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
                                      (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
                                      (cond

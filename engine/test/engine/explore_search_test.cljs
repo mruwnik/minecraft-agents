@@ -235,6 +235,13 @@
           (is (= [{:what "diamond_block" :pos [10 64 0]}] (:found (found-of s))))
           (is (= [] (walks s))))))))
 
+(deftest the-found-text-names-what-was-found-not-the-whole-target-set
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target ["diamond_block" "gold_block"]} {:blocks {"10,64,0" "diamond_block"}}))]
+          (is (= "found 1: diamond_block at 10,64,0 (looking for diamond_block/gold_block)" (:text (found-of s)))))))))
+
 (def two-diamonds {"10,64,0" "diamond_block" "0,64,12" "diamond_block"})
 
 (deftest a-target-in-an-avoided-column-is-not-found

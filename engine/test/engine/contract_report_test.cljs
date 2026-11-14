@@ -235,7 +235,7 @@
                  (contract/add-trip {:x 30 :y 64 :z 0} {:x 3 :y 64 :z 4} false))]
     (is (= {:dug 1 :far 30.0} (select-keys trip [:dug :far])))
     (is (= {:dug 1 :far 30} (contract/trip-summary trip)))
-    (is (= "(dug 1 cells, walked 30 blocks from the start)" (contract/trip-text (contract/trip-summary trip))))
+    (is (= "(dug 1 cells, at most 30 blocks from where it started)" (contract/trip-text (contract/trip-summary trip))))
     (is (nil? (contract/trip-summary {:dug 0 :far 5.0})) "a short walk is not worth a line")))
 
 (deftest a-root-job-answers-with-the-far-walk-of-its-child
@@ -247,5 +247,5 @@
           (await (core/tick! eng))
           (let [completed (first (filter #(= :completed (:kind %)) @seen))]
             (is (= {:far 40} (:trip completed)))
-            (is (= "(walked 40 blocks from the start)" (:text completed)))
+            (is (= "(at most 40 blocks from where it started)" (:text completed)))
             (is (= {:far 40} (get-in completed [:report :trip])))))))))

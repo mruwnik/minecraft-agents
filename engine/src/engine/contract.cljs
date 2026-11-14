@@ -91,7 +91,7 @@
   (when summary
     (str "(" (str/join ", " (cond-> []
                              (:dug summary) (conj (str "dug " (:dug summary) " cells"))
-                             (:far summary) (conj (str "walked " (:far summary) " blocks from the start")))) ")")))
+                             (:far summary) (conj (str "at most " (:far summary) " blocks from where it started")))) ")")))
 
 (defn report
   "The report of a frame's :contract state at now: its tally with what used gives among the uses, and its trip-summary as :trip."
