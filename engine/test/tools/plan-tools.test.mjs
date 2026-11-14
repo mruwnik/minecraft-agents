@@ -500,7 +500,7 @@ const ADOPT = ['adopt', 'farm', '--body', 'Probe', '--by', 'Maker', '--box=0,63,
 const farmCells = [[0, 63, 0, 'dirt'], [1, 63, 0, 'farmland'], [1, 64, 0, 'wheat'], [2, 63, 0, 'water'], [2, 64, 0, 'air'],
   [3, 63, 0, 'stone'], [3, 64, 0, 'oak_fence'], [4, 64, 0, 'oak_fence_gate']]
 
-test('adopt records what the body saw in the box as a plan: placed blocks, water and crops in, terrain, air, crop ground and the unseen out', async () => {
+test('adopt records every seen block of the box as it is, crops as crop wants; air and the unseen are out, --any areas are whatever', async () => {
   const fx = fixture()
   try {
     await writeSeen(fx, 'Probe', farmCells, Date.now() - 1000)
@@ -511,16 +511,16 @@ test('adopt records what the body saw in the box as a plan: placed blocks, water
     assert.ok(!fs.existsSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'farm.edn')))
     const made = await invoke('plan', fx, ADOPT)
     assert.equal(made.code, 0, made.output)
-    assert.deepEqual(made.value.adopted.parts, { wheat: 1, water: 1, fence: 1, gate: 1 })
+    assert.deepEqual(made.value.adopted.parts, { dirt: 1, farmland: 1, wheat: 1, water: 1, stone: 1, fence: 1, gate: 1 })
     assert.equal(made.value.adopted.unseen, 4)
     assert.equal(made.value.adopted['outside-author-zones'], 1)
     const text = fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'farm.edn'), 'utf8')
     assert.match(text, /:want \{:crop "wheat"\}/)
     assert.match(text, /:want \{:facing "north" :block "oak_fence_gate"\}/)
     assert.match(text, /:metadata \{:by "Maker"\}/)
-    assert.doesNotMatch(text, /farmland|"dirt"|"stone"|:open/)
-    const terrain = await invoke('plan', fx, ['adopt', 'ground', ...ADOPT.slice(2), '--terrain', '--dry-run'])
-    assert.deepEqual(terrain.value.adopted.parts, { dirt: 1, wheat: 1, water: 1, stone: 1, fence: 1, gate: 1 })
+    assert.doesNotMatch(text, /:open/)
+    const any = await invoke('plan', fx, ['adopt', 'wild', ...ADOPT.slice(2), '--any=0,63,0:1,64,0', '--any=3,63,0:3,63,0', '--dry-run'])
+    assert.deepEqual(any.value.adopted.parts, { water: 1, fence: 1, gate: 1, any: 0, 'any-2': 0 })
   } finally { fx.close() }
 })
 

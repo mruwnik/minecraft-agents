@@ -3,32 +3,48 @@
             [plan.adopt :as adopt]
             [plan.shape :as shape]))
 
-(def natural? #{"dirt" "stone" "grass_block" "sugar_cane" "bamboo"})
-
 (defn run
   "adopt over a box [[0 0 0] [x 0 0]] whose cells are the blocks of world (index -> block, absent = unseen)."
   [world & {:as opts}]
-  (adopt/adopt (merge {:id "p" :box [[0 0 0] [(dec (count world)) 0 0]] :natural? natural? :body "B" :date "d"
+  (adopt/adopt (merge {:id "p" :box [[0 0 0] [(dec (count world)) 0 0]] :body "B" :date "d"
                        :block-at (fn [[x]] (get world x))}
                       opts)))
 
-(defn parts [result] (into {} (map (juxt :id #(select-keys % [:cells :want]))) (-> result :plan :parts)))
+(defn parts [result] (into {} (map (juxt :id #(select-keys % [:cells :box :want]))) (-> result :plan :parts)))
 
-(deftest unseen-air-and-terrain-are-left-out
+(deftest unseen-and-air-are-left-out-and-terrain-is-kept-as-it-is
   (let [r (run [nil {:name "air"} {:name "dirt"} {:name "stone"} {:name "cobblestone"}])]
-    (is (= {"cobblestone" {:cells [[4 0 0]] :want "cobblestone"}} (parts r)))
+    (is (= {"dirt" {:cells [[2 0 0]] :want "dirt"} "stone" {:cells [[3 0 0]] :want "stone"} "cobblestone" {:cells [[4 0 0]] :want "cobblestone"}}
+           (parts r)))
     (is (= 1 (:unseen r)))))
 
-(deftest terrain-option-keeps-natural-blocks
-  (is (= {"dirt" {:cells [[0 0 0]] :want "dirt"}} (parts (run [{:name "dirt"}] :terrain? true)))))
-
-(deftest a-crop-is-a-crop-want-and-its-farmland-is-left-out
-  (let [r (adopt/adopt {:id "p" :box [[0 0 0] [1 1 0]] :natural? natural? :body "B" :date "d"
+(deftest a-crop-is-a-crop-want-and-its-farmland-is-kept
+  (let [r (adopt/adopt {:id "p" :box [[0 0 0] [1 1 0]] :body "B" :date "d"
                         :block-at {[0 0 0] {:name "farmland"} [0 1 0] {:name "wheat" :state {"age" "3"}}
                                    [1 0 0] {:name "farmland"} [1 1 0] {:name "air"}}})]
     (is (= {"wheat" {:cells [[0 1 0]] :want {:crop "wheat"}}
-            "farmland" {:cells [[1 0 0]] :want "farmland"}}
+            "farmland" {:box [[0 0 0] [1 0 0]] :want "farmland"}}
            (parts r)))))
+
+(deftest cane-bamboo-and-fruit-are-crop-wants-of-any-stage
+  (let [r (run [{:name "sugar_cane" :state {"age" "3"}} {:name "sugar_cane"} {:name "melon"} {:name "attached_pumpkin_stem"}])]
+    (is (= {"sugar_cane" {:box [[0 0 0] [1 0 0]] :want {:crop "sugar_cane"}}
+            "melon_stem" {:cells [[2 0 0]] :want {:crop "melon_stem"}}
+            "pumpkin_stem" {:cells [[3 0 0]] :want {:crop "pumpkin_stem"}}}
+           (parts r)))))
+
+(deftest cells-filling-a-box-are-one-box-part
+  (let [r (run [{:name "dirt"} {:name "dirt"} {:name "dirt"} {:name "stone"} nil {:name "stone"}])]
+    (is (= {"dirt" {:box [[0 0 0] [2 0 0]] :want "dirt"} "stone" {:cells [[3 0 0] [5 0 0]] :want "stone"}}
+           (into {} (map (juxt :id #(select-keys % [:box :cells :want]))) (-> r :plan :parts))))
+    (is (= {"dirt" 3 "stone" 2} (:parts r)))
+    (is (= [] (shape/plan-errors (:plan r) "p")))))
+
+(deftest an-any-area-is-a-part-and-none-of-its-cells-is-recorded
+  (let [r (run [{:name "dirt"} {:name "stone"} {:name "stone"} {:name "dirt"}] :any [[[1 0 0] [2 0 0]]])]
+    (is (= {"dirt" [[0 0 0] [3 0 0]]} (into {} (map (juxt :id :cells)) (filter :cells (-> r :plan :parts)))))
+    (is (= {:box [[1 0 0] [2 0 0]] :want :any} (select-keys (-> r :plan :parts last) [:box :want])))
+    (is (= [] (shape/plan-errors (:plan r) "p")))))
 
 (deftest a-sapling-is-a-tree-want
   (is (= {:tree "oak"} (-> (run [{:name "oak_sapling"}]) :plan :parts first :want))))
@@ -54,11 +70,6 @@
     (is (= "adopted from B's sight d" (-> r :plan :note)))
     (is (= ["gate" "fence" "bed" "wall-oak"] (map :id (-> r :plan :parts))))
     (is (= 4 (:cells r)))))
-
-(deftest cane-and-bamboo-are-kept-by-their-base-cell-though-natural
-  (let [r (adopt/adopt {:id "p" :box [[0 0 0] [0 2 0]] :natural? natural? :body "B" :date "d"
-                        :block-at {[0 0 0] {:name "sugar_cane" :state {"age" "3"}} [0 1 0] {:name "sugar_cane"} [0 2 0] {:name "sugar_cane"}}})]
-    (is (= {"sugar_cane" {:cells [[0 0 0]] :want "sugar_cane"}} (parts r)))))
 
 (deftest a-bed-keeps-its-part-so-head-and-foot-are-two-wants
   (let [r (run [{:name "white_bed" :state {"facing" "east" "part" "head" "occupied" "false"}}
