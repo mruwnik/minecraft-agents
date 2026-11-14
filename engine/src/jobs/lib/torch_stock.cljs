@@ -1,6 +1,6 @@
 (ns jobs.lib.torch-stock
   "What a dig stocks before it sets out, through jobs.lib.need: torches when few are carried, a spare for the last worn
-  pickaxe. Both are optional: a get that fails only warns, and the dig goes on (dark, or with the worn tool)."
+  pickaxe. Both are optional: a get that fails only warns, and the dig goes on (while its cells are lit, or with the worn tool)."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.need :as need]
@@ -26,7 +26,9 @@
          (if (zero? held)
            (str ", none made" (when (seq tried) (str " (" (str/join ", " (map (fn [[k v]] (str (name k) " " (if (keyword? v) (name v) v))) tried)) ")")))
            " and could not get more")
-         ": the dig goes on " (if (zero? held) "dark" "with them")
+         (if (zero? held)
+           ": the dig goes on over lit cells and stops :no-torches at the first dark one it must stair or tunnel through"
+           ": the dig goes on with them")
          (when-let [w (get-in e [:data :why])] (str " (" w ")")))))
 
 (defn ^:async torches!

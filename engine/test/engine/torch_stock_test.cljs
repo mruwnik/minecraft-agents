@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.mine-support :as mt]
             [engine.test-util :as tu]
+            [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]))
 
 (def log-world
@@ -61,3 +62,7 @@
   (let [p (tu/fake {:self {:pos {:x 5.5 :y 64 :z 2.5}}})]
     (is (= [[6 63 2] [6 64 2] [6 65 2] [7 63 2] [7 64 2] [7 65 2]] (trip/line-ahead {:args {:heading :east} :primitives p})))
     (is (= [[5 63 1] [5 64 1] [5 65 1] [5 63 0] [5 64 0] [5 65 0]] (trip/line-ahead {:args {:direction "north"} :primitives p})))))
+
+(deftest the-no-stock-text-of-a-body-with-no-torches-says-the-stair-or-tunnel-stops-at-a-dark-cell
+  (is (re-find #"stops :no-torches at the first dark one" (stock/no-stock-text 0 {:data {}})) "the stair torch step ends the dig :no-torches where a cell is unlit, so the text must not say it goes on dark")
+  (is (not (re-find #"goes on dark" (stock/no-stock-text 0 {:data {}})))))
