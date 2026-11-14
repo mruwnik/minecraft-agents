@@ -239,12 +239,14 @@
 (defn flee-hold-s "Seconds of the step's search kept back from its surveys for the flee search (hold-for-flee!), 0 when none." [c] (:flee-hold-s (ctx/mem c) 0))
 
 (defn hold-for-flee!
-  "Keep back for the flee search of this step the CPU of its cheapest plans: a plan to each of targets (positions, nil
-  skipped) expands at least one planner node a block of the straight way (cost/search-cell-ceiling-s each), at most the
-  step's budget. The surveys and looks that run before it (survey-meter) leave that to it, so it always plans."
+  "Keep back for the flee search of this step the CPU of its cheapest plan: a plan to the nearest of targets (positions,
+  nil skipped) expands at least one planner node a block of the straight way (cost/search-cell-ceiling-s each), at most
+  the step's budget. The surveys and looks that run before it (survey-meter) leave that to it, so it always plans; a
+  farther target's plan runs on what is left, as the meter allows."
   [c targets]
   (let [me (u/self-pos c)
-        s (* (cost/search-cell-ceiling-s) (reduce + 0 (map #(u/dist me %) (remove nil? targets))))]
+        blocks (map #(u/dist me %) (remove nil? targets))
+        s (* (cost/search-cell-ceiling-s) (if (seq blocks) (apply min blocks) 0))]
     (ctx/update-mem! c assoc :flee-hold-s (min s (cost/search-budget-s)))))
 
 (defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))

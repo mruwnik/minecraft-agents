@@ -758,6 +758,8 @@
           (do
             (rooms/hold-for-flee! c [{:x 5.5 :y 64 :z 30.5} nil])
             (is (= (* (cost/search-cell-ceiling-s) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a straight plan's nodes, a block each, are held for the flee search")
+            (rooms/hold-for-flee! c [{:x 5.5 :y 64 :z 30.5} {:x 5.5 :y 64 :z 3000.5}])
+            (is (= (* (cost/search-cell-ceiling-s) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a far goal adds nothing: the nearest plan is the one the step must run")
             (rooms/hold-for-flee! c [{:x 5.5 :y 64 :z 3000.5}])
             (is (= (cost/search-budget-s) (rooms/flee-hold-s c)) "never more than the step's search")
             (rooms/new-step! c)
@@ -765,6 +767,34 @@
           (is (<= (:spent-s late) budget) (str (:spent-s late)))
           (is (= [nil] (mapv :why (:verdicts fresh))) "a step with its search to spend runs home")
           (is (< 0 (:spent-s fresh) budget) (str (:spent-s fresh))))))))
+
+(defn ^:async holds-at-home-room
+  "The flee hold (rooms/flee-hold-s) at each home-room! call of job spec's run over a zombie 6 blocks from the hut."
+  [spec]
+  (let [home-room rooms/home-room!
+        holds (atom [])
+        _ (set! rooms/home-room! (fn [c home r] (swap! holds conj (rooms/flee-hold-s c)) (home-room c home r)))
+        {:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 12.5 0.4)]))]
+    (try (core/submit! eng (tu/order spec) {})
+         (await (tu/run-until-empty eng 2))
+         (finally (set! rooms/home-room! home-room)))
+    @holds))
+
+(deftest a-flight-step-holds-the-flee-search-its-cpu-before-it-looks-for-the-home-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [holds (await (holds-at-home-room '(test.flight)))]
+          (is (seq holds))
+          (is (every? pos? holds) (str "the first search of the step, after the hold: " holds)))))))
+
+(deftest respond-to-hostiles-flee-price-holds-the-flee-search-its-cpu-before-it-looks-for-the-home-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [holds (await (holds-at-home-room '(jobs.survival.respond-to-hostile)))]
+          (is (seq holds))
+          (is (every? pos? holds) (str "the first search of the step, after the hold: " holds)))))))
 
 (deftest a-known-closed-home-whose-room-flood-is-cut-is-unjudged-not-dropped-silently
   ;; card 9ccd6f0c: kept closed in job memory, its room still floods for its cells; a cut leaves it to a later step
