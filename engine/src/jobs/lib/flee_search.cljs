@@ -822,7 +822,7 @@
                 (some :blast-d timed) (assoc :blast-d (reduce min (keep :blast-d timed))))))))
 
 (defn way-up-chance
-  "{:chance} of a flight that takes a stair up it has seen (respond.cover/way-up): a seen way, at wworld/way-counts counts."
+  "{:chance} of a flight that takes a stair up it has seen and no chaser gets to first (respond.cover/way-up): a seen way, at wworld/way-counts counts."
   [counts]
   {:chance (cost/flight-caught-chance {:way? true :unseen? false :counts counts})})
 
@@ -836,6 +836,15 @@
   (cost/wins-race? lost at cost/flee-pace): no route there can be safe."
   [chasers from food pos]
   (not (cost/wins-race? (/ (u/dist from (cost/centred pos)) (cost/flee-pace food)) (arrive-at chasers (cost/centred pos)))))
+
+(defn way-beaten?
+  "Whether a chaser gets to a block of the straight way from `from` to cell `to` before the body (beaten-to? of each
+  block of it, `to` included): a chaser beside the way catches the body on it, however far its end."
+  [chasers from food to]
+  (let [end (cost/centred to)
+        n (max 1 (js/Math.ceil (u/dist from end)))]
+    (boolean (some (fn [i] (beaten-to? chasers from food (update-vals (merge-with + from (update-vals (merge-with - end from) #(* (/ i n) %))) js/Math.floor)))
+                   (range 1 (inc n))))))
 
 (defn safe-why
   "Why the walk to a named target is no safe run, its scored end e: :past-hostile (a chaser catches the route, or the

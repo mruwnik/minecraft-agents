@@ -963,6 +963,15 @@
           (is (= [{:x -1 :y 65 :z 0} (:chance (:price field))] [(:target stair) (:chance (:price stair))])
               (str "the same tunnel with a stair the body cut: the flight takes it, so the price is a seen way's like the field's, not a way through the unseen cells the flight never looks at " (pr-str stair))))))))
 
+(deftest a-stair-up-a-chaser-gets-to-first-is-no-way-out
+  ;; 2cac5807 (Brindle S9-5): the body's own stair was priced never caught with a zombie 3 blocks off; the step failed and it was cornered at once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (price-after-flight {:floor strip :blocks stair-rock :stair [[-1 64 0]] :entities [(zombie 7 1.5 {})]}))]
+          (is (not= {:x -1 :y 65 :z 0} (:target r)) (str "the zombie a block off is on the body before it is up the step " (pr-str r)))
+          (is (< 0.5 (:chance (:price r))) "so the flight is priced as one the zombie catches, not a free way"))))))
+
 (deftest an-unseen-shooters-line-of-fire-costs-a-flight-step-that-stays-in-it
   ;; the flight's marks priced only seen shooters' lines: a step straight along an unseen one's line cost it nothing
   (async done

@@ -138,13 +138,16 @@
 
 (defn way-up
   "Underground, the feet cell on a stair this body cut (ledger/ways-of) or where a recent walk of its began (trail-floors),
-  that leads up and away from threats (walk/way-target), else nil. Only stands the body has seen count."
+  that leads up and away from threats (walk/way-target) and that no chaser (respond.goal/chasers, calm ones left out)
+  gets to a block of first (flee-search/way-beaten?), else nil. Only stands the body has seen count."
   [c threats]
   (let [p (:primitives c)
-        floors (into (ledger/ways-of c) (trail-floors c))]
-    (when (and (seq threats) (sh-sense/buried? p))
-      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats)
-                       (filter #(seen-stand? p %) floors) (way-reach)))))
+        from (u/self-pos c)
+        floors (into (ledger/ways-of c) (trail-floors c))
+        target (when (and (seq threats) (sh-sense/buried? p))
+                 (walk/way-target from (mapv #(danger-q/mob-pos p %) threats) (filter #(seen-stand? p %) floors) (way-reach)))]
+    (when (and target (not (search/way-beaten? (search/with-ways c (remove :calm? (respond.goal/chasers c))) from (.-food (.self p)) target)))
+      target)))
 
 (defn homes
   "The homes a flight runs to: the first of rooms (survey's) and home-pos, none with a creeper within blast reach (blast?)."
