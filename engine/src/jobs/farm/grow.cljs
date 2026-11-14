@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
@@ -21,7 +22,7 @@
   reads the world first, so a cut or restarted run takes up the field it finds (a field already standing is never started
   again):
   1. A crop of :crop seen and ripe (a zone or claim of another owner leaves it): cut it with jobs.farm.harvest, which replants.
-  2. A crop seen, none ripe: look once at the field when a crop's memory is old enough that it could have ripened since (within the harvest radius), then wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
+  2. A crop seen, none ripe: look again (one sight pass per group of crops one look covers) when a crop's memory is old enough that it could have ripened since (within the harvest radius), then wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
   3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; a failed seed fetch with :count seeds carried sows what is carried; wheat seeds are
      broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body, the field worth a 3-day food reserve: cost/food-search-worth) and work it with jobs.farm.tend (till,
      irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance.
@@ -43,12 +44,10 @@
 
 (def target [:crop])
 (defn job-time-of
-  "The :job-time a grow of args may spend: the measured wait for its count to ripen from a fresh field (cost/ripen-s) plus the measured work (cost/field-step-s): the field's cells tilled, sown and watered, then each crop cut and sown again."
+  "The :job-time a grow of args may spend (Q184): the usual cost of growing its count from a fresh field, nothing carried (cost/field-grow: the hoe and seed fetches, the field work, the ripening), plus one sd of it."
   [{:keys [crop count w h]}]
-  (let [cells (* w h)]
-    (+ (cost/ripen-s crop count cells 0)
-       (cost/field-step-s :till cells) (cost/field-step-s :plant cells) (cost/field-step-s :irrigate 1)
-       (cost/field-step-s :harvest count) (cost/field-step-s :plant count))))
+  (let [{:keys [value sd]} (cost/field-grow crop count w h)]
+    (+ value sd)))
 
 (def defaults {:spend {:job-time job-time-of}})
 (def safe?
@@ -121,12 +120,16 @@
              seen)))
 
 (defn ^:async relook!
-  "Turn to the middle of the stale crops and take one sight pass (its cone covers the field, as a player's glance does), so ripeness is judged from sight."
+  "Group the stale crops by what one look covers (look/cone-groups) and, per group, turn to its middle and take one sight pass, so ripeness is judged from sight."
   [c seen]
-  (when-let [cells (seq (map :pos (stale c seen)))]
-    (let [mean (fn [k] (/ (reduce + (map k cells)) (count cells)))]
-      (await (ctx/act c :look (clj->js {:pos {:x (+ 0.5 (mean :x)) :y (+ 0.5 (mean :y)) :z (+ 0.5 (mean :z))}})))
-      (look/see! c (look/search-effort) :look-at))))
+  (when-let [cells (seq (map #(update-vals (:pos %) (fn [v] (+ v 0.5))) (stale c seen)))]
+    (let [eye (update (u/self-pos c) :y + game/eye-height)]
+      (loop [[g & more] (look/cone-groups eye cells)]
+        (when g
+          (let [mean (fn [k] (/ (reduce + (map k g)) (count g)))]
+            (await (ctx/act c :look (clj->js {:pos {:x (mean :x) :y (mean :y) :z (mean :z)}})))
+            (look/see! c (look/search-effort) :look-at)
+            (recur more)))))))
 
 (defn hoe? [c] (boolean (some #(.endsWith (:name %) "_hoe") (u/inventory (:primitives c)))))
 

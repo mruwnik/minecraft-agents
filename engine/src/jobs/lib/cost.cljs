@@ -29,7 +29,7 @@
     destroy  destroyed-s, destroyed-fn, cut-fn (a cut cell's dig with it): what digging a cell destroys, in seconds of replacing it (a crop's growth, farmland's dirt and till, a build put back with put-back-s; natural terrain and tree wood nothing, a log that looks placed (horizontal, in a line, joined to planks or glass) a build) (jobs.lib.cost.destroy).
     look     look-answer, look-value, closed-chance, closed-cell-chance, round-looks, turn-chance, turn-saving, cell-looks, redo-every, look-s: the value of a look before deciding, a boundary's unseen part closed, the looks a decision's unknown cells pay (jobs.lib.cost.look).
     find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance, vein-seen (ore blocks a find of a vein yields): an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; ore-level: the height a tunnel for it runs at; leg-chance, look-leg-chance (from what the body saw), tunnel-chance: a search leg's or a tunnel leg's chance of a find, tunnel-rate: a tunnel's blocks of ore per second over the cells it cuts (a heading's price), chance-of: leg i's; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find).
-    farm     field-share: the share of a field's unseen cells ripe or sowable, from the measured passes and its seen cells; ripe-chance: a cell seen growing ripe by now, at the game's growth rate, ripen-s: the wait for a count of a crop to ripen, growing-s: the seconds of them within the server's simulation distance of the body; harvests, sown-worth: the harvests a crop still to grow is worth now and what a sown cell is worth (its food at food-point-worth); field-step-s: the measured seconds of a tend step, earthwork-s: levelling a patch's cells off height (jobs.lib.cost.farm).
+    farm     field-share: the share of a field's unseen cells ripe or sowable, from the measured passes and its seen cells; ripe-chance: a cell seen growing ripe by now, at the game's growth rate, ripen-s, ripen-sd: the wait for a count of a crop to ripen and its spread, growing-s: the seconds of them within the server's simulation distance of the body; harvests, sown-worth: the harvests a crop still to grow is worth now and what a sown cell is worth (its food at food-point-worth); field-step-s: the measured seconds of a tend step, field-grow: growing a count from a fresh field (hoe, seeds, work, ripening) with its sd, earthwork-s: levelling a patch's cells off height (jobs.lib.cost.farm).
     pen      gap-loss: the animal worth a herd loses through fence gaps till the next pass, from a Gamma prior on the escape rate (jobs.lib.cost.pen); herd-loss, through one gap open a while.
     rise     expected-rise: the blocks up to a sky the body has not seen, from its height, what it knows of the surface, and a prior on the ground height (jobs.lib.cost.rise).
     averted  open-door-s, open-gate-s, short-slot-s, left-cell-s, riding-s, wedged-s, stuck-s, burn-hp: the loss a reflex averts where its trigger prices none, broad priors (jobs.lib.cost.averted); tree-worth: a tree's logs."
@@ -60,6 +60,7 @@
             [jobs.lib.cost.ways :as ways]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.table :as table]
+            [jobs.lib.crops :as crops]
             [jobs.lib.cost.value :as value]
             [jobs.lib.goal :as goal]
             [jobs.lib.look :as look]
@@ -556,6 +557,7 @@
 (def field-share farm/share)
 (def ripe-chance farm/ripe-chance)
 (def ripen-s farm/ripen-s)
+(def ripen-sd farm/ripen-sd)
 (def growing-s farm/growing-s)
 (def harvests farm/harvests)
 (def sown-worth farm/sown-worth)
@@ -734,6 +736,24 @@
   ([items overrides]
    (let [v (value/made-value items :overrides (merge (value/measured-worths @game/version) overrides) :basis (:goal-basis (value/measured-worth @game/version)))]
      (assoc v :sd (value/leaves-sd (:leaves v))))))
+
+(defn field-grow
+  "Seconds growing n of crop from a fresh w x h field takes, {:value mean :sd}: the cheapest hoe (none when carried) and the seeds
+  short of a cell each got (goal-value), the cells tilled and sown, the water poured, the crop's ripening (ripen-s, ripen-sd),
+  then each of the n cut and sown again (field-step-s); the gathers' and the ripening's spreads independent."
+  ([crop n w h] (field-grow crop n w h nil))
+  ([crop n w h {:keys [hoe? seeds]}]
+   (let [cells (* w h)
+         short (- cells (or seeds 0))
+         got (cond-> []
+               (not hoe?) (conj {:name (str (first weapon/cheapness) "_hoe") :count 1})
+               (pos? short) (conj {:name (get-in crops/field-items [crop :seed]) :count short}))
+         fetch (if (seq got) (goal-value got) {:value 0 :sd 0})
+         ripen-sd (farm/ripen-sd crop n cells 0)]
+     {:value (+ (:value fetch) (farm/ripen-s crop n cells 0)
+                (farm/step-s :till cells) (farm/step-s :plant cells) (farm/step-s :irrigate 1)
+                (farm/step-s :harvest n) (farm/step-s :plant n))
+      :sd (js/Math.sqrt (+ (* (:sd fetch) (:sd fetch)) (* ripen-sd ripen-sd)))})))
 
 (defn tree-worth
   "Seconds a tree of species with n logs is worth: the goal-value of its logs."

@@ -49,10 +49,14 @@
         (let [s (await (scenario {:count 1} (ft/world (ft/farm "wheat" 7 [[25 2]] [[25 2]]) ft/wheat-drops {:inventory kit}) 60))]
           (is (<= 1 (get (ft/inv s) "wheat" 0))))))))
 
-(deftest the-default-job-time-covers-the-crops-measured-ripening
-  (let [one (grow/job-time-of {:crop "wheat" :count 6 :w 3 :h 2})
+(deftest the-default-job-time-is-the-usual-cost-of-the-grow-plus-one-sd
+  (let [{:keys [value sd]} (cost/field-grow "wheat" 6 3 2)
+        one (grow/job-time-of {:crop "wheat" :count 6 :w 3 :h 2})
         two (grow/job-time-of {:crop "wheat" :count 12 :w 3 :h 2})]
-    (is (< (cost/ripen-s "wheat" 6 6 0) one (+ (cost/ripen-s "wheat" 6 6 0) 3600)) "the wait for the crop to ripen and the measured work, not a flat hour of it")
+    (is (= (+ value sd) one) "Q184: the expected cost plus one sd")
+    (is (< (+ (cost/ripen-s "wheat" 6 6 0) (cost/ripen-sd "wheat" 6 6 0) (:value (cost/goal-value [{:name "wheat_seeds" :count 6}]))) one js/Infinity)
+        "the ripening's mean and spread and the seed fetch, all within it")
+    (is (< (:value (cost/field-grow "wheat" 6 3 2 {:hoe? true :seeds 6})) value) "a hoe and seeds carried are not fetched")
     (is (< one two) "a second harvest of the field is a second growth to wait for")))
 
 (deftest a-growing-field-is-waited-for-and-no-field-is-started
@@ -86,9 +90,10 @@
               "it turned to the crop it only remembered"))))))
 
 (defn ^:async relook-calls
-  "The look calls a growing wait makes over a two-crop field whose memory is age-ms old."
-  [age-ms]
-  (let [s (setup (ft/world (ft/farm "wheat" 2 [[2 2] [3 2]] [[2 2] [3 2]]) ft/wheat-drops {:inventory kit}))
+  "The look calls a growing wait makes over a field of crops at cells (default two side by side) whose memory is age-ms old."
+  [age-ms & [cells]]
+  (let [cells (or cells [[2 2] [3 2]])
+        s (setup (ft/world (ft/farm "wheat" 2 cells cells) ft/wheat-drops {:inventory kit}))
         p (:p s)
         seen-blocks (aget p "seenBlocks")]
     (aset p "seenBlocks" (fn [q] (let [bs (seen-blocks q)] (doseq [b bs] (aset b "age-ms" age-ms)) bs)))
@@ -110,6 +115,14 @@
         (let [looks (await (relook-calls 2400000))]
           (is (some #{[3.0 2.5]} looks) "one look at the middle of the two crops")
           (is (not-any? #{[2.5 2.5] [3.5 2.5]} looks) "not one look a crop"))))))
+
+(deftest stale-crops-wider-apart-than-one-look-are-looked-at-once-per-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [looks (await (relook-calls 2400000 [[8 0] [-8 0]]))]
+          (is (some #{[8.5 0.5]} looks) "a look at the crop east of the body")
+          (is (some #{[-7.5 0.5]} looks) "and one at the crop west of it, behind the first look"))))))
 
 (deftest a-growing-field-in-a-plan-of-the-bodys-own-is-waited-for
   (async done

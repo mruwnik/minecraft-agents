@@ -177,6 +177,22 @@
        (perception/pass! per {:effort effort :reuse? true :why why}))
      (sample-entities! (:primitives c)))))
 
+(defn cone-groups
+  "points ({:x :y :z}) split into groups one look each covers from eye: in yaw order, a point joins the group before it while
+  the view cone (perception's fov and aspect) aimed at the group's mean still holds every point of it."
+  [eye points]
+  (let [[hx hy] (rays/half-extents (settings/get perception/settings :engine.perception/fov)
+                                   (settings/get perception/settings :engine.perception/aspect))
+        rel (fn [p] (mapv #(- (% p) (% eye)) [:x :y :z]))
+        yaw-of (fn [p] (let [[dx _ dz] (rel p)] (js/Math.atan2 (- dx) (- dz))))
+        mean (fn [ps] (into {} (for [k [:x :y :z]] [k (/ (reduce + (map k ps)) (count ps))])))
+        covers? (fn [ps] (let [[dx dy dz] (rel (mean ps))
+                               b (rays/basis (js/Math.atan2 (- dx) (- dz)) (js/Math.atan2 dy (js/Math.hypot dx dz)))]
+                           (every? #(let [[vx vy vz] (rel %)] (rays/in-cone? b hx hy vx vy vz)) ps)))]
+    (reduce (fn [gs p] (let [g (peek gs)]
+                         (if (and g (covers? (conj g p))) (conj (pop gs) (conj g p)) (conj gs [p]))))
+            [] (sort-by yaw-of points))))
+
 (defn ^:async look-at!
   "Turn to cell's centre (or the point aim [x y z]) and take a whole sight pass at search effort, again while the cell
   is still unknown, at most (passes)."

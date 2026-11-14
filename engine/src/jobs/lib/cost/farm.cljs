@@ -1,6 +1,6 @@
 (ns jobs.lib.cost.farm
   "What a farm field's cells are worth to a pass and what its steps take: the measured share of field cells ripe or
-  sowable at a pass (::field-prior), the chance a cell seen growing is ripe by now (ripe-chance), the wait for a count to ripen (ripen-s), the harvests a crop is worth over the horizon (harvests), what a sown cell is worth (sown-worth), and the seconds each step works (step-s)."
+  sowable at a pass (::field-prior), the chance a cell seen growing is ripe by now (ripe-chance), the wait for a count to ripen and its spread (ripen-s, ripen-sd), the harvests a crop is worth over the horizon (harvests), what a sown cell is worth (sown-worth), and the seconds each step works (step-s)."
   (:require [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -84,13 +84,22 @@
   (* (value/food-point-worth) (harvests crop age rate)
      (max 0 (- (value/crop-points crop) (value/food-points (crops/seed-of crop)))))))
 
-(defn ripen-s
-  "Mean seconds n of crop take to ripen in a field of `cells` cells (one item a cell a growth), from stage `age` on wet farmland under
-  open sky (crops/stages-per-s): its stages left, then a whole growth for each further harvest the count needs."
+(defn ripen-stages
+  "Growth stages n of crop wait for in a field of `cells` cells (one item a cell a growth) from stage `age`: its stages left, then a whole growth for each further harvest the count needs."
   [crop n cells age]
   (let [ripe (get crops/ripe-age crop 7)
         growths (max 1 (js/Math.ceil (/ n (max 1 cells))))]
-    (/ (+ (max 0 (- ripe age)) (* ripe (dec growths))) (crops/stages-per-s true nil))))
+    (+ (max 0 (- ripe age)) (* ripe (dec growths)))))
+
+(defn ripen-s
+  "Mean seconds n of crop take to ripen (ripen-stages) on wet farmland under open sky (crops/stages-per-s)."
+  [crop n cells age]
+  (/ (ripen-stages crop n cells age) (crops/stages-per-s true nil)))
+
+(defn ripen-sd
+  "Seconds of standard deviation of ripen-s: each stage's wait exponential at the stage rate, independent, so sqrt(stages) / rate."
+  [crop n cells age]
+  (/ (js/Math.sqrt (ripen-stages crop n cells age)) (crops/stages-per-s true nil)))
 
 (defn step-s
   "Seconds step works over units units: its ::field-work line, 0 for no units."

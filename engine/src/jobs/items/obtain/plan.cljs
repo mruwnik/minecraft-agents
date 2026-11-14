@@ -166,7 +166,7 @@
 (defn grow-s
   "Seconds a growable crop need (seen/growable?) with no ripe crop seen waits for the grow child: its standing crops
   ripening from the most grown (as many growths as its count over their cells takes; cost/ripen-s), else, none
-  standing, jobs.farm.grow's field tilled, sown and ripened from seed. 0 for any other need."
+  standing, jobs.farm.grow's field from what is carried (cost/field-grow). 0 for any other need."
   [c need]
   (if-not (and (growable? need) (not (ripe-crop c need)))
     0
@@ -175,7 +175,11 @@
           {:keys [w h]} crops/starter-field]
       (if (seq standing)
         (cost/ripen-s crop (:count need) (count standing) (apply max (map #(or (:age %) 0) standing)))
-        (+ (cost/ripen-s crop (:count need) (* w h) 0) (cost/field-step-s :till (* w h)) (cost/field-step-s :plant (* w h)))))))
+        (let [inv (u/inventory (:primitives c))
+              seed (get-in crops/field-items [crop :seed])]
+          (:value (cost/field-grow crop (:count need) w h
+                                   {:hoe? (some #(.endsWith (:name %) "_hoe") inv)
+                                    :seeds (reduce + 0 (for [s inv :when (= seed (:name s))] (:count s)))})))))))
 
 (defn need-cost
   "Seconds to gather a need whose nearest block is seen, a lower bound (the walk's danger is go-to's to price): the
