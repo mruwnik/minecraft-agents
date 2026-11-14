@@ -177,6 +177,17 @@
                               #(run corridor (fn [[x _ _]] (<= x 4)) {:boxes [[[0 64 0] [11 64 0]]]} torches)))]
           (is (not= :not-done r) "the unseen cells are each looked at once, not for ever"))))))
 
+(deftest a-blocked-look-walk-leaves-the-cell-unlooked-and-the-torch-is-still-hung
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (for [x (range 0 61)] [x 0])
+              [{:keys [p]} r] (await (tu/with-near-stub (fn [& _] (js/Promise.resolve :blocked))
+                                        #(run corridor (constantly false) {:boxes [[[0 64 0] [60 64 0]]]} torches)))]
+          (is (= :done (:status r)) (pr-str r))
+          (is (seq (:unlooked r)) "the cell the body never saw is reported unlooked")
+          (is (seq (torch-cells p corridor)) "the known dark cells still got a torch"))))))
+
 (deftest an-open-cell-with-its-head-or-floor-unseen-is-not-decided-yet
   (let [seen (fn [known] (fn [_ {:keys [y]}] (known y)))
         half? #(with-redefs [u/seen-name (seen %)] (light-area/half-seen? nil [0 64 0]))]

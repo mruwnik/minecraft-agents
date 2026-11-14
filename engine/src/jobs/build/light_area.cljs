@@ -152,7 +152,7 @@
   "Walk next to the unseen cell (a dark cell shows from close by) and look round there, once: :again, or :continue while
   the quote's search or the walk waits. A walk whose go-to quote (walk-pick/quoted-s) costs more than what the call is
   worth less the look walks taken so far (:look-s) as it survives (walk-pick/ev-worth) is not taken: the cell is noted
-  :unlooked and the frontier moves on."
+  :unlooked and the frontier moves on. A walk that ended :blocked looks round where the body stands and leaves the cell :unlooked."
   [c cell]
   (let [pos (zipmap [:x :y :z] cell)
         {:keys [looking look-s] :or {look-s 0}} (ctx/mem c)
@@ -173,7 +173,7 @@
         (if (= :partial r)
           (do (ctx/update-mem! c assoc :looking cell) :continue)
           (do (await (look/look-around! c))
-              (ctx/update-mem! c #(-> % (dissoc :looking) (update :viewed (fnil conj []) cell)))
+              (ctx/update-mem! c #(-> % (dissoc :looking) (update (if (= :there r) :viewed :unlooked) (fnil conj []) cell)))
               :again))))))
 
 (defn ^:async step! [c]
