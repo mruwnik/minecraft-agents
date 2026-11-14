@@ -31,7 +31,8 @@
   most :max-price (nil: no limit). A villager out of view is looked for (round, from the cell beside the workstation, at the spot the body last saw it, by day
   toward where one is heard);
   at night it is waited for till day (reason :night-villager-out-of-view), then looked for once more; one seen this call
-  is waited for ::away-s by day; then :gone. Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
+  is waited for ::away-s by day; then :gone. With the body boxed in its stand of the built pen, its near end open
+  (jobs.lib.villager-pen/luring), a villager out of view is left to the pen child, which waits for it to walk in. Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
   the place again are one urgent section (a night or food reflex waits for it); with a spare workstation carried, the
   spare goes in the moment the villager reads jobless and the drop is picked up after, so the villager has no time to
   claim another free job site. Before a break, and while a jobless villager is waited for, the villager must stand shut in
@@ -730,7 +731,9 @@
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)
-      ;; villagers count only while in view; one seen before may have stepped away while it lost its job
+      ;; villagers count only while in view; one seen before may have stepped away while it lost its job. Boxed in
+      ;; behind the workstation the body sees out only through the pen: the pen child waits for the walk-in.
+      (and (nil? e) villager (vp/luring p (b/cell (:pos (b/parse (:args c)))))) (await (pen! c))
       (nil? e) (await (look-for! c pos villager))
       (and e (not (and (:seen (ctx/mem c)) (nil? (:away-since (ctx/mem c)))))) (do (ctx/update-mem! c #(-> % (assoc :seen true) (dissoc :away-since))) :again)
       (.-baby e) (stop! c :baby)

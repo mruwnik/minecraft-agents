@@ -88,15 +88,27 @@
   [p lay]
   (boolean (some (fn [pair] (every? #(bs/passable? (name-at p %)) pair)) (partition 2 (:box lay)))))
 
-(defn exit-cell
-  "The first solid cell of the box's entry when the body stands boxed in the stand of a built pen at workstation cell ws
-  (its shut cells solid and the top slab on: no side open to walk out by), else nil: a dead end next to a workstation is no pen."
+(defn boxed
+  "The layout of the pen built at workstation cell ws (its shut cells solid, the top slab on) whose stand the body stands
+  boxed in (no side open to walk out by), else nil: a dead end next to a workstation is no pen."
   [p ws]
   (some (fn [side]
           (let [lay (layout ws side)]
             (when (and (at-stand? p lay) (not (way-in? p lay)) (empty? (owed p (:shut lay))) (top-slab? p (:slab lay)))
-              (first (filter #(solid? (name-at p %)) (:entry lay))))))
+              lay)))
         sides))
+
+(defn exit-cell
+  "The first solid cell of the box's entry when the body stands boxed in the stand of a built pen at ws (boxed), else nil."
+  [p ws]
+  (some->> (boxed p ws) :entry (filter #(solid? (name-at p %))) first))
+
+(defn luring
+  "The layout of the pen built at ws with the body boxed in its stand (boxed) and the near end open: the body sees out
+  only through the pen, where a villager walks in; else nil."
+  [p ws]
+  (let [lay (boxed p ws)]
+    (when (and lay (not (plug-shut? p lay))) lay)))
 
 (defn penned
   "The layout of the pen at workstation cell ws holding villager entity e (id its ident): shut, the slab on top, the

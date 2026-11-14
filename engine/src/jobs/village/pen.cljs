@@ -44,8 +44,10 @@
   Needs: a villager id, a profession with a workstation, the cell (else impossible :bad-args); building blocks, a wooden
   slab, torches and the workstation carried or fetchable.
   A building child that ends done with its piece still unbuilt ends the call nothing-possible :not-built (:piece).
+  With the body boxed in its stand of a built pen whose near end is open (jobs.lib.villager-pen/luring) it sees out only
+  through the pen, so a villager out of view is waited for to walk in like one in view.
   Ends done when the pen holds the villager (jobs.lib.villager-pen/penned; result {:side [dx dz] :cell [x y z]}), else condition-failed
-  :villager-out-of-view, :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
+  :villager-out-of-view (not luring), :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
   :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :dark, :not-walked-in (the villager
   stayed out for the whole wait; :sites names the other job sites seen), or a child's ending. What it built stays: the
   next call finds the pen standing.")
@@ -99,14 +101,17 @@
       (contract/later :penning "the villager is not shut in a pen yet"))))
 
 (defn quote-of
-  "The blocks still to place or dig at cost.ways/place-s each, the wait for the villager not priced."
+  "The blocks still to place or dig at cost.ways/place-s each; while the villager is not in, the walk-in wait, at most
+  take-job-ticks (wall time)."
   [c]
   (let [e (the-villager c)
         ws (ws-cell c)
         side (when ws (vp/choose (:primitives c) ws e))
-        n (if side (vp/work (:primitives c) (vp/layout ws side) (boolean (and e (vp/inside? (vp/layout ws side) e)))) 0)
-        t (* n (cost-ways/place-s))]
-    {:uses {:job-time [0 t ##Inf]}}))
+        in? (boolean (and e side (vp/inside? (vp/layout ws side) e)))
+        n (if side (vp/work (:primitives c) (vp/layout ws side) in?) 0)
+        t (* n (cost-ways/place-s))
+        wait (if in? 0 (/ (settings/ticks->ms (villager/take-job-ticks)) 1000))]
+    {:uses {:job-time [0 t ##Inf] :wall-time [0 wait wait]}}))
 
 (defn stop!
   [c kind reason & [data]]
@@ -233,12 +238,12 @@
   (let [p (:primitives c)
         ws (ws-cell c)
         e (the-villager c)
-        side (when e (vp/choose p ws e))
-        lay (when side (vp/layout ws side))
+        ;; boxed in, the body sees out only through the pen: the walk-in is what it waits for, not the villager in view
+        lay (if e (some->> (vp/choose p ws e) (vp/layout ws)) (vp/luring p ws))
         block (vp/name-at p ws)
-        in? (boolean (and lay (vp/inside? lay e)))]
+        in? (boolean (and e lay (vp/inside? lay e)))]
     (cond
-      (nil? e) (stop! c :condition-failed :villager-out-of-view)
+      (and (nil? e) (nil? lay)) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})
       (and block (not (bs/air block)) (not= (item-of (:args c)) block)) (stop! c :condition-failed :occupied {:block block})
       (seq (vp/owed p (:shut lay))) (await (fill! c :shut (vp/owed p (:shut lay))))

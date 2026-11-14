@@ -370,17 +370,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result] (await (roll {:entities [(librarian [] {:pos {:x 8.5 :y 64 :z 0.5} :profession "unemployed"})]
-                                     :keeps-job? true :blocks {"4,64,0" "air" "4,65,0" "air"}
+        ;; the pen's near end shut: a boxed body waits only on a pen a villager can walk into (villager-pen/luring)
+        (let [[result] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 8.5 :y 64 :z 0.5}})]
+                                     :keeps-job? true
                                      :wrap (fn [{:keys [p clock] :as env}]
-                                             (let [state (fake/state p)
-                                                   orig (.-entities p)
+                                             (let [orig (.-entities p)
                                                    hide-at (+ @clock 5000)
                                                    near? #(< 5 (.-x (.-pos (.self p))))]
-                                               (add-watch state :job (fn [_ _ _ w]
-                                                                       (when (and (near?) (= "unemployed" (get-in w [:entities 0 :profession])))
-                                                                         (swap! state update-in [:entities 0] assoc :profession "librarian"
-                                                                                :offers [(offer "enchanted_book")]))))
                                                (aset p "entities" (fn [a] (if (or (< @clock hide-at) (near?)) (.call orig p a) #js [])))
                                                env))} {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result)))))))
@@ -437,11 +433,11 @@
     env))
 
 (defn walks-in-and-takes-the-job
-  "v-1 walks into the open pen's cell 10 s of clock after the run starts, and takes the job (offers) once the near end
-  is plugged behind it with the lectern standing."
-  [offers]
+  "v-1 walks into the open pen's cell after-ms (default 10 s) of clock after the run starts, and takes the job (offers)
+  once the near end is plugged behind it with the lectern standing."
+  [offers & [after-ms]]
   (fn [{:keys [p clock] :as env}]
-    (let [at (+ @clock 10000)
+    (let [at (+ @clock (or after-ms 10000))
           s (fake/state p)
           v1 #(first (keep-indexed (fn [i e] (when (= "v-1" (:uuid e)) i)) (:entities @s)))]
       (add-watch clock :walk-in (fn [_ _ _ ms] (->> [ms] (filter #(>= % at))
@@ -469,6 +465,19 @@
                                            {:villager nil}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
           (is (= ["v-2" "v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen))))
+          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
+
+(deftest a-villager-out-of-view-of-the-body-boxed-in-the-built-pen-is-waited-for-to-walk-in-not-looked-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(jobless {:pos {:x 60 :y 64 :z 3}})] :keeps-job? true
+                                       :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone"}
+                                       :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
+                                       :wrap (comp (walks-in-and-takes-the-job [(offer "enchanted_book")] 60000) (ticking! 1000)
+                                                   #(do (tu/seeing-all (:p %)) %))}
+                                      {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
           (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
 
 (deftest a-penned-villager-kept-from-its-free-workstation-by-anothers-claim-takes-it-after-one-break

@@ -180,11 +180,11 @@
                                 (reset! lured (vec (remove #(vp/solid? (get-in w [:blocks %])) (concat (:shut lay) (:box lay)))))
                                 (swap! s assoc-in [:entities 0 :pos] [1.5 64 0.5])))))))))
 
-(deftest the-near-end-is-plugged-once-the-villager-walks-in
+(deftest a-villager-out-of-view-of-the-boxed-body-is-waited-for-and-the-near-end-plugged-once-it-walks-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (run-ticking (assoc (world (merge shut box)) :entities [(jobless {:x 6 :y 64 :z 3})]
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box)) :entities [(jobless {:x 60 :y 64 :z 3})]
                                                     :inventory [{:name "cobblestone" :count 4}])
                                              {} 400 walk-in-after))]
           (is (= :done (:status result)) (pr-str result))
