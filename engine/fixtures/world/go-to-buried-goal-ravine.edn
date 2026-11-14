@@ -3,6 +3,8 @@
 ;; against the goal's worth let the body down the ravine's stair a few blocks a plan (Tamsin, 69 -> 62 -> 55 -> 44).
 ;; Should-fail (buried): go-to stops not arrived and the body stays by the hill: no way down pays for the climb back.
 ;; Should-succeed (stair): a goal cell 4 down the stair's top is arrived at.
+;; Should-succeed (dig, card 307c741f): with a pickaxe and every way, the same goal is dug to from the hilltop: the cells round
+;; it under the seen top read as ground, so it is proved walled in at once; no edge tour, no :goal-unloaded.
 {:defaults
  {:tags [:movement :go-to]
   :time :any
@@ -33,7 +35,14 @@
    :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [15 22 10] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 110 :of-job true}]
    :after [[:body-near [15.5 22 10.5] 9]]}
-  {:name "stair-top-goal-arrives"
+  {:name "buried-goal-under-the-seen-hilltop-is-dug-to"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [15 22 10] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.edge-tour} :for-s 110 :until {:source :job :kind :completed} :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 110 :of-job true}]
+   :after [[:body-near [15.5 22 10.5] 2]]}
+    {:name "stair-top-goal-arrives"
    :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [26 15 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 110 :of-job true}]
    :after [[:body-near [26.5 15 16.5] 2]]}]}

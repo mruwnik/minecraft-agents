@@ -1444,3 +1444,18 @@
                                               {:pos [40 64 -24] :range 1 :unknown true}
                                               (looking {:light-default [0 0]})))]
           (is (= {:arrived false :why :one-way} (select-keys out [:arrived :why])) (pr-str out)))))))
+
+;; live: Tamsin S23r2-1 (307c741f). A goal inside the hill under the body, its cells never seen: the planner read the
+;; hill as hollow, the search ran out of nodes, the body toured the edge of the seen land and gave up :off-plan. The
+;; body feels its floor (a body's reflexes feel it every tick)
+(deftest a-goal-inside-the-ground-under-a-seen-top-is-dug-to-not-toured-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (run-go-to {:self {:pos {:x -3.5 :y 71 :z 0.5}} :blocks (merge (box -40 50 -40 40 60 40 "stone") (box -8 61 -8 8 70 8 "stone"))
+                                                      :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                     {:pos [1 66 0] :range 1 :unknown true}
+                                                     (fn [{:keys [w] :as world}] ((looking {:light-default [15 0]}) world) (u/feel w {:x -4 :y 70 :z 0}))))]
+          (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation]) " at " (:pos (fake/self p))))
+          (is (empty? (filter #(= :go-to.edge-tour (:kind %)) seen)) "no tour of the seen land's edge")
+          (is (= :dig-route (:step (last (filter #(= :go-to.escalated (:kind %)) seen)))) "a dig route to the goal in the ground"))))))

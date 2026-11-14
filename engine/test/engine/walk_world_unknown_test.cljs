@@ -189,6 +189,23 @@
 (def ladder-id (delay (first (blocks/state-ids (blocks/default-state-table) "ladder"))))
 (def stone-id (delay (first (blocks/state-ids (blocks/default-state-table) "stone"))))
 
+;; 307c741f: a goal inside a hill under its seen top read as open, the hill hollow
+(deftest an-unseen-cell-under-a-top-seen-from-above-is-ground-unless-seen-open-is-within-3-steps-through-unseen-cells
+  (let [top (for [x (range 0 16) z (range 0 16)] [x 70 z @stone-id])
+        air (for [x (range 0 16) z (range 0 16)] [x 71 z])
+        known (memory-of (concat top air [[5 64 5] [12 75 12]]))
+        buried? (fn [[x y z]] (boolean (some-> (rock/buried-section known (rock/open-ids) 3 0 (bit-shift-right y 4) 0 [] (js/Map.))
+                                               (aget (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left z 4) x)) (== 1))))]
+    (are [cell rock] (= rock (buried? cell))
+      [8 69 8] true
+      [8 66 8] true
+      [5 66 5] false
+      [5 67 5] false
+      [5 68 5] true
+      [12 80 12] false)
+    (is (nil? (rock/buried-section (memory-of air) (rock/open-ids) 3 0 4 0 [] (js/Map.))) "under seen air: no ground above")
+    (is (nil? (rock/buried-section (memory-of top) (rock/open-ids) 3 0 4 0 [] (js/Map.))) "a top seen only from below: a ceiling")))
+
 (deftest an-unseen-cell-straight-above-a-seen-ladder-is-not-rock-until-a-seen-block-ends-the-shaft
   (let [ladder (for [y (range 66 70)] [5 y 5 @ladder-id])
         shaft (memory-of ladder)

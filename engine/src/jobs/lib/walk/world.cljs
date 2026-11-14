@@ -209,11 +209,32 @@
     (let [d (inc (rock-beyond))]
       (memoize (fn [y] (<= (solid-at y d) 0.5))))))
 
-(defn- rock-seeds
-  "The cells path-world's rock guess spares for a walk over mask spec unknown: the feet and the spec's seeds (with-seeds)."
+(defn- stood-cells
+  "The cells a walk over mask spec unknown knows open though unseen: the feet and the spec's own (with-seeds)."
   [p ^js unknown]
   (let [{:keys [x y z]} (sh-sense/feet p)]
-    (cond-> (into [[x y z]] (.-own unknown)) (.-goal unknown) (conj (.-goal unknown)))))
+    (into [[x y z]] (.-own unknown))))
+
+(defn- rock-seeds
+  "The cells path-world's rock guess spares for a walk over mask spec unknown: stood-cells and the spec's goal (with-seeds)."
+  [p ^js unknown]
+  (cond-> (stood-cells p unknown) (.-goal unknown) (conj (.-goal unknown))))
+
+(defn goal-ground
+  "The cells within the goal's range (with-seeds) that a walk over mask spec unknown reads as ground, though unseen
+  (jobs.lib.walk.rock/ground-cells: under a top seen from above, away from all seen open), a Set of \"x,y,z\" keys; nil
+  when none is, or ::rock-beyond is off, the head is under water or the mask is :edge or without-rock. No stand is
+  planned in the ground: a goal there is dug to (go-to's escalation)."
+  [p ^js unknown]
+  (when-let [[gx gy gz] (and unknown (.-goal unknown) (not (.-edge unknown)) (not (.-noRock unknown)) (rock-beyond)
+                             (not (under-of p unknown)) (mapv #(js/Math.floor %) (.-goal unknown)))]
+    (when-let [known (memory-sections p)]
+      (let [r (or (.-goalRange unknown) 1)
+            n (js/Math.ceil r)]
+        (rock/ground-cells {:k (rock-beyond) :known known :stood (stood-cells p unknown)
+                            :cells (for [dx (range (- n) (inc n)) dy (range (- n) (inc n)) dz (range (- n) (inc n))
+                                         :when (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* r r))]
+                                     [(+ gx dx) (+ gy dy) (+ gz dz)])})))))
 
 (defn unseen-kind
   "How a walk over mask spec unknown (nil: over the world as it is) reads a cell the body has not seen, as a
@@ -223,11 +244,12 @@
   (if-not unknown
     :raw
     (let [rock (when-let [known (and (rock-guess? p unknown) (memory-sections p))]
-                 (rock/rock-at {:k (rock-beyond) :known (memory-sections p) :seeds (rock-seeds p unknown) :spare? (spare-fn p)}))
+                 (rock/rock-at {:k (rock-beyond) :known known :seeds (rock-seeds p unknown) :spare? (spare-fn p)}))
+          ^js ground (goal-ground p unknown)
           ^js blocked (.-blocked unknown)
           blocked (when (and blocked (pos? (.-size blocked))) blocked)]
-      (if (or rock blocked)
-        (fn [x y z] (if (or (and blocked (.has blocked (str x "," y "," z))) (and rock (rock x y z))) :solid :ground))
+      (if (or rock ground blocked)
+        (fn [x y z] (if (or (and blocked (.has blocked (str x "," y "," z))) (and ground (.has ground (str x "," y "," z))) (and rock (rock x y z))) :solid :ground))
         :ground))))
 
 (defn without-rock
@@ -261,10 +283,11 @@
     (kept-by-cell (fn [x y z] (cost/unseen-cell-share (- 1 (* (open x y z) (open x (inc y) z))) kit)))))
 
 (defn with-seeds
-  "The mask spec unknown with the cells its rock guess spares (path-world): goal ([x y z], or nil) and own (feet cells the
-  body dug its ways through itself); the spec is per call, the seeds per round."
-  [^js unknown goal own]
-  (doto unknown (unchecked-set "goal" goal) (unchecked-set "own" own)))
+  "The mask spec unknown with the cells its rock guess spares (path-world): goal ([x y z], or nil; within goal-range,
+  default 1, goal-ground reads its ground) and own (feet cells the body dug its ways through itself); the spec is per
+  call, the seeds per round."
+  [^js unknown goal own & [goal-range]]
+  (doto unknown (unchecked-set "goal" goal) (unchecked-set "own" own) (unchecked-set "goalRange" goal-range)))
 
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
@@ -273,7 +296,7 @@
   the spec with the mask's id, changed (memory-age/changed-fn: the chance a remembered cell changed), cell (unseen-share; without-rock: cellAt each), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Where
   the rock guess holds (rock-guess?), an unseen cell past ::rock-beyond of every seen open cell, the
   feet and the spec's seeds (with-seeds), at a height the guess does not spare (spare-fn), reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a
-  frontier, the snapshot's edge); the mask's rockBeyond says so (0: none)."
+  frontier, the snapshot's edge); the mask's rockBeyond says so (0: none). The goal-ground cells read stone too."
   ([p] (path-world p nil))
   ([p unknown]
    (when (fn? (.-pathWorld p))
@@ -282,6 +305,7 @@
            under? (when known (under-of p unknown))
            stone (first (blocks/state-ids table "stone"))
            k (when (and known (rock-guess? p unknown)) (rock-beyond))
+           ground (when known (goal-ground p unknown))
            mask (when known
                   (js/Object.assign #js {} unknown
                                     #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :under (boolean under?) :blockedId stone :known known :memoryEpoch (memory-epoch-fn p)
@@ -292,9 +316,9 @@
                                         #js {:cellAt (shut-cell-fn p kit) :cellMax (cost/unseen-cell-share 1 kit)}))))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
-           (when k
+           (when (or k ground)
              (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone (if (.-rockEdge unknown) unloaded-id stone) :edge (true? (.-rockEdge unknown))
-                                                                    :k k :known (memory-sections p) :seeds (rock-seeds p unknown) :spare? (spare-fn p)})))
+                                                                    :k k :known (memory-sections p) :seeds (rock-seeds p unknown) :spare? (spare-fn p) :ground ground})))
            pw))))))
 
 (defn unknown-of
