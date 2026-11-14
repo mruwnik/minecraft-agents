@@ -176,8 +176,9 @@
 (defn tell-body-idle! [eng idle-ms]
   (let [h (running eng)
         ids (cond-> (:list (state eng)) (:reflex h) (conj (:id h)))
-        jobs (mapv #(idle-job eng %) ids)]
-    (mem/write! (:store eng) :body-idle {:jobs jobs :idle-ms idle-ms} body-idle-policy)
+        jobs (mapv #(idle-job eng %) ids)
+        holds (some->> jobs (keep #(some-> (:holding %) :reason)) seq vec)]
+    (mem/write! (:store eng) :body-idle (cond-> {:jobs jobs :idle-ms idle-ms} holds (assoc :holds holds)) body-idle-policy)
     (emit! eng {:source :body :kind :idle :level :info :jobs jobs :idle-ms idle-ms
                 :text (str "body idle " (js/Math.round (/ idle-ms 1000)) " s with no useful act: "
                            (if (seq jobs) (str/join "; " (map idle-job-text jobs)) "no jobs"))})))

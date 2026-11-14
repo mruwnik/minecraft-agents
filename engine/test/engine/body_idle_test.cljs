@@ -92,7 +92,9 @@
           (core/submit! eng (tu/order '(repeat (filler))) {})
           (await (run-for eng clock 12000))
           (is (= {:reason :cooking} (select-keys (:holding (first (:jobs (first (idles seen))))) [:reason]))
-              (pr-str (:jobs (first (idles seen))))))))))
+              (pr-str (:jobs (first (idles seen)))))
+          (is (= [:cooking] (:holds (:data (mem/latest (mem/view (:store eng)) :body-idle))))
+              "the record says a hold was declared, and which"))))))
 
 (deftest a-real-job-acting-is-not-idle
   (async done

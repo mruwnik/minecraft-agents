@@ -81,3 +81,19 @@
     (mem/write! store :body-idle {:jobs [] :idle-ms 10000})
     (is (false? (read 200000 #{"j1" "j2"})))
     (is (true? (read 251000 #{"j1" "j2"})))))
+
+(deftest a-listed-job-that-holds-on-purpose-does-not-count-as-idle
+  (let [now (atom 1000)
+        store (mem/open (tu/tmp-dir) {:now #(deref now)})
+        p (tu/seeing-all (tu/fake-on-floor {:floor [-4 -4 4 4] :self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks roof}))
+        read (fn [t] (reset! now t) (su/stuck-underground p (mem/view store) su/defaults nil #{"j1"}))]
+    (mem/write! store :home {:pos {:x 30 :y 64 :z 0}} mem/place-policy)
+    (read 1000)
+    (reset! now 2000)
+    (mem/write! store :body-idle {:jobs [{:job "j1" :holding {:reason :cooking}}] :holds [:cooking] :idle-ms 10000})
+    (is (false? (read 130000)) "a declared hold: the body waits for something, it is not stuck")
+    (is (false? (read 400000)))
+    (reset! now 401000)
+    (mem/write! store :body-idle {:jobs [{:job "j1" :waiting {:reason :nothing-to-do}}] :idle-ms 10000})
+    (is (false? (read 402000)) "a plain idle record restarts the clock")
+    (is (true? (read 530000)))))

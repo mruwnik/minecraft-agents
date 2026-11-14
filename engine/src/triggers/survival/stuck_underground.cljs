@@ -2,8 +2,8 @@
   "The stuck-underground trigger: an idle body deep underground (its feet :below blocks or more under the remembered
   :home, else :bed, and buried: no sky light at its cell) walks home. mine, tunnel and the digs end where they stop and
   never walk back, so this is what gets an idle body out of a hole. Idle: no job listed, or the body's own body.idle
-  record (memory :body-idle) written since the clock below started, so a listed job that only waits keeps it no
-  longer. It holds only after the body has been in that state :idle-s seconds (a clock kept per body here, restarted
+  record (memory :body-idle) written since the clock below started with no declared hold (:holds, e.g. :cooking), so
+  a listed job that only waits keeps it no longer and one that holds still on purpose does. It holds only after the body has been in that state :idle-s seconds (a clock kept per body here, restarted
   while the state is off, when the listed jobs change, while a listed job works (no such record yet) and, with a job
   listed, when the body leaves its cell; a record from before the cell change still counts), so the gap between two agent calls walks nowhere. It needs a remembered home or bed, and holds nothing while the body sleeps or a death is unrecovered."
   (:require [engine.memory :as mem]
@@ -33,7 +33,9 @@
                     (sh-sense/buried? p))
         prev (.get since p)
         fresh {:t now :from now :cell cell :live live}
-        idle-since? (fn [t] (or (empty? live) (some-> (mem/latest view :body-idle) :t (>= t))))]
+        idle-since? (fn [t] (or (empty? live)
+                                (let [r (mem/latest view :body-idle)]
+                                  (and (some-> r :t (>= t)) (empty? (get-in r [:data :holds]))))))]
     (cond
       (not stuck?) (.delete since p)
       (or (nil? prev) (not= live (:live prev)) (not (idle-since? (:from prev)))) (.set since p fresh)
