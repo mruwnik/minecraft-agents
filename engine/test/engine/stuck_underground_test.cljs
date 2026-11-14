@@ -65,4 +65,19 @@
     (is (true? (read 246000)) "idle-s after the clock restarted under the working job")
     (swap! (fake/state p) assoc-in [:self :pos] [1.5 50 0.5])
     (is (false? (read 247000)) "leaving its cell restarts the clock")
-    (is (false? (read 400000)) "and only a new body.idle record makes it idle again")))
+    (is (true? (read 400000)) "the earlier body.idle record still counts: a push does not write a new one")))
+
+(deftest a-change-of-the-listed-jobs-restarts-the-clock
+  (let [now (atom 1000)
+        store (mem/open (tu/tmp-dir) {:now #(deref now)})
+        p (tu/seeing-all (tu/fake-on-floor {:floor [-4 -4 4 4] :self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks roof}))
+        read (fn [t live] (reset! now t) (su/stuck-underground p (mem/view store) su/defaults nil live))]
+    (mem/write! store :home {:pos {:x 30 :y 64 :z 0}} mem/place-policy)
+    (read 1000 #{"j1"})
+    (reset! now 2000)
+    (mem/write! store :body-idle {:jobs [] :idle-ms 10000})
+    (is (false? (read 130000 #{"j1" "j2"})) "j2 listed: a new clock, though a record is on file")
+    (reset! now 131000)
+    (mem/write! store :body-idle {:jobs [] :idle-ms 10000})
+    (is (false? (read 200000 #{"j1" "j2"})))
+    (is (true? (read 251000 #{"j1" "j2"})))))
