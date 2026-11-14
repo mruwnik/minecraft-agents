@@ -713,6 +713,19 @@
             (await (core/tick! eng)))
           (is (= 1 (count (calls p "attack"))) "the resumed fight still measures its leash from the first round's start: a mob 30 blocks on is not chased"))))))
 
+(deftest a-hurt-fight-swings-when-its-gap-ends-then-yields
+  ;; a zombie in reach hits the body in every swing gap: the yield for the parent's weighing follows the swing then due,
+  ;; so the fight keeps its weapon's cadence (yielding first put a whole flight step into every gap)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:entities [(zombie 1.5 0)]} 100)]
+          (.override (.-world p) "wait" (fn [token a impl] (swap! clock + (.-ms a)) (fake/swap-self! p update :health dec) (impl token a)))
+          (core/submit! eng (tu/order fight) {})
+          (await (core/tick! eng))
+          (is (= 2 (count (calls p "attack"))) "the first swing, the one due after the hurt gap, then the yield")
+          (is (= "attack" (.-name (last (.-calls (.-world p))))) "no gap waited before the yield"))))))
+
 (deftest hostile-attack-is-already-done-for-a-hidden-ranged-mob
   (async done
     (tu/run-async done

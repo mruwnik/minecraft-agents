@@ -51,7 +51,7 @@
   without a swing; a ranged one that, with another in range, is better left than walked to (hostile-fight/too-far-to-chase?: the
   priced answer says flee) ends :too-far; a creeper is a target only alone in range (hostile-fight/targets) and ends :creeper-unsafe when
   it cannot be fought hit-and-back (hostile-fight/hit-and-back-ok?) or only creepers are left: the parent, not each step, weighs fight against flight. No
-  hostile in range: :done :cleared. When the body lost health since the call began, or a creeper not there before is in range, the job yields (:continue). Every ending
+  hostile in range: :done :cleared. When the body lost health since the call began (hurt while it waited out a swing gap: once the swing then due at a target in reach is made), or a creeper not there before is in range, the job yields (:continue). Every ending
   but :done also carries :struck {id {:name :hits :health ...}}; a caller passes that ending's data back as :prior.")
 
 (a/defargs args
@@ -453,9 +453,19 @@
     (ctx/update-mem! c assoc :creepers ids)
     (boolean (and known (seq (remove known ids))))))
 
+(defn ^:async swing-once!
+  "Swing at target (engage!), then: :done :cleared with no hostile in range, :given-up with no target left, else then."
+  [c target then]
+  (ctx/update-mem! c update :seen (fnil conj #{}) (.-id target))
+  (await (engage! c target))
+  (cond
+    (empty? (hostile/in-range c)) (finish! c :cleared)
+    (empty? (hostile/targets c)) (declined c :given-up)
+    :else then))
+
 (defn ^:async hostile-step
-  "One step of a :hostiles fight: decline (hold ran out, ranged mob too far, only heard, all given up), yield when the body was hurt,
-  look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
+  "One step of a :hostiles fight: decline (hold ran out, ranged mob too far, only heard, all given up), yield when the body was hurt
+  (hurt while it waited out the swing gap: after the swing then due at a target in reach), look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
   [c]
   (let [p (:primitives c)
         target (first (hostile/targets c))
@@ -474,13 +484,15 @@
                         (cond (some combat/creeper? hs) (declined c :creeper-unsafe)
                               (seq hs) (declined c :given-up)
                               :else (finish! c :cleared))))
-      (combat/within-gap? c (swing-gap-ms c target)) (do (await (wait-swing-gap! c target)) :again)
-      :else (do (ctx/update-mem! c update :seen (fnil conj #{}) (.-id target))
-                (await (engage! c target))
-                (cond
-                  (empty? (hostile/in-range c)) (finish! c :cleared)
-                  (empty? (hostile/targets c)) (declined c :given-up)
-                  :else :again)))))
+      (combat/within-gap? c (swing-gap-ms c target))
+      (let [health (.-health (.self p))]
+        (await (wait-swing-gap! c target))
+        ;; hurt while it waited out the gap: the swing now due comes before the yield, so the parent weighs the hurt
+        ;; in the next gap, not after this one
+        (if (and (< (.-health (.self p)) health) (in-reach? c target))
+          (await (swing-once! c target :continue))
+          :again))
+      :else (await (swing-once! c target :again)))))
 
 (defn ^:async step
   "One step of the fight: end, look for a lost target, wait out the swing gap, or walk and swing once. :again or the ending."
