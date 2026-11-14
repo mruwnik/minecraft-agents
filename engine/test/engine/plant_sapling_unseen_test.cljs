@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [jobs.forestry.plant-sapling :as plant-sapling]
+            [jobs.lib.prepare-rule :as prepare-rule]
             [engine.library-test :as lt]
             [engine.events :as events]
             [engine.registry :as registry]
@@ -81,7 +82,7 @@
   (let [p (tu/seeing-all (tu/fake-on-floor {:blocks blocks}))
         omniscient (.-sensedAt p)]
     (aset p "sensedAt" (fn [pos] (if (and (= 63 (.-y pos)) (unseen-soil-at (.-x pos))) #js {:unknown true} (omniscient pos))))
-    (with-redefs [plant-sapling/light-at (constantly 15)]
+    (with-redefs [prepare-rule/light-at (constantly 15)]
       (plant-sapling/spot-price {:primitives p :args {}} {:pos {:x x :y 64 :z 0} :species "oak"}))))
 
 (deftest an-unseen-spot-costs-its-walk-over-the-measured-chance-and-a-seen-fit-one-near-it-wins

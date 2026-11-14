@@ -13,7 +13,7 @@
             [jobs.lib.world-files :as world]
             [jobs.forestry.prepare :as prepare]
             [jobs.forestry.prepare-field :as field]
-            [jobs.forestry.prepare-rule :as rule]
+            [jobs.lib.prepare-rule :as rule]
             [jobs.lib.trees :as trees]))
 
 (def job 'jobs.forestry.prepare)

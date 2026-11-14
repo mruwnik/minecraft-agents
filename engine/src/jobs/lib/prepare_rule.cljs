@@ -1,9 +1,10 @@
-(ns jobs.forestry.prepare-rule
+(ns jobs.lib.prepare-rule
   "The rule of jobs.forestry.prepare, pure: what state a planned tree cell is in, from the blocks around it and what
   the body carries."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.look :as look]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.trees :as forestry]
             [jobs.lib.tools :as tools]
@@ -14,7 +15,8 @@
 (a/defargs settings
   {::headroom {:default {"oak" 7 "birch" 8 "spruce" 9 "jungle" 13 "acacia" 10 "dark_oak" 10 "pale_oak" 10 "cherry" 9}
                :doc "{species cells} of growth space a planted cell needs above it, the cell included (about 70% sure of each); a species missing is refused as unsupported."
-               :spec (a/map-of a/name? (a/int-in 1 nil))}})
+               :spec (a/map-of a/name? (a/int-in 1 nil))}
+   ::min-light {:default 9 :doc "The light (the better of sky and block light, the clock left out) a planted sapling's cell needs to grow." :spec (a/int-in 0 15)}})
 
 (defn headroom-of
   "Cells of growth space for species (the planted cell included), nil for a species not supported."
@@ -61,6 +63,26 @@
               (nil? n) {:state :unloaded}
               (not (forestry/tree-free? n)) {:state :cramped :at (lib/cell-vec at) :block n})))
         (range 1 (headroom-of species))))
+
+(defn light-at
+  "The better of the sky and block light at pos, as the body knows it (look/known-light-at); nil when it is unknown."
+  [p pos]
+  (let [{:keys [x y z]} pos]
+    (when-let [v (look/known-light-at p x y z)]
+      (max (bit-and v 15) (bit-shift-right v 4)))))
+
+(defn unfit
+  "Why a sapling of species cannot grow at pos, as a cause {:reason ..}, or nil (unseen ground, room or light is no refusal)."
+  [p pos species]
+  (let [under (u/seen-name p (lib/down pos))
+        space (when (headroom-of species) (growth-space p pos species))
+        here (u/seen-name p pos)
+        light (when (and here (forestry/tree-free? here)) (light-at p pos))]
+    (cond
+      (#{"crimson" "warped"} species) nil
+      (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
+      (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
+      (and light (< light (settings/get settings ::min-light))) {:reason :too-dark :pos pos :light light})))
 
 (defn soil-state
   "{:state ...} for the ground under the planted cell: nil when it is soil the species takes, else :soil-dig (natural

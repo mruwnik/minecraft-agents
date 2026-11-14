@@ -16,7 +16,7 @@
             [jobs.farm.till :as till]
             [jobs.apiary.maintain :as apiary-maintain]
             [jobs.forestry.maintain :as maintain]
-            [jobs.forestry.prepare-rule :as prepare-rule]
+            [jobs.lib.prepare-rule :as prepare-rule]
             [jobs.forestry.plant-sapling :as sapling]
             [jobs.gather.get-seeds :as seeds]
             [jobs.lib.access :as access]

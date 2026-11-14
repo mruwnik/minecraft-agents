@@ -3,7 +3,7 @@
   what the access rules say of digging or placing at a cell."
   (:require [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [jobs.forestry.prepare-rule :as rule]
+            [jobs.lib.prepare-rule :as rule]
             [jobs.lib.util :as u]
             [jobs.lib.tidy-rules :as tidy]
             [jobs.lib.forestry :as lib]))

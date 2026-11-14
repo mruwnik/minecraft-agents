@@ -10,10 +10,9 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
-            [jobs.lib.look :as look]
             [jobs.lib.forestry :as lib]
             [jobs.lib.shelter :as sh]
-            [jobs.forestry.prepare-rule :as rule]
+            [jobs.lib.prepare-rule :as rule]
             [jobs.lib.trees :refer [debt-near-body? debts logs-per-tree forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species tree-free? cell-filled?]
              :rename {species all-species}]
             [jobs.lib.util :as u]
@@ -34,7 +33,7 @@
 
   Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), the spot's soil, light and room (checked
   before any sapling is fetched: :no-soil with :found, :cramped with :at and :block, the species' growth space of
-  jobs.forestry.prepare-rule/headroom, :too-dark when the cell's best light, sky or block, is under ::min-light (9); an unseen cell or light is no refusal, nor is light in a cell holding a solid block (:occupied is the place child's);
+  jobs.lib.prepare-rule/headroom, :too-dark when the cell's best light, sky or block, is under jobs.lib.prepare-rule/min-light (9); an unseen cell or light is no refusal, nor is light in a cell holding a solid block (:occupied is the place child's);
   jobs.forestry.prepare readies the ground), :no-sapling (none carried and
   :ways #{:carried}; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
   {:pos} once planted; condition-failed with the need cause when the fetch
@@ -52,8 +51,7 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::min-light {:default 9 :doc "The light (the better of sky and block light, the clock left out) a planted sapling's cell needs to grow." :spec (a/int-in 0 15)}
-   ::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:at :near])
@@ -69,26 +67,6 @@
 
 (def saplings (mapv sapling-of all-species))
 
-(defn light-at
-  "The better of the sky and block light at pos, as the body knows it (look/known-light-at); nil when it is unknown."
-  [p pos]
-  (let [{:keys [x y z]} pos]
-    (when-let [v (look/known-light-at p x y z)]
-      (max (bit-and v 15) (bit-shift-right v 4)))))
-
-(defn unfit
-  "Why a sapling of species cannot grow at pos, as a cause {:reason ..}, or nil (unseen ground, room or light is no refusal)."
-  [p pos species]
-  (let [under (u/seen-name p (lib/down pos))
-        space (when (rule/headroom-of species) (rule/growth-space p pos species))
-        here (u/seen-name p pos)
-        light (when (and here (tree-free? here)) (light-at p pos))]
-    (cond
-      (#{"crimson" "warped"} species) nil
-      (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
-      (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
-      (and light (< light (settings/get settings ::min-light))) {:reason :too-dark :pos pos :light light})))
-
 (defn spot-chance
   "The chance a sapling of species can be planted at pos: 0 when its seen soil, room or light rule it out, the measured
   cost/spot-plantable-chance when any of them is unseen, else 1."
@@ -96,11 +74,11 @@
   (let [p (:primitives c)]
     (cond
       (#{"crimson" "warped"} species) 1
-      (unfit p pos species) 0
+      (rule/unfit p pos species) 0
       (or (nil? (u/seen-name p (lib/down pos)))
           (nil? (u/seen-name p pos))
           (= :unloaded (:state (when (rule/headroom-of species) (rule/growth-space p pos species))))
-          (and (tree-free? (u/seen-name p pos)) (nil? (light-at p pos)))) (cost/spot-plantable-chance)
+          (and (tree-free? (u/seen-name p pos)) (nil? (rule/light-at p pos)))) (cost/spot-plantable-chance)
       :else 1)))
 
 (defn spot-price
@@ -151,7 +129,7 @@
   "Why the current target's spot cannot grow its sapling (unfit), or nil."
   [c]
   (let [t (current-target c)]
-    (when t (unfit (:primitives c) (:pos t) (:species t)))))
+    (when t (rule/unfit (:primitives c) (:pos t) (:species t)))))
 
 (def spot-unfit
   (checks/refusing :spot-fit "the spot has soil, light and room" target-unfit))

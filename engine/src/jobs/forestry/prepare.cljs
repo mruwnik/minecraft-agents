@@ -22,13 +22,13 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.forestry :as lib]
             [jobs.forestry.prepare-field :as field]
-            [jobs.forestry.prepare-rule :as rule]))
+            [jobs.lib.prepare-rule :as rule]))
 
 (def doc
   "Get the ground of a forest plan's planting spots ready (planting is jobs.forestry.maintain's). A spot is a planned tree cell (want {:tree species}). One call works
   the nearest cell with a step left until none is, each cell by the first rule that fits:
   1. Water in the cell: a source in it is filled with carried dirt (cleared as a stray after); a source beside it on its
-     level is dammed first, a flow is traced upstream (jobs.forestry.prepare-rule/max-upstream) and its source filled.
+     level is dammed first, a flow is traced upstream (jobs.lib.prepare-rule/max-upstream) and its source filled.
      While the traced water recedes the body pauses (jobs.time.noop) and looks again. Untraceable water, no dirt or a
      refused source: :wet.
   2. A stray in the cell (anything but air, the species' own sapling or log) is dug, by a jobs.blocks.clear-cells child. Not dug, only reported: another

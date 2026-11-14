@@ -2,7 +2,7 @@
   "tools/event-counts.mjs tree-spots: counts the measured prior jobs.lib.cost.value/::unseen-spot-counts from the
   recorded chunk columns (worlds/<world>/chunks): the base of a tree (a log on soil, no log under it) as a replant debt
   once the tree is felled, whether a sapling of its species could be planted there, its trunk and the leaves gone: the
-  growth space over it (jobs.forestry.prepare-rule/headroom-of cells) holds nothing a tree cannot grow through (logs count
+  growth space over it (jobs.lib.prepare-rule/headroom-of cells) holds nothing a tree cannot grow through (logs count
   as felled), and one of its open sides has light of 9 or more (the better of sky and block light). Trees of a species the
   job does not support, and bases with no recorded open side, are left out. Per chunk the shares are kept so the prior's
   spread is fitted by moments over chunks. Every stride-th column file in name order is read, the fixture plot grid left
@@ -10,8 +10,7 @@
   (:require ["fs" :as fs]
             [clojure.string :as str]
             [engine.settings :as settings]
-            [jobs.forestry.plant-sapling :as plant-sapling]
-            [jobs.forestry.prepare-rule :as rule]
+            [jobs.lib.prepare-rule :as rule]
             [jobs.lib.forestry :as forestry]
             [jobs.lib.trees :as trees]
             [world-test.field-passes :as field-passes]
@@ -44,7 +43,7 @@
                                       (when (and c (trees/tree-free? (:name c))) (max (or (:sky c) 0) (or (:block c) 0)))))
                      [[1 0] [-1 0] [0 1] [0 -1]])]
     (when (seq lights)
-      (boolean (and room? (<= (settings/get plant-sapling/settings ::plant-sapling/min-light) (reduce max lights)))))))
+      (boolean (and room? (<= (settings/get rule/settings ::rule/min-light) (reduce max lights)))))))
 
 (defn tally
   "{:plantable n :unfit n} of the tree bases in the columns xzs ([x z]) read by at."
