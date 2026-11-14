@@ -493,6 +493,13 @@
     (or (= want have)
         (and (= :facing k) (str/ends-with? (str name) "_fence_gate") (= (opposite-side want) have)))))
 
+(defn flowing-fluid?
+  "Whether the world's block is a fluid cell with level above 0 (flowing or falling); a source, or a fluid read with no level, is not."
+  [{:keys [name state]}]
+  (and (contains? #{"water" "lava"} name)
+       (let [l (some-> (state-of state :level) str)]
+         (boolean (and (seq l) (not= "0" l))))))
+
 (defn judge-block
   "A block want (name or block with state) against a non-air block: :match, :wrong, or :unknown when the name
   matches, the want names state and the world gave names only. The want `bed` is a bed of any colour; a block of
@@ -501,6 +508,7 @@
   (let [{wanted :block exact :exact :as want} (if (string? want) {:block want} want)
         wanted-state (apply dissoc want :block :exact (server-decided-state (:block want)))]
     (cond
+      (and (contains? #{"water" "lava"} wanted) (not (contains? want :level)) (flowing-fluid? {:name name :state state})) :wrong
       (not (or (= wanted name)
                (and (= "bed" wanted) (str/ends-with? (str name) "_bed"))
                (and (not exact) (contains? (counts-as wanted) name)))) :wrong

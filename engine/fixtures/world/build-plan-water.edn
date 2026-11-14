@@ -21,4 +21,10 @@
             [:set [19 0 16] "wheat"] [:set [21 0 16] "wheat"] [:set [20 0 15] "wheat"] [:set [20 0 17] "wheat"]]
    :act [[:job (jobs.items.use {:worth 1200 :on #at [20 -1 16] :face "up" :item "water_bucket"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
-   :after [[:block [20 0 16] "water"] [:block [19 1 16] "air"] [:block [21 1 16] "air"] [:block [20 1 15] "air"] [:block [20 1 17] "air"] [:item "bucket" 1]]}]}
+   :after [[:block [20 0 16] "water"] [:block [19 1 16] "air"] [:block [21 1 16] "air"] [:block [20 1 15] "air"] [:block [20 1 17] "air"] [:item "bucket" 1]]}
+  {:name "water-part-holding-flowing-water-is-made-a-source"
+   :blocks [[:set [21 0 16] "water"]]
+   :plans [{:id "pool" :metadata {:by "$body"} :parts [{:id "water" :cells [#at [22 0 16]] :want "water"}]}]
+   :act [[:wait-s 3] [:job (jobs.build.from-plan {:worth 1200 :plan "$plan:pool" :part "water" :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [22 0 16] "water[level=0]"]]}]}

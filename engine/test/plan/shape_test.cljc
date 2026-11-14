@@ -472,3 +472,12 @@
   (is (= "minecraft:the_nether" (shape/plan-dim (shape/with-dim wheat-plan "the_nether"))) "a short name gains the namespace")
   (is (= "minecraft:the_end" (:dim (shape/with-dim (assoc wheat-plan :dim "minecraft:the_end") "minecraft:the_nether"))) "an existing dim is kept")
   (is (= wheat-plan (shape/with-dim wheat-plan nil)) "no dimension known leaves the plan alone"))
+
+(deftest a-fluid-want-wants-a-source
+  (are [want block answer] (= answer (shape/judge want block))
+    "water" {:name "water" :state {:level "0"}} :match
+    "water" {:name "water"} :match
+    "water" {:name "water" :state {:level "8"}} :wrong
+    "water" {:name "water" :state {:level 3}} :wrong
+    "lava" {:name "lava" :state {:level "1"}} :wrong
+    {:block "water" :level "3"} {:name "water" :state {:level "3"}} :match))
