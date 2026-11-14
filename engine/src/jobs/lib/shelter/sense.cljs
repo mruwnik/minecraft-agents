@@ -16,20 +16,19 @@
                        :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}})
 
 (defn floor-top
-  "How high above its cell's floor the collision of the block the body feels in cell {:x :y :z} reaches (farmland and paths .9375, soul sand and mud .875, a bottom slab .5, a full block 1), 0 when it feels none or has no raw world to read it from."
-  [p {:keys [x y z] :as cell}]
-  (let [^js raw (look/raw-of p)]
-    (if (and raw (u/feel p cell))
-      (let [id (.stateAt raw x y z)]
-        (if (neg? id) 0 (or (.-top (.stateInfo raw id)) 0)))
-      0)))
+  "How high above its cell's floor the collision of the block in cell {:x :y :z} reaches (farmland and paths .9375, soul sand and mud .875, a bottom slab .5, a full block 1) when the body touches it (u/touches?, read without perception's feel, which writes memory), 0 when it does not or has no raw world to read it from."
+  [p {:keys [x y z]} pos]
+  (let [^js raw (look/raw-of p)
+        id (if raw (.stateAt raw x y z) -1)
+        top (if (neg? id) 0 (or (.-top (.stateInfo raw id)) 0))]
+    (if (u/touches? (:x pos) (:y pos) (:z pos) [x y z] top) top 0)))
 
 (defn feet
   "The cell the body's feet stand in: the cell above the block under it when that block's collision top is at or below the body's y, else the cell its y is in."
   [p]
   (let [pos (u/self-pos {:primitives p})
         cell (solid/cell pos)
-        top (floor-top p cell)]
+        top (floor-top p cell pos)]
     (cond-> cell
       (and (pos? top) (>= (:y pos) (+ (:y cell) top))) (update :y inc))))
 
