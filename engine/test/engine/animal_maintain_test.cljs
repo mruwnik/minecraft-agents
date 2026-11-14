@@ -587,7 +587,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (:plan (adopt/adopt {:id "pen" :box [[0 60 -5] [0 60 -5]] :natural? (constantly false) :body "Fake" :date "d"
+        (let [plan (:plan (adopt/adopt {:id "pen" :box [[0 60 -5] [0 60 -5]] :body "Fake" :date "d"
                                         :block-at {[0 60 -5] {:name "oak_fence"}}
                                         :pen {:box [[0 60 -5] [8 70 5]] :mob "cow" :target 4}}))
               s (await (plan-scenario (list 'jobs.animals.maintain {:plan "pen" :part "pen"}) {"pen" (assoc plan :metadata {:by "Fake"})}

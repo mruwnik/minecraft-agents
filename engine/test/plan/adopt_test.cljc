@@ -26,11 +26,11 @@
             "farmland" {:box [[0 0 0] [1 0 0]] :want "farmland"}}
            (parts r)))))
 
-(deftest cane-bamboo-and-fruit-are-crop-wants-of-any-stage
-  (let [r (run [{:name "sugar_cane" :state {"age" "3"}} {:name "sugar_cane"} {:name "melon"} {:name "attached_pumpkin_stem"}])]
+(deftest cane-and-stems-are-crop-wants-of-any-stage-and-fruit-is-left-out
+  (let [r (run [{:name "sugar_cane" :state {"age" "3"}} {:name "sugar_cane"} {:name "melon"} {:name "pumpkin"} {:name "melon_stem"} {:name "attached_pumpkin_stem"}])]
     (is (= {"sugar_cane" {:box [[0 0 0] [1 0 0]] :want {:crop "sugar_cane"}}
-            "melon_stem" {:cells [[2 0 0]] :want {:crop "melon_stem"}}
-            "pumpkin_stem" {:cells [[3 0 0]] :want {:crop "pumpkin_stem"}}}
+            "melon_stem" {:cells [[4 0 0]] :want {:crop "melon_stem"}}
+            "pumpkin_stem" {:cells [[5 0 0]] :want {:crop "pumpkin_stem"}}}
            (parts r)))))
 
 (deftest cells-filling-a-box-are-one-box-part

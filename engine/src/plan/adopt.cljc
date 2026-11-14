@@ -10,12 +10,14 @@
 
 (def crop-blocks #{"wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "nether_wart" "sugar_cane" "bamboo"})
 
+(def fruit-blocks "Left out of a plan: fruit comes and goes with harvests, and its stem is the want." #{"melon" "pumpkin"})
+
 (def fluid-names #{"water" "lava"})
 
 (defn crop-of
-  "The crop a block is (any growth stage; a melon or pumpkin is its stem's crop), nil for other blocks."
+  "The crop a block is (any growth stage; an attached stem is its stem's crop), nil for other blocks."
   [name]
-  (let [stem (some-> (re-matches #"(?:attached_)?(melon|pumpkin)(?:_stem)?" name) second (str "_stem"))]
+  (let [stem (some-> (re-matches #"attached_(melon|pumpkin)_stem" name) second (str "_stem"))]
     (cond (crop-blocks name) name stem stem)))
 
 (defn tree-of
@@ -32,6 +34,7 @@
   (cond
     (nil? name) nil
     (shape/air? name) nil
+    (fruit-blocks name) nil
     (crop-of name) {:crop (crop-of name)}
     (tree-of name) {:tree (tree-of name)}
     (fluid-names name) (when-not (shape/flowing-fluid? block) name)
