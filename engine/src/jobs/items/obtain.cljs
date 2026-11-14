@@ -10,7 +10,7 @@
             [jobs.items.obtain.base :refer [args-error carried-of gathers? holds makes? max-inspections names-of own-worth shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.loose :as loose-way]
-            [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
+            [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! hold-chance inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? explorable-needs gather-held gather-viable?]]
@@ -239,14 +239,16 @@
 
 (defn chests-to-try
   "The candidates whose walk there and back (with its risk) costs no more than the cheapest other way that would start
-  (a craft from what is carried, a gather of seen needs; a way already tried is out): a long walk to a chest, one that
-  may not hold the item or one that does, is dearer than making it now. With no other way, all of them."
+  (a craft from what is carried, a gather of seen needs; a way already tried is out) nor than the call's worth times the
+  chance the chest holds the item (chest/hold-chance): a long walk to a chest, one that may not hold the item or one that
+  does, is dearer than making it now, and with no other way a walk that does not pay is no way."
   [c m names n]
   (let [cs (candidates c names)
         other (when (seq cs)
                 (apply min ##Inf (keep identity [(when-not (get-in m [:tried :craft]) (craft-s c names n))
-                                                 (when-not (get-in m [:tried :gather]) (gather-s c names n))])))]
-    (if (infinite? other) cs (filter #(<= (walk-s c (:pos %)) other) cs))))
+                                                 (when-not (get-in m [:tried :gather]) (gather-s c names n))])))
+        worth (when (seq cs) (ctx/worth c))]
+    (filter #(cost/affords? (walk-s c (:pos %)) (min other (* worth (hold-chance c names %)))) cs)))
 
 (defn ^:async step! [c]
   (let [a (:args c)

@@ -45,6 +45,15 @@
                    (when-not (or (done cell) (and items (not (holds items names))))
                      {:pos pos :stock items})))))))
 
+(defn hold-chance
+  "The chance candidate cand holds one of names: 1 when booked as holding it, else the share of the chests the body has
+  looked into that held one, under a uniform prior ((k + 1) / (n + 2))."
+  [c names cand]
+  (if (:stock cand)
+    1
+    (let [booked (vals (stock/stock-of (ctx/view c)))]
+      (/ (inc (count (filter #(holds % names) booked))) (+ 2 (count booked))))))
+
 (defn ^:async cheapest!
   "The candidate of cs whose walk costs least (jobs.lib.walk-pick/pick!: go-to's quote with its walk risk, best-first by the
   straight walk), nil when cs is empty."

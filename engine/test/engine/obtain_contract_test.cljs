@@ -451,6 +451,17 @@
               _ (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false :ways #{:chest}} 30))]
           (is (re-find #"seen .* ago|seen just now" (pr-str (f/events-of s :obtain.chest)))))))))
 
+(deftest the-only-chest-is-looked-into-only-when-the-walk-pays-at-the-chance-it-holds-the-item
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walk (:cost (cost/walk-cost {:distance (* 2 14)}))]
+          (doseq [[k looks?] [[1.5 false] [4 true]]]
+            (let [s (f/start (update (f/bare []) :blocks assoc "14,64,0" "chest") [(assoc f/own-zone :min [-20 60 -20] :max [20 70 20])])
+                  _ (await (ending-of s 'jobs.items.obtain {:any-of ["wheat"] :count 1 :explore false :ways #{:chest} :worth (* k walk)} 30))]
+              (is (= looks? (boolean (seq (f/events-of s :obtain.chest))))
+                  (str "worth " k " walks; an unlooked chest holds wheat at 1/2 (nothing booked)")))))))))
+
 (deftest a-chest-in-another-players-zone-is-not-looked-into
   (async done
     (tu/run-async done
