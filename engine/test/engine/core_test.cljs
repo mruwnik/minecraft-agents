@@ -2248,6 +2248,23 @@
           (dotimes [_ 12] (swap! clock + 10000) (await (core/tick! eng)))
           (is (empty? (silent)) "idle rounds, a named wait, then idle rounds: the wait broke the spell, 12 rounds are under 3 min"))))))
 
+(deftest a-busy-round-resolves-a-job-silent-request-raised-before-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! gated-silent true)
+        (let [reg (assoc silent-registry 'gated-idle
+                         (tu/job [(fn [_] (if @gated-silent (contract/ok :open "open") (contract/later :closed "closed")))]
+                                 (fn ^:async idle-round [_] :continue)))
+              {:keys [eng clock]} (update (expr-setup) :eng assoc :jobs reg)]
+          (core/submit! eng (tu/order '(gated-idle)) {})
+          (dotimes [_ 20] (swap! clock + 10000) (await (core/tick! eng)))
+          (is (= 1 (count (:attention (core/state eng)))))
+          (reset! (:silent eng) {})
+          (reset! gated-silent false)
+          (swap! clock + 10000) (await (core/tick! eng))
+          (is (empty? (:attention (core/state eng))) "the spell counter is in memory, the request persisted"))))))
+
 (deftest a-repeat-whose-child-keeps-finding-nothing-to-do-never-raises-job-silent
   (async done
     (tu/run-async done

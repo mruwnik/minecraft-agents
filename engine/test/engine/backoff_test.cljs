@@ -639,6 +639,19 @@
           (await (tick-at r (+ t0 240000)))
           (is (= [] (fruitless-requests eng)) "a round with progress resolves the request"))))))
 
+(deftest a-progress-round-resolves-a-fruitless-request-raised-before-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as r} (setup)]
+          (core/submit! eng (tu/order '(bump)) {})
+          (dotimes [i 3] (await (tick-at r (+ t0 (* i 60000)))))
+          (is (= 1 (count (fruitless-requests eng))))
+          (reset! (:fruitless eng) {})
+          (reset! status "arrived")
+          (await (tick-at r (+ t0 180000)))
+          (is (= [] (fruitless-requests eng)) "the counter is in memory, the request persisted: progress resolves it anyway"))))))
+
 (deftest a-round-with-no-act-is-not-fruitless
   (async done
     (tu/run-async done

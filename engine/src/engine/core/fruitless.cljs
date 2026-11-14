@@ -119,7 +119,7 @@
 (defn note-fruitless!
   "After a round of listed job id that ended with status: count rounds in a row in which every act failed (round is
   its act tracker, see engine.backoff; a round that ends the job, is cut or fails is not counted). The third raises job.fruitless, a required attention request, once per spell; a round
-  with progress ends the spell and resolves the request; a round with no act neither counts nor ends it. It only flags: nothing is held against the job."
+  with progress ends the spell and resolves the request, even one a past run raised; a round with no act neither counts nor ends it. It only flags: nothing is held against the job."
   [eng id status round]
   (when-not (#{:cut :error :done :ended} status)
     (if (backoff/fruitless-round? round)
@@ -132,7 +132,7 @@
                                      :context (select-keys (job-fields eng id) [:round :chain])
                                      :data {:rounds n :act act :status status :why reason}
                                      :message (str "Job " id " makes no progress: " text)}))))
-      (when (and (pos? (:acts round 0)) (get @(:fruitless eng) id))
+      (when (pos? (:acts round 0))
         (swap! (:fruitless eng) dissoc id)
         (doseq [[request-id request] (:attention (state eng))
                 :when (same-request? request id :fruitless)]
@@ -154,14 +154,13 @@
          (nil? (get @(:waiting eng) id)))))
 
 (defn end-silent-spell!
-  "Forget listed job id's run of silent rounds and resolve its job.silent request, if raised."
+  "Forget listed job id's run of silent rounds and resolve its job.silent request. The request is persisted and the
+  spell is not, so it is resolved whether or not this run counted a spell."
   [eng id]
-  (when-let [spell (get @(:silent eng) id)]
-    (swap! (:silent eng) dissoc id)
-    (when (:raised? spell)
-      (doseq [[request-id request] (:attention (state eng))
-              :when (same-request? request id :silent)]
-        (resolve-attention! eng request-id :progress)))))
+  (swap! (:silent eng) dissoc id)
+  (doseq [[request-id request] (:attention (state eng))
+          :when (same-request? request id :silent)]
+    (resolve-attention! eng request-id :progress)))
 
 (defn note-silent!
   "After the settled round of listed job id: count rounds in a row that were silent (silent-round?). A spell of
