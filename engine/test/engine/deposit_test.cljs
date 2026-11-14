@@ -209,6 +209,46 @@
             (is (= #{[10 64 0] [11 64 0]} (chests-in p)))
             (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [11 64 0]]))]))))))))
 
+(def one-chest-world {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                      :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "9,64,0" []}})
+
+(def other-zone {:name "farm" :owner "Miles"})
+
+(defn setup-zoned
+  "setup-far with an engine world holding zones (and plans)."
+  ([world zones] (setup-zoned world zones {}))
+  ([world zones plans]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake-on-floor world))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world/of-data plans {} zones)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen})))
+
+(deftest deposit-says-so-when-a-chest-is-full-and-it-goes-on-into-the-next
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup-zoned {:inventory [{:name "dirt" :count 5}]
+                                                 :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                                 :containers {"10,64,0" [] "11,64,0" []}} [])]
+          (wt/know-place! eng :chest chest)
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (full-at p [10 64 0])
+          (await (wt/ending-of eng job {:items ["dirt"]} 30))
+          (is (= [[10 64 0]] (map :chest (filter #(= :deposit.chest-full (:kind %)) @seen)))))))))
+
+(deftest deposit-says-so-when-every-chest-is-full-and-making-is-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup-zoned one-chest-world [])]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (await (wt/ending-of eng job {:items ["dirt"] :make-chests? false} 30))
+          (is (some #(and (= :deposit.all-full (:kind %)) (= :notice (:attention %))) @seen)))))))
+
 (deftest deposit-with-a-full-chest-argument-never-uses-another-chest-of-the-group
   (async done
     (tu/run-async done
@@ -276,20 +316,6 @@
 
 ;; ------------------------------------------------------------------ chest making: spots, restarts, group upkeep
 
-(def other-zone {:name "farm" :owner "Miles"})
-
-(defn setup-zoned
-  "setup-far with an engine world holding zones (and plans)."
-  ([world zones] (setup-zoned world zones {}))
-  ([world zones plans]
-  (let [clock (atom 1000000)
-        [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor world))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :world (world/of-data plans {} zones)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen})))
-
 (deftest deposit-uses-a-chest-standing-in-the-bodys-own-plan-before-making-one
   (async done
     (tu/run-async done
@@ -304,9 +330,6 @@
               (await (wt/ending-of eng job {:items ["dirt"] :make-chests? false} 30))
               (is (= expected (mapv #(select-keys % [:name :count]) (get-in @(fake/state p) [:containers [11 64 0]])))
                   (str "plan made by " by))))))))) 
-
-(def one-chest-world {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
-                      :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "9,64,0" []}})
 
 (deftest deposit-skips-a-spot-in-anothers-zone
   (async done

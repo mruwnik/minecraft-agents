@@ -56,10 +56,14 @@
 (defn pool-positions [action] (fn [c] (map cell-pos (:pool (chests c action)))))
 
 (defn mark-full!
-  "The chest took nothing more: skip it for the rest of the call. :again."
+  "The chest took nothing more: skip it for the rest of the call, saying so once. :again."
   [c chest]
-  (ctx/update-mem! c update :full (fnil conj #{}) (storage/cell-of chest))
-  :again)
+  (let [cell (storage/cell-of chest)]
+    (when-not (contains? (:full (ctx/mem c) #{}) cell)
+      (ctx/emit! c :deposit.chest-full :warn
+                 {:chest cell :attention :notice :text (str "the chest at " (pr-str cell) " is full, trying another")}))
+    (ctx/update-mem! c update :full (fnil conj #{}) cell)
+    :again))
 
 (defn walk-args "The go-to args of the walk into reach of the chest at pos." [c pos]
   {:pos pos :range 3 :ignore-zones? (boolean (:ignore-zones? (:args c)))})

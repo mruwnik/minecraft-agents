@@ -141,6 +141,8 @@
 (defn stop!
   "End with kind and cause: {:gave-up true :moved n}, n the items put in so far."
   [c kind cause]
+  (when (= :all-chests-full cause)
+    (ctx/emit! c :deposit.all-full :warn {:attention :notice :text "every storage chest is full and no new one can be put down"}))
   (end! c kind cause {:gave-up true :moved (:moved (ctx/mem c) 0)}))
 
 (defn status-stop!
