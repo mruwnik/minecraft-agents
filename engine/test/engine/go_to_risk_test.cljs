@@ -839,11 +839,12 @@
 
 (defn dark-share
   "present-share of each death or near-death spot by a mob in dark-spot-world (simulation distance 10), at difficulty (1 easy, 2 normal), its records `entries`;
-  over its weight with :unfaded. Its body's death is dear (ready-test/dear-death's 15000 s): a hit to 2 hp is a near-death."
+  over its weight with :unfaded. Its body's death is dear (ready-test/dear-death's 15000 s): a hit to 2 hp is a near-death.
+  The clock is the long-inhabited late one (day 63, world age 3.6M ticks), where a loot-picker's special multiplier is 1."
   [difficulty entries & [unfaded]]
   (with-redefs [threat/simulation-distance (constantly 10)]
     (settings/with-settings {::threat/difficulty difficulty :jobs.lib.cost.death/extra-s 15000}
-      #(let [c (assoc (ready-test/ctx-of dark-spot-world) :view (fn [] {:now 36000000 :data {:policies {:deaths core/deaths-policy} :entries entries}}))]
+      #(let [c (assoc (doto (ready-test/ctx-of (assoc-in dark-spot-world [:self :worldAge] 3600000)) (-> :primitives fake/state (swap! assoc :days 63))) :view (fn [] {:now 36000000 :data {:policies {:deaths core/deaths-policy} :entries entries}}))]
          (mapv (fn [d] (/ (death-spot/present-share c (assoc d :mob (:cause d))) (if unfaded (:weight d) 1))) (filter :mob? (death-spot/recent c)))))))
 
 (defn died [cause age-ms] {:deaths [{:t (- 36000000 age-ms) :data {:pos {:x 80 :y 64 :z 5} :cause cause :death-t (- 36000000 age-ms)}}]})
