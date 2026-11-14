@@ -394,6 +394,15 @@
           (is (= 1 (digs p)) "one break after the wait, none after the second")
           (is (= "lectern" (workstation p))))))))
 
+(deftest a-villager-that-stays-jobless-is-broken-for-again-after-a-rescan-and-its-walk-not-after-the-claim-limit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})] :keeps-job? true
+                                  :wrap (comp (ticking! 1000) #(do (tu/seeing-all (:p %)) %))}
+                                 {:spend {:wall-time 30}}))]
+          (is (= 1 (digs p)) "600 ticks of wall time: the old 1240-tick wait never got to the second break"))))))
+
 (deftest a-jobless-villager-is-waited-for-in-game-ticks-of-its-walking-hours-not-in-daytime-seconds
   (async done
     (tu/run-async done

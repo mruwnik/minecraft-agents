@@ -43,7 +43,7 @@
     traded, and the game keeps a traded villager's job; a picked one is ruled out for the next nearest), :other-job, :occupied (another block at :pos),
     :cell-unseen.
   - impossible: :nitwit.
-  - nothing-possible :no-job: the villager took no job in ::take-job-ticks game ticks of its walking hours, nor after one more
+  - nothing-possible :no-job: the villager took no job in ::scan-ticks plus its walk of game ticks of its walking hours, nor in ::take-job-ticks after one more
     break and place; :sites names the other job-site blocks seen (a free one it may hold a claim on).
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
     read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
@@ -70,7 +70,8 @@
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
-   ::take-job-ticks {:default 1240 :doc "Game ticks of the villagers' walking hours (10-9000, 11000-12000) a villager may stay jobless with the workstation placed: then the workstation is broken and placed once more, and past that the call ends :no-job. The game's rule: a jobless villager looks for a free job site every 20-40 ticks and drops a claim on another site after 1200 ticks of walking to it, so past 1240 it holds a site it reaches (or ours is out of its way)." :spec (a/int-in 1 nil)}
+   ::take-job-ticks {:default 1240 :doc "Game ticks of the villagers' walking hours (10-9000, 11000-12000) a villager may stay jobless after the workstation was broken and placed once more, then the call ends :no-job. The game's rule: a jobless villager looks for a free job site every 20-40 ticks and drops a claim on another site after 1200 ticks of walking to it, so past 1240 it holds a site it reaches (or ours is out of its way)." :spec (a/int-in 1 nil)}
+   ::scan-ticks {:default 40 :doc "Game ticks of the villagers' walking hours a jobless villager's search for a free job site may take to start: the game rescans every 20-40 ticks. The workstation is broken and placed again once a villager in view stays jobless for this plus its walk to the workstation." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (villager/poll-s))
@@ -457,14 +458,23 @@
        (remove #(= (select-keys (:pos %) [:x :y :z]) (select-keys pos [:x :y :z])))
        (mapv #(select-keys % [:name :pos]))))
 
+(defn rebreak-ticks
+  "Game ticks a villager may stay jobless with the workstation placed before the first re-break: the game's rescan
+  (::scan-ticks) plus its walk to the workstation (one tick is 1/20 s); a villager not in view is given the search radius."
+  [c]
+  (let [e (villager/find-by-uuid (:primitives c) (villager/chosen c))
+        dist (if e (u/dist (u/pos-of (.-pos e)) (:pos (:args c))) (villager/search-radius))]
+    (+ (settings/get settings ::scan-ticks) (js/Math.ceil (* 20 (/ dist (cost/walk-blocks-per-s)))))))
+
 (defn ^:async wait-take-job!
   "The villager has no job with the workstation placed: wait while game ticks of the villagers' walking hours (count-ticks!)
-  stay under ::take-job-ticks, then break and place the workstation once more (a villager that took our site's ticket is
-  bumped), then end :no-job naming the other job sites seen (:sites)."
+  stay under rebreak-ticks, then break and place the workstation once more (a villager that took our site's ticket is
+  bumped), wait ::take-job-ticks (the game's worst case for a claim on another site), then end :no-job naming the other
+  job sites seen (:sites)."
   [c]
   (let [m (ctx/mem c)]
     (cond
-      (< (count-ticks! c) (settings/get settings ::take-job-ticks)) (await (wait-job! c :villager-takes-no-job))
+      (< (count-ticks! c) (if (:rebroke m) (settings/get settings ::take-job-ticks) (rebreak-ticks c))) (await (wait-job! c :villager-takes-no-job))
       (not (:rebroke m)) (do (ctx/update-mem! c assoc :rebroke true) (await (dig! c)))
       :else (ctx/end c :nothing-possible :no-job (data-of c {:sites (job-sites c (:pos (:args c)))})))))
 
