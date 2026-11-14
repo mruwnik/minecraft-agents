@@ -71,15 +71,18 @@
     (or (f) (await (look/look-around-until! c f (look/glance-effort) want)))))
 
 (defn ^:async approach-remembered!
-  "A villager named by id that is out of view: walk (go-to child, slot :memory) to where the body last saw it, as a
-  player goes back to the spot, once. :continue while the walk goes on, :again when it ended (the caller looks round
-  for the villager), nil when the body knows no place for it, is already within reach of it or has walked there."
-  [c id reach]
-  (let [p (:primitives c)
-        f (aget p "rememberedEntity")
-        pos (when (and id f (not (:memory-walked (ctx/mem c)))) (some-> (.call f p id) (js->clj :keywordize-keys true)))]
-    (when (and pos (not (u/within? (u/self-pos c) pos reach)))
-      (let [r (await (child/call-walk* c :memory {:pos pos :range reach :ways #{:walk :clear-seal}}))]
-        (if (= :continue r)
-          :continue
-          (do (ctx/update-mem! c assoc :memory-walked true) :again))))))
+  "A villager named by id that is out of view: walk (go-to child, slot :memory) to where the body last saw it (the entity
+  memory, else known: a place the caller saw it at), as a player goes back to the spot, once. :continue while the walk
+  goes on, :again when it ended (the caller looks round for the villager), nil when the body knows no place for it, is
+  already within reach of it or has walked there."
+  ([c id reach] (approach-remembered! c id reach nil))
+  ([c id reach known]
+   (let [p (:primitives c)
+         f (aget p "rememberedEntity")
+         pos (when (and id (not (:memory-walked (ctx/mem c))))
+               (or (some-> (when f (.call f p id)) (js->clj :keywordize-keys true)) known))]
+     (when (and pos (not (u/within? (u/self-pos c) pos reach)))
+       (let [r (await (child/call-walk* c :memory {:pos pos :range reach :ways #{:walk :clear-seal}}))]
+         (if (= :continue r)
+           :continue
+           (do (ctx/update-mem! c assoc :memory-walked true) :again)))))))

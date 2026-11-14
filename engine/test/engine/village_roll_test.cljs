@@ -9,6 +9,7 @@
             [engine.look-support :as ls]
             [engine.village-trade-test :as vt]
             [engine.contract :as contract]
+            [engine.entity-observations :as obs]
             [jobs.lib.look :as look]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
@@ -252,6 +253,73 @@
                                               (aset q "rememberedEntity" (fn [id] (when (= "v-1" id) #js {:x 12.5 :y 64 :z 0.5})))
                                               %)} {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
+
+(defn heard-until-near!
+  "The villager is out of sight (entities() drops it) and heard as a heardMobs row (what a sound tells) until the body
+  stands within 3 blocks of it, as one behind a house wall is seen from round the corner."
+  [p]
+  (let [orig (.-entities p)
+        near? (fn [] (let [me (.-pos (.self p))]
+                       (some (fn [^js e] (> 3 (js/Math.hypot (- (.-x (.-pos e)) (.-x me)) (- (.-z (.-pos e)) (.-z me)))))
+                             (array-seq (.call orig p #js {:radius 48})))))]
+    (set! (.-entities p) (fn [a] (if (near?) (.call orig p a) #js [])))
+    (set! (.-heardMobs p)
+          (fn [_]
+            (let [me (.-pos (.self p))]
+              (if (near?)
+                #js []
+                (into-array (for [^js e (array-seq (.call orig p #js {:radius 16}))
+                                  :let [pos (.-pos e)]]
+                              (clj->js (assoc (obs/rough-hearing {:x (.-x me) :y (.-y me) :z (.-z me)} {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
+                                              :id (.-id e) :name (.-name e) :kind "passive" :distance (.-distance e)))))))))
+    p))
+
+(deftest a-villager-heard-but-not-seen-by-day-is-walked-toward-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 0.5 :y 64 :z 8.5}})]
+                                       :wrap #(do (heard-until-near! (:p %)) %)} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
+          (is (< 5 (.-z (.-pos (.self p)))) "the body walked south, toward the sound"))))))
+
+(deftest a-villager-heard-at-night-is-waited-for-then-walked-toward-at-dawn-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [moved-at-night (atom false)
+              [result] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 0.5 :y 64 :z 8.5}})]
+                                     :wrap (fn [{:keys [p clock] :as env}]
+                                             (let [state (fake/state p)
+                                                   dawn (+ @clock 60000)]
+                                               (swap! state assoc :time 14000)
+                                               (add-watch clock :dawn (fn [_ _ _ now] (when (and (>= now dawn) (= 14000 (:time @state)))
+                                                                                         (swap! state assoc :time 1000))))
+                                               (add-watch state :night-walk (fn [_ _ o w] (when (and (= 14000 (:time w)) (< 3 (get-in w [:self :pos 2] 0)))
+                                                                                            (reset! moved-at-night true))))
+                                               (heard-until-near! p)
+                                               env))} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
+          (is (false? @moved-at-night) "by night the body waits at the workstation"))))))
+
+(deftest a-villager-seen-then-out-of-view-and-unheard-is-walked-to-where-the-roll-saw-it-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (roll {:entities [(librarian [] {:pos {:x 8.5 :y 64 :z 0.5} :profession "unemployed"})]
+                                     :keeps-job? true
+                                     :wrap (fn [{:keys [p clock] :as env}]
+                                             (let [state (fake/state p)
+                                                   orig (.-entities p)
+                                                   hide-at (+ @clock 5000)
+                                                   near? #(< 5 (.-x (.-pos (.self p))))]
+                                               (add-watch state :job (fn [_ _ _ w]
+                                                                       (when (and (near?) (= "unemployed" (get-in w [:entities 0 :profession])))
+                                                                         (swap! state update-in [:entities 0] assoc :profession "librarian"
+                                                                                :offers [(offer "enchanted_book")]))))
+                                               (aset p "entities" (fn [a] (if (or (< @clock hide-at) (near?)) (.call orig p a) #js [])))
+                                               env))} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result)))))))
 
 (deftest a-villager-out-of-view-at-night-is-waited-for-till-day-not-gone
   (async done

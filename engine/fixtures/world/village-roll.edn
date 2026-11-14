@@ -5,6 +5,7 @@
 ;; roll-three-times-in-one-call: three rerolls in one call (no villager offers a netherite ingot), then no-match; the report counts every lectern picked up (yields = uses).
 ;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
 ;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
+;; roll-villager-heard-behind-a-wall-by-day-is-walked-toward-not-gone: by day a named villager heard behind a wall is walked toward round it (roll.offers), not :gone.
 ;; Should-fail: nitwit, absent villager (by day), a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
 ;; roll-sealed-in-dirt-never-digs-its-way-out-for-the-drop: the body sealed in a pocket under dirt that is another's (a plan footprint stands for the zone), the lectern drop out of reach: the roll ends without breaking the dirt (the pillar escape's roof dig obeys zones).
 ;; Unseen-cell cases: the body at [8.5 0 16.5] faces west (yaw 90), the lectern is 7 blocks behind it, so it starts unseen; the roll
@@ -145,6 +146,14 @@
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000020" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :holding :data {:reason :night-villager-out-of-view}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30}]
+   :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-villager-heard-behind-a-wall-by-day-is-walked-toward-not-gone"
+   :blocks [[:fill [13 0 20] [19 2 20] "stone"]]
+   :act [[:summon "villager" [16.5 0 22.5] "{NoAI:1b,UUID:[I;20260,7,5,33],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 2]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000021" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 1}})]]
+   :expect [{:event {:source :job :kind :roll.offers} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :gone}} :for-s 90}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-villager-behind-the-body-is-looked-for-not-gone"
    :body {:at [14.5 0 16.5] :yaw 90}
