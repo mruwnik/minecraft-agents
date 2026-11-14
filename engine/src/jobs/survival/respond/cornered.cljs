@@ -209,9 +209,15 @@
     (into {} (for [o [:water :roof] :let [cell (stand-in/place c o block-at)] :when cell]
                [o (* (cost/walk-step-s) (u/dist from {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))}))]))))
 
+(defn pillar-open?
+  "Whether a pillar is still a cover where the body stands now (rc/pillar-cover): an option before it may have taken
+  time, and a shot felt since leaves its top in the line of fire."
+  [c]
+  (some? (rc/pillar-cover c (near-hostiles c))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order (its covers and back-off by price, by-price) that it can
-  take and has not failed since the last start over (blocked!). home?: the body is in its home room. ends: the step's
+  take and has not failed since the last start over (blocked!); a pillar only while it is still priced (pillar-open?). home?: the body is in its home room. ends: the step's
   flee search (flee-search/search!), its back-off taken from its near ring (back-off-of); with none the back-off
   searches (back-off-search!)."
   ([c why] (await (cornered! c why false)))
@@ -272,8 +278,8 @@
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
                   :plug-dig-zone (when (and (flight/tried? c :plug-dig) (:zone-dig (ctx/mem c))) (await (refuge/plug-option! c :plug-dig-zone #{:pit :pocket})))
                   :stand (await (hold! c "no way out of the creeper: standing"))
-                  :pillar (await (refuge/pillar! c false))
-                  :pillar-zone (when-not (flight/tried? c :pillar) (await (refuge/pillar! c true)))
+                  :pillar (when (pillar-open? c) (await (refuge/pillar! c false)))
+                  :pillar-zone (when (and (not (flight/tried? c :pillar)) (pillar-open? c)) (await (refuge/pillar! c true)))
                   :water (await (stand! c :water :water "in water, away from the enderman"))
                   :roof (await (stand! c :roof :roof "under a roof, out of the enderman's reach"))
                   :swim-out (await (stand! c :swim-out :dry nil))

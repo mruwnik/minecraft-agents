@@ -1,0 +1,20 @@
+;; Card ba5cca45 (Brindle S9): cornered beside a creeper with a skeleton shooting, the pillar held in the order went up after the arrows hit,
+;; and the body was shot dead on its top. A pillar is taken only while still priced at its turn (cornered/pillar-open?: a shot felt
+;; within hurt-window-s leaves its top in the line of fire). A pit 5x5, 3 deep (no way out), cut in a stone mass x 2..20, z 8..22, y 0..3;
+;; the body in it with 3 dirt (a pillar, too few for walls), a NoAI creeper 3 off in the pit, a skeleton (AI on, helmeted) on the rim
+;; 5 off. Resistance keeps the body alive. Should-succeed: cornered (retreat.cornered), shot at, and never pillared.
+{:defaults
+ {:tags [:hostile :survival :cornered :creeper]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near}]
+  :blocks [[:fill [2 0 8] [20 3 22] "stone"]
+           [:fill [8 1 13] [12 3 17] "air"]]
+  :body {:at [9.5 1 15.5] :effects [["resistance" 600 3]] :inventory [["dirt" 3]]}
+  :limit-s 45}
+ :cases
+ [{:name "cornered-body-under-arrows-does-not-pillar"
+   :act [[:summon "creeper" [12.5 1 15.5] "{NoAI:1b}"]
+         [:summon "skeleton" [9.5 4 20.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.cornered} :within-s 20}
+            {:no-event {:source :job :kind :retreat.pillar} :for-s 35}]}]}

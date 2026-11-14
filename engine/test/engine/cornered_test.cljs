@@ -1790,6 +1790,19 @@
   [{:keys [eng]}]
   (mem/write! (:store eng) :hurt {:amount 3 :health 8 :damageType "arrow" :attacker {:id 99 :name "skeleton"}} {:cap 50 :ttl 60000}))
 
+;; Brindle S9 death: the order was set before the walls failed under arrows, and the pillar it held went up into their line of fire
+(deftest a-pillar-in-the-order-is-skipped-once-a-shot-is-felt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [by-price choose/by-price]
+          (set! choose/by-price (fn [o _] (into [:pillar] (remove #{:pillar}) o)))
+          (try
+            (let [{:keys [p]} (await (beset-round [(zombie 6 64 0) (assoc (zombie 0 64 6) :id 8)] #(do (hit-and-closed-on! %) (shot! %))))]
+              (is (empty? (calls p "jumpPlace")) "no pillar once an arrow hit the body")
+              (is (pos? (+ (count (calls p "place")) (count (calls p "attack")))) "the next option was taken"))
+            (finally (set! choose/by-price by-price))))))))
+
 (deftest an-armed-body-shot-by-an-unseen-skeleton-seals-before-it-fights-the-mob-at-its-side
   (async done
     (tu/run-async done
