@@ -12,6 +12,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.seal :as seal]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
@@ -27,7 +28,7 @@
   hostile stands in a cell (not with :for :night), no block is left or a place is refused. A place refused for a mob in the cell is waited out
   (jobs.lib.seal/mob-wait-ticks), then fails; one refused otherwise goes after the others (blocks.fill-cells: the walls are placed one cell a step through it, in place, ledgered; a torch in a cell is dug first, an open door shut) and fails with the other failures; a block that stays in a cell is left alone. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
-  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their risk-s over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and :morning-s names the door dug out and the blocks left (plug-way/morning-s); it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
+  (##Inf with no block carried, or, not with :for :night, a hostile standing in an open cell; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their risk-s over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and :morning-s names the door dug out and the blocks left (plug-way/morning-s); it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
@@ -49,16 +50,19 @@
 (defn done? [c] (way/done? c :walls))
 
 (defn why-not
-  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; {:stop :lava-adjacent} with :on-lava :stop when a cell to fill holds lava; nil otherwise."
+  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; {:stop :lava-adjacent} with :on-lava :stop when a cell to fill holds lava; {:stop :hostile-in-cell} (not with :for :night) when a known hostile stands in an open cell, which the walls fail on; nil otherwise."
   [c]
-  (let [cells (fill/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
+  (let [p (:primitives c)
+        cells (fill/open-cells p (sh-sense/feet p))
         open (count cells)
         have (reduce + (map :count (lb/carried c (flight/blocks c))))]
     (cond
-      (and (= :stop (:on-lava (:args c))) (some #(some->> (u/seen-name (:primitives c) %) (re-find #"lava")) cells))
+      (and (= :stop (:on-lava (:args c))) (some #(some->> (u/seen-name p %) (re-find #"lava")) cells))
       {:stop :lava-adjacent :text "lava in a cell the walls would fill"}
       (placer/own-plan-cell c cells) {:stop :own-plan :text "the walls need a cell of the body's own plan"}
       (nil? (lb/pick c (flight/blocks c))) {:stop :no-blocks :text "no block to wall the body in with"}
+      (and (not= :night (:for (:args c))) (some (seal/hostile-cells p (danger-q/hostile-radius)) cells))
+      {:stop :hostile-in-cell :text "a hostile stands in a cell the walls would close"}
       (and (= :night (:for (:args c))) (< have open)) {:stop :no-blocks :text (str "fewer blocks carried than the " open " open cells")})))
 
 (defn can-start?

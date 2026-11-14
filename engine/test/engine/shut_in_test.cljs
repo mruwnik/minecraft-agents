@@ -268,16 +268,17 @@
         (let [{:keys [out]} (await (plug! {:blocks ct/dead-end :inventory pick :entities [(ct/skeleton 4 64 0)]} {:ways #{:walls :pocket}}))]
           (is (= [:done :pocket] [(:kind out) (:way (:data out))])))))))
 
-(deftest a-way-that-fails-is-named-with-its-cause-and-the-dropped-ways-are-listed-once
+(deftest walls-with-a-hostile-in-an-open-cell-are-dropped-by-their-quote-with-the-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (plug! {:blocks ct/dead-end :inventory cobble :entities [(ct/zombie 1 64 0)]} {}))
+        (let [{:keys [out p]} (await (plug! {:blocks ct/dead-end :inventory cobble :entities [(ct/zombie 1 64 0)]} {}))
               d (:data out)]
           (is (= :nothing-possible (:kind out)))
-          (is (= [:walls] (:tried d)))
-          (is (= [:pit :pocket] (:dropped d)))
-          (is (= :hostile-in-cell (get-in d [:stops :walls :reason])) "the walls name why they stopped, not :failed")
+          (is (empty? (:tried d)) "a zombie standing in the only open side: the walls cannot close, so they are not begun")
+          (is (= [:walls :pit :pocket] (:dropped d)))
+          (is (empty? (ct/calls p "place")))
+          (is (= :hostile-in-cell (get-in d [:stops :walls :reason])) "the walls name why they are dropped")
           (is (re-find #"hostile" (:text d))))))))
 
 (deftest a-place-refused-for-a-mob-yields-continue-to-the-caller
@@ -299,7 +300,7 @@
     (tu/run-async done
       (fn ^:async t []
         (with-redefs [way/walls-step! (fn ^:async fail [_] nil)]
-          (let [{:keys [digs-at-first]} (await (plug! {:blocks ct/dead-end :inventory (into cobble pick) :entities [(ct/zombie 1 64 0)]} {:ways #{:walls :pocket} :settings {:jobs.lib.cost.ways/place-s 0.1}}))]
+          (let [{:keys [digs-at-first]} (await (plug! {:blocks ct/dead-end :inventory (into cobble pick) :self {:pos [0.5 64 0.5]} :entities [(ct/zombie 2.35 64 0.5)]} {:ways #{:walls :pocket} :settings {:jobs.lib.cost.ways/place-s 0.1}}))]
             (is (= 0 digs-at-first) "the round ended :continue before the pocket dug")))))))
 
 (deftest a-torch-in-an-off-limits-cell-is-not-dug-over
