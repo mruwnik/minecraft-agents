@@ -260,7 +260,11 @@
                                  ;; the tool was lost during this dig, which carried no ways: the next dig carries them
                                  (and (not fetch?) (fetch-tool? c) (lacks-tool? c block)) :continue
                                  (and (= :auto (:need-drop (:args c))) (not (:by-hand (ctx/mem c))))
-                                 (do (ctx/update-mem! c assoc :by-hand true) :continue)
+                                 (let [because (let [cause (:cause e)] (when (map? cause) (:why cause)))]
+                                   (ctx/emit! c :stair.by-hand :info {:block block :because because
+                                                                      :text (str "no " (tools/needed-kind p block) " could be got" (when because (str " (" because ")")) ": digging by hand (slow, no drop)")})
+                                   (ctx/update-mem! c assoc :by-hand true)
+                                   :continue)
                                  :else {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)
                                         :because (let [cause (:cause e)] (when (map? cause) (:why cause)))})
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))

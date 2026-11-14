@@ -1105,7 +1105,9 @@
         (doseq [args [(assoc east :ways #{:carried}) east]]
           (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} args (fn [_])))]
             (is (= [:done 3] [(:status @out) (:steps @out)]) "no fetch allowed, or the fetch failed: the cut is dug bare-handed")
-            (is (seq (digs p)))))))))
+            (is (seq (digs p)))))
+        (let [s (await (stair! {:blocks ground :inventory []} east (fn [_])))]
+          (is (= 1 (count (events-of s :stair.by-hand))) "the failed fetch is told once before the hand digs"))))))
 
 (deftest bad-args-end-at-once
   (async done
