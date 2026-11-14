@@ -161,15 +161,20 @@
                                :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c))))
     :again))
 
+(defn dig-end
+  "How far from goal dig-route escalation e ends: a distance, or with dive? (a climb away from a dive) the height still
+  to gain; nil for a route with no cells."
+  [e goal dive?]
+  (when-let [[x y z] (:cell (last (:cells e)))]
+    (if dive?
+      (- (goal 1) y)
+      (u/dist {:x x :y y :z z} (zipmap [:x :y :z] goal)))))
+
 (defn dig-progress?
   "Whether dig-route escalation e ends more than a block nearer goal than best, the least any way before it started
-  from: a distance, or with dive? (a climb away from a dive, whose best is a height to gain) the height still to gain."
+  from or a dig route before it ended (dig-end)."
   [e goal best dive?]
-  (let [[x y z] (:cell (last (:cells e)))]
-    (boolean (and x (< (if dive?
-                         (- (goal 1) y)
-                         (u/dist {:x x :y y :z z} (zipmap [:x :y :z] goal)))
-                       (dec best))))))
+  (boolean (some-> (dig-end e goal dive?) (< (dec best)))))
 
 (defn note-guess!
   "Memory :guess-looks {class {:bad :all}}: cell, which the route guessed as rock, of class (escape/guess-class),
@@ -448,7 +453,7 @@
           :again)
       (and failed (= :detour status) (not= :replans-spent (:reason failed)) (not (:other-heading failed))) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation failed}))
       ;; past its price a dig route is still taken while it ends more than a block nearer the goal than any way before
-      (and (not (worth-another? c feet n e)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted) (:dive-climb (ctx/mem c))))))
+      (and (not (worth-another? c feet n e)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (min (:escalation-best counted) (get-in (ctx/mem c) [:dig-ends goal] ##Inf)) (:dive-climb (ctx/mem c))))))
       (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (dec n)}) into? (assoc :into true))}))
       (= :searching (:step e))
       ;; a failed escalation's child is done: left in memory it would run again before the search goes on
@@ -465,6 +470,8 @@
                                                        :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))}
                                                 (:weighed e) (assoc :weighed (:weighed e))))
           (ctx/update-mem! c #(-> (merge (dissoc % :escalate-failed :route-search) counted)
+                                  ;; the next dig route past its price must end nearer than this one: the same route again changes nothing
+                                  (cond-> (= :dig-route (:step e)) (update-in [:dig-ends goal] (fnil min ##Inf) (or (dig-end e goal (:dive-climb %)) ##Inf)))
                                   (assoc :escalations (inc (:escalations % 0)) :escalation (assoc (dissoc e :weighed) :guesses (guesses e)) :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
