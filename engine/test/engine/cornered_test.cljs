@@ -24,6 +24,8 @@
             [engine.triggers :as triggers]
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.respond.options :as cornered]
+            [jobs.lib.util :as u]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.respond-choose :as choose]
             [jobs.survival.respond.cornered :as pick]
@@ -2228,16 +2230,33 @@
             (is (= 1 @plugs))
             (finally (set! refuge/plug! plug) (set! dig-cells/sealed-in? sealed) (set! ctx/mem mem) (set! ctx/update-mem! upd))))))))
 
-;; The way out of a failed refuge is priced: the seal's break and the blows over it come before the fight or the back-off.
+;; The way out of a failed refuge is priced: every option that leaves the cell begins with the seal's break and the blows
+;; over it; a hold in place pays none, and the plugs (refused there) are no option.
 (deftest a-failed-refuge-is-left-at-the-price-of-breaking-its-seal
   (let [fight {:damage 2 :hit 2 :seconds 4}
         back {:damage 0 :hit 0 :seconds 6}
+        swim {:damage 0 :hit 0 :seconds 5}
+        stand {:damage 0 :hit 0 :seconds 8}
         zombie {:name "zombie" :distance 0 :follow 16}
-        sealed (cornered/leaving nil [zombie] 3 {:fight fight :back-off back :plug {:damage 0 :hit 0 :seconds 1}})
-        open (cornered/leaving nil [zombie] 0 {:fight fight :back-off back})]
+        leaves #{:fight :back-off :swim-out}
+        sealed (cornered/leaving nil [zombie] 3 leaves {:fight fight :back-off back :swim-out swim :stand stand :plug {:damage 0 :hit 0 :seconds 1}})
+        open (cornered/leaving nil [zombie] 0 leaves {:fight fight :back-off back})]
     (is (= {:fight fight :back-off back} open) "no seal, nothing added")
-    (is (= [7 9 1] ((juxt (comp :seconds :fight) (comp :seconds :back-off) (comp :seconds :plug)) sealed)) "the break's seconds go before fight and back-off only")
+    (is (= {:fight 7 :back-off 9 :swim-out 8 :stand 8} (update-vals sealed :seconds)) "the break's seconds go before every way out, the plug is gone, the hold stays")
     (is (< (:damage fight) (:damage (:fight sealed))) "the blows over the break are added")))
+
+;; A seal the body does not see is priced as what it placed there, else as rock: never free.
+(deftest a-seal-not-seen-is-priced-by-what-was-placed-or-rock
+  (let [orig [refuge/failed-refuge-here? refuge/plug-entries u/seen-name sh-sense/feet]
+        c {:primitives nil}]
+    (set! refuge/failed-refuge-here? (constantly true))
+    (set! u/seen-name (constantly nil))
+    (set! sh-sense/feet (constantly {:x 0 :y 64 :z 0}))
+    (try
+      (are [entries s] (do (set! refuge/plug-entries (constantly entries)) (= s (cornered/break-out-s c)))
+        [{:cell [1 64 0] :item "dirt"}] (cost/dig-cost "dirt")
+        []                              (cost/dig-cost "stone"))
+      (finally (let [[a b d e] orig] (set! refuge/failed-refuge-here? a) (set! refuge/plug-entries b) (set! u/seen-name d) (set! sh-sense/feet e))))))
 
 (deftest a-raise-cut-short-for-a-mob-is-a-seen-failure-of-the-class-the-refuge-began-in
   (async done

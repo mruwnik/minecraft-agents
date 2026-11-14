@@ -276,18 +276,27 @@
                  #(merge (exits-of c) %)))))
 
 (defn break-out-s
-  "Seconds the body takes to break out of the seal of a refuge that failed where it stands (the cheapest block of the flight's plug cells to dig: cost/dig-cost); 0 when it is not so shut in or no plug cell is known."
+  "Seconds the body takes to break out of the seal of a refuge that failed where it stands: the cheapest block to dig
+  (cost/dig-cost) of the flight's plug cells, else of the walls round the feet; a cell it does not see is the block it
+  placed there, else rock (the walk's guess for an unseen cell). 0 when it is not so shut in."
   [c]
   (if-not (refuge/failed-refuge-here? c)
     0
-    (or (some->> (refuge/plug-cells c) (keep #(some-> (u/seen-name (:primitives c) (zipmap [:x :y :z] %)) cost/dig-cost)) seq (apply min)) 0)))
+    (let [p (:primitives c)
+          {:keys [x y z]} (sh-sense/feet p)
+          placed (into {} (map (juxt :cell :item)) (refuge/plug-entries c))
+          cells (or (seq (keys placed)) [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]])]
+      (or (some->> cells (keep #(cost/dig-cost (or (u/seen-name p (zipmap [:x :y :z] %)) (placed %) "stone"))) seq (apply min)) 0))))
 
 (defn leaving
-  "answers with the fight and the back-off begun after break-s seconds of breaking out of the seal (cost/leave-answer: the
-  blows of mobs over them): a body in a failed refuge pays to leave it, as it would to stay."
-  [equipment mobs break-s answers]
+  "answers after break-s seconds of breaking out of a failed refuge's seal: the options in leaves (those that take the body
+  out of its cell) begun after the break (cost/leave-answer: the blows of mobs over it), the plugs gone (refuge/plug-option!
+  refuses a plug there), the rest (a hold in place) as they were."
+  [equipment mobs break-s leaves answers]
   (if (pos? break-s)
-    (reduce (fn [as k] (cond-> as (contains? as k) (update k #(cost/leave-answer {:equipment equipment :mobs mobs :seconds break-s} %)))) answers [:fight :back-off])
+    (reduce (fn [as k] (cond-> as (contains? as k) (update k #(cost/leave-answer {:equipment equipment :mobs mobs :seconds break-s} %))))
+            (dissoc answers :plug :plug-dig)
+            leaves)
     answers))
 
 (defn cornered-answers
@@ -312,7 +321,8 @@
       (contains? a :flee) (assoc :back-off (:flee a))
       swim? (assoc :swim-out (hostile/flee-answer c hostiles (:fight a) nil nil))
       enderman? (into (for [o [:water :roof] :when (not (flight/tried? c o))] [o (hold o mobs)])))
-         (leaving (cost/equipment-of (.-equipment (.self p))) mobs (break-out-s c))))))
+         (leaving (cost/equipment-of (.-equipment (.self p))) mobs (break-out-s c)
+                  (into #{:fight :back-off :swim-out :pillar} (filter #(pos? (get walks % 0))) [:water :roof :stand]))))))
 
 (defn glance-reach [] (settings/get settings ::glance-reach))
 

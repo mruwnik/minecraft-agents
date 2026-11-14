@@ -72,11 +72,16 @@
   (ctx/update-mem! c assoc :refuge refuge)
   (await (refuge-round! c)))
 
-(defn plug-cells
-  "The cells of the blocks this flight's plugs hold (the open ledger entries of the flight's plug purpose), as [x y z]."
+(defn plug-entries
+  "The open ledger entries of this flight's plug purpose: the blocks its plugs hold ({:cell [x y z] :item ...})."
   [c]
   (let [purpose (flight/plug-purpose c)]
-    (vec (keep #(when (= purpose (:purpose %)) (:cell %)) (ledger/entries c)))))
+    (filterv #(= purpose (:purpose %)) (ledger/entries c))))
+
+(defn plug-cells
+  "The cells of the blocks this flight's plugs hold, as [x y z]."
+  [c]
+  (mapv :cell (plug-entries c)))
 
 (def all-ways #{:walls :pit :pocket})
 
