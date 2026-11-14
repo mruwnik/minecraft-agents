@@ -3,6 +3,7 @@
   blocks that can be stood on and is no hazard, never the column of the cell itself."
   (:require [jobs.lib.block-sets :as bs]
             [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
@@ -51,7 +52,8 @@
 
 (defn ^:async step-off!
   "Walk off the column of cell (a go-to child :step-off, range 0, no escalation). opts {:avoid :ok? :reach :near} as candidates (:near default: the body) (jobs pass :ok? (zone-ok (access/rules-input c))).
-  Glances at floors it has not seen first. Resolves to :arrived, :continue (go-to waits on the world) or {:unreachable why}: no cell to go to (:no-cell) or go-to's."
+  Glances at floors it has not seen first. A go-to that counts a body straddling the cell's edge as arrived is
+  followed by a step to the middle of the cell. Resolves to :arrived, :continue (go-to waits on the world) or {:unreachable why}: no cell to go to (:no-cell) or go-to's."
   [c cell {:keys [reach] :or {reach (reach-blocks)}  :as opts}]
   (await (sense/look-at-unknown! c (floors cell reach) dig-look/max-floor-looks))
   (if-let [to (first (candidates (:primitives c) cell (merge {:near (u/self-pos c)} opts)))]
@@ -59,7 +61,10 @@
           res (:data e)]
       (cond
         (= :continue e) :continue
-        (and (= :done (:kind e)) (:arrived res)) :arrived
+        (and (= :done (:kind e)) (:arrived res))
+        (do (when-not (= [(:x to) (:y to) (:z to)] (u/cell-vec (u/self-pos c)))
+              (await (ctx/act c :moveTo #js {:pos #js {:x (+ (:x to) 0.5) :y (:y to) :z (+ (:z to) 0.5)} :range 0.1})))
+            :arrived)
         :else {:unreachable (if (= :done (:kind e)) (:why res :unreachable) :declined)}))
     {:unreachable :no-cell}))
 

@@ -113,12 +113,13 @@
   (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (when-not (true? (.-unknown b)) (.-name b)))))
 
 (defn body-columns
-  "The set of [x z] cells the body's box overlaps when it stands at x, z. A coordinate on a whole number (only a fake
-  world puts a body there) counts as inside its own cell."
+  "The set of [x z] cells the body's box overlaps when it stands at x, z: a box edge on a cell's far face only touches
+  it, as the game's collision reads. A coordinate on a whole number (only a fake world puts a body there) counts as
+  inside its own cell."
   [x z]
   (let [span (fn [v] (if (integer? v)
                        [v]
-                       (range (js/Math.floor (- v game/hitbox-half)) (inc (js/Math.floor (+ v game/hitbox-half))))))]
+                       (range (js/Math.floor (- v game/hitbox-half)) (js/Math.ceil (+ v game/hitbox-half)))))]
     (set (for [cx (span x) cz (span z)] [cx cz]))))
 
 (defn rules-input

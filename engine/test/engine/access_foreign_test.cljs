@@ -28,3 +28,9 @@
   (let [c {:engine {:world (world-files/of-data {"pad" {:id "pad" :parts [{:id "p" :box [[0 64 0] [1 64 0]] :want "stone"}]}} {})}}]
     (with-redefs [ctx/self-name (constantly "Bot") ctx/now (constantly 1000)]
       (is (identical? (:footprints (access/zone-input c)) (:footprints (access/zone-input c)))))))
+
+(deftest the-body-overlaps-a-column-only-past-its-face-not-touching-it
+  (are [x z cols] (= cols (access/body-columns x z))
+    1.7 0.5 #{[1 0]}
+    1.75 0.5 #{[1 0] [2 0]}
+    1.25 0.5 #{[0 0] [1 0]}))
