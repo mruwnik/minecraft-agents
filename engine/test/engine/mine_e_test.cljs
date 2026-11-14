@@ -110,6 +110,20 @@
           (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))
           (is (not= :failures (:reason (done-event s))) "no dig failure is booked"))))))
 
+;; Brindle S9-N7: a cut toward seen iron 14 below ran down a 1x1 hole; the cell under the feet with no side stand was
+;; refused, the cut said no way, and the ore was given up for the whole obtain.
+(deftest a-cut-digs-its-planned-cell-under-the-feet-from-on-top-when-no-side-stand-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              job {:round (fn ^:async r [c] (reset! out (await (drops/cut-dig! c {:x 0 :y 63 :z 0}))) (ctx/end c :done nil))}
+              s (start {:world (rock-world {}) :jobs (assoc registry/jobs 'test.cut-dig job)})]
+          (core/submit! (:eng s) (tu/order '(test.cut-dig {})) {})
+          (await (run-ticks s 20))
+          (is (= :dug @out) "the way planned the drop: walled in on every side, the body digs down from where it stands")
+          (is (= "air" (block-at s 0 63 0))))))))
+
 (deftest the-tunnel-heading-arg-names-a-way-or-a-cell-to-run-toward
   (async done
     (tu/run-async done

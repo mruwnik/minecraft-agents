@@ -82,6 +82,18 @@
   (book-ground! c pos)
   (await (blocks/dig-cell! c pos {:accept (ways/accept (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
+(defn ^:async cut-dig!
+  "dig-cell! for a cell of a cut's planned way: one under the feet with no cell beside it to step to (:no-side-stand) is
+  dug from on top, as go-to's dig route does when boxed in, since the way planned the drop into it."
+  [c pos]
+  (book-ground! c pos)
+  (let [args {:accept (ways/accept (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+        e (await (blocks/dig-cell-ending! c pos args))
+        e (if (and (not= :continue e) (= :no-side-stand (:why (:cause e))))
+            (await (blocks/dig-cell-ending! c pos (update args :accept conj :under-feet)))
+            e)]
+    (blocks/dig-outcome e)))
+
 (defn worth
   "Seconds n of the call's items are worth to it: the call's worth less the other items it owes (owed), each at an even
   share of it (cost/worth-left)."
@@ -247,7 +259,7 @@
 (defn ^:async cut-to-drop!
   "Open a way beside the cell dug (cut-via with the real steps). counted: the cells whose worth max-s already holds."
   [c dug max-s counted]
-  (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem
+  (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! cut-dig! :look-at! dig-look/look-at! :mem ctx/mem
                                         :frontier frontier :walk-to! walk-to!} dug max-s))
 
 (defn lip-point
