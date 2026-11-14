@@ -9,6 +9,7 @@
 ;; its only free side the pen's cell, and the named villager walks in to it).
 ;; pen-lures-a-villager-out-of-view-of-the-boxed-body (card 3263645c: as above, the villager off the pen's axis, so the
 ;; boxed body loses sight of it; the pen waits for the walk-in instead of ending :villager-out-of-view).
+;; pen-shuts-over-a-wall-torch-without-the-body-walking-into-the-ring (card 512e8f37): the shut fill digs a wall torch in the wall and leaves its drop.
 ;; Should-fail: pen-villager-that-never-walks-in-ends-not-walked-in (a jobless NoAI villager 6 blocks off the pen's axis,
 ;; out of view once the body is boxed: the pen is built, its near end stays open, the call ends :not-walked-in after the
 ;; walking-hour ticks).
@@ -29,6 +30,15 @@
            [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]
            [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [16 2 15] "cobblestone"]
            [:block [15 1 15] "cobblestone"] [:block [17 1 15] "cobblestone"] [:block [16 1 14] "cobblestone"]]}
+  {:name "pen-shuts-over-a-wall-torch-without-the-body-walking-into-the-ring"
+   ;; card 512e8f37: a wall torch stands in the pen's east wall cell (17 0 17); the shut fill digs it and no longer picks the drop up, so the body
+   ;; never steps into the cells it encloses: the pen completes, the wall is cobblestone and the body stays in its stand 16 0 15
+   :blocks [[:set [18 0 17] "stone"] [:set [17 0 17] "wall_torch[facing=west]"]]
+   :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,72],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000048" :pos #at [16 0 16] :profession "librarian"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:block [17 0 17] "cobblestone"] [:block [17 1 17] "cobblestone"] [:block [16 2 17] "cobblestone"] [:body-near [16 0 15] 1.6]
+           [:entities "type=villager" [[16 0 17] [16 0 17]] 1]]}
   {:name "pen-closes-the-stand-beside-a-second-villager"
    :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,42],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:summon "villager" [14.5 0 15.5] "{NoAI:1b,UUID:[I;20260,7,5,43],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
