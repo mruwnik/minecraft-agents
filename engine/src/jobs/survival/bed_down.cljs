@@ -213,7 +213,7 @@
   :cost of the walk; go-to's price has its dark cells' spawns and the threats that catch it): busy the walk's seconds and, a flee to a cave or
   natural ground, the shelter's time on arrival (flee-after; here's toll is here's), the walk's cost beyond its seconds, that shelter exposed at the target
   (exposed-price: the hostiles known there once),
-  and by day that shelter's morning and, in the ground (its work goes on here), the walk back (cost/commute-s's); :home with a carried bed (it goes down there) loses the night as :bed
+  and by day that shelter's morning and the walk back to where the night found the body; :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-worth there. :exposed the night left in the open where the body stands (or the worst cell
   it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers.
   Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
@@ -246,7 +246,7 @@
                (let [seconds (min cost (or (:seconds t) cost))
                      busy (min left (sin/time-s after))]
                  {:busy-s (+ seconds busy) :risk-s (- cost seconds)
-                  :open-s (exposed-price c (spawn-light/night-chance p pos) busy pos) :morning-s (+ (if in-ground? seconds 0) (:morning-s after))}))
+                  :open-s (exposed-price c (spawn-light/night-chance p pos) busy pos) :morning-s (+ seconds (:morning-s after))}))
         into-home? (some? (sh-beds/closed-home c))
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) into-home?))
         body (respawn-body c)

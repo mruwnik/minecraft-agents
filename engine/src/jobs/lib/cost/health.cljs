@@ -85,11 +85,10 @@
   (+ (night-lost-s in-ground? left busy-s) risk-s open-s morning-s))
 
 (defn night-walk-bound-s
-  "The longest walk whose least night-way-s (busy its seconds and, in the ground, the same seconds back by day: commute-s's walk there
-  and back) is within price; -1 when none is."
+  "The longest walk whose least night-way-s (busy its seconds, in the ground, and the same seconds back by day: commute-s's walk) is within price; -1 when none is."
   [in-ground? left price]
   (cond
-    (not in-ground?) (if (<= left price) ##Inf -1)
+    (not in-ground?) (if (<= left price) (- price left) -1)
     (<= (/ price 2) left) (/ price 2)
     :else (- price left)))
 

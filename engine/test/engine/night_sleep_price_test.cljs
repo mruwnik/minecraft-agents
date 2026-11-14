@@ -306,3 +306,14 @@
           (is (>= (:bed far) (+ left walk-s)) "the whole night is lost walking, as staying up loses it, and the walk's price comes on top")
           (is (> (:bed far) (:shelter far)) "digging in here beats a bed reached only after the night")
           (is (>= (:bed half) (+ (/ left 2) walk-s)) "the half of the night walked is not skipped"))))))
+
+(deftest a-flee-off-the-ground-owes-the-walk-back-by-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night})) {}
+                           {::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})
+              target (fn [secs] {:flee {:pos {:x 20 :y 64 :z 0} :cost secs :seconds secs}})
+              near (:flee (await (bed-down/answers c (target 10))))
+              far (:flee (await (bed-down/answers c (target 110))))]
+          (is (= 100 (- far near)) "100 s more walk: the night is lost either way, the 100 s back by day come on top"))))))

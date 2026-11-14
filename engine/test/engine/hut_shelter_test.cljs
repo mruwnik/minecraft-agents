@@ -123,7 +123,7 @@
           (let [{:keys [p]} (await (dig-in! (assoc (hut-world {:x 5 :y 64 :z 0} (assoc extra "5,67,0" "air")) :states states)))]
             (is (< 1 (count (st/calls p "place"))) why)))))))
 
-(deftest shelter-in-a-mended-room-ends-the-night-and-leaves-by-day-without-digging
+(deftest a-lit-room-with-a-roof-hole-is-stayed-in-through-the-night-nothing-placed-nothing-dug
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -131,8 +131,8 @@
                                                {:time st/night :inventory st/wall-stack}))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (is (nil? (await (st/night-then-day eng p 8 #(core/holder eng) 6)))
-              "mended, the room is safe: the night job ends and the queue may run")
-          (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))) "one block, and no dig-in after")
+              "lit, nothing spawns in it: the night job ends and the queue may run")
+          (is (= [] (st/calls p "place")) "staying costs the night and no risk; mending the hole (dig-in test above) would add seconds for nothing")
           (is (nil? (core/holder eng)) "nothing holds by day")
           (is (= [] (st/calls p "dig")) "nothing dug to leave: the room's door is the way out")
           (is (= {} (room-blocks p))))))))
@@ -172,7 +172,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
+        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 6))
@@ -185,7 +185,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
+        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
               id (core/submit! eng (tu/order '(jobs.survival.night {})) {})]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (swap! (fake/state p) assoc-in [:self :isSleeping] true)
@@ -377,7 +377,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
+        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "occupied"})))
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})

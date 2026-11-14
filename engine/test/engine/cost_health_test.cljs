@@ -157,7 +157,8 @@
 
 (deftest the-longest-walk-worth-quoting-by-a-night-is-bound-by-the-least-price-and-the-night-left
   (are [in-ground? left price bound] (= bound (health/night-walk-bound-s in-ground? left price))
-    false 100 500 ##Inf
+    false 100 500 400
+    false 100 100 0
     false 500 100 -1
     true 1000 100 50
     true 100 500 400))
