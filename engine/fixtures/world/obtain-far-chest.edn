@@ -3,6 +3,7 @@
 ;; Should succeed: the body walks to the chest and carries the ingots.
 ;; The carried-materials case: 4 planks carried, the far chest holds sticks, the body crafts.
 ;; The tree case: empty pack, a tree 10 blocks off, a chest 90 blocks off remembered as holding a wooden sword: the body fells the tree and crafts, no chest is visited.
+;; Card 4c092c3f: an unlooked chest 20 blocks off, the only way (nothing booked holds the item: a 1/2 chance at most), is looked into at worth 200 but not at worth 15 (its 12 s walk there and back is over 15 x 1/2).
 ;; Should fail: a chest 90 blocks off with a 10 s call is not walked to; the memory says the far chest holds only dirt, so nothing is walked to and the call ends without a source.
 {:defaults
  {:tags [:items :obtain :storage :jobs] :time :any
@@ -48,4 +49,19 @@
    :act [[:job (jobs.items.obtain {:worth 1200 :item "iron_ingot" :count 3 :ways #{:chest} :explore false})]]
    :expect [{:event {:source :job :kind #{:stopped :waiting}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind #{:stopped :waiting}}}]
-   :limit-s 90}]}
+   :limit-s 90}
+  {:name "an-unlooked-only-chest-is-looked-into-when-the-walk-pays"
+   :plot {:light :lit :height 8 :length 100 :width 16 :floor "grass_block"}
+   :blocks [[:set [23 0 8] "chest{Items:[{Slot:0b,id:\"minecraft:amethyst_shard\",count:2}]}"]]
+   :act [[:job (jobs.items.obtain {:worth 200 :item "amethyst_shard" :count 2 :ways #{:chest} :explore false})]]
+   :expect [{:event {:source :job :kind :obtain.chest} :within-s 30}
+            {:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "amethyst_shard" 2]]
+   :limit-s 90}
+  {:name "an-unlooked-only-chest-is-not-walked-to-when-the-walk-does-not-pay"
+   :plot {:light :lit :height 8 :length 100 :width 16 :floor "grass_block"}
+   :blocks [[:set [23 0 8] "chest{Items:[{Slot:0b,id:\"minecraft:amethyst_shard\",count:2}]}"]]
+   :act [[:job (jobs.items.obtain {:worth 15 :item "amethyst_shard" :count 2 :ways #{:chest} :explore false})]]
+   :expect [{:no-event {:source :job :kind :obtain.chest} :for-s 40}]
+   :after [[:item "amethyst_shard" 0] [:body-near [3 0 8] 4]]
+   :limit-s 60}]}
