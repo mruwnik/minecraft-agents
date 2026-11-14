@@ -798,7 +798,7 @@
             (note-holes! c [dug])
             (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)]))
             (when (contains? (:pillar-cells (ctx/mem c)) (vec cell)) (pillar-undone! c cell)))
-          (when (and guess (not looked)) (note-guess! c cell class (not (#{:not-diggable :missing} o))))
+          (when (and guess (not looked)) (note-guess! c cell class (not= :not-diggable o)))
           (cond (and guess (= :not-diggable o)) :replan
                 ;; the walk refuses a cell the body cannot see: the route is no way
                 (and guess (= :missing o) (dig-look/unknown? p cell)) :unseen-open

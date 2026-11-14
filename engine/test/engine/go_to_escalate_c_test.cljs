@@ -2219,7 +2219,7 @@
           (is (false? (:arrived out)) (pr-str out))
           (is (= 1 (count (dig-routes seen))))
           (is (= [[:unseen-open [-31 65 -10]]] (map (juxt :reason :cell) (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalation-stopped)))))
-          (is (= [false] (map :ok? (events-of seen :go-to.guess-look))) "open where rock was guessed is a bad guess"))))))
+          (is (= [true] (map :ok? (events-of seen :go-to.guess-look))) "open where rock was guessed is no undiggable cell"))))))
 
 (deftest a-dig-route-that-changes-nothing-is-not-taken-again-past-its-price
   ;; a route whose cells all read open while the walk still refuses them ends no nearer than the last: without memory
