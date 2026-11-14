@@ -18,9 +18,10 @@
 (def doc
   "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, walking on through the
   night): into the closed room it lies in (jobs.lib.shelter/home-room), the room's cell nearest it, else within 2 of it.
-  Conditions (at the start only): a :home or :bed remembered, else :no-home.
+  Conditions: a :home or :bed remembered, else :no-home.
   Done {:home pos} on arrival (also records :home there unless a live one exists), or at once when already home (in its room, else within 2 of it).
-  A place farther than :limit blocks is a condition: the call waits (:too-far {:pos :distance :text}) while the night job digs in or sleeps. A walk that did not arrive is
+  A place farther than :limit blocks is a condition: the call waits (:too-far {:pos :distance :text}) while the night job digs in or sleeps;
+  once started, a round that finds it so (the body moved far) ends condition-failed :too-far. A walk that did not arrive is
   nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
   With :commute? (the :dusk-home trigger's) a body in the ground (jobs.lib.shelter/in-ground?: its work goes on through the
@@ -110,9 +111,11 @@
            (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (sin/time-s (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))))))
 
 (defn ^:async round [c]
-  (let [pos (place c)]
+  (let [pos (place c)
+        status (home-status c)]
     (cond
       (nil? pos) (ctx/end c :condition-failed :no-home)
+      (= :too-far (:reason (nth status 2))) (ctx/end c :condition-failed :too-far (contract/status-cause status))
       (await (commute-dearer? c pos))
       (ctx/end c :nothing-possible {:reason :shelter-cheaper}
                {:text "in the ground, the walk home and back costs more than sheltering here; its work goes on"

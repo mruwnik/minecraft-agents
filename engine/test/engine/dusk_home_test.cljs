@@ -11,6 +11,7 @@
             [engine.hut-shelter-test :refer [hut-world]]
             [engine.test-util :as tu]
             [jobs.movement.go-to.cut :as gcut]
+            [jobs.survival.go-home :as go-home]
             [triggers.survival.dusk-home :as dh]))
 
 (defn holds?
@@ -211,3 +212,19 @@
           (await (tu/run-until-empty eng 30))
           (let [{:keys [x z]} (st/pos-of p)]
             (is (and (<= 4 x 7) (<= -1 z 2)) (str "inside the hut, at " x " " z))))))))
+
+(deftest a-go-home-round-that-finds-home-past-its-limit-ends-too-far
+  ;; Brindle S2: moved ~1100 blocks off mid-walk, go-home walked on toward the home it was given 160 blocks for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})
+              _ (mem/write! store :home {:pos {:x 90 :y 64 :z 0}} mem/place-policy)
+              c {:primitives (tu/fake-on-floor {:floor [200 -5 230 5] :self {:pos {:x 220.5 :y 64 :z 0.5}}})
+                 :args {:limit 100} :view (fn [] (mem/view store))}
+              walks (atom 0)
+              r (with-redefs [child/call-walk* (fn [& _] (swap! walks inc) (js/Promise.resolve :continue))
+                              ctx/end (fn ([_ kind cause] [kind cause]) ([_ kind cause _] [kind cause]))]
+                  (await (go-home/round c)))]
+          (is (= [:condition-failed :too-far] r))
+          (is (zero? @walks) "no step on toward the home"))))))
