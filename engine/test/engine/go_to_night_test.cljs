@@ -315,6 +315,11 @@
           (core/submit! eng (tu/order '(seeded)) {})
           (await (ticks eng 20))
           (is (nil? (mem/latest (mem/view (:store eng)) :sent-back)) "cut in the hut where it restarts (a reflex in place): no entry"))
+        (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :light {} :light-default [15 15]) {'seeded (seeded-walker (assoc sent-back-seed :prev {:x 5.5 :y 64 :z 3.5}))})]
+          (core/submit! eng (tu/order '(seeded)) {})
+          (await (ticks eng 20))
+          (is (= :room (:place (:data (mem/latest (mem/view (:store eng)) :sent-back)))) "cut on the step outside the door, a block back inside: an entry")
+          (is (= inside (st/pos-of p)) "and the next walk out waits"))
         (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :time st/noon) {'seeded (seeded-walker sent-back-seed)})]
           (core/submit! eng (tu/order '(seeded)) {})
           (await (tu/run-until-empty eng 40))
