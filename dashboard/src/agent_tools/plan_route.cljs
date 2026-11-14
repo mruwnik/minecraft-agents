@@ -114,10 +114,45 @@
     (let [parsed (zone-file/parse text)]
       (if (seq (:errors parsed)) {:error (str "zones.edn does not parse: " (first (:errors parsed)))} {:zones (:value parsed)}))))
 
-(defn no-route-hint [{:keys [tunnel bridge spent nodes]}]
-  (str (if spent (str "the search ran out of its " nodes " nodes (--nodes) before it found a rail line") "no rail line fits the seen ground")
+(defn launch-runs
+  "The straight cells a line's first and last leg run before a turn ([start end], plan.rail-route/connect's near and far)
+  for opts :launch and :launch-ends (nil: plan.rail/defaults)."
+  [{:keys [launch launch-ends]}]
+  (let [{:keys [launch launch-ends]} (merge rail/defaults (cond-> {} launch (assoc :launch launch) launch-ends (assoc :launch-ends launch-ends)))
+        near (+ launch 3)]
+    [near (if (= :both launch-ends) near 3)]))
+
+(defn run-free?
+  "Whether n cells straight on from [x y z] heading [dx dz] each have known ground (height, (fn [x z]) -> y) within a block
+  of y: a cut or a fill keeps the rail level there."
+  [height [x y z] [dx dz] n]
+  (every? (fn [i] (some-> (height (+ x (* i dx)) (+ z (* i dz))) (- y) abs (<= 1))) (range 1 (inc n))))
+
+(defn hemmed-ends
+  "The ends, of [[:from from n] [:to to n]], with no heading along which n cells run free (run-free?)."
+  [height ends]
+  (filterv (fn [[_ cell n]] (not-any? #(run-free? height cell % n) [[1 0] [-1 0] [0 1] [0 -1]])) ends))
+
+(defn end-text [[end cell n]]
+  (str "--" (name end) " " (pr-str cell) " has no heading with " n " straight cells of seen ground within a block of its level"))
+
+(defn no-route-hint [{:keys [tunnel bridge spent nodes hemmed]}]
+  (str (cond spent (str "the search ran out of its " nodes " nodes (--nodes) before it found a rail line")
+             (seq hemmed) (str "no rail line can leave its ends: " (str/join "; " (map end-text hemmed))
+                               " (a line's first and last cells run straight and level for its launch groups before a turn); move that end to where they do")
+             :else "no rail line fits the seen ground")
        " between the cells (longest tunnel " (or tunnel "any") ", bridge " (or bridge "any")
        "). Walk and look along the way: unseen columns are not ground, zones and other plans' cells are not touched, and a line needs room for its launch groups at both ends"))
+
+(defn bad-route-text
+  "Why the cheapest route cannot be laid (plan.rail/layout's error): a :touching one names the straight launch runs at its
+  ends, which make a hemmed-in end loop out and back beside itself."
+  [{:keys [error at]} [near far]]
+  (if (= :touching error)
+    (str "the cheapest route runs beside itself" (some->> at (str " at ")) " (rails side by side join): its first " near
+         " and last " far " cells must run straight and level before a turn, so an end hemmed in loops round; start and end where "
+         near " cells run free toward the other end")
+    (str "the cheapest route cannot be laid: " (name error) (some->> at (str " at ")))))
 
 (defn route-plan
   "{:plan <plan map> :summary {...}} for the route from to between the two cells, or {:error reason :message text}.
@@ -125,13 +160,16 @@
   cells other plans want, a set of [x y z])."
   [{:keys [id by tunnel bridge launch nodes planned] :or {nodes route/max-nodes planned #{}}} from to name-at zones]
   (let [opts (cond-> {:tunnel tunnel :bridge bridge} launch (assoc :launch launch))
-        routed (route/connect (height-fn name-at from to zones by planned) from to
+        height (height-fn name-at from to zones by planned)
+        [near far :as runs] (launch-runs opts)
+        routed (route/connect height from to
                               (assoc opts :max-nodes nodes :gap (water-fn name-at from to) :prices (route-prices name-at zones by planned)))]
     (if (:error routed)
       {:error (if (= :no-route (:error routed)) :no-route :bad-route)
        :message (if (= :no-route (:error routed))
-                  (no-route-hint {:tunnel tunnel :bridge bridge :spent (:spent routed) :nodes nodes})
-                  (str "the cheapest route cannot be laid: " (name (:error routed)) (some->> (:at routed) (str " at "))))}
+                  (no-route-hint {:tunnel tunnel :bridge bridge :spent (:spent routed) :nodes nodes
+                                  :hemmed (when-not (:spent routed) (hemmed-ends height [[:from from near] [:to to far]]))})
+                  (bad-route-text routed runs))}
       (let [laid (rail/layout (:waypoints routed) (dissoc opts :tunnel :bridge))
             spans (mapv #(select-keys % [:kind :from :to]) (:spans routed))]
         (if (:error laid)

@@ -503,6 +503,18 @@ test('route goes round the cells another plan wants, the maker\'s own plan too',
   } finally { fx.close() }
 })
 
+// b2eefec2: a start with no straight launch run got the generic "no rail line fits" hint
+test('route with no launch run free at its start names that end and the straight cells it lacks', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells({ hills: [[0, 1, 70], [4, 30, 70]] }), Date.now() - 1000)
+    const refused = await invoke('plan', fx, [...ROUTE, '--tunnel', '0', '--dry-run'])
+    assert.deepEqual(refused.value.reason, keyword('no-route'))
+    assert.match(refused.value.message, /--from \[2 64 5\] has no heading with 7 straight cells/)
+    assert.doesNotMatch(refused.value.message, /--to /)
+  } finally { fx.close() }
+})
+
 test('route refuses bad cells, a missing body or by, and an unseen world; --dry-run writes nothing', async () => {
   const fx = fixture()
   try {
