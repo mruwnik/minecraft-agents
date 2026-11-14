@@ -6,6 +6,10 @@
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.foods :as foods]
+            [jobs.lib.expiry :as expiry]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.reserve :as reserve]
+            [engine.settings :as settings]
             [jobs.lib.util :as u]))
 
 (def meta {:tags [:goal :food]})
@@ -43,11 +47,20 @@
   (assoc (select-keys (await (ctx/quote c 'jobs.survival.get-food {:carry (:carry (:args c)) :explore false})) [:uses :death :estimate])
          :done [0 1 1]))
 
+(defn keep-trip-food!
+  "The fetched food is the trip's: a reserve entry (ttl-stamped, left to run out after the job ends) keeps a deposit from putting the surplus back; eating is not barred."
+  [c]
+  (ctx/remember! c reserve/kind
+                 (expiry/stamp {:id (str (:id c) "-trip-food") :tag :food :count :all :strength 1 :by (:id c) :not #{:eat}
+                                :why "food fetched for the trip"}
+                               (ctx/now c) (* 1000 (settings/get ledger/settings ::ledger/ttl-s)))
+                 reserve/policy))
+
 (defn ^:async round [c]
   (let [e (await (ctx/call c :fetch 'jobs.survival.get-food {:carry (:carry (:args c)) :explore false}))]
     (cond
       (= :continue e) :continue
-      (= :done (:kind e)) (ctx/end c :done nil {:have (have c)})
+      (= :done (:kind e)) (do (keep-trip-food! c) (ctx/end c :done nil {:have (have c)}))
       (and (:go-on? (:args c)) (= [:nothing-possible :no-carry] [(:kind e) (:cause e)])) (contract/with-because
                             (ctx/end c :done nil {:short true :have (have c) :cause (contract/cause-key e)
                                                   :text (str "the fetch fell short (" (name (contract/cause-key e)) "): going on with " (have c) " food points")})
