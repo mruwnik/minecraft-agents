@@ -280,9 +280,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (lt/setup {:blocks (fm/ground [[6 0]]) :inventory [sapling] :unloaded ["6,64,0"]})]
+        (let [{:keys [eng]} (lt/setup {:blocks (fm/ground [[6 0]])})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
-          (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:ways #{:carried}} 50))
+          (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {} 50))
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (mapv :data (mem/entries (mem/view (:store eng)) trees/stalled-kind)))))))))
 
 (deftest plant-sapling-takes-the-debt-whose-sapling-is-carried-before-an-older-one
