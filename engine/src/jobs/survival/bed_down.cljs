@@ -206,7 +206,7 @@
   the body's sleep skips it (sh-sleepers/sleepers-short 0) and no known hostile is near the bed (sh-sleepers/monsters-near-bed?:
   the server refuses the sleep; with none known, the refusal is the chance one spawns and arrives while the bed is placed and lain in, arrival-chance, its price mixed with the night left in the open), open (not sh-beds/bed-sheltered?) all that time or at least the time to place the bed and lie
   asleep (sh-sleepers/sleep-start-s), all of it from the walk's end (walk-secs, the walk's seconds: a walk that outlasts the night skips
-  none of it), plus walk-s (the walk there, priced by the caller), the night it walks lost and the skip the others wait meanwhile. :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
+  none of it), plus walk-s (the walk there and back by day, priced by the caller), the night it walks lost and the skip the others wait meanwhile. :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
   exposed, then lain in. :shelter sheltering here (dig-in-quote, when shut-in quotes a way) and :niche (niche, the caller's shelter-quote
   of a pocket dug nearby) alike: busy their time (time-s), the toll their quote names, that time exposed from the worst of the cells the bed
   is got up to (wake-cells) when asleep, and their :morning-s. :flee and :home (flee, home: the caller's target with go-to's :seconds and

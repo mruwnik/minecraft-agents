@@ -66,10 +66,10 @@
 
 (defn commute-s
   "Seconds a walk of secs away costs over sheltering where the body stands, which takes shelter-s: for a body in the ground
-  (in-ground?, its work goes on through the night) the walk there and back less that time; else 0 (the night stops the
-  work either way)."
+  (in-ground?, its work goes on through the night) the walk there and back less that time; else the walk back by day (the
+  night stops the work either way, the morning's work is where the night found the body)."
   [in-ground? secs shelter-s]
-  (if in-ground? (- (* 2 secs) shelter-s) 0))
+  (if in-ground? (- (* 2 secs) shelter-s) secs))
 
 (defn night-lost-s
   "Seconds of work a way through a night with left seconds still to run costs a body busy at it busy-s seconds: for a body in the

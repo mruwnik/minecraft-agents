@@ -326,7 +326,8 @@
   (let [tunnel {:blocks hut/tunnel}]
     (is (< (:walk (walk-price tunnel 5)) (:walk (walk-price tunnel 30))) "in the ground the work a walk costs grows with it")
     (is (< (:walk-hp (walk-price tunnel 30)) (:walk (walk-price tunnel 30))) "beyond its hp")
-    (is (= (:walk-hp (walk-price {} 30)) (:walk (walk-price {} 30))) "on open ground the night stops the work either way")))
+    ;; Tamsin S3: on open ground a ~1150-block walk to the old bed cost nothing past its hp and won by 8 s over digging in at the field
+    (is (= (+ (:walk-hp (walk-price {} 30)) 30) (:walk (walk-price {} 30))) "on open ground the night stops the work either way, but the walk back by day is owed")))
 
 (defn dark-route
   "The planner's route over an open floor from x 0 to x 38 with dark feet cells over the whole width at x 5 to 5+n-1 (crossed, not sidestepped): {:seconds :dark-seconds}, as go-to quotes it."

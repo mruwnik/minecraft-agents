@@ -134,11 +134,11 @@
     (is (= 0 (:air-limit (policy {:jobs.lib.walk.world/dive false}))))
     (is (nil? (:air-limit (policy {}))))))
 
-(deftest a-walk-from-the-ground-costs-there-and-back-less-the-shelter-time
+(deftest a-walk-away-for-the-night-costs-the-walk-back-and-in-the-ground-the-walk-there-less-the-shelter-time
   (are [in-ground? secs expected] (= expected (cost/commute-s in-ground? secs 12))
     true 30 48
     true 5 -2
-    false 30 0))
+    false 30 30))
 
 (deftest the-hp-price-converts-every-death-term
   (let [body {:health 20 :food 20 :level 0 :carried 0}
