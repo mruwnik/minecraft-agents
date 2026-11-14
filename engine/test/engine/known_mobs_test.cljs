@@ -282,6 +282,17 @@
     (is (false? (proofs/proved-way? kind-at pr [4 64 0] [0 66 0])) "no mob below a 2-high pillar walks up it")
     (is (< (count @looked) reach/node-budget) "settled by the closure back from the body, not by the forward search flooding the field")))
 
+(deftest the-queries-of-one-view-share-their-proofs-until-the-cell-or-a-block-changes
+  (let [{:keys [p clock]} (rig {})
+        pr (danger-q/query-proofs p)]
+    (later! clock 200)
+    (is (identical? pr (danger-q/query-proofs p)) "a later tick, the same cell and blocks: no search is redone")
+    (fake/set-block! p [3 64 3] "stone")
+    (let [pr2 (danger-q/query-proofs p)]
+      (is (not (identical? pr pr2)) "a block changed")
+      (swap! (fake/state p) assoc-in [:self :pos] [1.5 64 0.5])
+      (is (not (identical? pr2 (danger-q/query-proofs p))) "the body moved"))))
+
 ;; ---- light (card 01b5462f): a mob in the dark is seen only close up
 
 (defn dark! [p cells] (swap! (fake/state p) assoc :light cells))

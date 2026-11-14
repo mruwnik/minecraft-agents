@@ -12,6 +12,7 @@
             [engine.settings :as settings]
             [engine.entity-observations :as obs]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost.danger :as cost-danger]
@@ -352,7 +353,28 @@
   [p radius cells]
   (boolean (seq (dangers-opened p radius cells))))
 
-(defn query-proofs [p] (proofs/proofs (reach/cell-of (u/pos-of (.-pos (.self p))))))
+(defn same-view?
+  "Whether two perception sensed keys (#js [tick epoch dimension x y z yaw pitch]) agree bar the tick."
+  [^js a ^js b]
+  (loop [i 1] (or (== i (.-length a)) (and (identical? (aget a i) (aget b i)) (recur (inc i))))))
+
+(defn query-proofs
+  "Walk proofs (reach.proofs) for a query from the body's cell. Proofs are facts about that cell and the blocks as
+  sensed, so the queries of one decision share them while the cell and every sensed answer hold (perception/memo-key
+  bar its tick): each would rerun the same budget-long searches. Fresh without a perception."
+  [p]
+  (let [cell (reach/cell-of (u/pos-of (.-pos (.self p))))
+        per (aget p "perception")
+        k (when per (perception/memo-key per))]
+    (if-not k
+      (proofs/proofs cell)
+      (let [^js st (:st per)
+            ^js m (.-proofsMemo st)]
+        (if (and m (== (k 1) (aget m 1)) (= cell (aget m 2)) (same-view? (k 0) (aget m 0)))
+          (aget m 3)
+          (let [pr (proofs/proofs cell)]
+            (set! (.-proofsMemo st) #js [(k 0) (k 1) cell pr])
+            pr))))))
 
 (defn dangers
   "The hostiles of known-hostiles (same opts) that are real dangers, nearest first."
@@ -370,7 +392,7 @@
   [p radius opts {:keys [skip] :as danger-opts}]
   (let [skip (set skip)
         kind-at (or (:kind-at danger-opts) (reach/mob-lookup p))
-        pr (delay (query-proofs p))
+        pr (delay (if (:kind-at danger-opts) (proofs/proofs (reach/cell-of (u/pos-of (.-pos (.self p))))) (query-proofs p)))
         danger-opts (assoc (dissoc danger-opts :skip :kind-at) :arrow-at (reach/arrow-lookup p))]
     (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at @pr % danger-opts)) %)
           (known-hostiles p radius opts))))
