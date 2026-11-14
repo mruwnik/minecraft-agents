@@ -329,7 +329,7 @@
           (let [looks (events-of s :go-to.guess-look)]
             (is (seq looks) "the way under the floor was guessed rock and looked at")
             (is (every? :class looks) "each look counts for its guess's class, so the next guess learns from it")
-            (is (= :placed (:class (second looks))) "beside the bedrock the first look found, above the layer: a build")))))))
+            (is (= [false :apart] ((juxt :ok? :class) (first looks))) "the first look finds the bedrock, an :apart cell; the wall cut then beats a second guess under the floor, whose climb back is paid")))))))
 
 ;; stone over the void with one bedrock cell: the climb past the first look is not dug under the wall onto stands over
 ;; floors the dark hides (each walk to them failed :unseen-floor-dark), but through the glass
