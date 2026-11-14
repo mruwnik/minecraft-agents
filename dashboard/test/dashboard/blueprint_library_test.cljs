@@ -62,11 +62,10 @@
   (is (seq (:errors (lib/preview (pr-str tiny) "{:oak_log 3}"))))
   (is (seq (:errors (lib/preview (pr-str tiny) "{\"oak_log\" -1}")))))
 
-(deftest canonical-library-ignores-json
+(deftest library-lists-edn-and-names-the-broken
   (let [dir (.mkdtempSync fs (.join path (.tmpdir os) "blueprints-edn-test-"))]
     (try
       (.writeFileSync fs (.join path dir "tiny.edn") (pr-str tiny))
-      (.writeFileSync fs (.join path dir "tiny.blueprint.json") "invalid legacy JSON")
       (.writeFileSync fs (.join path dir "broken.edn") "{")
       (let [{:keys [blueprints errors]} (lib/library dir)]
         (is (= ["broken" "tiny"] (mapv :name blueprints)))

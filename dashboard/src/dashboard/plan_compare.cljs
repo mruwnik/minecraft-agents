@@ -59,7 +59,7 @@
   "A short summary of a part for people."
   [{:keys [where want blueprint turn]}]
   (if (= :blueprint where)
-    (str "blueprint " blueprint ", turn " turn)
+    (str "blueprint " (if (map? blueprint) (or (:id blueprint) "(inline)") blueprint) ", turn " turn)
     (shape/want-text want)))
 
 (defn element

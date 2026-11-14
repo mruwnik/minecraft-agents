@@ -10,8 +10,7 @@
             [dashboard.server.esm :refer [import-esm]]))
 
 ;; ---------------------------------------------------------------- plans (dashboard.plan-api)
-;; Plans are worlds/<world>/plans/<id>.edn, the blueprints they place blueprints/<id>.edn at the repo root (next to
-;; the legacy .blueprint.json library). The block lookup over the dumped chunk columns is the JS glue js/worldblocks.mjs
+;; Plans are worlds/<world>/plans/<id>.edn, the blueprints they place blueprints/<id>.edn at the repo root. The block lookup over the dumped chunk columns is the JS glue js/worldblocks.mjs
 ;; (the view's column decoders); everything else is ClojureScript.
 (def worldblocks-module (or (.-WORLDBLOCKS_MODULE js/process.env) (.join path dashboard-dir "js" "worldblocks.mjs")))
 (def plan-blueprints-dir (.join path repo-root "blueprints"))

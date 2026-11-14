@@ -104,8 +104,7 @@ off screen gets an arrow on the edge, click it to pan there), `/plans` (plan fil
 
 A plan records the desired state of a piece of the world; the format is the one of `docs/design.md`, "Plans and blueprints". The
 dashboard compares it with the chunk columns the bodies dumped (`worlds/<world>/chunks/<cx>.<cz>.bin`, `cx = floor(x/16)`).
-One EDN file per plan, `worlds/<world>/plans/<id>.edn`, and one per blueprint, `blueprints/<id>.edn` at the repo root (next to
-legacy `.blueprint.json` files, which the dashboard ignores); the file name is the id. `plan.shape` (`../engine/src/plan/shape.cljc`, plain data, no
+One EDN file per plan, `worlds/<world>/plans/<id>.edn`, and one per blueprint, `blueprints/<id>.edn` at the repo root; the file name is the id. A blueprint in the library is a template; a plan part `{:blueprint "id" ...}` places it by name, and `{:blueprint {...grid map...}}` holds a placed copy inline (its optional `:id` names the template). `plan.shape` (`../engine/src/plan/shape.cljc`, plain data, no
 IO, meant to be required by the engine's jobs too) is the only namespace that knows the format: checking (`plan-errors`,
 `blueprint-errors`), expansion into cells (`expand`, the later part winning a shared cell; blueprints placed and turned with `place`)
 and plan minus world (`judge`, `plan-minus-world`, `assignment-answers`). `dashboard.plan` reads the files, `dashboard.plan-compare`

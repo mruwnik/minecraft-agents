@@ -26,12 +26,6 @@
       (is (every? seq (map :errors errors))))
     (is (= {:plans {} :errors []} (plan/read-dir (.join path dir "missing"))))))
 
-(deftest read-blueprints-skips-the-legacy-json-documents
-  (let [dir (temp-dir)]
-    (.writeFileSync fs (.join path dir "shed.edn") (pr-str shed))
-    (.writeFileSync fs (.join path dir "hut.blueprint.json") "{}")
-    (is (= {:blueprints {"shed" shed} :errors []} (plan/read-blueprints dir)))))
-
 (deftest the-fixture-plans-and-blueprints-are-valid
   (let [{:keys [plans errors]} (plan/read-dir fixtures-dir)]
     (is (= [] errors))

@@ -413,7 +413,9 @@
          (let [plan (value (get-in state [:plans id]))
                text (str (pr-str plan)
                          (apply str (for [part (:parts plan)
-                                          :let [bp (value (get-in state [:blueprints (:blueprint part)]))]
+                                          :let [bp (if (map? (:blueprint part))
+                                                     (:blueprint part)
+                                                     (value (get-in state [:blueprints (:blueprint part)])))]
                                           :when bp]
                                       (pr-str (:key bp)))))]
            (boolean (some #(str/includes? text %) needles))))))

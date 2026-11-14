@@ -13,7 +13,8 @@
   values as keywords or strings). Turning a blueprint turns facing, axis, rotation (signs, banners, heads) and the
   north/east/south/west connection keys (fences, panes, walls, vines). Not turned yet: rail shape (north_south,
   ascending_east, south_east ...), orientation (jigsaw, crafter), and any other state naming a side in its value."
-  (:require [clojure.string :as str]
+  (:require [clojure.set :as set]
+            [clojure.string :as str]
             [plan.pen-fit :as pen-fit]))
 
 (def turns #{0 90 180 270})
@@ -200,9 +201,13 @@
     (let [step (turn-step (:step copy) (or turn 0))]
       (mapv (fn [i] (assoc part :id (str id "." i) :at (mapv + at (mapv #(* i %) step)))) (range (:n copy))))))
 
+(declare blueprint-errors)
+
 (defn blueprint-part-error [part]
   (cond
-    (not (string? (:blueprint part))) ":blueprint must be the name of a blueprint"
+    (not (or (string? (:blueprint part)) (map? (:blueprint part)))) ":blueprint must be the name of a blueprint or a blueprint map"
+    (and (map? (:blueprint part)) (seq (blueprint-errors (:blueprint part) nil)))
+    (str "inline blueprint: " (:error (first (blueprint-errors (:blueprint part) nil))))
     (not (coords? (:at part))) "a placed blueprint needs :at [x y z], its north-west bottom corner after turning"
     (not (contains? turns (get part :turn 0))) ":turn must be 0, 90, 180 or 270"
     (not (or (nil? (:repeat part)) (repeat? (:repeat part))))
@@ -280,7 +285,9 @@
           inside? (fn [at] (and (coords? at) (let [[x y z] at] (and (< -1 x w) (< -1 y h) (< -1 z d)))))
           letters (when-not layers-problem (set (map str (apply concat (apply concat (:layers bp))))))]
       (vec (for [e (concat
-                    [(when-not (= file-id (:id bp)) (str ":id must equal the file name, " (pr-str file-id)))
+                    [(if (some? file-id)
+                       (when-not (= file-id (:id bp)) (str ":id must equal the file name, " (pr-str file-id)))
+                       (when (and (contains? bp :id) (not (string? (:id bp)))) ":id must be the name of the template it was copied from"))
                      (when-not (some #{(:front bp)} sides) ":front must be :north, :east, :south or :west")
                      (when-not (map? (:key bp)) ":key must map letters to blocks")
                      layers-problem
@@ -408,11 +415,16 @@
 ;; ---------------------------------------------------------------- expansion
 (defn where-of [part] (or (some #(when (contains? part %) %) (conj where-keys :blueprint)) :none))
 
+(defn blueprint-of
+  "The blueprint a :blueprint part places: its inline map (a placed copy) or the library's by name (the template)."
+  [blueprints part]
+  (let [b (:blueprint part)] (if (map? b) b (get blueprints b))))
+
 (defn expand-part
   "-> {:cells [{:pos :want :part}] :spots {..}} or {:error text}"
   [blueprints part]
   (if (contains? part :blueprint)
-    (if-let [bp (get blueprints (:blueprint part))]
+    (if-let [bp (blueprint-of blueprints part)]
       (let [placements (copies part)]
         {:cells (into [] (mapcat #(placed-cells bp % (:id part))) placements)
          :spots (into {} (map #(placed-spots bp %)) placements)})
@@ -450,6 +462,36 @@
                             {:part (:id part) :error error})
                           (for [{:keys [spot]} (:assign plan) :when (not (contains? names spot))]
                             {:assign spot :error (str "no part or spot called " (pr-str spot))})))}))
+
+(def key-letters "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+(defn cut-blueprint [cells new-id part-id]
+  (let [by-pos (into {} (map (juxt :pos :want)) cells)
+        axis (fn [i] (let [v (map #(nth % i) (keys by-pos))] (range (apply min v) (inc (apply max v)))))
+        holes? (< (count by-pos) (* (count (axis 0)) (count (axis 1)) (count (axis 2))))
+        wants (distinct (concat (vals by-pos) (when holes? [:any])))
+        letters (zipmap wants (map str key-letters))]
+    (if-let [bad (some #(key-error "x" %) wants)]
+      {:error bad}
+      {:id new-id :front :north :note (str "cut from plan part " part-id)
+       :key (set/map-invert letters)
+       :layers (vec (for [y (axis 1)]
+                      (vec (for [z (axis 2)]
+                             (apply str (for [x (axis 0)] (letters (get by-pos [x y z] :any))))))))})))
+
+(defn part-blueprint
+  "The blueprint (id new-id, turn 0, front :north) holding what part part-id of plan places, cut to its bounding box;
+  cells the part does not name are :any. -> blueprint or {:error text}. A want a letter cannot stand for ({:crop} {:tree})
+  is an error."
+  [plan blueprints part-id new-id]
+  (let [part (some #(when (= part-id (:id %)) %) (:parts plan))
+        {:keys [cells errors]} (when part (expand {:parts [part]} blueprints))]
+    (cond
+      (nil? part) {:error (str "no part called " (pr-str part-id))}
+      (seq errors) {:error (:error (first errors))}
+      (empty? cells) {:error (str "part " (pr-str part-id) " holds no cells")}
+      (> (count (distinct (map :want cells))) (dec (count key-letters))) {:error "more different blocks than letters"}
+      :else (cut-blueprint cells new-id part-id))))
 
 ;; ---------------------------------------------------------------- plan minus world
 (defn crop-names

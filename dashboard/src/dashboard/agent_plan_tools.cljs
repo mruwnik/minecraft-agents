@@ -88,7 +88,7 @@
                  (cond
                    (:cells part) (count (:cells part))
                    (:stair part) (if (shape/stair-error (:stair part)) 0 (* 3 (shape/stair-steps (:stair part))))
-                   (:blueprint part) (let [bp (get blueprints (:blueprint part))]
+                   (:blueprint part) (let [bp (shape/blueprint-of blueprints part)]
                                        (if bp (* (count (first (first (:layers bp))))
                                                  (count (first (:layers bp)))
                                                  (count (:layers bp))

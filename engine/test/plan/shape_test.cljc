@@ -281,6 +281,38 @@
       {:id "shed-1" :where :blueprint :blueprint "shed" :at [10 64 20] :turn 90 :count 12}
       (select-keys (first (:parts e)) [:id :where :blueprint :at :turn :count]))))
 
+(deftest an-inline-blueprint-expands-like-the-same-blueprint-by-id
+  (let [part {:id "s" :at [10 64 20] :turn 90}
+        by-id (expanded {:id "v" :parts [(assoc part :blueprint "shed")]})
+        inline (shape/expand {:id "v" :parts [(assoc part :blueprint shed)]} {})]
+    (are [expected actual] (= expected actual)
+      [] (shape/plan-errors {:id "v" :parts [(assoc part :blueprint shed)]} "v")
+      (:cells by-id) (:cells inline)
+      (:spots by-id) (:spots inline))))
+
+(deftest a-bad-inline-blueprint-is-named
+  (is (some #(str/includes? (:error %) "inline blueprint")
+            (shape/plan-errors {:id "v" :parts [{:id "s" :blueprint (assoc shed :layers []) :at [0 64 0]}]} "v"))))
+
+(deftest a-part-cut-to-a-blueprint-places-back-the-same-cells
+  (let [plan {:id "v" :parts [{:id "wall" :box [[3 64 5] [5 64 5]] :want "stone"}
+                              {:id "post" :cells [[3 65 6]] :want "oak_log"}
+                              {:id "other" :cells [[90 64 90]] :want "dirt"}]}
+        bp (shape/part-blueprint plan {} "wall" "wall-copy")
+        placed (shape/expand {:id "c" :parts [{:id "wall" :blueprint bp :at [3 64 5]}]} {})]
+    (is (= [] (shape/blueprint-errors bp "wall-copy")))
+    (is (= (set (map (juxt :pos :want) (:cells (shape/expand {:id "v" :parts [(first (:parts plan))]} {}))))
+           (set (map (juxt :pos :want) (:cells placed)))))))
+
+(deftest a-cut-part-keys-its-holes-any
+  (let [plan {:id "v" :parts [{:id "two" :cells [[0 64 0] [2 64 0]] :want "stone"}]}
+        bp (shape/part-blueprint plan {} "two" "two")]
+    (is (= ["aba"] (first (:layers bp))))
+    (is (= :any (get (:key bp) "b")))))
+
+(deftest a-part-with-a-crop-cannot-be-cut
+  (is (:error (shape/part-blueprint {:id "v" :parts [{:id "f" :cells [[0 64 0]] :want {:crop "wheat"}}]} {} "f" "f"))))
+
 (deftest a-repeated-blueprint-places-n-turned-copies-a-step-apart-sharing-cells
   (let [e (expanded {:id "row" :parts [{:id "row" :blueprint "shed" :at [4 64 0] :turn 180 :repeat {:n 3 :step [2 0 0]}}]})]
     (are [expected actual] (= expected actual)
