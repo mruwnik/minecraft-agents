@@ -57,9 +57,10 @@
 (defn due-spot
   "The site (a cell vector) a torch is owed at, or nil: jobs.lib.torch-plan over cells (seen, judged by how the body perceives
   their light) and ahead (not yet cut; dark when the light under the feet is 1 or less), light passing through open cells, the
-  sites being only site, the torches already hung the sources."
+  sites being only site, the torches already hung the sources. A site asked once (:asked: hung or left out) is owed no more:
+  a torch the body's remembered light and blocks do not credit would otherwise be owed again every round."
   [c cells ahead site]
-  (when (and site (not (some #{site} (:left-out (ctx/mem c)))))
+  (when (and site (not (some #{site} (:asked (ctx/mem c)))))
     (let [p (:primitives c)
           feet-light (sense/light-at p (cell-of (u/self-pos c)))
           ahead? (set ahead)
@@ -134,14 +135,14 @@
     (boolean (and (on? c) (pos? (:steps d 0)) (not (:mouth-torch d)) (not= :done (:state (:own-stair d)))))))
 
 (defn booked!
-  "Book a torch hung: its cell joins the planner's sources."
-  [c site]
-  (ctx/update-mem! c update :hung (fnil conj []) site))
+  "Book a torch hung for site: its cell joins the planner's sources, the site is not asked again."
+  [c site cell]
+  (ctx/update-mem! c #(-> % (update :hung (fnil conj []) cell) (update :asked (fnil conj []) site))))
 
 (defn left-out!
   "Book the torch step done with no torch hung: the site is not asked again, but lights nothing. An info event of the reason."
   [c site cell reason]
-  (ctx/update-mem! c update :left-out (fnil conj []) site)
+  (ctx/update-mem! c update :asked (fnil conj []) site)
   (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
                                            :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
 
@@ -188,7 +189,7 @@
     (if reason
       (left-out! c booked cell reason)
       (let [held? (await (torch/place! c choice block-at))]
-        (if held? (booked! c (vec cell)) (left-out! c booked cell :place-failed))))))
+        (if held? (booked! c booked (vec cell)) (left-out! c booked cell :place-failed))))))
 
 (defn owed-site
   "The cell the torch of this round hangs from (the site due-spot asks about), as hang-torch! picks it."

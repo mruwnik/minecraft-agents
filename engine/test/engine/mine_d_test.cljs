@@ -11,6 +11,7 @@
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.blocks :as lb]
             [jobs.lib.look :as lk]
+            [jobs.lib.torch-plan :as tp]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [engine.memory :as mem]
@@ -609,6 +610,26 @@
           (await (run-ticks s 200))
           (is (seq (for [x (range 0 3) y (range 62 67) z [-1 0 1] :when (#{"torch" "wall_torch"} (block-at s x y z))] [x y z]))
               "the round that crafted torches did not use up the mouth torch"))))))
+
+;; Brindle S9 j1682: the body's remembered light and blocks did not credit a torch at the stair site, so the site was owed
+;; again every round and the place act found it "occupied" 7 times a second for 17 min. The plan stub owes every site it
+;; is asked about, as that stale memory did.
+(deftest a-torch-site-is-asked-once-even-when-the-plan-still-calls-it-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig tp/plan]
+          (set! tp/plan (fn [{:keys [spots]}] {:spots (vec spots) :uncovered []}))
+          (try
+            (let [s (start {:world {:blocks (soil-over-stone 63 56) :drops cobble :inventory pickaxe}})
+                  _ (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3})) {})
+                  _ (await (run-ticks s 200))
+                  torch-cells (mapv #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)])
+                                    (filter #(= "torch" (.-item (.-args %))) (calls s "place")))]
+              (is (seq torch-cells) "the stair hangs torches")
+              (is (= (count torch-cells) (count (set torch-cells))) (str "no torch cell is placed at twice: " (pr-str torch-cells)))
+              (is (seq (filter #(< (second %) 63) (dug-cells s))) "the stair goes on down"))
+            (finally (set! tp/plan orig))))))))
 
 ;; Juniper j108: a tunnel run from the foot of a stair back under it would cut its lowest steps' floors.
 (deftest a-tunnel-under-the-stair-it-came-down-stops-before-it-cuts-the-way-up
