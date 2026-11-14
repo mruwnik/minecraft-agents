@@ -48,6 +48,17 @@
           (is (every? (fn [[tx _ tz]] (every? (fn [[x z]] (< (+ (abs (- x tx)) (abs (- z tz))) 14)) room)) (torch-cells p room))
               "the torch's light (14 less a step a cell) reaches every cell of the room; a corner torch would leave the far corner unlit"))))))
 
+(deftest a-room-dark-of-block-light-is-lit-by-day-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world room (constantly false) torches)
+              cells (for [[x z] room y [64 65]] [x y z])]
+          (swap! (.. (:p env) -world -state) merge {:light (into {} (for [c cells] [c [15 0]]))})
+          (let [r (await (tu/child-outcome (:eng env) job {:boxes [[[0 64 0] [8 64 8]]]} 400))]
+            (is (= :done (:status r)) (pr-str r))
+            (is (= 1 (count (torch-cells (:p env) room))) "sky light 15 does not stop monsters spawning at night: block light 0 is dark")))))))
+
 (deftest the-lighting-is-planned-once-for-each-state-of-the-room
   (async done
     (tu/run-async done

@@ -26,7 +26,7 @@
   "Light a room, corridor or box so no cell a monster could spawn in stays dark: the fewest floor torches
   (jobs.lib.torch-plan, light spreads 13 cells, 9 for a soul torch through open cells). Area: :boxes (each two opposite corners) and/or :cells. The
   cells that matter are those the body has seen as spawn ground (sense/spawnable?: air, air, solid floor) that it perceives
-  dark (jobs.lib.torch/perceived-dark?); torches already standing count through that light read, the ones this call hung
+  at block light below :level (sky light and the hour do not count: spawning follows block light); torches already standing count through that light read, the ones this call hung
   count at once. An area cell not seen yet that touches a seen open cell is walked to on foot first (once) to look, unless go-to's
   quote of the walk (walk-pick/quoted-s) costs more than the call is worth less the look walks before it: then it stays unlooked. Each step hangs one torch with a jobs.blocks.place child (walks in reach; a missing torch is fetched
   by it with the call's :ways), at the spot lighting most of the dark cells still owed. A spot whose place fails is not tried again.
@@ -104,9 +104,9 @@
         spots (->> hangs (remove (set failed))
                    (sort-by #(u/dist here (zipmap [:x :y :z] %))))]
     (tp/plan {:cells cells :spread (- (tp/light-of (torch/carried-torch p)) (or level 1))
-              :dark? (if (> (or level 1) 1)
-                       #(< (or (sh-sense/light-at p (zipmap [:x :y :z] %)) 0) level)
-                       #(torch/perceived-dark? p %))
+              :dark? #(if-let [b (sh-sense/block-light-at p (zipmap [:x :y :z] %))]
+                        (< b (or level 1))
+                        (torch/perceived-dark? p %))
               :open? #(let [n (block-at %)] (and n (not (solid/solid? n))))
               :spots spots :sources torches})))
 
