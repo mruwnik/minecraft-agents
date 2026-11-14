@@ -265,7 +265,8 @@
   would take where the body stands; :covers-key what they depend on past the body and its kit), with no mob known the death of
   being caught at its last seen cell, and :counts, wworld/way-counts, for dead-end). Kept for the body while it asks the same of the
   same inputs (gather, priced-key); a cut one only for an asker whose meter has no more left than that search's had (it
-  would plan no further: the flight's first step after the decision that priced it, in the same step's meter)."
+  would plan no further: the flight's first step after the decision that priced it, in the same step's meter). opts :ways, a
+  delay of the chasers with their ways (with-ways), forced only by a search that plans (none: chasers as given)."
   [c targets {:keys [chasers enough?] :as opts}]
   (let [chased (set (map #(floor-cell (:pos %)) chasers))
         other? #(not (chased (floor-cell (:pos %))))
@@ -281,7 +282,7 @@
              (or (not (:enough? (meta v))) (and enough? (enough? v #(< % (:staying (meta v)))))))
       v
       (let [landings (js/Map.)
-            v (await (price-all! c in other? landings (:meter opts) enough?))]
+            v (await (price-all! c in other? landings (:meter opts) enough? (:ways opts)))]
         (when st (.set kept-prices st {:k k :v v :landings landings :left left}))
         v))))
 
@@ -319,17 +320,25 @@
          (cost/dead-end-cost counts (trap-s chasers {:cells cells :seen-n seen-n :end end :trapped (trapped)}))
          0))))
 
+(defn spent?
+  "Whether meter (a jobs.lib.reach/meter, nil none) has not a planner node's price left: a plan under it expands nothing."
+  [meter]
+  (boolean (and meter (zero? (binding [lreach/*search* meter] (lreach/metered-cap 1 :node-s))))))
+
 (defn ^:async price-all!
   "price! without the kept result, over the inputs gathered (gather); the landings its plans asked about are kept in landings.
   The far ring is planned in the order of estimate, best first; enough? (a fn of the ends priced so far and below?, whether
   a price is below staying's, the cornered answer where the body stands; nil none) true after a far ring end stops the
   search there (Q147: the first good-enough way, not the best), meta :enough? and :staying. The covers are built only for
-  a dead end a route meets or a price below staying's without them (they only lower it)."
-  [c {:keys [targets chasers pos body covers others caught-by policy food kit]} other? landings meter enough?]
+  a dead end a route meets or a price below staying's without them (they only lower it). ways: a delay of the chasers
+  with their ways (nil: the chasers as gathered). The path worlds, the chasers' ways and the far ring's order are built
+  only when a plan needs them: a meter spent before a plan builds none of them."
+  [c {:keys [targets pos body covers others caught-by policy food kit] :as in} other? landings meter enough? ways]
   (let [p (:primitives c)
-        ring-world (costed c nil other? true)
+        chasers (delay (if ways @ways (:chasers in)))
+        ring-world (delay (costed c nil other? true))
         named-world (delay (costed c (keep #(some-> (:pos %) floor-cell) targets) other? false))
-        mobs (seq (keep #(when (:mob %) {:distance 0 :name (:mob %) :burns (:burns %)}) chasers))
+        mobs (seq (keep #(when (:mob %) {:distance 0 :name (:mob %) :burns (:burns %)}) (:chasers in)))
         fight (delay (cost/fight-answer {:weapon (:weapon body) :equipment (:equipment body) :health (:health body) :mobs mobs}))
         cornered-of (fn [covers] (when mobs (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight @fight :covers covers}) pos))))))
         bare (delay (cornered-of nil))
@@ -338,57 +347,65 @@
         trapped-at (fn [cell] (or @cornered (caught-at cell)))
         counts (wworld/way-counts p)
         spawn-kill (delay (:kill (price/spawn-parts c body (sh-sense/feet p))))
-        share (spawn-light/share-of p false nil)
+        share (delay (spawn-light/share-of p false nil))
         slow (pace)
-        contact-s (arrive-at (remove (some-fn :calm? shooter?) chasers) pos)
+        contact-s (delay (arrive-at (remove (some-fn :calm? shooter?) @chasers) pos))
         named-n (count (filter :pos targets))
         staying (delay (trapped-at pos))
         below? (fn [x] (and (< x (or @bare (caught-at pos))) (< x @staying)))
         guess {:food food :kit kit :body body :others others :counts counts :trapped #(or @bare (caught-at pos))
                :dark (look/dark-fn p {:unseen-dark? false})}
-        targets (into (vec (remove far? targets)) (->> (filter far? targets) (map (juxt identity #(- (estimate p chasers pos % guess)))) (sort-by second) (map first)))]
-    (if (nil? ring-world)
+        near (vec (remove far? targets))
+        far (filterv far? targets)
+        far-sorted (delay (->> far (map (juxt identity #(- (estimate p @chasers pos % guess)))) (sort-by second) (mapv first)))
+        total (+ (count near) (count far))
+        ring? (fn [i] (or (>= i (count near)) (nil? (:pos (nth near i)))))
+        target (fn [i] (if (< i (count near)) (nth near i) (nth @far-sorted (- i (count near)))))]
+    (if-not (fn? (.-pathWorld p))
       []
-      (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {} plan-ms 0 own-s 0 stop? false]
-        (let [most (when t (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes))))
-              cap (when most (binding [lreach/*search* meter] (lreach/metered-cap most :node-s)))
-              cut? (and t (or (:pos t) (pos? ring-left)) (zero? cap))]
-          (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0)) cut?
-                  (and (> planned named-n) (<= contact-s own-s)))
+      (loop [i 0 out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {} plan-ms 0 own-s 0 stop? false]
+        (let [more? (and (not stop?) (< i total) (not (and (ring? i) (<= ring-left 0))))
+              cut? (and more? (spent? meter))]
+          (if (or (not more?) cut? (and (> planned named-n) (<= @contact-s own-s)))
             (do (when cut? (lreach/spend! meter 0 true))
                 (with-meta out (cond-> {:nodes nodes :planned planned :unrouted unrouted :plan-ms (js/Math.round plan-ms)}
                                  cut? (assoc :cut? true)
                                  stop? (assoc :enough? true :staying @staying))))
-            (let [pw (if (:pos t) @named-world ring-world)
-                  t1 (clock/now)
-                  ^js res (await (plan-to! c pw policy (query c t) cap landings))
-                  ms (- (clock/now) t1)
-                  spent (or (.-expanded res) 0)
-                  ;; the clock's, or the nodes' price when more: a clock that does not move with the CPU (a fake's) still ends the search
-                  s (max (/ ms 1000) (* spent (cost/search-cell-ceiling-s)))
-                  _ (lreach/spend! meter s false)
-                  r (some->> (routed res slow) (seen-split p))
-                  short? (and r (not (:found? r)) (< cap most) (= "budget" (.-reason res))
-                              (not (and (nil? (:pos t)) (seen-shut? p pos t r))))
-                  out (if r
-                        (conj out (assoc r :target t
-                                           :cut? short?
-                                           :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
-                                           :price (+ (:priced r)
-                                                     (let [spawns (spawn-light/spawns-over p (:cells r) share)]
-                                                       (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos)))
-                                           :counts counts
-                                           :trapped (when (or (:unseen r) short?) (trapped-at (nth (:cells r) (dec (:seen-n r)))))))
-                        out)
-                  stop? (boolean (and enough? r (far? t) (enough? out below?)))]
-            (recur (when-not stop? more) out
-                   (+ nodes spent)
-                   (cond-> ring-left (nil? (:pos t)) (- spent))
-                   (inc planned)
-                   (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0)))
-                   (+ plan-ms ms)
-                   (+ own-s s)
-                   stop?))))))))
+            (let [t (target i)
+                  pw (if (:pos t) @named-world @ring-world)]
+              (if (nil? pw)
+                []
+                (let [most (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))
+                      cap (binding [lreach/*search* meter] (lreach/metered-cap most :node-s))
+                      t1 (clock/now)
+                      ^js res (await (plan-to! c pw policy (query c t) cap landings))
+                      ms (- (clock/now) t1)
+                      spent (or (.-expanded res) 0)
+                      ;; the clock's, or the nodes' price when more: a clock that does not move with the CPU (a fake's) still ends the search
+                      s (max (/ ms 1000) (* spent (cost/search-cell-ceiling-s)))
+                      _ (lreach/spend! meter s false)
+                      r (some->> (routed res slow) (seen-split p))
+                      short? (and r (not (:found? r)) (< cap most) (= "budget" (.-reason res))
+                                  (not (and (nil? (:pos t)) (seen-shut? p pos t r))))
+                      out (if r
+                            (conj out (assoc r :target t
+                                               :cut? short?
+                                               :open? (or (:found? r) (and (nil? (:pos t)) (given-up? @chasers (:end r))))
+                                               :price (+ (:priced r)
+                                                         (let [spawns (spawn-light/spawns-over p (:cells r) @share)]
+                                                           (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos)))
+                                               :counts counts
+                                               :trapped (when (or (:unseen r) short?) (trapped-at (nth (:cells r) (dec (:seen-n r)))))))
+                            out)
+                      stop? (boolean (and enough? r (far? t) (enough? out below?)))]
+                  (recur (inc i) out
+                         (+ nodes spent)
+                         (cond-> ring-left (nil? (:pos t)) (- spent))
+                         (inc planned)
+                         (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0)))
+                         (+ plan-ms ms)
+                         (+ own-s s)
+                         stop?))))))))))
 
 (defn shooter?
   "Whether chaser ch only shoots: a shot spot (:shooter?, where an unseen shot came from) or a mob {:mob :held} that
@@ -718,22 +735,23 @@
   (let [t0 (clock/now)
         self (.self (:primitives c))
         from (u/self-pos c)
-        chasers (with-ways c chasers)
-        ways-ms (js/Math.round (- (clock/now) t0))
+        ways-ms (volatile! 0)
+        ways (delay (let [t (clock/now) w (with-ways c chasers)] (vreset! ways-ms (- (clock/now) t)) w))
         r (or (:reach opts) (reach from chasers (.-food self)))
         n (settings/get settings ::bearings)
         enough? (when enough
                   (fn [out below?]
                     (let [ring (filterv (comp far? :target) out)]
-                      (boolean (when-let [e (choose [(peek (scored chasers from ring nil fire))] (force enough))]
+                      (boolean (when-let [e (choose [(peek (scored @ways from ring nil fire))] (force enough))]
                                  (and (:open? e) (below? (- (min (:arrive e) unreached-s) (:net e)))))))))
         priced (await (price! c (-> (vec targets) (into (when near (map #(assoc % :near? true) (ring from chasers near n)))) (into (ring from chasers r n)))
-                              (assoc opts :reach r :chasers chasers :enough? enough?)))
+                              (assoc opts :reach r :chasers chasers :ways ways :enough? enough?)))
         near? (comp :near? :target)
-        ends (scored chasers from (remove near? priced) nil fire)]
-    (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (clock/now) t0)) :ways-ms ways-ms :targets (count targets)))
-    (with-meta (cond-> ends covered? (into (covers chasers from covered? ends fire)))
-      (cond-> (meta priced) near (assoc :near (scored chasers from (filterv near? priced)))))))
+        scored* (fn [es fire] (if (seq es) (scored @ways from es nil fire) []))
+        ends (scored* (remove near? priced) fire)]
+    (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (clock/now) t0)) :ways-ms (js/Math.round @ways-ms) :targets (count targets)))
+    (with-meta (cond-> ends (and covered? (seq ends)) (into (covers @ways from covered? ends fire)))
+      (cond-> (meta priced) near (assoc :near (scored* (filterv near? priced) nil))))))
 
 (defn unseen-ahead
   "The first unseen cells ([x y z], nearest first) of ends' routes but those in glanced (looked at this flight already:

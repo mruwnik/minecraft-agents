@@ -137,7 +137,16 @@
               m (rooms/search-meter 0)
               metered (await (run m))
               spent (rooms/search-meter budget)
-              none (await (run spent))]
+              built (atom [])
+              costed search/costed
+              with-ways search/with-ways
+              [none planning] (with-redefs [search/costed (fn [& args] (swap! built conj :world) (apply costed args))
+                                            search/with-ways (fn [& args] (swap! built conj :ways) (apply with-ways args))]
+                                (let [none (await (run spent))
+                                      spent-built @built]
+                                  (await (run (rooms/search-meter 0)))
+                                  [none [spent-built (set @built)]]))]
+          (is (= [[] #{:world :ways}] planning) "a spent meter builds no path world and no chaser's way, a fresh one builds both")
           (is (> (* (:nodes (meta free)) (cost/search-cell-ceiling-s)) budget) (str "the whole search is over the budget: " (meta free)))
           (is (search/cut? metered) (pr-str (meta metered)))
           (is (<= (reach/spent-s m) budget) (str (reach/spent-s m)))
