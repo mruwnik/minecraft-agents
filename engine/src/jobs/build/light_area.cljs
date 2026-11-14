@@ -19,18 +19,20 @@
             [jobs.lib.solid :as solid]
             [jobs.lib.torch :as torch]
             [jobs.lib.torch-plan :as tp]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-pick :as walk-pick]))
 
 (def doc
   "Light a room, corridor or box so no cell a monster could spawn in stays dark: the fewest floor torches
   (jobs.lib.torch-plan, light spreads 13 cells, 9 for a soul torch through open cells). Area: :boxes (each two opposite corners) and/or :cells. The
   cells that matter are those the body has seen as spawn ground (sense/spawnable?: air, air, solid floor) that it perceives
   dark (jobs.lib.torch/perceived-dark?); torches already standing count through that light read, the ones this call hung
-  count at once. An area cell not seen yet that touches a seen open cell is walked to first (once) to look. Each step hangs one torch with a jobs.blocks.place child (walks in reach; a missing torch is fetched
+  count at once. An area cell not seen yet that touches a seen open cell is walked to first (once) to look, unless go-to's
+  quote of the walk (walk-pick/quoted-s) costs more than the call is worth less the look walks before it: then it stays unlooked. Each step hangs one torch with a jobs.blocks.place child (walks in reach; a missing torch is fetched
   by it with the call's :ways), at the spot lighting most of the dark cells still owed. A spot whose place fails is not tried again.
 
-  Needs: the area seen, torches (carried or fetchable). Ends done {:torches [cells hung this call] :uncovered []} when no
-  spawnable cell of the area is dark (at once, with none hung, when none is); nothing-possible :uncovered when dark cells
+  Needs: the area seen, torches (carried or fetchable). Ends done {:torches [cells hung this call] :uncovered [] :unlooked
+  [cells left unlooked]} when no spawnable cell of the area is dark (at once, with none hung, when none is); nothing-possible :uncovered when dark cells
   remain that no spot can light or whose torch could not be placed (data :uncovered, :torches); condition-failed :need
   when the torch is missing and cannot be had, :refused when a zone or claim refuses a spot. With :level those cells must reach that block
   light (not just 1), and with :beside? the torches hang round the area, not in it. Impossible :bad-args with no area.")
@@ -38,7 +40,7 @@
 (a/defargs args
   {:cells {:doc "cells of the area, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default []}
    :boxes {:doc "boxes of the area, each two opposite corners [[x y z] [x y z]]; their cells come first, x then y then z" :spec (a/coll-of (a/coll-of a/position?)) :default []}
-   :near {:doc "also the cells within this many blocks of the body (its square round the feet, one below to two above), read where the body stands now" :spec (a/int-in 0 16) :default 0}
+   :near {:doc "also the cells within this many blocks of the body (its square round the feet, one below to two above), round the cell it stood in when the call began" :spec (a/int-in 0 16) :default 0}
    :level {:doc "the block light every area cell must reach, 1 to 14 (1: no spawn ground stays dark; a crop needs 9); a torch lights 14 less its steps" :spec (a/int-in 1 14) :default 1}
    :beside? {:doc "hang torches only in the cells round the area, not in it (a field keeps its cells for crops)" :spec boolean? :default false}
    :ignore-zones? :shared})
@@ -56,10 +58,10 @@
     (for [x (span 0) y (span 1) z (span 2)] [x y z])))
 
 (defn near-cells
-  "The cells [x y z] within :near blocks of the body, none with :near 0."
+  "The cells [x y z] within :near blocks of the cell the body stood in when the call began (job memory :near-at, else where it stands), none with :near 0."
   [c]
   (let [n (:near (:args c))
-        {:keys [x y z]} (look/cell-of (u/self-pos c))]
+        {:keys [x y z]} (or (:near-at (ctx/mem c)) (look/cell-of (u/self-pos c)))]
     (when (pos? n)
       (for [dx (range (- n) (inc n)) dz (range (- n) (inc n)) dy [-1 0 1 2]] [(+ x dx) (+ y dy) (+ z dz)]))))
 
@@ -129,7 +131,7 @@
   [c]
   (let [p (:primitives c)
         block-at (access/seen-at p)
-        looked (set (:viewed (ctx/mem c)))
+        looked (into (set (:viewed (ctx/mem c))) (:unlooked (ctx/mem c)))
         here (u/self-pos c)
         open? #(let [n (block-at %)] (and n (not (solid/solid? n))))]
     (->> (area c)
@@ -142,22 +144,41 @@
          first)))
 
 (defn ^:async look-at!
-  "Walk next to the unseen cell (a dark cell shows from close by) and look round there, once: :again, or :continue while the walk waits."
+  "Walk next to the unseen cell (a dark cell shows from close by) and look round there, once: :again, or :continue while
+  the quote's search or the walk waits. A walk whose go-to quote (walk-pick/quoted-s) costs more than what the call is
+  worth less the look walks taken so far (:look-s) as it survives (walk-pick/ev-worth) is not taken: the cell is noted
+  :unlooked and the frontier moves on."
   [c cell]
-  (let [r (await (near/go-near! c (zipmap [:x :y :z] cell) 1 {}))]
-    (if (= :partial r)
-      :continue
-      (do (await (look/look-around! c))
-          (ctx/update-mem! c update :viewed (fnil conj []) cell)
-          :again))))
+  (let [pos (zipmap [:x :y :z] cell)
+        {:keys [looking look-s] :or {look-s 0}} (ctx/mem c)
+        q (when-not (= cell looking) (await (walk-pick/quote! c {:pos pos :range 1 :one-way :closed})))
+        price (when q (walk-pick/quoted-s c q))
+        left (- (ctx/worth c) look-s)]
+    (cond
+      (:estimate q) :continue
+      (and price (js/isFinite price) (> price (walk-pick/ev-worth left q)))
+      (do (ctx/emit! c :look-skipped :info {:cell cell :walk-s (js/Math.round price) :worth-left (js/Math.round left)
+                                             :text (str "light-area: the walk to look at " cell " costs " (js/Math.round price) " s, more than the "
+                                                        (js/Math.round left) " s the call has left")})
+          (ctx/update-mem! c update :unlooked (fnil conj []) cell)
+          :again)
+      :else
+      (let [_ (when (and price (js/isFinite price)) (ctx/update-mem! c assoc :look-s (+ look-s price)))
+            r (await (near/go-near! c pos 1 {}))]
+        (if (= :partial r)
+          (do (ctx/update-mem! c assoc :looking cell) :continue)
+          (do (await (look/look-around! c))
+              (ctx/update-mem! c #(-> % (dissoc :looking) (update :viewed (fnil conj []) cell)))
+              :again))))))
 
 (defn ^:async step! [c]
+  (when-not (:near-at (ctx/mem c)) (ctx/update-mem! c assoc :near-at (look/cell-of (u/self-pos c))))
   (let [{:keys [spots uncovered]} (lighting c)
         spot (first spots)
         unseen (frontier c)]
     (cond
       unseen (await (look-at! c unseen))
-      (and (empty? spots) (empty? uncovered)) (ctx/end c :done nil {:torches (:torches (ctx/mem c) []) :uncovered []})
+      (and (empty? spots) (empty? uncovered)) (ctx/end c :done nil {:torches (:torches (ctx/mem c) []) :uncovered [] :unlooked (:unlooked (ctx/mem c) [])})
       (nil? spot) (ctx/end c :nothing-possible {:reason :uncovered} {:torches (:torches (ctx/mem c) []) :uncovered uncovered})
       :else
       (let [o (b/place-outcome (waits/waiting-out c (await (ctx/call c :place 'jobs.blocks.place
@@ -191,7 +212,7 @@
         hung (count (:torches (ctx/mem c)))]
     (if (and (empty? spots) (empty? uncovered) (nil? (frontier c)))
       (contract/ok :lit "no spawnable cell of the area is dark" :units :torches :done hung
-                   :result {:torches (:torches (ctx/mem c) []) :uncovered []})
+                   :result {:torches (:torches (ctx/mem c) []) :uncovered [] :unlooked (:unlooked (ctx/mem c) [])})
       (contract/later :dark (str (count spots) " torches to hang") :units :torches :done hung))))
 
 (defn work-s "Mean seconds hanging the torches still to hang takes." [c] (* 8 (count (:spots (lighting c)))))

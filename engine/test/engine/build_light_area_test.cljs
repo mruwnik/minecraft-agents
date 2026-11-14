@@ -140,6 +140,19 @@
           (is (seq (torch-cells p corridor)) "the dark far end got a torch, not an instant done")
           (is (every? (fn [[x _ _]] (> x 30)) (torch-cells p corridor))))))))
 
+(deftest an-unseen-part-whose-walk-costs-more-than-the-call-is-worth-is-left-unlooked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (for [x (range 0 61)] [x 0])
+              env (world corridor (fn [[x _ _]] (<= x 20)) torches)
+              walks (atom [])
+              r (await (tu/with-near-spy walks #(tu/child-outcome (:eng env) job {:boxes [[[0 64 0] [60 64 0]]]} 400 2)))]
+          (is (not-any? (fn [[pos]] (> (:x pos) 2)) @walks)
+              (str "Brindle S20: dark-work walked 36 blocks into a mob cave to look at one cell; a 2 s call does not buy a 16-block walk " @walks))
+          (is (= :done (:status r)) (pr-str r))
+          (is (seq (:unlooked r)) "the far part is reported unlooked, not lit"))))))
+
 (deftest a-cell-looked-at-from-where-the-body-stands-is-not-looked-at-again
   (async done
     (tu/run-async done
