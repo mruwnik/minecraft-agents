@@ -7,6 +7,9 @@
             [agent-tools.plan-route :as plan-route]
             [agent-tools.world-data :as data]
             [dashboard.agent-plan-tools :as checks]
+            [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as block-sets]
+            [plan.adopt :as adopt]
             [plan.parse :as parse]
             [plan.shape :as shape]
             [plan.surface :as surface]
@@ -18,7 +21,7 @@
 (def names #"^[A-Za-z0-9_-]{1,100}$")
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
-  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  route <id> --from=x,y,z --to=x,y,z --body <name> --by <name> [--tunnel N --bridge N --launch 3..5 --nodes N] [--dry-run] [--raw]   (a rail line between two rail cells (the cell above the ground) over the ground that body has seen, avoiding other owners' zones; the line cuts, fills, tunnels through rock 2+ above the rail and bridges drops 2+ below or water where that costs less than going round; --tunnel/--bridge cap the longest span (0: none); --nodes caps the search states (default about 0.9 GB of them); the plan carries the :spans and jobs.build.rail-line builds them first; the result lists the materials)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory, flushed from the running body first; :seen-note says when it could not be and the data is the file on disk); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
+  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  adopt <id> --box=x,y,z:x,y,z --body <name> --by <name> [--terrain] [--dry-run] [--raw]   (the plan of what that body has seen in the box: walls, fences, gates, paths, chests, beds, water sources, farmland, crops and saplings; unseen cells, air, natural terrain (unless --terrain), flowing water and a crop's farmland are left out; the result counts the parts and unseen cells and names plan cells outside your zones)\n  route <id> --from=x,y,z --to=x,y,z --body <name> --by <name> [--tunnel N --bridge N --launch 3..5 --nodes N] [--dry-run] [--raw]   (a rail line between two rail cells (the cell above the ground) over the ground that body has seen, avoiding other owners' zones; the line cuts, fills, tunnels through rock 2+ above the rail and bridges drops 2+ below or water where that costs less than going round; --tunnel/--bridge cap the longest span (0: none); --nodes caps the search states (default about 0.9 GB of them); the plan carries the :spans and jobs.build.rail-line builds them first; the result lists the materials)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory, flushed from the running body first; :seen-note says when it could not be and the data is the file on disk); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
    :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (deletes the global blueprint file)\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
@@ -76,6 +79,13 @@
     {:from a :to b :tunnel (:limit (plan-route/limit-arg tunnel)) :bridge (:limit (plan-route/limit-arg bridge)) :launch launch-n
      :nodes (plan-route/nodes-arg nodes)}))
 
+(defn box-arg!
+  "[[x y z] [x y z]] of a \"x,y,z:x,y,z\" option, or a refusal."
+  [text]
+  (let [corners (when (string? text) (mapv plan-route/cell-arg (str/split text #":")))]
+    (when-not (and (= 2 (count corners)) (every? some? corners)) (fail! :bad-box "--box is x,y,z:x,y,z"))
+    corners))
+
 (defn mineshaft-edn
   "The plan text of a mineshaft the options declare."
   [req]
@@ -109,18 +119,18 @@
 
 (defn parsed-args [kind argv]
   (let [options (merge (into {} (map (fn [k] [k {:type "string"}])
-                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body :at :heading :to-y :from :to :tunnel :bridge :launch :nodes]))
+                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body :at :heading :to-y :from :to :tunnel :bridge :launch :nodes :box]))
                        {:state {:type "string"} :worlds {:type "string"}
                         :repo {:type "string" :default repo-root}
                         :blueprint {:type "string" :multiple true}}
                        (into {} (map (fn [k] [k {:type "boolean" :default false}])
-                                    [:raw :geometry :large :dry-run])))
+                                    [:raw :geometry :large :dry-run :terrain])))
         parsed (data/from-json (.parseArgs util #js {:args argv :allowPositionals true :options (clj->js options)}))
         [command id & extra] (:positionals parsed)
         v (:values parsed)
-        commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "validate" "check" "mineshaft" "route"}
+        commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "validate" "check" "mineshaft" "route" "adopt"}
                      #{"list" "find" "show" "save" "remove" "validate"})
-        mutations #{"add" "edit" "save" "remove" "mineshaft" "route"}
+        mutations #{"add" "edit" "save" "remove" "mineshaft" "route" "adopt"}
         allowed (cond-> #{:world :worlds :state :repo}
                   (#{"list" "find"} command) (into [:limit :offset :raw :large])
                   (= command "show") (into [:raw :geometry :large])
@@ -130,13 +140,14 @@
                   (mutations command) (into [:by :revision :dry-run :raw :large])
                   (#{"add" "edit" "save"} command) (conj :edn)
                   (= command "mineshaft") (into [:at :heading :to-y])
-                  (= command "route") (into [:from :to :body :tunnel :bridge :launch :nodes]))]
+                  (= command "route") (into [:from :to :body :tunnel :bridge :launch :nodes])
+                  (= command "adopt") (into [:box :body :terrain]))]
     (when-not (and (:world v) (re-matches #"^[A-Za-z0-9_-]{1,64}$" (:world v)))
       (fail! :invalid-world "supply an explicit valid --world"))
     (when (and (= kind :plan) (= command "status"))
       (fail! :usage "plans have no status: every submitted plan is active, and a draft is a plan you keep locally; to retire a plan use `remove <id> --by <name> --revision <digest>`"))
-    (when (and (#{"check" "route"} command) (not (re-matches #"^[A-Za-z0-9_-]{1,64}$" (str (:body v)))))
-      (fail! :body-required "check and route need --body <name>: the body whose seen memory is judged"))
+    (when (and (#{"check" "route" "adopt"} command) (not (re-matches #"^[A-Za-z0-9_-]{1,64}$" (str (:body v)))))
+      (fail! :body-required "check, route and adopt need --body <name>: the body whose seen memory is judged"))
     (when (and (= kind :plan) (:status v))
       (fail! :bad-option "plans have no status field; every submitted plan is active"))
     (when-not (commands command) (fail! :usage (str "unknown " (name kind) " command " command)))
@@ -144,6 +155,7 @@
       (fail! :usage (str command (if (= command "list") " takes no ID" (if (= command "find") " needs one search string" " needs exactly one ID")))))
     (when (= command "mineshaft") (mineshaft-args! v))
     (when (= command "route") (route-args! v))
+    (when (= command "adopt") (box-arg! (:box v)))
     (when (and id (not= command "find") (not (re-matches names id)))
       (fail! :invalid-id "ID must use letters, digits, _ or - (up to 100)"))
     (doseq [[key value] v]
@@ -158,7 +170,7 @@
     (when (and (#{"add" "edit" "save" "validate"} command) (nil? (:edn v))) (fail! :bad-option (str command " requires --edn")))
     (when (and (mutations command) (or (not (string? (:by v))) (str/blank? (:by v)) (> (count (:by v)) 80)))
       (fail! :actor-required "mutations require --by (up to 80 characters)"))
-    (when (and (#{"add" "route"} command) (some? (:revision v))) (fail! :bad-option "add is create-only and does not take --revision"))
+    (when (and (#{"add" "route" "adopt"} command) (some? (:revision v))) (fail! :bad-option "add is create-only and does not take --revision"))
     (when (and (#{"edit" "remove"} command) (nil? (:revision v))) (fail! :revision-required (str command " requires the --revision from list/show")))
     (when (and (seq (:blueprint v)) (not (and (= kind :plan) (#{"validate" "check"} command))))
       (fail! :bad-option "--blueprint is only valid for plan validate/check"))
@@ -245,8 +257,10 @@
                      (fail! :bad-inventory "inventory is a map of block/item names to nonnegative integer counts"))
                    (assoc acc (str/replace item-name #"^minecraft:" "") count))) {} (edn-value text "inventory"))))
 
-(defn geometry-check! [cells large]
-  (when (> (count cells) (if large 200000 1000)) (fail! :geometry-limit "use --large for more than 1000 cells")))
+(defn cell-limit! [n large]
+  (when (> n (if large 200000 1000)) (fail! :geometry-limit "use --large for more than 1000 cells")))
+
+(defn geometry-check! [cells large] (cell-limit! (count cells) large))
 
 (defn read-zone-text [ctx]
   (try (.readFileSync fs (data/document-path ctx :zone "collection") "utf8")
@@ -410,12 +424,49 @@
                               (fn [result & _] (write (cond-> (assoc result :route summary)
                                                         (not (:flushed? flush)) (assoc :seen-note (seen-age-note (:why flush)))) 0))))))))
 
+(def natural-terrain?
+  "What adopt leaves out of a plan unless --terrain: terrain and its plants, grown tree wood, plants a placement overwrites."
+  (fn [n] (boolean (or (rules/natural? n) (rules/tree-wood? n) (block-sets/replaceable n)))))
+
+(defn outside-zones
+  "How many of the cells lie in no zone the author owns."
+  [cells zones by]
+  (let [boxes (into [] (comp (filter #(= by (:owner %))) (map (juxt :min :max))) zones)]
+    (count (remove (fn [[x y z]] (some (fn [[[x0 y0 z0] [x1 y1 z1]]] (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1))) boxes)) cells))))
+
+(defn adopt-plan!
+  "plans adopt: what the body has seen in --box becomes the plan :id (plan.adopt); the result carries the part counts, the
+  unseen cell count and how many plan cells lie outside the author's zones. Flushes the body's sight memory first, as check does."
+  [req ctx write]
+  (let [[a b :as box] (box-arg! (:box req))
+        zones (plan-route/zone-list (read-zone-text ctx))]
+    (when (:error zones) (fail! :bad-zones (:error zones)))
+    (cell-limit! (reduce * (map (fn [i] (inc (abs (- (nth a i) (nth b i))))) [0 1 2])) (:large req))
+    (-> (js/Promise.all #js [(flush-seen! ctx (:body req)) ((:load-worldblocks req))])
+        (.then (fn [[flush seen-module]]
+                 (let [memory ((aget seen-module "createSeenBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx) :body (:body req) :dim (shape/plan-dim {:dim (body-dimension ctx (:body req))})})
+                       block-at (fn [[x y z]] (some-> (.call (aget memory "blockAt") memory x y z)
+                                                      (as-> block {:name (aget block "name") :state (js->clj (aget block "state"))})))]
+                   (try
+                     (assoc (adopt/adopt {:id (:id req) :box box :block-at block-at :natural? natural-terrain? :terrain? (:terrain req)
+                                          :body (:body req) :date (.slice (.toISOString (js/Date.)) 0 10)})
+                            :flush flush)
+                     (finally (.call (aget memory "close") memory))))))
+        (.then (fn [{:keys [plan flush] :as adopted}]
+                 (when (empty? (:parts plan)) (fail! :nothing-seen (str "the body has seen nothing to adopt in the box (" (:unseen adopted) " cells unseen)")))
+                 (mutate-plan (assoc req :command "add" :edn (pr-str plan)) ctx
+                              (fn [result & _]
+                                (write (cond-> (assoc result :adopted (assoc (select-keys adopted [:cells :unseen :parts])
+                                                                              :outside-author-zones (outside-zones (mapcat :cells (:parts plan)) (:zones zones) (:by req))))
+                                         (not (:flushed? flush)) (assoc :seen-note (seen-age-note (:why flush)))) 0))))))))
+
 (defn execute-plan [req write]
   (let [ctx (data/context {:state (:state req) :worlds (:worlds req) :world (:world req) :repo-root (:repo req)}) command (:command req)]
     (cond
       (#{"list" "find"} command) (do (write (list-result :plan (current-docs ctx :plan) req)) 0)
       (#{"add" "edit" "remove"} command) (mutate-plan req ctx write)
       (= command "route") (route-plan! req ctx write)
+      (= command "adopt") (adopt-plan! req ctx write)
       (= command "mineshaft") (mutate-plan (assoc req :command "add" :edn (mineshaft-edn req)) ctx write)
       (= command "show") (let [doc (data/read-document ctx :plan (:id req))]
                             (when-not doc (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))

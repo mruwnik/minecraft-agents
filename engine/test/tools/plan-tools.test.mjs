@@ -495,3 +495,41 @@ test('route refuses bad cells, a missing body or by, and an unseen world; --dry-
     assert.ok(!fs.existsSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'line.edn')))
   } finally { fx.close() }
 })
+
+const ADOPT = ['adopt', 'farm', '--body', 'Probe', '--by', 'Maker', '--box=0,63,0:5,64,0']
+const farmCells = [[0, 63, 0, 'dirt'], [1, 63, 0, 'farmland'], [1, 64, 0, 'wheat'], [2, 63, 0, 'water'], [2, 64, 0, 'air'],
+  [3, 63, 0, 'stone'], [3, 64, 0, 'oak_fence'], [4, 64, 0, 'oak_fence_gate']]
+
+test('adopt records what the body saw in the box as a plan: placed blocks, water and crops in, terrain, air, crop ground and the unseen out', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', farmCells, Date.now() - 1000)
+    fs.mkdirSync(path.join(fx.state, 'worlds', 'fixture'), { recursive: true })
+    fs.writeFileSync(path.join(fx.state, 'worlds', 'fixture', 'zones.edn'), '[{:name "z" :owner "Maker" :min [0 60 0] :max [3 70 0]}]\n')
+    const dry = await invoke('plan', fx, [...ADOPT, '--dry-run'])
+    assert.equal(dry.code, 0, dry.output)
+    assert.ok(!fs.existsSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'farm.edn')))
+    const made = await invoke('plan', fx, ADOPT)
+    assert.equal(made.code, 0, made.output)
+    assert.deepEqual(made.value.adopted.parts, { wheat: 1, water: 1, fence: 1, gate: 1 })
+    assert.equal(made.value.adopted.unseen, 4)
+    assert.equal(made.value.adopted['outside-author-zones'], 1)
+    const text = fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'farm.edn'), 'utf8')
+    assert.match(text, /:want \{:crop "wheat"\}/)
+    assert.match(text, /:want \{:facing "north" :block "oak_fence_gate"\}/)
+    assert.match(text, /:metadata \{:by "Maker"\}/)
+    assert.doesNotMatch(text, /farmland|"dirt"|"stone"|:open/)
+    const terrain = await invoke('plan', fx, ['adopt', 'ground', ...ADOPT.slice(2), '--terrain', '--dry-run'])
+    assert.deepEqual(terrain.value.adopted.parts, { dirt: 1, wheat: 1, water: 1, stone: 1, fence: 1, gate: 1 })
+  } finally { fx.close() }
+})
+
+test('adopt refuses a bad box, a missing body and a box where nothing was seen', async () => {
+  const fx = fixture()
+  try {
+    const bad = args => invoke('plan', fx, ['adopt', 'farm', '--by', 'Maker', ...args])
+    assert.deepEqual((await bad(['--body', 'Probe', '--box=0,63:5,64,0'])).value.reason, keyword('bad-box'))
+    assert.deepEqual((await bad(['--box=0,63,0:5,64,0'])).value.reason, keyword('body-required'))
+    assert.deepEqual((await bad(['--body', 'Probe', '--box=0,63,0:5,64,0'])).value.reason, keyword('nothing-seen'))
+  } finally { fx.close() }
+})
