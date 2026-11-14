@@ -314,17 +314,30 @@
     ((:stop c))
     (is (= 0 @listeners))))
 
-(deftest a-loaded-mob-that-leaves-the-senses-is-dropped-at-once
-  (let [bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}
-        cow (mob 2 "cow" 64 12.5 0.5)
-        c (seen/open {:world "w" :body "Probe" :sense (partial seen/sense (:per (rig {:blocks (tu/box 5 64 -3 5 69 3 "stone")})))})
-        types (fn [t] (into #{} (map :type) (:entities (seen/snapshot c t))))]
-    (seen/observe! c (sample bot [(.-entity bot) cow]) 0)
-    (is (= #{"player" "cow"} (types 0)))
-    ;; the cow is teleported 40 blocks behind the wall: still loaded, no longer sensed
-    (set! (.-x (.-position cow)) 40.5)
-    (seen/observe! c (sample bot [(.-entity bot) cow]) 1000)
-    (is (= #{"player"} (types 1000)))))
+(deftest a-loaded-mob-that-leaves-the-senses-is-remembered-where-it-was-seen-at-once
+  (let [senses (atom :seen)
+        c (cache {:sense (fn [_ _] @senses)}) bot #js {:entity (entity 0 "player" "p-0" 0)} cow (entity 1 "cow" "c-1" 7)
+        row #(first (:entities (seen/snapshot c %)))]
+    (seen/observe! c (sample bot [cow]) 1000)
+    (is (= :seen (:sense (row 1000))))
+    ;; still loaded, no longer sensed (walked behind a wall, out of hearing)
+    (reset! senses nil)
+    (set! (.-x (.-position cow)) 40)
+    (seen/observe! c (sample bot [cow]) 2000)
+    (is (= :remembered (:sense (row 2000))) "never listed as seen once out of sight")
+    (is (= 7 (get-in (row 2000) [:pos :x])) "where it was seen, not where it is")
+    (seen/observe! c (sample bot [cow]) 121000)
+    (is (nil? (row 121000)) "aged out by the ttl")))
+
+(deftest a-heard-row-ends-when-the-sound-does
+  (let [senses (atom :heard)
+        c (cache {:sense (fn [_ _] @senses)}) bot #js {:entity (entity 0 "player" "p-0" 0)} cow (entity 1 "cow" "c-1" 7)
+        types #(into #{} (map :type) (:entities (seen/snapshot c %)))]
+    (seen/observe! c (sample bot [cow]) 1000)
+    (is (= #{"cow"} (types 1000)))
+    (reset! senses nil)
+    (seen/observe! c (sample bot [cow]) 2000)
+    (is (= #{} (types 2000)))))
 
 (deftest an-unloaded-mob-keeps-its-last-observation
   (let [bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position #js {:x 0.5 :y 64 :z 0.5}}}

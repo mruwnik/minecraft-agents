@@ -4,7 +4,8 @@
   reflexes do not read this cache.
 
   Each entity is listed with how it was sensed:
-  - a :seen row that went unrefreshed for three samples (no longer tracked) is listed :remembered
+  - a :seen row that went unrefreshed for three samples (no longer tracked), or at once when the entity is tracked but
+    no longer sensed, is listed :remembered at the place it was seen until the ttl ages it out; a :heard row ends then
   - hostile mobs come only from engine.perception's known-mobs memory (`known-sense`): :seen, :heard, or
     :remembered at the place last sensed, with :age-ms; dropped once that memory forgets it, even if unloaded
   - everything else goes through perception's rule for a thing at a place (`sense`): a clear line, light and
@@ -194,8 +195,15 @@
                         [e (sense-of source e)]))
         senses (map sense-entry tracked)
         loaded (keep (fn [[e how entry]] (when how [e how entry])) senses)
-        ;; Still loaded but no longer sensed (walked behind a wall, teleported away): the row would be a ghost.
+        ;; Still loaded but no longer sensed (walked behind a wall, teleported away): what was seen is remembered where it
+        ;; was seen, at once (no ghost sighting); a sound leaves no place to remember.
         lost (into #{} (keep (fn [[e how]] (when-not how (:key (entity-identity store source e))))) senses)
+        unseen (fn [entities]
+                 (reduce (fn [m key]
+                           (case (get-in m [key :sense])
+                             (:seen :remembered) (assoc-in m [key :sense] :remembered)
+                             (dissoc m key)))
+                         entities lost))
         cap (get-in store [:opts :cap])
         ;; A sound after a sighting does not unsee it: the row stays and ages to :remembered at the place it was seen.
         incoming (keep #(observation store source (.-fields sample) dim % now) (take cap loaded))
@@ -204,7 +212,7 @@
         ;; A hostile mob is listed only while perception's memory holds it, whether or not the client still tracks it.
         forgotten (when known (into #{} (keep (fn [[key e]] (when (and (:hostile? e) (not (contains? known (:id e)))) key)))
                                     (:entities @(:state store))))
-        prior (apply dissoc (prune (:entities @(:state store)) now) (concat lost forgotten))
+        prior (unseen (apply dissoc (prune (:entities @(:state store)) now) forgotten))
         merged (reduce (fn [m entity] (assoc m (:key entity) entity)) prior incoming)
         dropped (+ (max 0 (- (count loaded) cap)) (max 0 (- (count merged) cap)))
         kept (if (> (count merged) cap)
