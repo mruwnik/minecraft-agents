@@ -50,7 +50,7 @@
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only for a child given a :worth; a :look instead, before any look round, while chests are allowed and none is seen or a raw need is unseen, and a look round is within the worth: the price is judged after it).
   Worth (ctx/worth): the caller's, at the root worth-of; each walk of a search for an unseen need is priced against it, within the job time left.
   Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source (with the craft child's cause as :cause when a gather also ended), :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need, for an animal an explore.search for it); limit-reached :timeout after :spend :job-time (default-time: fetch-time/items-s, so a crafted item's budget counts its recipe tree; a bill its items' summed).
-  Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
+  Quote: the count as yield, time per step and gather, no most for a gather; with no plan, price-of (##Inf when no way would start); a bill two gathers' time per missing item.")
 
 (a/defargs args
   {:item {:doc "the item to get" :spec a/item? :default nil}
@@ -215,7 +215,7 @@
 
 (defn quote-item
   "The plan's figures: the count as yield; time per craft and smelt step and the raw needs' gathers (plan/gathers-s),
-  a gather's most open."
+  a gather's most open; with no plan, price-of (a search's price, ##Inf when no way would start) and no most."
   [c]
   (let [a (:args c)
         names (names-of a)
@@ -225,7 +225,9 @@
         smelts (reduce + 0 (map :count (filter #(= :smelt (:op %)) steps)))
         gathers (count (:gather pl))
         step-s (cost/craft-step-s)
-        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (smelt-s c smelts) (if (pos? gathers) (gathers-s c pl) 0))
+        mean (if pl
+               (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (smelt-s c smelts) (if (pos? gathers) (gathers-s c pl) 0))
+               (price-of c))
         item (or (:item pl) (first names))]
     {:uses {:job-time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
      :yields {:items {item [0 n n]}}}))

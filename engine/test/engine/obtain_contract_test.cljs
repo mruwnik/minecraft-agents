@@ -57,6 +57,22 @@
           (is (nil? (contract/quote-problem q)))
           (is (= ##Inf (get-in q [:uses :job-time 2])) "a gather has no most"))))))
 
+(defn ^:async seeds-mean
+  "The mean job time obtain quotes for n wheat seeds in world."
+  [world n]
+  (get-in (await (quote-in (f/start world []) 'jobs.items.obtain {:item "wheat_seeds" :count n})) [:uses :job-time 1]))
+
+(deftest the-quote-is-the-price-of-the-cheapest-way-that-would-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [grass (update (f/bare []) :blocks assoc "1,64,3" "short_grass")
+              two (await (seeds-mean grass 2))
+              sixteen (await (seeds-mean grass 16))
+              unseen (await (seeds-mean (f/bare []) 16))]
+          (is (< two sixteen) "a seed drops from one grass break in eight: sixteen take eight times the breaks")
+          (is (< sixteen unseen) "with no grass seen the seeds are searched for (or none would start): dearer than breaking the grass in front of the body"))))))
+
 (deftest the-default-time-limit-counts-the-items-usual-cost
   (let [t #(obtain/default-time {:item %1 :count %2})]
     (is (< (t "raw_iron" 1) (t "raw_iron" 27)) "27 raw iron are many mines, not one")
