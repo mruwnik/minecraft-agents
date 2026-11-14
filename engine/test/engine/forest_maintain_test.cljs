@@ -207,6 +207,14 @@
           (is (= {:felled 1 :planted 1 :left [] :bare []} (dissoc result :status :text)))
           (is (= [] (lt/debts eng)) "fell-tree's replant debt is cleared by the planting"))))))
 
+(deftest a-grown-tree-is-left-standing-while-the-logs-held-cover-the-demand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (run (update oak-world :inventory conj (item "oak_log" 400)) {"forest" oak-cell} {:plan "forest"} 40))]
+          (is (= [] (digs p)) "a tree 3 blocks away is not worth the walk with 400 logs carried")
+          (is (listed? eng) "still listed, waiting"))))))
+
 (deftest every-sapling-goes-in-through-the-plant-sapling-job
   (async done
     (tu/run-async done

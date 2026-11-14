@@ -19,6 +19,8 @@
             [jobs.lib.forestry :as lib :refer [cell-vec down feet-cell field-cells soil-for survey-field! trouble-status]]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
+            [jobs.lib.stock :as stock]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.tidy-rules :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.need :as need]
@@ -47,7 +49,7 @@
   - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
     dig and again before every felling round), or
   - planting it was refused or failed three times.
-  Does not start (condition-failed, a skipped job) unless a grown tree stands on a planned cell that is not left, a
+  Does not start (condition-failed, a skipped job; {:reason :not-worth :worth :walk-s} while even the least walk to the work costs more than the pass is worth, which falls to nothing as the logs held, carried and in known chests, cover three days of the expected demand) unless a grown tree stands on a planned cell that is not left, a
   bare planned cell has its sapling carried or can be fetched, or a cell wants readying: the cause is the worst blocked state ({:reason :cells-foreign
   :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. {:reason :plan-trouble :why text}
   a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
@@ -225,6 +227,8 @@
   (let [read #(classes-of c (:trees field))]
     (if (look/unseen? (:primitives c) (field-cells field)) (read) (check-cache/cached c :classes read))))
 
+(declare worth-of)
+
 (defn not-ready
   "Whether the job may start: ok while a grown tree is ripe on a planned cell or a bare one has its sapling carried; else
   later with the cells that hold it back, a look first while one was never seen. The cells are read once per
@@ -235,10 +239,12 @@
       (checks/cause-status :later {:reason :plan-trouble :why (:trouble field)})
       (let [unseen? (look/unseen? (:primitives c) (field-cells field))
             classes (checked-classes c field)]
-        (if (or (seq (ripe-cells c classes))
-                (seq (plantable c (owed-cells c classes)))
-                (seq (unplantable-cells classes)))
-          (contract/ok :work "a tree is ripe, a sapling can be planted or a cell wants readying")
+        (if-let [target (or (first (ripe-cells c classes))
+                            (:pos (first (plantable c (owed-cells c classes))))
+                            (first (unplantable-cells classes)))]
+          (if-let [cause (pick/not-worth c {:pos target} #(worth-of c))]
+            (checks/cause-status :later cause)
+            (contract/ok :work "a tree is ripe, a sapling can be planted or a cell wants readying"))
           (checks/cause-status (if (and unseen? (not (look/surveyed? c :near))) :look :later)
                                (or (blocked-reason c classes) {:reason :nothing-to-do})))))))
 
@@ -439,23 +445,36 @@
   [species]
   (tree-worth species))
 
+(defn held-logs
+  "Logs of any species the body carries and the chests it knows (jobs.lib.stock) hold."
+  [c]
+  (let [log? #(str/ends-with? (str %) "_log")]
+    (+ (transduce (comp (filter (comp log? :name)) (map :count)) + 0 (u/inventory (:primitives c)))
+       (transduce (comp (mapcat identity) (filter (comp log? key)) (map val)) + 0 (vals (stock/stock-of (ctx/view c)))))))
+
 (defn worth-of
   "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell; a sapling it
   would plant on a bare cell it can plant, or on one prepare readies, planting-worth; a planned cell never seen one tree at
-  the ripe share (cost/field-share, as farm tend prices unseen cells) of the cells seen."
+  the ripe share (cost/field-share, as farm tend prices unseen cells) of the cells seen. Only the logs the held stock
+  (carried and in known chests) leaves wanted count (cost/log-share)."
   [c]
   (let [field (planned c)
         classes (when-not (:trouble field) (checked-classes c field))
         unseen (filter #(look/unseen? (:primitives c) [%]) (keys (:trees field)))
         seen (apply dissoc classes unseen)
-        share (cost/field-share :ripe (count (filter (comp #{:ripe} first val) seen)) (count seen))]
-    (+ (reduce + 0 (map (fn [pos]
-                          (let [species (second (classes pos))]
-                            (:value (cost/goal-value [{:name (str species "_log") :count (count (remaining-logs c pos species))}]))))
-                        (filter (set (keys seen)) (ripe-cells c classes))))
-       (reduce + 0 (map (comp planting-worth :species) (plantable c (filter (comp (set (keys seen)) :pos) (owed-cells c classes)))))
-       (reduce + 0 (map #(planting-worth (second (classes %))) (filter (set (keys seen)) (unplantable-cells classes))))
-       (reduce + 0 (map #(* share (tree-worth ((:trees field) %))) unseen)))))
+        share (cost/field-share :ripe (count (filter (comp #{:ripe} first val) seen)) (count seen))
+        per-tree (forestry/logs-per-tree)
+        ripe (map (fn [pos] (let [species (second (classes pos))
+                                  n (count (remaining-logs c pos species))]
+                              [(:value (cost/goal-value [{:name (str species "_log") :count n}])) n]))
+                  (filter (set (keys seen)) (ripe-cells c classes)))
+        planted (map (fn [species] [(planting-worth species) per-tree])
+                     (concat (map :species (plantable c (filter (comp (set (keys seen)) :pos) (owed-cells c classes))))
+                             (map #(second (classes %)) (filter (set (keys seen)) (unplantable-cells classes)))))
+        guessed (map (fn [pos] [(* share (tree-worth ((:trees field) pos))) (* share per-tree)]) unseen)
+        terms (concat ripe planted guessed)
+        logs (reduce + 0 (map second terms))]
+    (* (cost/log-share (held-logs c) logs) (reduce + 0 (map first terms)))))
 
 (defn plan-place "A tree cell of the plan, nil when it cannot be worked." [c] (some-> (planned c) :trees keys first))
 

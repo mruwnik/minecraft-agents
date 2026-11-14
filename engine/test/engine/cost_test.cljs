@@ -1176,3 +1176,11 @@
 (deftest the-priced-recipes-list-a-campfire-made-with-charcoal-for-any-log
   (let [campfires (filter #(= "campfire" (first %)) (tbl/recipe-list game/default-version))]
     (is (some #(and (some #{"charcoal"} (nth % 2)) (some #{"oak_log"} (nth % 2))) campfires))))
+
+(deftest more-logs-are-wanted-only-while-the-held-stock-leaves-demand-uncovered
+  (are [held n share] (= share (cost/log-share held n))
+    0 10 1
+    182 20 0.5
+    192 10 0
+    1400 10 0
+    0 0 1))

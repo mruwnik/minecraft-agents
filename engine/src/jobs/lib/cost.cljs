@@ -33,7 +33,7 @@
     pen      gap-loss: the animal worth a herd loses through fence gaps till the next pass, from a Gamma prior on the escape rate (jobs.lib.cost.pen); herd-loss, through one gap open a while.
     repair   repair-worth: what mending a plan's broken cells is worth: each cell's put-back, a herd's gap-loss, a crop's harvests lost growing dry (jobs.lib.cost.repair).
     rise     expected-rise: the blocks up to a sky the body has not seen, from its height, what it knows of the surface, and a prior on the ground height (jobs.lib.cost.rise).
-    averted  open-door-s, open-gate-s, short-slot-s, left-cell-s, riding-s, wedged-s, stuck-s, burn-hp: the loss a reflex averts where its trigger prices none, broad priors (jobs.lib.cost.averted); tree-worth: a tree's logs."
+    averted  open-door-s, open-gate-s, short-slot-s, left-cell-s, riding-s, wedged-s, stuck-s, burn-hp: the loss a reflex averts where its trigger prices none, broad priors (jobs.lib.cost.averted); tree-worth: a tree's logs; log-share: the share of more logs the held stock leaves wanted (jobs.lib.cost.stock)."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -42,6 +42,7 @@
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.averted :as averted]
+            [jobs.lib.cost.stock :as stock]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.death :as death]
@@ -583,6 +584,7 @@
 (def wedged-s averted/wedged-s)
 (def stuck-s averted/stuck-s)
 (def burn-hp averted/burn-hp)
+(def log-share stock/log-share)
 (def earthwork-s farm/earthwork-s)
 (def light-cost value/light-cost)
 (def per-danger value/per-danger)

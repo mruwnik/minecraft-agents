@@ -1,0 +1,23 @@
+;; Card 3dbb7102: forest maintain rests while the logs held (carried, or in known chests) cover three days of the expected demand
+;; (cost/log-share), as farm tend rests on a pass not worth its walk; a body with no logs fells the same tree.
+;; Should-succeed: no logs carried, the ripe tree 6 blocks away is felled. Should-fail: 400 logs carried, the same tree stands and the job waits :not-worth.
+{:defaults
+ {:tags [:forestry :maintain :worth] :time :any
+  :plot {:height 12 :floor "stone"}
+  :blocks [[:fill [16 0 16] [16 4 16] "oak_log"]
+           [:fill [14 4 14] [18 6 18] "oak_leaves[persistent=true]"]
+           [:fill [16 4 16] [16 5 16] "oak_log"]]
+  :plans [{:id "forest" :metadata {:by "$body"}
+           :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
+  :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1] ["oak_sapling" 1]] :effects [["resistance" 600 4]]}
+  :act [[:job (jobs.forestry.maintain {:worth 1200 :plan "$plan:forest"})]]
+  :limit-s 120}
+ :cases
+ [{:name "no-logs-held-the-ripe-tree-is-felled"
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
+   :after [[:not-block [16 0 16] "oak_log"]]}
+  {:name "four-hundred-logs-held-the-tree-stands"
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1] ["oak_log" 400]]}
+   :expect [{:event {:kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}
+            {:no-event {:kind #{:completed :stopped}} :for-s 20 :of-job true}]
+   :after [[:block [16 0 16] "oak_log"] [:item "oak_log" 400]]}]}
