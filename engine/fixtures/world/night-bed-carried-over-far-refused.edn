@@ -1,0 +1,21 @@
+;; Night picked the carried bed; bed-down then re-picked the remembered far bed (its unsafe-walk verdict lapsed once the body moved) and walked to it in the dark.
+;; Should-succeed: the carried bed is put down near the body (night.bed-placed) and the body stays near its start. Should-fail: with no bed in the pack nothing is placed.
+;; Needs the night (bed use is decided by the clock).
+{:defaults
+ {:tags [:night :survival :bed]
+  :time :night :time-why :sleep
+  :plot {:light :sky :length 128 :width 16 :height 6}
+  :blocks [[:set [120 0 6] "red_bed[facing=east,part=foot]"] [:set [121 0 6] "red_bed[facing=east,part=head]"]]
+  :memory [{:kind :bed :data {:pos #xyz [120 0 6]} :policy {:cap 1 :ttl :forever}}]
+  :body {:at [6.5 0 6.5] :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
+  :limit-s 130}
+ :cases
+ [{:name "carried-bed-is-placed-not-the-far-refused-bed-walked-to"
+   :body {:inventory [["white_bed" 1] ["cobblestone" 32]]}
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :expect [{:event {:source :job :kind :night.bed-placed} :within-s 90}]
+   :after [[:body-near [6.5 0 6.5] 12]]}
+  {:name "no-carried-bed-places-none"
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :expect [{:no-event {:source :job :kind :night.bed-placed} :for-s 60}]
+   :after [[:body-near [6.5 0 6.5] 12]]}]}
