@@ -143,7 +143,6 @@
   {:round (fn [c] (swap! world update :spent (fnil conj []) (:job-time (ctx/spent c))) :continue)})
 
 (deftest a-job-that-yields-every-round-spends-the-wall-time-it-holds-the-body
-  ;; Q192: before, only the rounds' own time counted, so an instant act every tick spent almost no :job-time.
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -176,6 +175,24 @@
           (swap! clock + 4000)
           (await (core/tick! eng))
           (is (= [0 0] (:spent @world)) "a pass that did not choose the job ends its claim on the gap"))))))
+
+(def refused
+  {:can-run? (fn [_] (contract/later :no-tool "no axe" :need :axe))
+   :round (fn [_] :continue)})
+
+(deftest an-exclusive-run-that-fails-its-check-leaves-no-gap-for-the-job-before-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'held held 'refused refused})]
+          (core/submit! eng (tu/order '(held)) {})
+          (await (core/tick! eng))
+          (core/exclusive-run! eng '(refused {:worth 60}))
+          (swap! clock + 4000)
+          (await (core/tick! eng))
+          (swap! clock + 20000)
+          (await (core/tick! eng))
+          (is (= [0 0] (:spent @world)) "the exclusive interval is not the job's time"))))))
 
 (def spends
   {:can-run? (fn [c] (swap! world update :spent (fnil conj []) (ctx/spent c)) (contract/ok :free "free"))

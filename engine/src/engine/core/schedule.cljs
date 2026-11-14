@@ -345,7 +345,7 @@
   (clear-asked! eng)
   (cond
     (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (drop-gap! eng) nil)
-    (exclusive-job eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng)
+    (exclusive-job eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (drop-gap! eng)
                             (reset! (:exclusive-t eng) (now eng))
                             (some-> (tick-exclusive! eng) (.finally #(reset! (:exclusive-t eng) (now eng)))))
     :else
