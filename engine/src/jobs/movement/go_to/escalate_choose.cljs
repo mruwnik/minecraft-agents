@@ -224,11 +224,11 @@
   (boolean (and (= :exhausted (some-> (:reason result) keyword)) (goal-aim/see-cell c))))
 
 (defn refused-drop?
-  "Whether a give-up with result is a :one-way end whose refused step is a fall: the goal is seen below and the only
-  nearer way is a drop the walk will not take, so a free body digs down to it as a player who won't jump does."
+  "Whether a give-up with result is a :one-way end whose refused step is a fall or a way down (:descent): the only
+  nearer way is one the walk will not take down, so a free body digs to the goal as a player who won't jump does."
   [result]
   (and (= :one-way (some-> (:reason result) keyword))
-       (= :drop (some-> (:one-way result) :kind keyword))))
+       (#{:drop :descent} (some-> (:one-way result) :kind keyword))))
 
 (defn damage-refused?
   "Whether a give-up with result is a :damage-budget end: at full health the only whole way costs more hp than the body

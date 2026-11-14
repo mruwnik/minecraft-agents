@@ -673,24 +673,32 @@
           (is (nil? (:stopped-short far))))))))
 
 ;; Tamsin S6: plans toward a leg goal buried in a hill (y 67) walked the body 69 -> 65 -> 62 -> 55 down a ravine beside it, each
-;; plan's drops cheap against the goal's worth. A plan's way down is priced against the climb back up to the goal's level.
+;; plan's drops cheap against the goal's worth. A plan's way down over unseen floors is priced against the climb back up to the
+;; goal's level; over seen floors its own steps are the way back.
 (deftest a-speculative-plan-goes-down-no-farther-than-the-climb-back-pays
   (let [p (tu/fake {:blocks {} :self {:pos {:x 0.5 :y 69 :z 0.5}}})
-        cut (fn [to steps] (wplan/descent-cut {:primitives p} to (mapv (fn [[x y z]] {:x x :y y :z z}) steps)))
+        step (fn [[x y z]] {:x x :y y :z z})
+        unseen (fn [steps] (into [(step (first steps))] (map #(assoc (step %) :unseen-floor true)) (rest steps)))
+        cut (fn [to steps] (wplan/descent-cut {:primitives p} to steps))
         goal [-16256 67 -7904]]
-    (is (= {:steps [{:x -16256 :y 69 :z -7903} {:x -16257 :y 68 :z -7903} {:x -16259 :y 66 :z -7904}] :refused [-16262 65 -7905]}
-           (cut goal [[-16256 69 -7903] [-16257 68 -7903] [-16259 66 -7904] [-16262 65 -7905]]))
+    (is (= {:steps (unseen [[-16256 69 -7903] [-16257 68 -7903] [-16259 66 -7904]]) :refused [-16262 65 -7905] :kind :descent}
+           (cut goal (unseen [[-16256 69 -7903] [-16257 68 -7903] [-16259 66 -7904] [-16262 65 -7905]])))
         "from beside the goal, a plan down and away goes no lower than the goal's level")
-    (is (= {:steps [{:x -16272 :y 62 :z -7911}] :refused [-16272 60 -7912]}
-           (cut goal [[-16272 62 -7911] [-16272 60 -7912] [-16270 57 -7913] [-16266 55 -7913]]))
+    (is (= {:steps (unseen [[-16272 62 -7911]]) :refused [-16272 60 -7912] :kind :descent}
+           (cut goal (unseen [[-16272 62 -7911] [-16272 60 -7912] [-16270 57 -7913] [-16266 55 -7913]])))
         "from 5 under the goal's level, a plan 7 deeper for 6 blocks across is not walked")
-    (is (= {:steps [{:x 0 :y 64 :z 0} {:x 3 :y 61 :z 0} {:x 6 :y 61 :z 0} {:x 12 :y 66 :z 0} {:x 20 :y 70 :z 0}]}
-           (cut [30 70 0] [[0 64 0] [3 61 0] [6 61 0] [12 66 0] [20 70 0]]))
-        "a dip on the way up to a hilltop is walked")
-    (is (= 2 (count (:steps (cut [100 64 0] [[0 64 0] [24 61 0] [26 52 0]]))))
+    (let [dip (unseen [[0 64 0] [3 61 0] [6 61 0] [12 66 0] [20 70 0]])]
+      (is (= {:steps dip} (cut [30 70 0] dip)) "a dip on the way up to a hilltop is walked"))
+    (is (= 2 (count (:steps (cut [100 64 0] (unseen [[0 64 0] [24 61 0] [26 52 0]])))))
         "far from the goal, 24 blocks across pay for a 3-block dip; a 9-block drop for 2 more do not")
-    (is (= 3 (count (:steps (cut [0 80 8] [[40 64 9] [30 64 9] [20 64 9]]))))
-        "a level walk away from a goal above (a tour) goes no lower: it is not cut")))
+    (let [tour (unseen [[40 64 9] [30 64 9] [20 64 9]])]
+      (is (= {:steps tour} (cut [0 80 8] tour)) "a level walk away from a goal above (a tour) goes no lower: it is not cut"))
+    (let [away (unseen [[0 62 0] [30 61 0] [30 61 20] [30 61 45]])]
+      (is (= {:steps (subvec away 0 3)} (cut [40 66 0] away))
+          "a plan that came down nearer, then walks away at that depth, ends where the goal last cost no more than from its start"))
+    (let [seen (mapv step [[0 66 0] [6 66 0] [7 65 0] [8 65 0] [9 66 0] [16 66 0]])]
+      (is (= {:steps seen} (cut [-16256 67 -7904] seen)) "a 1-block dip over seen floors far from the goal is walked: its steps are the way back")
+      (is (= {:steps seen} (cut [30 67 0] seen)) "toward the goal, too"))))
 
 (deftest an-unfinished-search-walks-down-only-as-far-as-the-climb-back-pays
   (async done
@@ -708,7 +716,7 @@
               search {:walled walled :limited #js {:progress (fn [] #js {:path (.-path (:r found)) :startDistance 100 :distance 80})}}
               plan (fn [to] (wsearch/unfinished-plan search 1 nil true (constantly false) (constantly true) (constantly true) #(wplan/descent-cut {:primitives p} to %)))]
           (is (= 56 (:y (peek (:steps (plan [11 50 0]))))) "toward a goal below, the walk goes down the whole stair")
-          (is (<= 63 (:y (peek (:steps (plan [11 70 0]))))) "toward a goal above, it walks no more than a step down the stair: a block across for each block down is no progress"))))))
+          (is (= 64 (:y (peek (:steps (plan [11 70 0]))))) "toward a goal above, it walks no step down the stair: a block across for each block down is no progress"))))))
 
 (def flooded-corridor
   (merge (box 8 62 0 40 67 2 "stone") (box 9 64 1 36 65 1 "water")))

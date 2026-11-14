@@ -1432,3 +1432,15 @@
                                                    (looking {:light-default [0 0]})))]
           (is (= {:arrived false :why :unseen-floors} (select-keys out [:arrived :why])) (pr-str out))
           (is (seq (filter #(and (= :go-to.retrying (:kind %)) (= :unseen-floors (:reason %))) seen)) "each such walk is a try, and says so"))))))
+
+;; the common case of the dark edge above: the goal at the floor's level across an unseen dark void. A drop off the edge
+;; brings it no nearer and has no known way back up (plan/cut-climb): the walk refuses it.
+(deftest go-to-across-a-dark-void-to-a-goal-at-the-floor-s-level-refuses-the-drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (run-go-to {:self {:pos {:x 39.5 :y 64 :z -7.5}} :blocks (box -30 63 -10 40 63 10 "stone") :radius 8
+                                               :inventory [{:name "torch" :count 16}]}
+                                              {:pos [40 64 -24] :range 1 :unknown true}
+                                              (looking {:light-default [0 0]})))]
+          (is (= {:arrived false :why :one-way} (select-keys out [:arrived :why])) (pr-str out)))))))

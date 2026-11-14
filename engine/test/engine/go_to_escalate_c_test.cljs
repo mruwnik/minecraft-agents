@@ -61,6 +61,7 @@
 
 (deftest a-one-way-end-at-a-refused-drop-is-dug-down-but-a-closed-door-one-is-not
   (is (true? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :drop :at [0 70 0]}}))))
+  (is (true? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :descent :at [0 60 0]}}))) "a refused way down that does not pay its climb back")
   (is (true? (choose/damage-refused? {:status :no-path :reason :damage-budget :hp-cost 10 :hp-budget 7})))
   (is (false? (choose/damage-refused? {:status :no-path :reason :needs-health})))
   (is (false? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :door}}))))

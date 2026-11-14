@@ -65,7 +65,6 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
-            [jobs.lib.stair-time :as stair-time]
             [jobs.lib.torch-plan :as torch-plan]
             [jobs.lib.util :as u]))
 
@@ -704,12 +703,12 @@
 
 (defn climb-back-s
   "Seconds getting back up `blocks` blocks costs a body that went down into land it does not know the way back from: at
-  chance `trap` no walk leads up and it cuts a stair (stair-time/steps-s), else it walks up (walk-cost); each way dark
-  (dark-way-s of kit) unless `lit?`."
-  [blocks trap lit? kit]
-  (let [way #(if lit? % (dark-way-s % blocks kit))]
+  chance `trap` no walk leads up and it climbs out in stair-s seconds (one-way/climb-out-s, with its kit), else it walks
+  up (walk-cost); each way dark (dark-way-s of kit) unless `lit?`."
+  [blocks trap lit? kit stair-s]
+  (let [way #(if (or lit? (= ##Inf %)) % (dark-way-s % blocks kit))]
     (+ (chance-times (- 1 trap) (way (:cost (walk-cost {:distance blocks}))))
-       (chance-times trap (way (stair-time/steps-s :up blocks))))))
+       (chance-times trap (way stair-s)))))
 
 (defn respawn-of
   "Where a death of the body of p would wake: the live spawn bed (sh-spawn/spawn-bed-pos; view nil: none), else where it
