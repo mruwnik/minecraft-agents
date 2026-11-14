@@ -237,7 +237,24 @@
           (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
           (full-at p [10 64 0])
           (await (wt/ending-of eng job {:items ["dirt"]} 30))
-          (is (= [[10 64 0]] (map :chest (filter #(= :deposit.chest-full (:kind %)) @seen)))))))))
+          (is (= [[10 64 0]] (map :chest (filter #(= :deposit.chest-full (:kind %)) @seen))))
+          (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [11 64 0]]))]))
+          (is (empty? (get-in @(fake/state p) [:containers [10 64 0]]))))))))
+
+(deftest deposit-says-a-chest-is-full-once-over-later-calls
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup-zoned {:inventory [{:name "dirt" :count 5}]
+                                                 :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                                 :containers {"10,64,0" [] "11,64,0" []}} [])]
+          (wt/know-place! eng :chest chest)
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (full-at p [10 64 0])
+          (await (wt/ending-of eng job {:items ["dirt"]} 30))
+          (swap! (fake/state p) assoc :inventory [{:name "dirt" :count 5}])
+          (await (wt/ending-of eng job {:items ["dirt"]} 30))
+          (is (= 1 (count (filter #(= :deposit.chest-full (:kind %)) @seen)))))))))
 
 (deftest deposit-says-so-when-every-chest-is-full-and-making-is-off
   (async done

@@ -138,6 +138,17 @@
   (let [{:keys [done left]} (nth (done? c) 2)]
     (least/end! c kind cause data done (+ done left))))
 
+(def full-said-kind :deposit/full-said)
+
+(defn say-full!
+  "Say once per chest (body memory, as long as stock books last) that deposit found it full."
+  [c chest]
+  (let [cell (storage/cell-of chest)]
+    (when-not (some #(= cell (:cell (:data %))) (ctx/entries c full-said-kind))
+      (ctx/remember! c full-said-kind {:cell cell} stock/stock-policy)
+      (ctx/emit! c :deposit.chest-full :warn
+                 {:chest cell :attention :notice :text (str "the chest at " (pr-str cell) " is full, trying another")}))))
+
 (defn stop!
   "End with kind and cause: {:gave-up true :moved n}, n the items put in so far."
   [c kind cause]
@@ -269,9 +280,9 @@
                                 :text (str "put " (.-moved r) " " (:name (:stack pick)) " in the chest at " (pr-str (storage/cell-of chest)))})
                     (u/progress! c)
                     :again)
-                (if group? (mark-full! c chest) (give-up! c :nothing-moved)))
+                (if group? (do (say-full! c chest) (mark-full! c chest)) (give-up! c :nothing-moved)))
               (cond
-                (and group? (= "full" (.-status r))) (mark-full! c chest)
+                (and group? (= "full" (.-status r))) (do (say-full! c chest) (mark-full! c chest))
                 (and group? (= "missing" (.-status r)) (not= (storage/cell-of chest) (some-> (mem/place (ctx/view c) :chest) storage/cell-of)))
                 (do (storage/drop-from-group! c chest) (mark-full! c chest))
                 (retracted? c chest (.-status r)) (status-stop! c (.-status r))
