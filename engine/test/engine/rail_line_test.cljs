@@ -181,16 +181,14 @@
 
 ;; ---------------------------------------------------------------- redstone blocks on ground that is there
 
-(deftest a-redstone-block-bed-on-natural-ground-waits-naming-the-cells-and-what-would-work
+(deftest a-redstone-block-bed-on-natural-ground-is-dug-and-the-block-placed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [opts {:power :block}
-              r (await (declines (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} {:plan "line"}))]
-          (is (= [:source-blocked] (distinct (map :reason (:waits r)))))
-          (is (= 0 (:warns r)))
-          (is (= 0 (:places r)))
-          (is (every? #(re-find % (:why (first (:waits r)))) [#"\[3 63 0\]" #"\[25 63 0\]" #"torch or lever" #"raised"])))))))
+              [result _ p] (await (build! (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} {}))]
+          (is (true? (:ok? result)) (pr-str (select-keys result [:breaks :text])))
+          (is (= "redstone_block" (h/block-at p 3 63 0))))))))
 
 (deftest a-redstone-block-bed-on-a-raised-line-is-not-declined
   (async done
@@ -593,7 +591,6 @@
                 [[(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
                  [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail" {:ways #{:carried}}]
                  [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"zone list"]
-                 [(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"redstone block"]
                  [(spec "stone" 63 (kit {})) {} [] :plan #"plan"]]]
           (let [r (await (declines world plans (merge {:plan "line"} extra) zones))
                 w (first (:waits r))]
@@ -764,3 +761,24 @@
           (is (every? #(<= (.-count (.-args %)) stock/stack) (h/calls p "transfer")) "no take is more than a stack, so the bag room holds")
           (is (< (count items) (count (h/calls p "transfer"))) "the rest comes in later trips")
           (is (= "powered_rail" (h/block-at p 3 64 0))))))))
+
+(deftest a-stone-bump-over-the-line-gets-a-pickaxe-fetched-for-its-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bump (for [x (range 10 13) z (range -4 5) y [64 65]] [(h/cell-key x y z) "stone"])
+              chest "-2,64,3"
+              world (-> (spec "stone" 63 (kit {}))
+                        (update :blocks #(-> (into % bump) (assoc chest "chest")))
+                        (assoc :containers {chest [{:name "stone_pickaxe" :count 1}]}))
+              {:keys [eng p]} (b/start world {"line" (line-plan {})} [])
+              orig ctx/call
+              tool-calls (atom [])
+              _ (set! ctx/call (fn [c slot j args]
+                                 (when (= 'jobs.items.get-tool j) (swap! tool-calls conj args))
+                                 (orig c slot j args)))
+              e (try (await (ending-of {:eng eng} job {:plan "line"} 1500))
+                     (finally (set! ctx/call orig)))]
+          (is (some #(= {:block "stone"} (select-keys % [:block])) @tool-calls) (pr-str @tool-calls))
+          (is (= :done (:kind e)) (pr-str (select-keys e [:kind :cause])))
+          (is (= "rail" (h/block-at p 11 64 0))))))))

@@ -13,6 +13,7 @@
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.build.from-plan.walk :as fp-walk]
+            [jobs.build.from-plan.book :as fp-book]
             [jobs.build.rail-spans :as spans]
             [jobs.build.rail-stock :as stock]
             [jobs.lib.placement :as placement]
@@ -50,7 +51,7 @@
   3. :check runs plan.rail/judge-line over the world. A powered rail found unlit (or lit) only in the body's memory is
      first walked to once, to read its power as it is now; a line broken only by power states is re-read for a short while before it counts as broken. A sturdy block where the plan wants bed or buffer fill is
      no fault.
-  Needs: the plan, a zone list (unless :ignore-zones?), and the items for every cell still to build carried (unless
+  Needs: the plan, a zone list (unless :ignore-zones?), a tool that harvests the ground cut for the line (fetched with jobs.items.get-tool, as from-plan does; a failed fetch is not asked again and the cut goes the builder's way), and the items for every cell still to build carried (unless
   the call's :least is below :all); those lacking are fetched first (jobs.lib.need; a failed fetch ends the job with its cause). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
   :given-up :wrong :refused}}. :hazards lists falling beds (gravel, sand).
   Endings: done when the line is sound (a line sound already is done at once, placed 0);
@@ -59,9 +60,7 @@
   left (:refused :given-up :short)). A build that stopped short of finishing (its ending carries the result) goes on to the proof, which names what is missing.
   Start facts:
   - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails); the plan has no cells to build (:no-cells).
-  - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell wanting
-    a redstone block holds another block (:source-blocked, :cells; the builder keeps the sturdy ground under the line, so there put a
-    torch or lever in the plan, or use a raised bed); a cell still to build is refused by the access rules
+  - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell still to build is refused by the access rules
     (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :least :all (the default) and the ways only :carried, items for
     the cells still to build are not all carried (:short {item n}, :up-to; an :any want counts every
     choice carried; only cells seen empty are owed, the warn's :up-to {item n} counts the unseen cells too). With
@@ -149,12 +148,6 @@
   [cells carried]
   (lacking cells carried))
 
-(defn blocked-sources
-  "The cells wanting a redstone block that hold another block (sturdy ground under the line is never dug), in order."
-  [cells]
-  (vec (sort (keep #(when (and (= "redstone_block" (shape/want-block (:want %))) (= :wrong (:answer %))) (:pos %))
-                   cells))))
-
 (defn fetch-opts
   "The limits {:how :explore :minutes} for fetching the items still to place, nil when the ways leave only :carried."
   [c]
@@ -166,20 +159,15 @@
   (= :all (or (:least (ctx/frozen-call c)) (:least (:args c)) :all)))
 
 (defn not-ready
-  "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: no
-  redstone block cell taken by ground, nothing refused, and with :least :all everything certainly needed carried."
+  "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: nothing
+  refused, and with :least :all everything certainly needed carried."
   [c cells]
   (let [all-carried (whole? c)
-        blocked (blocked-sources cells)
         no (refused c cells)
         owed (plan/owed cells)
         carried (storage/carried-totals (u/inventory (:primitives c)))
         short (short-of owed carried)]
     (cond
-      (seq blocked) (let [text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
-                                    ": the cell holds the ground under the line, which this job keeps; put a torch or lever in the plan, "
-                                    "or lay the line on a raised bed")]
-                      {:reason :source-blocked :cells blocked :why text})
       (seq no) (let [text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))]
                  {:reason :refused :refused no :why text})
       (and all-carried (not (fetch-opts c)) (seq short))
@@ -368,20 +356,32 @@
                                  (str/join ", " (map break-text (take (max-breaks) (:breaks proof))))
                                  (when (seq left) (str "; " left))))))))
 
-(defn ^:async fetch-step!
-  "Before the build is begun with :least :all, fetch a share of what is certainly lacking (jobs.build.rail-stock): the
-  first item with jobs.lib.need. :continue while the child waits, :again once got, the failed ending, nil when nothing is due."
-  [c cells]
-  (when-let [shares (and (whole? c) (not (:building (ctx/mem c))) (fetch-opts c)
-                         (seq (stock/shares (shortages (filter #(= :missing (:answer %)) (plan/owed cells))
-                                                       (storage/carried-totals (u/inventory (:primitives c))))
-                                            (u/free-slots (:primitives c)))))]
-    (let [[_ n names] (first shares)
-          o (fetch-opts c)
-          e (await (if (= 1 (count names)) (need/item! c (first names) n o) (need/blocks! c names n o)))]
+(defn ^:async fetch-tool!
+  "Before the build is begun, fetch the tool (jobs.items.get-tool) for the first ground cell to cut that no carried tool
+  harvests, as jobs.build.from-plan does; a failed fetch is booked and not asked again, the cell then going the builder's way.
+  :continue while the child waits, :again once it ended, nil when nothing is due."
+  [c]
+  (when-let [w (plan/due c (plan/tool-of c (builder/cells-of c)))]
+    (let [e (await (need/tool! c {:block (:block w)} (fetch-opts c)))]
       (cond (= :continue e) :continue
-            (= :done (:kind e)) :again
-            :else e))))
+            :else (do (when-not (= :done (:kind e)) (fp-book/book-failed! c w e)) :again)))))
+
+(defn ^:async fetch-step!
+  "Before the build is begun, fetch the tool for its cuts (fetch-tool!), then with :least :all a share of what is
+  certainly lacking (jobs.build.rail-stock): the first item with jobs.lib.need. :continue while the child waits, :again
+  once got, the failed ending, nil when nothing is due."
+  [c cells]
+  (or (when-not (:building (ctx/mem c)) (await (fetch-tool! c)))
+      (when-let [shares (and (whole? c) (not (:building (ctx/mem c))) (fetch-opts c)
+                             (seq (stock/shares (shortages (filter #(= :missing (:answer %)) (plan/owed cells))
+                                                           (storage/carried-totals (u/inventory (:primitives c))))
+                                                (u/free-slots (:primitives c)))))]
+        (let [[_ n names] (first shares)
+              o (fetch-opts c)
+              e (await (if (= 1 (count names)) (need/item! c (first names) n o) (need/blocks! c names n o)))]
+          (cond (= :continue e) :continue
+                (= :done (:kind e)) :again
+                :else e)))))
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)

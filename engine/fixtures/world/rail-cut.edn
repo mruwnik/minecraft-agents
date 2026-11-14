@@ -3,6 +3,7 @@
 ;; The line is plan.rail/layout [2 0 16] -> [31 0 16] (22 rails, 8 powered rails, 2 torches, fill 36), flat at y 0, no :spans.
 ;; Should succeed: a dirt bump x 10..12, y 0..1 across the line is cut and the line is sound (old code: never dug, :gap).
 ;; Should fail: the same bump of stone with no pickaxe carried and :ways #{:carried} is not cut, so the line does not end done.
+;; Should succeed: the same stone bump with a pickaxe in a remembered chest: the pickaxe is fetched, the bump cut, the line sound.
 {:defaults
  {:tags [:build :rail :jobs] :time :any
   :plot {:height 14 :length 48 :width 32}
@@ -23,4 +24,11 @@
    :expect [{:event {:source :job :kind #{:stopped :waiting}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 300 :until {:source :job :kind #{:stopped :waiting}}}]
    :after [[:not-block [11 0 16] "rail"]]
-   :limit-s 330}]}
+   :limit-s 330}
+  {:name "a-stone-bump-is-cut-with-a-pickaxe-fetched-from-a-chest"
+   :blocks [[:fill [10 0 12] [12 1 20] "stone"]
+            [:set [6 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
+   :memory [{:kind :chest :data {:pos #xyz [6 0 19]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.build.rail-line {:worth 1200 :plan "$plan:line"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 400 :of-job true}]
+   :after [[:block [11 0 16] "rail[shape=east_west]"] [:block [11 1 16] "air"]]}]}
