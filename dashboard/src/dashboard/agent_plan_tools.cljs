@@ -167,7 +167,7 @@
                                        (contains? (:want %) :tree) :tree
                                        :else :other)
                                      (remove #(or (exact-material (:want %)) (= :clear (:want %))) remaining-cells)))
-        unknown (count (filter #(= :unknown (:answer %)) judged))
+        unknown (count (filter #(and (= :unknown (:answer %)) (not= :any (:want %))) judged))
         materials (into {} (map (fn [[block needed]]
                                   [block {:needed needed
                                           :available (when supplied? (get inventory block 0))

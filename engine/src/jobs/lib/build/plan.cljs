@@ -417,7 +417,7 @@
   "The call's :cells that no cell of the plan has, nil when none."
   [c]
   (when-let [only (only-set (:cells (:args c)))]
-    (let [in-plan (into #{} (map :pos) (:cells (known/plan c (:plan (:args c)))))]
+    (let [in-plan (into #{} (map :pos) (:cells (surfaced c (known/plan c (:plan (:args c))))))]
       (not-empty (vec (sort (remove in-plan only)))))))
 
 (defn planned
@@ -425,8 +425,8 @@
   [c]
   (let [{:keys [plan part cells]} (:args c)
         only (only-set cells)
-        known-plan (known/plan c plan)
-        found (surfaced c (cond-> known-plan (and only (:cells known-plan)) (update :cells with-supports (comp only :pos))))
+        surfaced-plan (surfaced c (known/plan c plan))
+        found (cond-> surfaced-plan (and only (:cells surfaced-plan)) (update :cells with-supports (comp only :pos)))
         filled (when (:cells found)
                  (fill/with-fill (partial world-block (:primitives c)) (fill-worth c) (partial fill-price c) (places/min-y (:primitives c))
                                  (if part (with-supports (:cells found) (in-part? part)) (:cells found))))
@@ -446,7 +446,9 @@
         trouble (or (when-let [nw (:not-worth filled)]
                       (str "the fill under the floor costs " (js/Math.round (:price nw)) " s, more than the build is worth"
                            (when (:worth nw) (str " (" (js/Math.round (:worth nw)) " s)"))))
-                    (plan-trouble answer cells)
+                    (some-> (plan-trouble answer cells)
+                            (cond-> (and only (empty? cells) (not-in-plan c))
+                              (str " (the listed cells " (str/join " " (not-in-plan c)) " are not in the plan)")))
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) no-zones))]
     (if-not trouble
       {:cells cells :wood wood}

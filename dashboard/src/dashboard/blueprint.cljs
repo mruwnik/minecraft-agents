@@ -40,8 +40,9 @@
   (let [want (native-want bp token)
         block (shape/want-block want)
         states (into {} (map (fn [[k v]] [k (shape/state-text v)])) (when (map? want) (dissoc want :block)))
-        air (or (#{:clear "clear"} want) (shape/air? block))]
-    {:dx dx :dz dz :y y :token token :name block :label (if air "clear" (shape/want-text want))
+        anything (#{:any "any"} want)
+        air (or anything (#{:clear "clear"} want) (shape/air? block))]
+    {:dx dx :dz dz :y y :token token :name block :label (if (and air (not anything)) "clear" (shape/want-text want))
      :want want :colour (when-not air (bc/alt-colour {:name block :states states})) :air (boolean air)}))
 
 (defn layer-cells [bp y]

@@ -220,6 +220,44 @@
           (is (= "air" (block p [4 64 4])))
           (is (= [[9 9 9]] (:not-in-plan result))))))))
 
+(deftest a-listed-cell-keeps-the-plan-cells-it-stands-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "post" :parts [{:id "low" :cells [[4 64 1]] :want "oak_fence"} {:id "high" :cells [[4 65 1]] :want "oak_fence"}
+                                       {:id "other" :cells [[6 64 1]] :want "oak_fence"}]}
+              {:keys [eng p]} (start {:inventory kit :self {:pos {:x 4.5 :y 64 :z 3.5}}} {"post" plan})
+              _ (await (child-outcome eng job {:plan "post" :cells [[4 65 1]]} 200))]
+          (is (= #{[4 64 1] [4 65 1]} (set (map first (places p)))) "the cell under it is built too, an unlisted one beside it is not"))))))
+
+(deftest cells-are-read-on-the-ground-a-surface-plan-puts-them-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hill (into {} (for [x (range 0 8) z (range 0 4) y (range 62 (if (<= x 2) 64 65))] [(h/cell-key x y z) "stone"]))
+              plan {:id "slope" :surface true :parts [{:id "base" :cells [[4 64 1]] :want "air"} {:id "fence" :cells [[4 65 1]] :want "oak_fence"}]}
+              {:keys [eng p]} (start {:blocks (assoc hill "5,65,1" "stone" "5,66,1" "stone") :inventory [{:name "oak_fence" :count 4}] :self {:pos {:x 2.5 :y 64 :z 2.5}}} {"slope" plan})
+              result (await (child-outcome eng job {:plan "slope" :cells [[4 66 1]]} 200))]
+          (is (= "oak_fence" (block p [4 66 1])) "the listed cell is where the surface put the fence")
+          (is (nil? (:not-in-plan result))))))))
+
+(deftest a-call-listing-only-cells-outside-the-plan-names-them-in-its-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)})
+              result (await (child-outcome eng job {:plan "pen" :cells [[9 9 9]]} 50))]
+          (is (re-find #"9 9 9" (pr-str result)) "the end names the listed cell the plan lacks"))))))
+
+(deftest an-unseen-bare-any-cell-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "post" :cells [[3 64 0]] :want "oak_fence"} {:id "free" :cells [[30 64 0]] :want :any}]}
+              {:keys [eng p]} (start {:inventory kit :sight 5 :self {:pos {:x 3.5 :y 64 :z 2.5}}} {"far" plan})
+              _ (await (child-outcome eng job {:plan "far"} 100))]
+          (is (< (.-x (.-pos (.self p))) 20) "a cell that may be anything is not worth a walk to look at"))))))
+
 (deftest a-cell-refused-three-times-is-given-up
   (async done
     (tu/run-async done

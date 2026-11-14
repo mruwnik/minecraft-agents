@@ -106,7 +106,7 @@
 
 (def ways need/fetch-ways)
 
-(def target [:plan :part])
+(def target [:plan :part :cells])
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (a/defargs settings
