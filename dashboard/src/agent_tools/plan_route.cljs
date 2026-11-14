@@ -24,13 +24,21 @@
     (when (and (= 3 (count cell)) (every? js/Number.isSafeInteger cell)) cell)))
 
 (defn limit-arg
-  "The span limit of an option text: {:limit n} for an integer from 0 to 64, {:limit nil} (no limit but the price) for no
-  text, nil when it is neither."
+  "The span limit of an option text: {:limit n} for an integer from 0, {:limit nil} (no limit but the price) for no text,
+  nil when it is neither."
   [text]
   (if (nil? text)
     {:limit nil}
     (let [n (js/Number text)]
-      (when (and (js/Number.isSafeInteger n) (<= 0 n 64)) {:limit n}))))
+      (when (and (js/Number.isSafeInteger n) (<= 0 n)) {:limit n}))))
+
+(defn nodes-arg
+  "The search's node budget of an option text: a positive integer, route/max-nodes for no text, nil otherwise."
+  [text]
+  (if (nil? text)
+    route/max-nodes
+    (let [n (js/Number text)]
+      (when (and (js/Number.isSafeInteger n) (pos? n)) n))))
 
 (defn zone-refuses
   "(fn [[x y z]]) -> whether (memoised) another owner's zone that does not let others do action (:place, :dig) holds the cell."
@@ -100,29 +108,22 @@
     (let [parsed (zone-file/parse text)]
       (if (seq (:errors parsed)) {:error (str "zones.edn does not parse: " (first (:errors parsed)))} {:zones (:value parsed)}))))
 
-(defn search-budget
-  "(fn []) -> true once the search has run cell-s seconds: a search may cost what one cell of line costs."
-  [cell-s]
-  (let [end (+ (js/Date.now) (* 1000 cell-s))]
-    (fn [] (> (js/Date.now) end))))
-
-(defn no-route-hint [{:keys [tunnel bridge spent]}]
-  (str (if spent "the search ran out of its time before it found a rail line" "no rail line fits the seen ground")
+(defn no-route-hint [{:keys [tunnel bridge spent nodes]}]
+  (str (if spent (str "the search ran out of its " nodes " nodes (--nodes) before it found a rail line") "no rail line fits the seen ground")
        " between the cells (longest tunnel " (or tunnel "any") ", bridge " (or bridge "any")
        "). Walk and look along the way: unseen columns are not ground, and a line needs room for its launch groups at both ends"))
 
 (defn route-plan
   "{:plan <plan map> :summary {...}} for the route from to between the two cells, or {:error reason :message text}.
-  opts: :id, :by, :tunnel, :bridge, :launch (nil: layout's default)."
-  [{:keys [id by tunnel bridge launch]} from to name-at zones]
+  opts: :id, :by, :tunnel, :bridge, :launch (nil: layout's default), :nodes (the search's node budget)."
+  [{:keys [id by tunnel bridge launch nodes] :or {nodes route/max-nodes}} from to name-at zones]
   (let [opts (cond-> {:tunnel tunnel :bridge bridge} launch (assoc :launch launch))
         routed (route/connect (height-fn name-at from to zones by) from to
-                              (let [prices (route-prices name-at zones by)]
-                                (assoc opts :max-nodes nil :spent? (search-budget (:cell prices)) :gap (water-fn name-at from to) :prices prices)))]
+                              (assoc opts :max-nodes nodes :gap (water-fn name-at from to) :prices (route-prices name-at zones by)))]
     (if (:error routed)
       {:error (if (= :no-route (:error routed)) :no-route :bad-route)
        :message (if (= :no-route (:error routed))
-                  (no-route-hint {:tunnel tunnel :bridge bridge :spent (:spent routed)})
+                  (no-route-hint {:tunnel tunnel :bridge bridge :spent (:spent routed) :nodes nodes})
                   (str "the cheapest route cannot be laid: " (name (:error routed)) (some->> (:at routed) (str " at "))))}
       (let [laid (rail/layout (:waypoints routed) (dissoc opts :tunnel :bridge))
             spans (mapv #(select-keys % [:kind :from :to]) (:spans routed))]

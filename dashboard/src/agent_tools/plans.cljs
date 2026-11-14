@@ -18,7 +18,7 @@
 (def names #"^[A-Za-z0-9_-]{1,100}$")
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
-  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  route <id> --from=x,y,z --to=x,y,z --body <name> --by <name> [--tunnel N --bridge N --launch 3..5] [--dry-run] [--raw]   (a rail line between two rail cells (the cell above the ground) over the ground that body has seen, avoiding other owners' zones; the line cuts, fills, tunnels through rock 2+ above the rail and bridges drops 2+ below or water where that costs less than going round; --tunnel/--bridge cap the longest span (0: none); the plan carries the :spans and jobs.build.rail-line builds them first; the result lists the materials)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory, flushed from the running body first; :seen-note says when it could not be and the data is the file on disk); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
+  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  route <id> --from=x,y,z --to=x,y,z --body <name> --by <name> [--tunnel N --bridge N --launch 3..5 --nodes N] [--dry-run] [--raw]   (a rail line between two rail cells (the cell above the ground) over the ground that body has seen, avoiding other owners' zones; the line cuts, fills, tunnels through rock 2+ above the rail and bridges drops 2+ below or water where that costs less than going round; --tunnel/--bridge cap the longest span (0: none); --nodes caps the search states (default about 0.9 GB of them); the plan carries the :spans and jobs.build.rail-line builds them first; the result lists the materials)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory, flushed from the running body first; :seen-note says when it could not be and the data is the file on disk); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
    :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (deletes the global blueprint file)\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
@@ -63,16 +63,18 @@
 
 ;; before parsed-args: it refuses a bad option before anything is read
 (defn route-args!
-  "The {:from :to :tunnel :bridge :launch} of the route options, or a refusal naming the bad option."
-  [{:keys [from to tunnel bridge launch]}]
+  "The {:from :to :tunnel :bridge :launch :nodes} of the route options, or a refusal naming the bad option."
+  [{:keys [from to tunnel bridge launch nodes]}]
   (let [a (plan-route/cell-arg from) b (plan-route/cell-arg to)
         launch-n (when launch (js/Number launch))]
     (when-not a (fail! :bad-from "--from needs the rail cell as x,y,z integers (write --from=-5,64,3 for a negative x)"))
     (when-not b (fail! :bad-to "--to needs the rail cell as x,y,z integers (write --to=-5,64,3 for a negative x)"))
     (when (= [(first a) (nth a 2)] [(first b) (nth b 2)]) (fail! :bad-to "--from and --to are the same column"))
-    (when-not (and (plan-route/limit-arg tunnel) (plan-route/limit-arg bridge)) (fail! :bad-span "--tunnel and --bridge are integers from 0 to 64"))
+    (when-not (and (plan-route/limit-arg tunnel) (plan-route/limit-arg bridge)) (fail! :bad-span "--tunnel and --bridge are integers from 0"))
+    (when-not (plan-route/nodes-arg nodes) (fail! :bad-nodes "--nodes is a positive integer"))
     (when (and launch (not (and (js/Number.isSafeInteger launch-n) (<= 3 launch-n 5)))) (fail! :bad-launch "--launch is 3, 4 or 5 lit powered rails per launch group"))
-    {:from a :to b :tunnel (:limit (plan-route/limit-arg tunnel)) :bridge (:limit (plan-route/limit-arg bridge)) :launch launch-n}))
+    {:from a :to b :tunnel (:limit (plan-route/limit-arg tunnel)) :bridge (:limit (plan-route/limit-arg bridge)) :launch launch-n
+     :nodes (plan-route/nodes-arg nodes)}))
 
 (defn mineshaft-edn
   "The plan text of a mineshaft the options declare."
@@ -107,7 +109,7 @@
 
 (defn parsed-args [kind argv]
   (let [options (merge (into {} (map (fn [k] [k {:type "string"}])
-                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body :at :heading :to-y :from :to :tunnel :bridge :launch]))
+                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body :at :heading :to-y :from :to :tunnel :bridge :launch :nodes]))
                        {:state {:type "string"} :worlds {:type "string"}
                         :repo {:type "string" :default repo-root}
                         :blueprint {:type "string" :multiple true}}
@@ -128,7 +130,7 @@
                   (mutations command) (into [:by :revision :dry-run :raw :large])
                   (#{"add" "edit" "save"} command) (conj :edn)
                   (= command "mineshaft") (into [:at :heading :to-y])
-                  (= command "route") (into [:from :to :body :tunnel :bridge :launch]))]
+                  (= command "route") (into [:from :to :body :tunnel :bridge :launch :nodes]))]
     (when-not (and (:world v) (re-matches #"^[A-Za-z0-9_-]{1,64}$" (:world v)))
       (fail! :invalid-world "supply an explicit valid --world"))
     (when (and (= kind :plan) (= command "status"))
@@ -455,7 +457,7 @@
                                   (write output) (if (:ok output) 0 1)))
       :else (fail! :usage "unknown blueprint command"))))
 
-(defn format-error [error] (js/console.error (.-stack error))
+(defn format-error [error]
   (let [message (str (or (ex-message error) error))
         errors (.-errors error)
         current (.-current error)]

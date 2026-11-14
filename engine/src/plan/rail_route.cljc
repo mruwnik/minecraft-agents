@@ -98,6 +98,11 @@
           (and (not (zero? aside)) (>= ahead 0)) 1
           :else 2)))
 
+(def max-nodes
+  "Search states a route may open, sized to memory: a spent search of this many peaks near 0.9 GB (plans route, measured);
+  a 113-column leg over real hills (Tamsin's home to Fenwick's farm) took about 180000."
+  500000)
+
 (defn connect
   "The cheapest route from cell `from` to cell `to` as {:waypoints [[x y z] ...] :spans [...]} for `plan.rail/layout`, or
   {:error why}. `height` is (fn [x z]) -> the y a rail would have on the ground of that column, nil where none is known
@@ -106,13 +111,12 @@
   it may not be), :dark lighting a tunnel cell. A cell of rail one off its ground is cut or filled; two or more off,
   flat and straight, it is tunnelled through ground above (rail and head cell dug, lit) or bridged over ground below or
   over a column where (:gap x z) (the least rail height over a column `height` knows none of, e.g. water) is at most
-  the rail's. Other options: :launch (as layout's, default its own), :launch-ends, :max-nodes (search budget, default
-  20000; nil: none), :spent? (fn []) -> true once the caller's budget is spent, :tunnel and :bridge (the longest span of each, nil: no limit but the price). :spans lists each tunnel or bridge
-  as {:kind :from :to :length}, in line order. Errors: :no-route (none exists in the known ground; :spent true: the budget ran
-  out first), or
-  layout's error for the cheapest path found (e.g. :touching, when the path runs beside itself)."
+  the rail's. Other options: :launch (as layout's, default its own), :launch-ends, :max-nodes (the search's node budget,
+  default max-nodes), :tunnel and :bridge (the longest span of each, nil: no limit but the price). :spans lists each
+  tunnel or bridge as {:kind :from :to :length}, in line order. Errors: :no-route (none exists in the known ground;
+  :spent true: the node budget ran out first), or layout's error for the cheapest path found (e.g. :touching, when the path runs beside itself)."
   [height [fx fy fz :as from] [tx ty tz :as to] opts]
-  (let [{:keys [launch launch-ends max-nodes spent? tunnel bridge gap prices]} (merge rail/defaults {:max-nodes 20000} opts)
+  (let [{:keys [launch launch-ends max-nodes tunnel bridge gap prices]} (merge rail/defaults {:max-nodes max-nodes} opts)
         near (+ launch 3)
         far (if (= :both launch-ends) near 3)
         ends {[fx fz] fy [tx tz] ty}
@@ -133,7 +137,7 @@
                           wps (waypoints cells)
                           laid (rail/layout wps opts)]
                       (if (:error laid) (select-keys laid [:error :at :leg]) {:waypoints wps :spans (spans-of states cells)}))
-          (or (and max-nodes (> n max-nodes)) (and spent? (spent?))) {:error :no-route :spent true}
+          (> n max-nodes) {:error :no-route :spent true}
           :else (let [fresh (for [[t c] (moves env s) :let [g2 (+ g c)] :when (< g2 (first (get came t [##Inf])))] [t g2])]
                   (recur (into (disj open top) (map-indexed (fn [i [t g2]] [(+ g2 (h t)) (- g2) (+ n i) g2 t])) fresh)
                          (into came (map (fn [[t g2]] [t [g2 s]])) fresh)

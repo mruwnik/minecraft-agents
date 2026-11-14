@@ -39,6 +39,9 @@
   (let [height (fn [x _] (if (< x 10) 64 70))]
     (is (= :no-route (:error (connect height [0 64 0] [20 70 0] {:max-nodes 2000}))))))
 
+(deftest a-search-whose-node-budget-runs-out-ends-spent
+  (is (= {:error :no-route :spent true} (connect (flat 64) [0 64 0] [20 64 0] {:max-nodes 4}))))
+
 (def bump (fn [x _] (if (<= 10 x 12) 65 64)))
 (def dip (fn [x _] (if (<= 10 x 12) 63 64)))
 (def bumpy (fn [x _] (if (odd? (quot x 2)) 65 64)))
