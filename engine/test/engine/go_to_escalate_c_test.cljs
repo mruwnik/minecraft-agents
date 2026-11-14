@@ -2195,3 +2195,38 @@
                   [s0 steps0] (climb-searched inv false)]]
       (is (= [s0 steps0] [s steps]) (str inv ": the same route at the same price"))
       (is (<= cells bare) (str inv ": " cells " cells")))))
+
+
+(defn ^:async edge-walk
+  "go-to from the walk-floor's corner to [-34 64 -11] past its edge, where the fake keeps every cell unseen (rock to the
+  search and the walk) though it is air: {:out :seen}."
+  []
+  (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :self {:pos {:x -29.5 :y 64 :z -9.5}} :seeing-all true})
+        out (atom :not-done)
+        eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [-34 64 -11]}))]
+    (core/submit! eng (tu/order '(recording-parent {})) {})
+    (await (tick-out! eng 200))
+    {:out @out :seen seen}))
+
+(defn dig-routes [seen] (filterv #(= :dig-route (:step %)) (events-of seen :go-to.escalated)))
+
+(deftest a-guessed-cell-the-dig-finds-open-but-unseen-ends-the-dig-route
+  ;; the walk refuses an unseen cell: walking again through the route would fail as before (old code passed it and took the route again)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (edge-walk))]
+          (is (false? (:arrived out)) (pr-str out))
+          (is (= 1 (count (dig-routes seen))))
+          (is (= [[:unseen-open [-31 65 -10]]] (map (juxt :reason :cell) (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalation-stopped)))))
+          (is (= [false] (map :ok? (events-of seen :go-to.guess-look))) "open where rock was guessed is a bad guess"))))))
+
+(deftest a-dig-route-that-changes-nothing-is-not-taken-again-past-its-price
+  ;; a route whose cells all read open while the walk still refuses them ends no nearer than the last: without memory
+  ;; :dig-ends dig-progress? took it again for ever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (with-redefs [esc/route-cell! (fn [_ _ _] (js/Promise.resolve :open))] (await (edge-walk)))]
+          (is (= :spent (get-in out [:escalation :step])) (pr-str out))
+          (is (< 1 (count (dig-routes seen))) "taken again while under its price"))))))

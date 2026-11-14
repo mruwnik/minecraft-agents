@@ -764,7 +764,8 @@
   It fetches a pickaxe only when the route's cells left (todo, this one first) dig quicker with it got first
   (route-tool); else the cell is dug with what is carried, the drop not needed.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
-  was planned over rock that is not there), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
+  was planned over rock that is not there), :unseen-open for a guessed cell the dig found open that the body still
+  cannot see, or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
   [c {:keys [cell guess block class looked] :as planned} todo]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
@@ -797,8 +798,11 @@
             (note-holes! c [dug])
             (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)]))
             (when (contains? (:pillar-cells (ctx/mem c)) (vec cell)) (pillar-undone! c cell)))
-          (when (and guess (not looked)) (note-guess! c cell class (not= :not-diggable o)))
-          (if (and guess (= :not-diggable o)) :replan o))))))
+          (when (and guess (not looked)) (note-guess! c cell class (not (#{:not-diggable :missing} o))))
+          (cond (and guess (= :not-diggable o)) :replan
+                ;; the walk refuses a cell the body cannot see: the route is no way
+                (and guess (= :missing o) (dig-look/unknown? p cell)) :unseen-open
+                :else o))))))
 
 (defn replans-spent?
   "Whether the dig route's replans (memory :replan-budget {:since :cells :fallback-s}, begun at the first) have taken the body as long
@@ -894,7 +898,8 @@
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,
   so a resumed round goes on where it stopped; a guessed cell seen otherwise, or a guessed floor seen to be none
-  (route-ways/floor-gone), plans the route again (replan-route!). A cell that may not or could not be dug ends it (escalation-failed!)."
+  (route-ways/floor-gone), plans the route again (replan-route!). A cell that may not or could not be dug, or a guessed one
+  the dig found open that the body still cannot see (the walk refuses it), ends it (escalation-failed!)."
   [c pos]
   (let [{:keys [cells] :as e} (:escalation (ctx/mem c))]
     (loop [todo cells]
