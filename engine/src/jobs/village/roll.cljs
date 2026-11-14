@@ -204,13 +204,14 @@
     (await (wait-job! c :villager-keeps-job))))
 
 (defn ^:async walk!
-  "One go-to leg toward the villager at pos. :again, :continue or the stop."
-  [c pos]
+  "One go-to leg toward the villager e. A leg that got no nearer is one try: the next round aims at where the villager
+  is then. :again, :continue or the stop."
+  [c e]
   (let [r (await (child/call-chase* c :walk
-                                   {:pos pos :range (reach) :leg-s (leg-s) :walk {:ways #{:walk :clear-seal}}}))]
+                                   {:pos (u/pos-of (.-pos e)) :entity (.-id e) :range (reach) :leg-s (leg-s) :walk {:ways #{:walk :clear-seal}}}))]
     (cond
       (= :continue r) :continue
-      (let [res (:data r)] (or (:arrived res) (:nearer res))) :again
+      (let [res (:data r)] (or (:arrived res) (:nearer res) (:leg res))) :again
       :else (stop! c :unreachable))))
 
 (defn ^:async approach!
@@ -609,7 +610,7 @@
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
       (= "unemployed" profession) (await (wait-take-job! c))
-      (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c (u/pos-of (.-pos e))))
+      (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c e))
       :else
       (let [_ (ctx/update-mem! c dissoc :rebroke)
             r (await (read-offers! c))]

@@ -12,6 +12,7 @@
             [jobs.lib.reserve :as reserve]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
+            [jobs.lib.child :as child]
             [jobs.village.offers :as offers]
             [jobs.village.trade :as trade]))
 
@@ -371,6 +372,19 @@
                                             {}))]
           (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason :unreachable} result))
           (is (not (contains? (kinds seen) :trade.gave-up))))))))
+
+(deftest a-chase-leg-that-got-no-nearer-is-one-try-and-the-next-leg-reaches-the-villager
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig child/call-chase*
+              legs (atom 0)
+              no-nearer {:kind :limit-reached :cause {:reason :leg :line :job-time} :data {:arrived false :leg true :nearer false}}]
+          (with-redefs [child/call-chase* (fn ^:async f [c slot args]
+                                            (if (= 1 (swap! legs inc)) no-nearer (await (orig c slot args))))]
+            (let [[result p] (await (trade {:entities [(villager [(bread {})] {:pos {:x 12 :y 64 :z 0}})] :inventory [{:name "emerald" :count 3}]} {}))]
+              (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+              (is (< 1 @legs)))))))))
 
 (deftest a-villager-behind-a-glass-wall-is-not-traded-with
   (async done

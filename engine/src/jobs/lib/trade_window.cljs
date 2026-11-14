@@ -134,7 +134,7 @@
                                         :walk {:see true :ways #{:walk :clear-seal}}}))]
         (cond
           (= :continue r) :continue
-          (let [res (:data r)] (or (:arrived res) (:nearer res))) :again
+          (let [res (:data r)] (or (:arrived res) (:nearer res) (:leg res))) :again
           :else (finish! c :unreachable nil))))))
 
 (defn ^:async run!

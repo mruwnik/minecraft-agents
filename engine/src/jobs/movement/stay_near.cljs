@@ -131,14 +131,14 @@
 
 (defn ^:async walk!
   "Walk legs toward pos (re-aimed at the player each leg) until within range or the first leg that is neither an arrival
-  nor nearer; three legs that left the body out of range of the target end the job out-of-range. :continue or an ending."
+  nor nearer nor a leg that ran out of time; three legs that left the body out of range of the target end the job out-of-range. :continue or an ending."
   [c pos range]
   (loop [blocked 0 out 0]
     (let [{:keys [player]} (:args c)
           r (await (child/call-chase* c :walk (cond-> {:pos pos :range range :leg-s (leg-s) :walk {:doors :shut :ways #{:walk :clear-seal}}}
                                                  player (assoc :player player))))
           res (:data r)
-          blocked (if (or (:arrived res) (:nearer res)) 0 (inc blocked))
+          blocked (if (or (:arrived res) (:nearer res) (:leg res)) 0 (inc blocked))
           now (target-now c)
           out (next-out out blocked (u/self-pos c) (or now pos) range)]
       (cond
