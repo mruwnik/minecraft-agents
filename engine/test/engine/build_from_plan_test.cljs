@@ -194,6 +194,20 @@
           (is (= [[[4 64 3] "oak_fence"]] (places p)))
           (is (= 1 (:placed result))))))))
 
+(deftest an-any-cell-holding-junk-is-neither-dug-nor-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (pen-plan) :parts conj {:id "hole" :cells [[4 64 3]] :want :any})
+              built (into {"3,64,2" "oak_fence_gate" "2,65,2" "torch" "4,64,3" "dirt"}
+                          (map (fn [[x y z]] [(h/cell-key x y z) "oak_fence"]) (remove #{[4 64 3]} ring)))
+              {:keys [eng p]} (start {:blocks built :inventory kit} {"pen" plan})
+              result (await (child-outcome eng job {:plan "pen"} 200))]
+          (is (= [] (places p)))
+          (is (= [] (h/calls p "dig")))
+          (is (= "dirt" (block p [4 64 3])))
+          (is (zero? (:placed result 0))))))))
+
 (deftest a-cell-refused-three-times-is-given-up
   (async done
     (tu/run-async done

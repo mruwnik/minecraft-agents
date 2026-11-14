@@ -1,0 +1,26 @@
+;; Plan wildcard (bare :any want): a cell the plan says can be whatever is neither dug nor placed over.
+;; A dirt row [10 0 10]-[13 0 10] where [11 0 10] is :any and holds stone, and the pickaxe is carried: the old code could not
+;; say it (the cell was left out or a wanted block), here only the wanted cells are placed and the junk stays.
+;; Should-succeed: the three wanted cells are placed, the stone stays, the job completes.
+;; Should-fail (control): the same cell wanted "dirt" is dug and replaced.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8}
+  :body {:at [11.5 0 13.5] :settle-s 2 :inventory [["dirt" 16] ["iron_pickaxe" 1]]}
+  :limit-s 120}
+ :cases
+ [{:name "any-cell-holding-stone-is-left-alone"
+   :plans [{:id "row" :metadata {:by "$body"}
+            :parts [{:id "wall" :box [#at [10 0 10] #at [13 0 10]] :want "dirt"}
+                    {:id "hole" :cells [#at [11 0 10]] :want :any}]}]
+   :blocks [[:set [11 0 10] "stone"]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:row"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [11 0 10] "stone"] [:block [10 0 10] "dirt"] [:block [12 0 10] "dirt"] [:block [13 0 10] "dirt"]]}
+  {:name "wanted-cell-holding-stone-is-dug-and-replaced"
+   :plans [{:id "row" :metadata {:by "$body"}
+            :parts [{:id "wall" :box [#at [10 0 10] #at [13 0 10]] :want "dirt"}]}]
+   :blocks [[:set [11 0 10] "stone"]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:row"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [11 0 10] "dirt"]]}]}

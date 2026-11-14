@@ -15,7 +15,8 @@
     (set (map normal (rest want)))
     #{(normal want)}))
 
-(defn agree? [a b] (boolean (seq (set/intersection (choices a) (choices b)))))
+(defn agree? [a b]
+  (or (= :any a) (= :any b) (boolean (seq (set/intersection (choices a) (choices b))))))
 
 (defn index
   "{pos [[plan-id want] ...]} over every plan's cells, each cell's entries in plan id order."

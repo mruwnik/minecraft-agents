@@ -83,10 +83,11 @@
   (and (map? want) (string? (:block want)) (every? keyword? (keys want))))
 
 (defn want-error
-  "nil when want is one of: a block name, a block with state, [:any name-or-block ...], {:crop c}, {:tree s}, :clear."
+  "nil when want is one of: a block name, a block with state, [:any name-or-block ...], {:crop c}, {:tree s}, :clear,
+  or the bare :any (the cell can be whatever)."
   [want]
   (cond
-    (= :clear want) nil
+    (#{:clear :any} want) nil
     (string? want) (when (str/blank? want) "want: a block name must not be empty")
     (vector? want) (when-not (and (= :any (first want)) (seq (rest want))
                                   (every? #(or (string? %) (block-want? %)) (rest want)))
@@ -257,9 +258,9 @@
   (cond
     (not (and (string? letter) (= 1 (count letter)))) (str "key " (pr-str letter) ": a key is one letter")
     (and (map? want) (contains? want :blueprint)) (str "key " (pr-str letter) ": a blueprint cannot contain a blueprint")
-    (not (or (= :clear want) (and (string? want) (not (str/blank? want))) (block-want? want)
+    (not (or (#{:clear :any} want) (and (string? want) (not (str/blank? want))) (block-want? want)
              (and (vector? want) (nil? (want-error want)))))
-    (str "key " (pr-str letter) ": a letter stands for a block, a block with state, [:any block ...] or :clear")))
+    (str "key " (pr-str letter) ": a letter stands for a block, a block with state, [:any block ...], :any or :clear")))
 
 (defn layers-error [{:keys [layers] :as bp}]
   (if-not (and (vector? layers) (seq layers) (every? vector? layers) (every? #(every? string? %) layers))
@@ -525,6 +526,7 @@
   (let [name (:name block)]
     (cond
       (nil? block) :unknown
+      (= :any want) :match
       (= :clear want) (if (air? name) :match :extra)
       (air? name) :missing
       (string? want) (judge-block want block)
@@ -552,6 +554,7 @@
 (defn want-text [want]
   (cond
     (= :clear want) "clear"
+    (= :any want) "any"
     (string? want) want
     (vector? want) (str/join " | " (map want-text (rest want)))
     (contains? want :crop) (str "crop " (:crop want))
@@ -568,10 +571,10 @@
 
 (defn want-block
   "The block a want is drawn as, without any [state]: its name, the first choice of an :any, the plant of a crop, the
-  leaves of a tree; nil for :clear."
+  leaves of a tree; nil for :clear and the bare :any."
   [want]
   (cond
-    (= :clear want) nil
+    (keyword? want) nil
     (string? want) (block-name want)
     (vector? want) (want-block (second want))
     (contains? want :crop) (first (remove #(str/starts-with? % "attached_") (crop-names (:crop want))))

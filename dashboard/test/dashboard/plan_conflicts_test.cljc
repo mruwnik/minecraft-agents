@@ -23,7 +23,9 @@
     {:crop "wheat"} {:crop "wheat"}
     :clear :clear
     [:any "stone" "dirt"] "dirt"
-    [:any "stone" "dirt"] [:any "dirt" "sand"]))
+    [:any "stone" "dirt"] [:any "dirt" "sand"]
+    :any "stone"
+    {:crop "wheat"} :any))
 
 (deftest different-wants-on-a-shared-cell_conflict
   (are [wa wb] (= [["a" "b"]] (pairs (conflicts/conflicts {"a" (expansion [[0 64 0] wa]) "b" (expansion [[0 64 0] wb])})))

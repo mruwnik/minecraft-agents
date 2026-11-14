@@ -393,6 +393,20 @@
     [:any {:block "oak_log" :axis :y} "oak_log"] {:name "oak_log"} :match
     [:any {:block "oak_log" :axis :y} "stone"] {:name "oak_log" :state {:axis "x"}} :wrong))
 
+(deftest a-bare-any-is-a-cell-that-can-be-whatever
+  (are [expected actual] (= expected actual)
+    [] (errors-of (with-part {:id "x" :box [[0 0 0] [1 0 1]] :want :any}))
+    [] (shape/blueprint-errors (assoc-in shed [:key "Q"] :any) "shed")
+    :match (shape/judge :any {:name "stone"})
+    :match (shape/judge :any {:name "air"})
+    :unknown (shape/judge :any nil)
+    nil (shape/want-block :any)
+    "any" (shape/want-text :any)
+    [:any "hole" 3] (let [e (shape/expand {:id "p" :parts [{:id "wall" :box [[0 64 0] [2 64 0]] :want "stone"}
+                                                         {:id "hole" :cells [[1 64 0]] :want :any}]} {})]
+                   (let [cell (first (filter #(= [1 64 0] (:pos %)) (:cells e)))]
+                     [(:want cell) (:part cell) (count (:cells e))]))))
+
 (deftest a-want-of-air-is-a-clear-cell-however-it-is-written
   (let [plan {:id "p" :parts [{:id "a" :cells [[0 64 0]] :want "air"}
                               {:id "b" :cells [[1 64 0]] :want {:block "cave_air"}}]}
