@@ -41,20 +41,22 @@
       (when (and (js/Number.isSafeInteger n) (pos? n)) n))))
 
 (defn zone-refuses
-  "(fn [[x y z]]) -> whether (memoised) another owner's zone that does not let others do action (:place, :dig) holds the cell."
-  [zones by action]
-  (let [boxes (into [] (comp (filter (fn [{:keys [owner allow]}] (and (not= owner by) (not (contains? (set allow) action)))))
+  "(fn [[x y z]]) -> whether (memoised) the cell is claimed for action (:place, :dig): in a zone of the maker by, or of
+  another owner that does not let others do it, or one of planned (a set of cells other plans want)."
+  [zones by action planned]
+  (let [boxes (into [] (comp (filter (fn [{:keys [owner allow]}] (or (= owner by) (not (contains? (set allow) action)))))
                              (map (juxt :min :max)))
                     zones)]
-    (memoize (fn [[x y z]] (boolean (some (fn [[[x0 y0 z0] [x1 y1 z1]]] (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1))) boxes))))))
+    (memoize (fn [[x y z :as cell]] (boolean (or (contains? planned cell)
+                                                 (some (fn [[[x0 y0 z0] [x1 y1 z1]]] (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1))) boxes)))))))
 
 (defn height-fn
   "(fn [x z]) -> the y a rail would have in that column: on the seen ground top within the ends' levels, nil when unknown,
-  fluid or in a zone the body may not build in. name-at takes {:x :y :z}, returns the seen block name or nil."
-  [name-at [_ fy _] [_ ty _] zones by]
+  fluid or claimed for :place (zone-refuses). name-at takes {:x :y :z}, returns the seen block name or nil."
+  [name-at [_ fy _] [_ ty _] zones by planned]
   (let [mid (quot (+ fy ty) 2)
         depth (+ depth-over-ends (abs (- fy ty)))
-        refused? (zone-refuses zones by :place)
+        refused? (zone-refuses zones by :place planned)
         name-fn (fn [pos] (let [n (name-at pos)] (if (and n (or (re-find surface/on-ground n) (rail/rail-name? n))) "air" n)))
         memo (volatile! {})]
     (fn [x z]
@@ -88,14 +90,14 @@
 
 (defn route-prices
   "The :prices of plan.rail-route/connect, in seconds as jobs.lib.cost prices them: a cell of line its rail's worth and a
-  step; a dug block its dig time and a step (an unseen one as stone; nil in a zone that refuses :dig or for a block never
-  dug); a placed block the levelling price of one (jobs.lib.cost.farm/earthwork-s; nil in a zone that refuses :place); a
-  tunnel cell its share of a torch every torch-gap cells."
-  [name-at zones by]
+  step; a dug block its dig time and a step (an unseen one as stone; nil where claimed for :dig (zone-refuses) or for a
+  block never dug); a placed block the levelling price of one (jobs.lib.cost.farm/earthwork-s; nil where claimed for
+  :place); a tunnel cell its share of a torch every torch-gap cells."
+  [name-at zones by planned]
   (let [step (value/per-block)
         open? (fn [n] (or (ground/open? n) (re-find surface/on-ground n) (rail/rail-name? n)))
-        no-dig? (zone-refuses zones by :dig)
-        no-place? (zone-refuses zones by :place)
+        no-dig? (zone-refuses zones by :dig planned)
+        no-place? (zone-refuses zones by :place planned)
         dig-s (memoize (fn [n] (if (open? n) 0 (some-> (table/dig-cost n) (+ step)))))]
     {:cell (+ (:value (value/item-value [{:name "rail" :count 1}])) step)
      :dig (fn [[x y z :as pos]]
@@ -115,15 +117,16 @@
 (defn no-route-hint [{:keys [tunnel bridge spent nodes]}]
   (str (if spent (str "the search ran out of its " nodes " nodes (--nodes) before it found a rail line") "no rail line fits the seen ground")
        " between the cells (longest tunnel " (or tunnel "any") ", bridge " (or bridge "any")
-       "). Walk and look along the way: unseen columns are not ground, and a line needs room for its launch groups at both ends"))
+       "). Walk and look along the way: unseen columns are not ground, zones and other plans' cells are not touched, and a line needs room for its launch groups at both ends"))
 
 (defn route-plan
   "{:plan <plan map> :summary {...}} for the route from to between the two cells, or {:error reason :message text}.
-  opts: :id, :by, :tunnel, :bridge, :launch (nil: layout's default), :nodes (the search's node budget)."
-  [{:keys [id by tunnel bridge launch nodes] :or {nodes route/max-nodes}} from to name-at zones]
+  opts: :id, :by, :tunnel, :bridge, :launch (nil: layout's default), :nodes (the search's node budget), :planned (the
+  cells other plans want, a set of [x y z])."
+  [{:keys [id by tunnel bridge launch nodes planned] :or {nodes route/max-nodes planned #{}}} from to name-at zones]
   (let [opts (cond-> {:tunnel tunnel :bridge bridge} launch (assoc :launch launch))
-        routed (route/connect (height-fn name-at from to zones by) from to
-                              (assoc opts :max-nodes nodes :gap (water-fn name-at from to) :prices (route-prices name-at zones by)))]
+        routed (route/connect (height-fn name-at from to zones by planned) from to
+                              (assoc opts :max-nodes nodes :gap (water-fn name-at from to) :prices (route-prices name-at zones by planned)))]
     (if (:error routed)
       {:error (if (= :no-route (:error routed)) :no-route :bad-route)
        :message (if (= :no-route (:error routed))

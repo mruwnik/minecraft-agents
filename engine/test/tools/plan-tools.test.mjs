@@ -441,7 +441,7 @@ test('route bridges a seen drop of 2 or more and a lake by default; --bridge 0 f
   try {
     await writeSeen(fx, 'Probe', groundCells({ chasms: [[18, 24, 59]] }), Date.now() - 1000)
     assert.deepEqual((await invoke('plan', fx, [...ROUTE, '--bridge', '0'])).value.reason, keyword('no-route'))
-    const bridged = await invoke('plan', fx, ROUTE)
+    const bridged = await invoke('plan', fx, [...ROUTE, '--dry-run'])
     assert.equal(bridged.code, 0, bridged.output)
     assert.deepEqual(bridged.value.route.spans.map(s => s.kind), [keyword('bridge')])
     const lake = groundCells().map(([x, y, z, name]) => (x >= 18 && x <= 24 && y >= 61 && y <= 63 ? [x, y, z, 'water'] : [x, y, z, name]))
@@ -475,16 +475,31 @@ test('route cuts a bump of one block and fills a dip of one at rail height rathe
   } finally { fx.close() }
 })
 
-test('route treats another owner\'s zone as no ground unless it allows :place; the maker\'s own zone is fine', async () => {
+test('route treats a zone as no ground, the maker\'s own too, unless another owner\'s allows :place', async () => {
   const fx = fixture()
   try {
     await writeSeen(fx, 'Probe', groundCells(), Date.now() - 1000)
     const zones = path.join(fx.state, 'worlds', 'fixture', 'zones.edn')
-    const wall = owner => `[{:name "wall" :owner "${owner}" :min [10 60 0] :max [14 70 10]}]\n`
-    fs.writeFileSync(zones, wall('Other'))
+    const wall = (owner, allow) => `[{:name "wall" :owner "${owner}" :min [10 60 0] :max [14 70 10]${allow}}]\n`
+    fs.writeFileSync(zones, wall('Other', ''))
     assert.deepEqual((await invoke('plan', fx, ROUTE)).value.reason, keyword('no-route'))
-    fs.writeFileSync(zones, wall('Router'))
+    fs.writeFileSync(zones, wall('Router', ''))
+    assert.deepEqual((await invoke('plan', fx, ROUTE)).value.reason, keyword('no-route'))
+    fs.writeFileSync(zones, wall('Other', ' :allow #{:place :dig}'))
     assert.equal((await invoke('plan', fx, ROUTE)).code, 0)
+  } finally { fx.close() }
+})
+
+// e321de28: the line ran through the maker's own house, its blocks priced as plain digs
+test('route goes round the cells another plan wants, the maker\'s own plan too', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells(), Date.now() - 1000)
+    const house = '{:id "house" :parts [{:id "wall" :cells [[20 64 4] [20 64 5] [20 64 6] [20 65 4] [20 65 5] [20 65 6]] :want "oak_planks"}]}'
+    assert.equal((await invoke('plan', fx, ['add', 'house', '--edn', house, '--by', 'Router'])).code, 0)
+    const made = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    assert.equal(made.code, 0, made.output)
+    assert.notDeepEqual(made.value.route.waypoints, [[2, 64, 5], [38, 64, 5]])
   } finally { fx.close() }
 })
 
