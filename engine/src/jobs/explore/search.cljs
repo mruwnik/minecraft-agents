@@ -505,11 +505,18 @@
 (defn stand-cap [] (settings/get settings ::stand-cap))
 (defn near-sight [] (settings/get settings ::near-sight))
 
+(defn in-ground?
+  "Whether the cell [x y z] reads as inside the ground: the lowest cell seen at or up to rise over it is solid, not leaves
+  (a hill's seen top over its unseen inside)."
+  [block-at [x y z]]
+  (let [n (some (fn [h] (let [n (block-at [x h z])] (when-not (= :unseen n) (or n :none)))) (range y (+ y (rise) 1)))]
+    (and (string? n) (not (leaves? n)) (= :solid (reach/kind-of #js {:name n})))))
+
 (defn step-toward
   "Where to walk toward the unseen column [x z] from the body at [bx y bz]: the seen stand cell on the line 12, 6 or 3
   blocks out, else the 6 or 3 block point at feet height when the ground under it is not in view (far ground is
-  seldom seen), else its stand-cell; nil when within 3 or it has none (lava, water, canopy, no head room). A player walks
-  toward ground out of view and looks again."
+  seldom seen) and the point is not in the ground (in-ground?), else its stand-cell; nil when within 3 or it has none
+  (lava, water, canopy, no head room). A player walks toward ground out of view and looks again."
   [block-at [bx y bz] x z]
   (let [d (xz-dist [bx bz] [x z])
         at (fn [k] (let [f (/ k d)] [(js/Math.round (+ bx (* f (- x bx)))) (js/Math.round (+ bz (* f (- z bz))))]))
@@ -519,7 +526,9 @@
           (let [[sx sz] (at k)
                 below (block-at [sx (dec y) sz])
                 ;; an unseen floor under the point is walked toward and looked at again
-                sy (if (or (nil? below) (= :unseen below)) y (:y (stand-cell block-at sx sz y 0)))]
+                sy (if (or (nil? below) (= :unseen below))
+                     (when-not (in-ground? block-at [sx y sz]) y)
+                     (:y (stand-cell block-at sx sz y 0)))]
             (when sy [sx sy sz]))))))
 
 (defn held?

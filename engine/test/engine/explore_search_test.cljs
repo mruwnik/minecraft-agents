@@ -138,6 +138,12 @@
     (is (= [6 64 0] (search/step-toward (fn [_] :unseen) [0 64 0] 20 0)) "all unseen: 6 blocks at feet height")
     (is (nil? (search/step-toward (fn [_] :unseen) [0 64 0] 3 0)))))
 
+(deftest a-step-toward-an-unseen-column-is-never-a-cell-inside-a-hill-whose-top-is-seen
+  (let [hill (fn [top] (fn [[x y _]] (cond (<= x 0) (if (= y 63) "grass_block" "air") (= y 67) top :else :unseen)))]
+    (is (nil? (search/step-toward (hill "grass_block") [0 64 0] 20 0)) "the hill's seen top is over the point: its inside is ground")
+    (is (= [6 64 0] (search/step-toward (hill "oak_leaves") [0 64 0] 20 0)) "a canopy over the point is no ground")
+    (is (= [6 64 0] (search/step-toward (hill "air") [0 64 0] 20 0)) "seen open over the point: walked toward and looked at again")))
+
 (deftest a-step-past-a-drop-stands-on-the-seen-ground-below-never-in-the-air
   (let [edge (fn [floor] (fn [[x y _]] (cond (> x 8) :unseen (and (<= x 0) (= y 63)) "grass_block" (< y 60) floor :else "air")))]
     (is (= [6 60 0] (search/step-toward (edge "stone") [0 64 0] 20 0)) "the drop's floor is in view: the step stands on it")
