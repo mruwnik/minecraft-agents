@@ -52,3 +52,13 @@
           (await (run-until-empty eng 12))
           (is (= {[12 64 0] {"emerald" 3}} (stock/stock-of (mem/view (:store eng))))
               "the chest that is gone is forgotten, the other one was still opened"))))))
+
+(deftest transfers-on-one-chest-leave-the-other-chests-booked
+  (let [store (mem/open (tu/tmp-dir) {})
+        c {:view #(mem/view store)
+           :remember (fn [kind data policy] (mem/write! store kind data policy))
+           :forget (fn [kind pred] (mem/forget-where! store kind pred))}]
+    (stock/note-stock! c [1 64 1] [{:name "bread" :count 5}])
+    (stock/note-stock! c [2 64 2] [])
+    (dotimes [_ (inc (:cap stock/stock-policy))] (stock/note-moved! c [2 64 2] "wheat" 1))
+    (is (= {[1 64 1] {"bread" 5} [2 64 2] {"wheat" 65}} (stock/stock-of (mem/view store))))))

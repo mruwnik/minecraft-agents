@@ -44,10 +44,16 @@
                       (update m n (fnil + 0) k)))
           {} (if (array? stacks) (array-seq stacks) stacks)))
 
+(defn book!
+  "Replace the chest's entry at cell, so the cap counts chests, not transfers."
+  [c cell items]
+  (ctx/forget-where! c stock-kind #(= cell (:pos %)))
+  (ctx/remember! c stock-kind {:pos cell :items items} stock-policy))
+
 (defn note-stock!
   "Book what the chest at pos holds now (stacks as inspected)."
   [c pos stacks]
-  (ctx/remember! c stock-kind {:pos (cell-of pos) :items (stacks->items stacks)} stock-policy))
+  (book! c (cell-of pos) (stacks->items stacks)))
 
 (defn note-moved!
   "Book delta of name moved into (+) or out of (-) the chest at pos, when its stock is known."
@@ -55,7 +61,7 @@
   (let [cell (cell-of pos)]
     (when-let [items (get (stock-of (ctx/view c)) cell)]
       (let [n (+ (get items name 0) delta)]
-        (ctx/remember! c stock-kind {:pos cell :items (if (pos? n) (assoc items name n) (dissoc items name))} stock-policy)))))
+        (book! c cell (if (pos? n) (assoc items name n) (dissoc items name)))))))
 
 (defn view-age-ms [] (settings/get settings ::view-age-ms))
 
