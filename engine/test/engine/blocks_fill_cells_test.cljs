@@ -128,6 +128,18 @@
           (is (= :done (:kind e)))
           (is (= "dirt" (bd/block-at (:p env) (first cells)))))))))
 
+(deftest collect-false-leaves-the-dug-rail-lying
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn ^:async run1 [args]
+                    (let [env (bd/setup {:self body :inventory [{:name "dirt" :count 5}] :blocks {"2,64,0" "rail" "2,63,0" "stone"} :drops {"rail" "rail"}})]
+                      (await (ending-of env (merge {:cells [(first cells)] :use {:blocks ["dirt"]} :clear-loose true} args)))
+                      (count (filter #(= "rail" (.-name %)) (.-inventory (.self (:p env)))))))
+              picked (await (run {}))
+              left (await (run {:collect false}))]
+          (is (= [1 0] [picked left])))))))
+
 (deftest a-cell-in-anothers-zone-ends-refused-unless-zones-are-ignored
   (async done
     (tu/run-async done

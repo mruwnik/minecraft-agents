@@ -59,6 +59,7 @@
    :order {:doc "which cell goes next: :lowest (lowest first, then nearest) or :given (the order of :cells)" :spec #{:lowest :given} :default :lowest}
    :clear-loose {:doc "dig loose things (rails, torches, cobwebs ...) out of the cells first and pick up the drops" :spec boolean? :default false}
    :shut-open {:doc "shut a door, gate or trapdoor standing open in a cell with a click (it counts as unfilled until shut)" :spec boolean? :default false}
+   :collect {:doc "pick up the drops of the loose things dug out (false: leave them lying, as a fill that walls the body's own way in must not walk into the cells it encloses)" :spec boolean? :default true}
    :in-place {:doc "work from where the body stands: place and dig without aiming at the cell, pick no drops up (a shelter does not move)" :spec boolean? :default false}
    :danger? {:doc "the body places in danger: it may spend soft-reserved blocks (not hard ones) it can dig back out, at cells where taking the block out later is safe (jobs.lib.blocks/safe-to-break?)" :spec boolean? :default false}
    :purpose {:doc "scaffold ledger purpose of each placed block (jobs.access.cleanup); nil: not ledgered" :spec keyword? :default nil}
@@ -173,7 +174,7 @@
                                                 (:in-place (:args c)) (assoc :see false))))]
     (case o
       :continue :partial
-      (:dug :missing) (do (when-not (:in-place (:args c)) (ctx/update-mem! c assoc :collect true))
+      (:dug :missing) (do (when (and (:collect (:args c)) (not (:in-place (:args c)))) (ctx/update-mem! c assoc :collect true))
                           (await (look/look-at! c (u/cell-vec pos)))
                           :dug)
       :refused :refused
