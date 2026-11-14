@@ -140,7 +140,7 @@
   (let [p (:primitives c)
         hurt? (boolean (some-> (:flight-start (ctx/mem c)) (->> (body/hit-by-since? (ctx/view c) "enderman"))))
         angry? (boolean (or (and (or hurt? (:angry-enderman (ctx/mem c))) (some combat/enderman? (concat hostiles (flight/known-chasers p))))
-                            (some #(and (combat/enderman? %) (true? (.-angry %))) hostiles)))]
+                            (some #(and (combat/enderman? %) (not (danger-q/calm-enderman? %))) hostiles)))]
     (when angry? (ctx/update-mem! c assoc :angry-enderman true))
     angry?))
 

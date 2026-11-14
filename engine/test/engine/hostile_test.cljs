@@ -2004,6 +2004,20 @@
     (is (not (hostile-fight/wins? c zombies (hostile-fight/cornered-answers c zombies {:walls {:open-s 0 :seconds 40}} false nil))) "walls built unhurt cost less than the fight's death chance")
     (is (hostile-fight/wins? c zombies (hostile-fight/cornered-answers c zombies {:walls {:open-s 30 :seconds 70}} false nil)) "walls with a side open half a minute beside the zombie cost more")))
 
+(deftest a-fight-is-priced-without-a-calm-enderman-by-its-way
+  ;; 3508ad2b (Brindle S9-5): a calm enderman 13 blocks off was priced as fought beside the zombie (515 s against 36): the body fled and died
+  (let [answer (fn [ender]
+                 (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :inventory sword
+                                                           :entities (cond-> [(zombie 9 4 1)] ender (conj ender))}))
+                       c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}]
+                   (select-keys (hostile-fight/fight-answer c (filterv #(= "zombie" (.-name %)) (danger-q/known-hostiles p 16 {})) (constantly nil))
+                                [:damage :seconds :hit])))
+        ender (fn [angry] (cond-> {:id 100 :name "enderman" :kind "hostile" :health 40 :pos {:x 8 :y 64 :z 8}} (some? angry) (assoc :angry angry)))
+        alone (answer nil)]
+    (is (= alone (answer (ender false))) "flagged calm: the zombie alone")
+    (is (= alone (answer (ender nil))) "no flag (remembered): no sign of anger, the zombie alone")
+    (is (< (:damage alone) (:damage (answer (ender true)))) "an angry one by the way is met too")))
+
 (deftest a-calm-enderman-is-no-danger-an-angry-one-is
   (async done
     (tu/run-async done

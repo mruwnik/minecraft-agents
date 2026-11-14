@@ -173,10 +173,11 @@
          vec)))
 
 (defn calm-enderman?
-  "Whether e is an enderman the body's client says is not angry (its angry field is false; one without the field counts as angry):
-  it does nothing unless provoked, so it is no danger."
+  "Whether e is an enderman the body's client does not flag angry (the game's anger: a stare or a blow provokes it; a
+  remembered one carries no flag): it does nothing unless provoked, so it is no danger. One that hits the body is one
+  by its blow (danger-in? :hit-ids, respond.options/angry-enderman?)."
   [e]
-  (and (combat/enderman? e) (false? (.-angry e))))
+  (and (combat/enderman? e) (not (true? (.-angry e)))))
 
 (defn heard-close?
   "Whether hostile e is heard only and within close-hearing of the body: loud enough that a player knows it is beside them."

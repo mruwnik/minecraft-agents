@@ -186,11 +186,13 @@
 
 (defn way-mobs
   "The hostiles known (seen, or heard at their rough spot) within price ::way-radius of the way to the nearest of near,
-  not in near: a fight walked into there meets them too."
+  not in near, calm endermen left out (a fight swings at none): a fight walked into there meets them too."
   [p near]
   (when-let [t (first near)]
     (let [ids (set (map #(.-id %) near))]
-      (remove #(ids (.-id %)) (danger-q/hostiles-near-way p (danger-q/mob-pos p t) (settings/get price/settings ::price/way-radius) {})))))
+      (->> (danger-q/hostiles-near-way p (danger-q/mob-pos p t) (settings/get price/settings ::price/way-radius) {})
+           (remove #(ids (.-id %)))
+           (remove danger-q/calm-enderman?)))))
 
 (defn fight-walk-args
   "The go-to args of the walk to fight hostile e: within a swing's reach of where the body takes it to be."
