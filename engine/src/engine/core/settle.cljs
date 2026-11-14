@@ -15,6 +15,11 @@
             [engine.memory :as mem]
             [clojure.string :as str]))
 
+(defn stack-of
+  "The first frames of the JS stack of a thrown error (nil for anything without one), for a :failed event to name the thrower."
+  [error]
+  (some->> (some-> error .-stack str str/split-lines) (take 8) (str/join "\n")))
+
 (defn stopped-text
   "The words of a :stopped event: the result's own :text, else its cause's (a status's text), else their :why,
   else \"stopped: <reason>\"."
@@ -62,7 +67,7 @@
   (delete-root! eng id :ended)
   (request-attention! eng {:job-id id :reason :round-failed :kind :failed
                            :context (select-keys (job-fields eng id) [:round :chain])
-                           :data {:error (str error)}
+                           :data {:error (str error) :stack (stack-of error)}
                            :message (str "Job failed: " error)
                            :state-update #(remove-listed % id)}))
 
@@ -154,7 +159,7 @@
       :error
       (request-attention! eng {:job-id id :reason :round-failed :kind :failed
                                :context (select-keys fields [:round :chain])
-                               :data {:error (str error)}
+                               :data {:error (str error) :stack (stack-of error)}
                                :message (str "Job failed and is parked until retried or cancelled: " error)
                                :state-update #(-> %
                                                   (assoc-in [:failed id] {:error (str error) :t (now eng)})
@@ -258,7 +263,7 @@
     (:error :cut)
     (do (emit! eng (if (= :cut status)
                      {:source :job :kind :cut :level :info :job (:id run) :reflex (:reflex run) :error (str error)}
-                     {:source :job :kind :failed :level :warn :job (:id run) :reflex (:reflex run) :error (str error)}))
+                     {:source :job :kind :failed :level :warn :job (:id run) :reflex (:reflex run) :error (str error) :stack (stack-of error)}))
         (end-reflex! eng run (if (= :cut status) :cut :failed) nil))
     (if (stopped-result? result)
       (do (emit! eng {:source :job :kind :stopped :level :warn :job (:id run) :reflex (:reflex run)

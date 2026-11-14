@@ -298,6 +298,7 @@
           (is (= ["j1" "j2"] (listed eng)) "still listed")
           (is (= {:x 1} (job-mem eng "j1")) "memory intact")
           (is (= {"j1" {:error "Error: nope" :t @clock}} (:failed (core/state eng))))
+          (is (re-find #"^Error: nope\n\s+at .*core_test" (:stack (some #(when (= :failed (:kind %)) %) @seen))) "the failed event carries the thrower's stack")
           (let [[request-id request] (first (:attention (core/state eng)))]
             (is (string? request-id) "a parked failure opens a stable required request")
             (is (= :round-failed (:reason request)))
