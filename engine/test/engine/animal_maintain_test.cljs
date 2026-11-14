@@ -15,6 +15,7 @@
             [engine.build-from-plan-test :as b]
             [engine.pen-build-test :as pb]
             [jobs.animals.maintain :as maintain]
+            [plan.adopt :as adopt]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.pen :as pen]
             [jobs.lib.world-files :as ew]))
@@ -581,6 +582,17 @@
           (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s))))
           (is (= {:mob "cow" :target 4} (select-keys (done-event s) [:mob :target])))
           (is (true? (finished? s))))))))
+
+(deftest an-adopted-pen-part-gives-the-box-the-kind-and-the-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (:plan (adopt/adopt {:id "pen" :box [[0 60 -5] [0 60 -5]] :natural? (constantly false) :body "Fake" :date "d"
+                                        :block-at {[0 60 -5] {:name "oak_fence"}}
+                                        :pen {:box [[0 60 -5] [8 70 5]] :mob "cow" :target 4}}))
+              s (await (plan-scenario (list 'jobs.animals.maintain {:plan "pen" :part "pen"}) {"pen" (assoc plan :metadata {:by "Fake"})}
+                                      {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 12))]
+          (is (= {:mob "cow" :target 4} (select-keys (done-event s) [:mob :target]))))))))
 
 (deftest a-surface-plan-puts-the-pen-box-on-the-ground-like-its-fences
   (async done

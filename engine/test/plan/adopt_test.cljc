@@ -3,7 +3,7 @@
             [plan.adopt :as adopt]
             [plan.shape :as shape]))
 
-(def natural? #{"dirt" "stone" "grass_block"})
+(def natural? #{"dirt" "stone" "grass_block" "sugar_cane" "bamboo"})
 
 (defn run
   "adopt over a box [[0 0 0] [x 0 0]] whose cells are the blocks of world (index -> block, absent = unseen)."
@@ -54,3 +54,21 @@
     (is (= "adopted from B's sight d" (-> r :plan :note)))
     (is (= ["gate" "fence" "bed" "wall-oak"] (map :id (-> r :plan :parts))))
     (is (= 4 (:cells r)))))
+
+(deftest cane-and-bamboo-are-kept-by-their-base-cell-though-natural
+  (let [r (adopt/adopt {:id "p" :box [[0 0 0] [0 2 0]] :natural? natural? :body "B" :date "d"
+                        :block-at {[0 0 0] {:name "sugar_cane" :state {"age" "3"}} [0 1 0] {:name "sugar_cane"} [0 2 0] {:name "sugar_cane"}}})]
+    (is (= {"sugar_cane" {:cells [[0 0 0]] :want "sugar_cane"}} (parts r)))))
+
+(deftest a-bed-keeps-its-part-so-head-and-foot-are-two-wants
+  (let [r (run [{:name "white_bed" :state {"facing" "east" "part" "head" "occupied" "false"}}
+                {:name "white_bed" :state {"facing" "east" "part" "foot"}}])]
+    (is (= {"bed" {:cells [[0 0 0]] :want {:block "white_bed" :facing "east" :part "head"}}
+            "bed-2" {:cells [[1 0 0]] :want {:block "white_bed" :facing "east" :part "foot"}}}
+           (parts r)))))
+
+(deftest a-pen-adds-a-part-with-box-and-herd-that-agrees-with-the-walls
+  (let [r (run [{:name "oak_fence"}] :pen {:box [[0 0 0] [8 0 8]] :mob "cow" :target 4})]
+    (is (= {:box [[0 0 0] [8 0 8]] :want :any :herd {:mob "cow" :target 4}} (select-keys (-> r :plan :parts last) [:box :want :herd])))
+    (is (= "pen" (-> r :plan :parts last :id)))
+    (is (= [] (shape/plan-errors (:plan r) "p")))))

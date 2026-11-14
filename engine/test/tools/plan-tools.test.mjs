@@ -524,6 +524,20 @@ test('adopt records what the body saw in the box as a plan: placed blocks, water
   } finally { fx.close() }
 })
 
+test('adopt --pen and --herd add the pen part animals.maintain reads, and refuse one without the other', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', farmCells, Date.now() - 1000)
+    const pen = await invoke('plan', fx, [...ADOPT, '--pen=0,64,0:5,64,0', '--herd', 'cow:2'])
+    assert.equal(pen.code, 0, pen.output)
+    const text = fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'farm.edn'), 'utf8')
+    assert.match(text, /:id "pen"/)
+    assert.match(text, /:herd \{:mob "cow" :target 2\}/)
+    const half = await invoke('plan', fx, [...ADOPT, '--pen=0,64,0:5,64,0', '--dry-run'])
+    assert.deepEqual(half.value.reason, keyword('bad-pen'))
+  } finally { fx.close() }
+})
+
 test('adopt refuses a bad box, a missing body and a box where nothing was seen', async () => {
   const fx = fixture()
   try {
