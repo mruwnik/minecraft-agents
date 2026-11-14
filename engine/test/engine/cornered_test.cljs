@@ -1861,6 +1861,7 @@
               short (await (fight-price skeleton {:uses {:job-time [2 2 6] :health [0 0 0]}}))
               dark (await (fight-price skeleton {:uses {:job-time [60 60 180] :health [0 0 0]} :risk {:walk-hp 6}}))]
           (is (< short dark) "a long walk through the dark with its risk is dearer than a short lit one")
+          (is (= ##Inf (await (fight-price skeleton {:uses {:job-time [##Inf ##Inf ##Inf] :health [0 0 0]}}))) "a walk go-to cannot make is priced ##Inf, not as the straight way")
           (reset! asked [])
           (await (fight-price (zombie 4 64 0) {:uses {:job-time [60 60 180]}}))
           (is (= [] (filterv #(= {:x 4 :y 64 :z 0} (:pos %)) @asked)) "a melee mob is waited for, not walked to: no walk to it quoted"))))))
