@@ -99,9 +99,11 @@
 
 (def waste-seeds "Every seed: the field crops' and the others." (into (filterv #(.endsWith % "_seeds") field-seeds) other-seeds))
 
+(def stalk-items "Sugar cane and bamboo: the stalks farm.maintain cuts." ["sugar_cane" "bamboo"])
+
 (def farm-goods
-  "Seeds, crops, fruit, hay, cocoa, bread and baked potatoes: what a farm yields and may be put in a chest."
-  (vec (distinct (concat waste-seeds produce-items fruits fruit-drops ["hay_block" "cocoa_beans" "bread" "baked_potato"]))))
+  "Seeds, crops, fruit, stalks, hay, cocoa, bread and baked potatoes: what a farm yields and may be put in a chest."
+  (vec (distinct (concat waste-seeds produce-items fruits fruit-drops stalk-items ["hay_block" "cocoa_beans" "bread" "baked_potato"]))))
 
 (defn seed-item?
   "Whether an item name is a seed or a seed-like crop item (carrot, potato) a body keeps to sow."

@@ -21,7 +21,7 @@
     (is (compost/compostable seed) seed)
     (is (compost/held-back seed) seed)
     (is ((:seeds reserve/tags) seed) seed))
-  (is (every? (set crops/farm-goods) (concat crops/waste-seeds crops/produce-items))))
+  (is (every? (set crops/farm-goods) (concat crops/waste-seeds crops/produce-items crops/stalk-items))))
 
 (deftest only-seeds-are-seeds
   (are [item expected] (= expected ((:seeds reserve/tags) item))

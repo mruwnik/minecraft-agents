@@ -4,7 +4,7 @@
             [jobs.lib.plan-field :as pf]
             [jobs.lib.util :as u]))
 
-(def names #{"sugar_cane" "bamboo"})
+(def names (set crops/stalk-items))
 
 (def cut-names "Block names the cut step digs." (into (vec names) crops/fruits))
 
