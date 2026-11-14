@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.food-test :refer [know-source!]]
             [engine.get-food-rounds-test :refer [setup]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
@@ -68,7 +69,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:self {:food 20} :inventory [{:name "bread" :count 20}]})
-              _ (await (ending-of eng {:carry 8}))
+        (let [{:keys [eng]} (setup {:self {:food 20} :containers {"20,64,0" [{:name "bread" :count 20}]}})
+              _ (know-source! eng {:x 20 :y 64 :z 0} :chest)
+              e (await (ending-of eng {:carry 8}))
               es (reserve/entries (mem/view (:store eng)))]
+          (is (= :done (:kind e)) "the pack was short, so food was fetched")
           (is (= [[:food :all #{:eat}]] (map (juxt :tag :count :not) es)) "the trip's food is reserved against a deposit, not against eating"))))))
