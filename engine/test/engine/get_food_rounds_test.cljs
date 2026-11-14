@@ -1308,8 +1308,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [home-herd [(assoc cow :id 8 :pos {:x 8 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 9 :y 64 :z 0})]]
-          (is (pos? (await (two-beef-crafts! []))) "no cows left near, no pen: replacing the beef is dear")
-          (is (= 0 (await (two-beef-crafts! home-herd))) "two cows penned in the home zone: beef is cheap to replace"))))))
+          (is (pos? (await (tu/with-obtain-budget #(two-beef-crafts! [])))) "no cows left near, no pen: replacing the beef is dear")
+          (is (= 0 (await (tu/with-obtain-budget #(two-beef-crafts! home-herd)))) "two cows penned in the home zone: beef is cheap to replace"))))))
 
 (deftest a-little-raw-meat-is-cooked-when-a-furnace-and-fuel-are-carried
   (async done

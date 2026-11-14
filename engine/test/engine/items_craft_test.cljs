@@ -6,7 +6,6 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.core :as core]
-            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.contract :as contract]
@@ -59,11 +58,7 @@
   "Like craft, its obtain children given a job-time as long as the scene needs: their default prices a child from the
   usual cost of the item, which a scene of several fetches and crafts in a few ticks outruns."
   [world args]
-  (let [orig ctx/call]
-    (set! ctx/call (fn [c slot j a] (orig c slot j (cond-> a (= 'jobs.items.obtain j) (assoc :spend {:job-time 3600})))))
-    (try
-      (await (craft world args))
-      (finally (set! ctx/call orig)))))
+  (tu/with-obtain-budget #(craft world args)))
 
 (defn ^:async craft-counting-walks
   "Like craft, with the number of go-to calls the job made (one call may take several rounds)."

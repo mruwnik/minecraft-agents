@@ -420,7 +420,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (seeing-plant {:area (box 2 2 3 2)} 120))]
+        (let [{:keys [p]} (await (tu/with-obtain-budget #(seeing-plant {:area (box 2 2 3 2)} 120)))]
           (is (= "wheat" (block-at p 2 64 2)))
           (is (= "wheat" (block-at p 3 64 2))))))))
 

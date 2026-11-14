@@ -300,6 +300,15 @@
     (try (await (f))
          (finally (set! wplan/chunk-expansions chunk)))))
 
+(defn ^:async with-obtain-budget
+  "Run the thunk f (sync or promise) with every jobs.items.obtain child given :spend :job-time 3600: obtain's default prices a
+  child from the item's usual cost, which a scene on a hand-moved clock (700 ms a tick, 30 s stubs) outruns. Restores ctx/call."
+  [f]
+  (let [orig ctx/call]
+    (set! ctx/call (fn [c slot j a] (orig c slot j (cond-> a (= 'jobs.items.obtain j) (assoc :spend {:job-time 3600})))))
+    (try (await (f))
+         (finally (set! ctx/call orig)))))
+
 (defonce tracked-engines (atom []))
 
 (defn track-engine!

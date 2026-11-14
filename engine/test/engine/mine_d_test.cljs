@@ -235,12 +235,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [orig ctx/call
-              ;; the torch fetch runs on a hand-moved clock (700 ms a tick), past obtain's priced default budget
-              _ (set! ctx/call (fn [c slot j a] (orig c slot j (cond-> a (= 'jobs.items.obtain j) (assoc :spend {:job-time 3600})))))
-              s (try (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 15}
-                                          (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300 [0 0]))
-                     (finally (set! ctx/call orig)))]
+        (let [s (await (tu/with-obtain-budget
+                         #(scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 15}
+                                        (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300 [0 0])))]
           (is (= [0 11] (torch-xs s)) "the first one hung")
           (is (pos? (get (inv s) "torch" 0)))
           (is (empty? (events-of s :mine.no-torches))))))))

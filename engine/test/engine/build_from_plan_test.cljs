@@ -2087,7 +2087,7 @@
                            (when (= 'jobs.items.obtain j) (swap! held conj [(:item args) (reserve/held c :craft)]))
                            (orig c slot j args)))
           (try
-            (await (child-outcome eng job {:plan "wall" :explore false} 20))
+            (await (tu/with-obtain-budget #(child-outcome eng job {:plan "wall" :explore false} 20)))
             (finally (set! ctx/call orig)))
           (is (some #(= ["torch" {"oak_planks" 2}] %) @held) (pr-str @held)))))))
 
@@ -2103,7 +2103,7 @@
                            (when (= 'jobs.items.obtain j) (swap! held conj [(:item args) (reserve/held c :craft)]))
                            (orig c slot j args)))
           (try
-            (await (child-outcome eng job {:plan "gate" :explore false} 20))
+            (await (tu/with-obtain-budget #(child-outcome eng job {:plan "gate" :explore false} 20)))
             (finally (set! ctx/call orig)))
           (is (some #(= ["torch" {"oak_planks" 6 "crafting_table" 1}] %) @held) (pr-str @held)))))))
 
