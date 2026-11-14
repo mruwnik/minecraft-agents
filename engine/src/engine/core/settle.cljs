@@ -272,6 +272,7 @@
   (when (= (:token run) (:token (running eng)))
     (reset! (:running eng) nil)
     (free-owner! eng)
+    (tally/end-gap! eng run outcome)
     (if (:reflex run)
       (let [outcome (if (= :continue (:status outcome))
                       (do (warn-continued! eng run) (assoc outcome :status :declined))
@@ -301,6 +302,7 @@
                              (= id (:resume s)) (assoc :resume nil)))))
         inst (get-in s [:instances id])
         run {:id id :token token :reflex (:reflex inst) :round (:round inst)}]
+    (tally/charge-gap! eng id)
     (reset! (:running eng) run)
     (activity/keep-hold! eng id)
     (reset! (:activity eng) {:token token :id id :in-flight 0 :last-at (now eng)})

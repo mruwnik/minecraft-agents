@@ -91,8 +91,10 @@
                      (-> % (update-in [:tally :uses :tries] (fnil inc 0)) (assoc :last-try {:job job :reason reason})))))
 
 (defn add-time!
-  "Book ms of round time on the frame at slots only: a parent's round already holds its children's."
+  "Book ms of round time on the frame at slots only: a parent's round already holds its children's. The frame is noted
+  as one that ran in root's round, for charge-gap!."
   [eng root slots ms]
+  (some-> (:gap eng) (swap! #(cond-> % (= root (:id %)) (update :slots conj slots))))
   (when (pos? ms)
     (update-frames! eng root [(mem/slot-path slots)] #(update % :ran-ms (fnil + 0) ms))))
 
@@ -101,6 +103,31 @@
   [eng root slots ms]
   (when (pos? ms)
     (update-frames! eng root (frame-paths slots) #(update % :ran-ms (fnil + 0) ms))))
+
+(defn charge-gap!
+  "A round of root id starts: when the scheduler's last pass was id's round, which yielded with no wait declared, the
+  time since that round ended is id's own (it held the body; a job that acts instantly every tick spends the wall
+  time), booked on every frame that ran in that round. A held job (not chosen, waiting, resting, cut) is charged nothing."
+  [eng id]
+  (let [{:keys [slots end] :as g} @(:gap eng)]
+    (when (and end (= id (:id g)))
+      (let [ms (- (ttl-now eng) end)]
+        (when (pos? ms)
+          (update-frames! eng id (map mem/slot-path slots) #(update % :ran-ms (fnil + 0) ms)))))
+    (reset! (:gap eng) {:id id :slots #{}})))
+
+(defn end-gap!
+  "A round settled with outcome: a listed round that yielded with no wait declared starts its gap now; any other
+  ends it."
+  [eng run outcome]
+  (swap! (:gap eng) #(when (and (= (:id run) (:id %)) (not (:reflex run)) (= :continue (:status outcome))
+                                (nil? (:child-wait outcome)))
+                       (assoc % :end (ttl-now eng)))))
+
+(defn drop-gap!
+  "A scheduling pass gave the body to no round: the next round's gap is no job's."
+  [eng]
+  (reset! (:gap eng) nil))
 
 (defn report [eng root slots]
   (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots)) (ttl-now eng)))

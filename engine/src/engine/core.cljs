@@ -281,6 +281,7 @@
              :looks (atom {})
              :said (atom [])
              :rounds (atom {})
+             :gap (atom nil)
              :passes (atom {})
              :backoffs (atom {})
              :was-paused (atom false)

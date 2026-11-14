@@ -12,6 +12,7 @@
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
             [engine.core.settle :refer [end-slot! judge-deferred-ends! start-round!]]
+            [engine.core.tally :refer [drop-gap!]]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.expr :as expr]
@@ -329,7 +330,10 @@
                             (cut! eng h :outranked nil)
                             (swap! (:state eng) assoc :resume id)))
                         (check-idle! eng))
-      :else (do (clear-held-waits! eng) (when-let [id (or (paused-reflex eng order) (when-not (exclusive-grace? eng) (choose-listed eng)))] (start-round! eng id))))))
+      :else (do (clear-held-waits! eng)
+                (if-let [id (or (paused-reflex eng order) (when-not (exclusive-grace? eng) (choose-listed eng)))]
+                  (start-round! eng id)
+                  (drop-gap! eng))))))
 
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
@@ -340,7 +344,7 @@
   [eng]
   (clear-asked! eng)
   (cond
-    (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) nil)
+    (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (drop-gap! eng) nil)
     (exclusive-job eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng)
                             (reset! (:exclusive-t eng) (now eng))
                             (some-> (tick-exclusive! eng) (.finally #(reset! (:exclusive-t eng) (now eng)))))

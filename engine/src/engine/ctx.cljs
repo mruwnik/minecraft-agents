@@ -46,8 +46,8 @@
   ((:left ctx)))
 
 (defn spent
-  "What the current call has spent so far (engine.contract/used of its own frame): :job-time the s its rounds ran,
-  :wall-time the s since it started, waits and yields included; nil before it starts or with no engine behind the ctx."
+  "What the current call has spent so far (engine.contract/used of its own frame): :job-time the s its rounds ran and the gaps
+  between them it held the body, :wall-time the s since it started, waits and yields included; nil before it starts or with no engine behind the ctx."
   [ctx]
   (when-let [f (:spent ctx)] (f)))
 

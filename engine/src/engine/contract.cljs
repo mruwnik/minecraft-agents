@@ -62,8 +62,8 @@
 (defn add [a b] (merge-with (fn [x y] (if (map? x) (add x y) (+ x y))) a b))
 
 (defn used
-  "What a frame's :contract state has used of each spend line at TTL-clock now: :job-time the s its rounds ran (plus
-  extra-ms, the round in flight's), :wall-time the s since its call started, yields and waits included."
+  "What a frame's :contract state has used of each spend line at TTL-clock now: :job-time the s its rounds ran and the
+  gaps between them it held the body (plus extra-ms, the round in flight's), :wall-time the s since its call started, yields and waits included."
   [{:keys [tally ran-ms started-ms]} now extra-ms]
   (cond-> (assoc (:uses tally) :job-time (/ (+ (or ran-ms 0) extra-ms) 1000))
     started-ms (assoc :wall-time (/ (- now started-ms) 1000))))
@@ -246,7 +246,7 @@
          :spec (a/map-of keyword? (a/coll-of (a/or-of a/item? map?)))}
    :ways {:doc "the ways allowed, a set of the job's way keywords; default the job's defaults, else all" :default nil
           :spec (a/set-of keyword?)}
-   :spend {:doc "what the job may use up: {:job-time s (its rounds ran) :wall-time s (since it started) :tries n (children ended other than :cut-off, this frame and below, across rounds) :health hp :food pts :items {name n} :wear {tool uses}}"
+   :spend {:doc "what the job may use up: {:job-time s (its rounds ran, gaps it held the body included) :wall-time s (since it started) :tries n (children ended other than :cut-off, this frame and below, across rounds) :health hp :food pts :items {name n} :wear {tool uses}}"
            :default nil
            :spec (a/valid-by "a map {:job-time s :wall-time s :tries n :health hp :food pts :items {name n} :wear {tool uses}} of numbers >= 0"
                              (partial lines-problem #{:job-time :wall-time :tries :health :food} #{:items :wear}))}

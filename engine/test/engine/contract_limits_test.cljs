@@ -140,26 +140,42 @@
   (is (= [0 0] [(clock/now) (clock/now)]) "the clock jobs time their work by"))
 
 (def waits
-  {:round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})
+  {:round (fn [c] (swap! world update :spent (fnil conj []) (:job-time (ctx/spent c))) :continue)})
 
-(deftest waiting-spends-no-time-but-counts-as-elapsed-from-the-start
+(deftest a-job-that-yields-every-round-spends-the-wall-time-it-holds-the-body
+  ;; Q192: before, only the rounds' own time counted, so an instant act every tick spent almost no :job-time.
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'waits waits})]
-          (core/submit! eng (tu/order '(waits {:spend {:job-time 5 :wall-time 10}})) {})
+          (core/submit! eng (tu/order '(waits {:spend {:job-time 5}})) {})
           (swap! clock + 60000)
           (await (core/tick! eng))
           (swap! clock + 4000)
           (await (core/tick! eng))
           (swap! clock + 4000)
           (await (core/tick! eng))
-          (is (= 3 (:wait-rounds @world)) "yields spend no :time; time queued before the start is not elapsed")
-          (swap! clock + 3000)
+          (is (= [0 4] (:spent @world)) "time queued before the start is not spent; the gap after a round is")
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen))))))))
+
+(def held
+  {:can-run? (fn [_] (if (:hold @world) (contract/later :held "held") (contract/ok :free "free")))
+   :round (fn [c] (swap! world update :spent (fnil conj []) (:job-time (ctx/spent c))) :continue)})
+
+(deftest a-job-held-between-its-rounds-spends-nothing-meanwhile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'held held})]
+          (core/submit! eng (tu/order '(held)) {})
           (await (core/tick! eng))
-          (is (= 3 (:wait-rounds @world)))
-          (is (= {:kind :limit-reached :cause {:line :wall-time :spend 10}} (stopped seen)))
-          (is (= {:job-time 0 :wall-time 11} (get-in (first (job-ev seen :limit_reached)) [:data :report :uses]))))))))
+          (swap! world assoc :hold true)
+          (swap! clock + 4000)
+          (await (core/tick! eng))
+          (swap! world assoc :hold false)
+          (swap! clock + 4000)
+          (await (core/tick! eng))
+          (is (= [0 0] (:spent @world)) "a pass that did not choose the job ends its claim on the gap"))))))
 
 (def spends
   {:can-run? (fn [c] (swap! world update :spent (fnil conj []) (ctx/spent c)) (contract/ok :free "free"))
