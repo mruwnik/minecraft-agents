@@ -38,11 +38,16 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 3600 :doc "Seconds a grow may take: the field has to ripen." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 3600 :doc "Seconds of work a grow may take besides the wait for the crop to ripen (cost/ripen-s)." :spec (a/num-in 0 nil)}
    ::wait-s {:default 30 :doc "Seconds the body holds still before it looks at the growing crop again." :spec (a/num-in 1 nil)}})
 
 (def target [:crop])
-(def defaults {:spend {:job-time ::job-time-s}})
+(defn job-time-of
+  "The :job-time a grow of args may spend: the measured wait for its count to ripen from a fresh field (cost/ripen-s) plus ::job-time-s of work."
+  [{:keys [crop count w h]}]
+  (+ (settings/get settings ::job-time-s) (cost/ripen-s crop count (* w h) 0)))
+
+(def defaults {:spend {:job-time job-time-of}})
 (def safe?
   "It roams to its field's spot and the children it calls judge their own exposure."
   (with-meta ready/threatened
@@ -74,7 +79,7 @@
 
 (defn quote-of [c]
   (let [n (:count (:args c))]
-    {:uses {:job-time [0 (settings/get settings ::wait-s) (settings/get settings ::job-time-s)]}
+    {:uses {:job-time [0 (settings/get settings ::wait-s) (job-time-of (:args c))]}
      :yields {:items {(item-of (:crop (:args c))) [0 n n]}}}))
 
 (defn remembered

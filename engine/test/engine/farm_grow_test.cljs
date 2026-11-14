@@ -7,6 +7,7 @@
             [engine.triggers :as triggers]
             [engine.farm-tend-test :as ft]
             [engine.test-util :as tu]
+            [jobs.farm.grow :as grow]
             [jobs.lib.world-files :as ew]))
 
 (defn setup
@@ -46,6 +47,12 @@
       (fn ^:async t []
         (let [s (await (scenario {:count 1} (ft/world (ft/farm "wheat" 7 [[25 2]] [[25 2]]) ft/wheat-drops {:inventory kit}) 60))]
           (is (<= 1 (get (ft/inv s) "wheat" 0))))))))
+
+(deftest the-default-job-time-covers-the-crops-measured-ripening
+  (let [one (grow/job-time-of {:crop "wheat" :count 6 :w 3 :h 2})
+        two (grow/job-time-of {:crop "wheat" :count 12 :w 3 :h 2})]
+    (is (< 3600 one) "a flat hour could not outlast a wheat growth")
+    (is (< one two) "a second harvest of the field is a second growth to wait for")))
 
 (deftest a-growing-field-is-waited-for-and-no-field-is-started
   (async done
