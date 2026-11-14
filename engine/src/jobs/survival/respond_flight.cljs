@@ -130,8 +130,8 @@
   reaches the door first) drops that room for the rest of the flight."
   [c room way]
   (say-once! c room)
+  (cornered/ran! c)
   (let [e (await (ctx/call c :room 'jobs.survival.shut-in {:ways #{:room} :at (:inside way) :flee? true}))]
-    (cornered/ran! c)
     (when-not (or (= :continue e) (= :done (:kind e)) (room-lib/inside? (:primitives c) room)) (failed! c room))
     :again))
 
