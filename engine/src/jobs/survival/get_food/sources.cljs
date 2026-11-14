@@ -196,9 +196,11 @@
         (do (pass-over! c pos) nil))))
 
 (defn loaves-wanted
-  "How many loaves fill the body to full."
+  "How many loaves fill the body to full, or the pack to its :carry points when that is more."
   [c]
-  (int (js/Math.ceil (/ (- 20 (.-food (.self (:primitives c)))) 5))))
+  (let [bread (foods/points "bread")
+        short (- (animals/carry c) (foods/stock-points (u/inventory (:primitives c))))]
+    (int (js/Math.ceil (max (/ (- 20 (.-food (.self (:primitives c)))) bread) (/ short bread))))))
 
 (defn best-in-chest [items]
   (->> items
@@ -231,7 +233,7 @@
       :else (bury-source! c pos))))
 
 (defn ^:async chest!
-  "Look in the chest (the inventory may have changed since it was learned) and withdraw its best food, or wheat."
+  "Look in the chest (the inventory may have changed since it was learned) and withdraw its best food, or wheat while a bake can still follow."
   [c {:keys [pos]}]
   (let [seen (await (chests/look-in! c pos))
         status (:status seen)]
@@ -242,7 +244,7 @@
       :else
       (let [items (when (= "ok" status) (array-seq (:items seen)))
             best (best-in-chest items)
-            wheat (wheat-to-take c (chest-wheat items))]
+            wheat (if (:no-bake (ctx/mem c)) 0 (wheat-to-take c (chest-wheat items)))]
         (cond
           best (await (withdraw! c pos (.-name best) (min (.-count best) (settings/get settings ::take))))
           (pos? wheat) (await (withdraw! c pos "wheat" wheat))

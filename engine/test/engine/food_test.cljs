@@ -939,6 +939,20 @@
           (is (= 2 (last (call-args p "craft" "count"))))
           (is (> (food p) 12) "baked and eaten"))))))
 
+(deftest get-food-bakes-wheat-from-a-chest-while-food-is-carried-and-the-pack-is-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 18} :inventory [{:name "melon_slice" :count 1}]
+                                           :blocks {"21,64,0" "crafting_table"}
+                                           :containers {"20,64,0" [{:name "wheat" :count 30}]}})]
+          (know-source! eng {:x 20 :y 64 :z 0} :chest)
+          (core/submit! eng (tu/order '(jobs.survival.get-food {:carry 15})) {})
+          (await (run-until-empty eng 30))
+          (is (= "bread" (last (call-args p "craft" "item"))) "bread is baked though melon is carried")
+          (is (= 1 (count (call-args p "transfer" "item"))) "wheat taken once, not again and again")
+          (is (= [:completed] (mapv :kind (filterv #(and (= :job (:source %)) (#{:stopped :completed} (:kind %))) @seen)))))))))
+
 ;; ---------------------------------------------------------------- top-up
 
 (deftest hungry-trigger-tops-up-a-hurt-body-that-carries-food

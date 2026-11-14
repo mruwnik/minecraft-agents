@@ -33,7 +33,7 @@
   One call is one whole attempt. It eats what is carried (the eat job), up to 18, or up to 20 while health is below
   :health; fed, it ends done {:food n}. Still hungry, it takes the first allowed way that has something to do, then eats again.
   The ways (call key :ways, default all):
-  :bake  No food carried but 3 or more wheat: bake bread (the craft job, enough loaves for the hunger, within 32 blocks of
+  :bake  3 or more wheat and no food carried, or the pack short of :carry: bake bread (the craft job, enough loaves for the hunger, within 32 blocks of
          a table). A failed bake is not retried in this job.
   :cook  Raw food carried (chicken, beef ...) with a furnace or smoker seen or remembered (the :furnace place) within cook's ::cook-far-radius (64), or no furnace but enough raw food
          to pay for making one (jobs.lib.cost/cook-worth?): first eat the carried food that needs no cooking, then cook (the smelt job, which fetches a furnace and fuel, waiting out the cook in
@@ -234,9 +234,9 @@
 ;; ------------------------------------------------------------------ bread
 
 (defn can-bake?
-  "No edible food carried, 3 or more wheat, and no failed bake in this job."
+  "3 or more wheat, no failed bake in this job, and either no edible food carried or the pack short of :carry."
   [c]
-  (and (nil? (eat/carried-best c))
+  (and (or (nil? (eat/carried-best c)) (carry-short? c))
        (>= (sources/carried-count c "wheat") 3)
        (not (:no-bake (ctx/mem c)))))
 
@@ -617,6 +617,7 @@
         (= :again cooked) (recur n)
         (or (= :continue eaten) (= :continue way)) (if (:reflex c) (or (waits/reflex-wait-end c) (do (await (pace/pace! c)) (recur n))) :continue)
         (= ::fed way) (ctx/end c :done nil (cond-> {:food (food-level c)} (seq (:killed (ctx/mem c))) (assoc :killed (:killed (ctx/mem c)))))
+        (and (= ::enough way) (not (hungry-now? c))) (carry-stop! c)
         (= ::enough way) (stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                 :food (food-level c))
         (= :again way) (recur (inc n))
