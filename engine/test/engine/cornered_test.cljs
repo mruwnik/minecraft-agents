@@ -2150,7 +2150,13 @@
 (defn stub-ctx
   "A ctx over a fake world whose job memory is the atom m."
   [p m]
-  {:engine {:warned (atom #{})} :primitives p :mem m :remember (fn [& _]) :forget (fn [& _]) :emit (fn [& _])})
+  {:engine {:warned (atom #{})} :primitives p :mem m :remember (fn [& _]) :forget (fn [& _]) :emit (fn [& _]) :view (constantly {:now 0 :data mem/empty-data})})
+
+(defn remembering-ctx
+  "stub-ctx whose body memory is the atom data (engine.memory data), read at now 1000."
+  [p m data]
+  (assoc (stub-ctx p m) :view (fn [] {:now 1000 :data @data})
+         :remember (fn [kind d policy] (swap! data mem/add-entry kind {:t 1000 :data d} policy))))
 
 (defn with-stub-mem [f]
   (with-redefs [ctx/mem (fn [c] @(:mem c))
@@ -2239,6 +2245,39 @@
             (fake/add-entity! p (zombie 2 64 0))
             (cornered/covers c [:walls])
             (is (= [[:walls :pit :pocket] [:walls]] @asked) "a hostile came nearer: priced again")))))))
+
+(deftest a-cover-that-failed-here-is-dearer-here-in-this-flight-and-the-next
+  (let [data (atom mem/empty-data)
+        p (tu/fake-on-floor {:blocks dead-end :inventory [{:name "dirt" :count 20}] :entities [(zombie 3 64 0)]})
+        c (remembering-ctx p (atom {}) data)
+        fails #(update-vals (cornered/covers % [:walls :pit]) :fails)]
+    (with-stub-mem
+      (fn []
+        (let [before (fails c)]
+          (flight/cover-failed! c :walls {:x 5 :y 64 :z 5})
+          (is (= before (fails c)) "a failure elsewhere says nothing here")
+          (flight/cover-failed! c :walls)
+          (let [once (fails c)]
+            (is (< (:walls before) (:walls once)))
+            (is (= (:pit before) (:pit once)) "the other ways keep their price")
+            (flight/cover-failed! c :walls)
+            (is (< (:walls once) (:walls (fails c))) "each failure here makes it dearer again")
+            (is (= (fails c) (fails (remembering-ctx p (atom {}) data))) "the next flight there prices them too")))))))
+
+(deftest a-plug-that-failed-marks-each-way-it-tried-failed-where-it-began
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [data (atom mem/empty-data)
+              m (atom {:plugging {:at {:x 0 :y 63 :z 0} :from {:x 0 :y 64 :z 0} :option :plug-dig :ways #{:pit :pocket}}})
+              p (tu/fake-on-floor {})]
+          (with-redefs [ctx/call (fn ^:async f [& _] {:kind :nothing-possible :cause :no-way :data {:tried [:pit] :dropped [:pocket]}})
+                        ctx/use (constantly nil)
+                        ctx/mem (fn [c] @(:mem c))
+                        ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
+            (is (nil? (await (refuge/plug-in! (assoc (remembering-ctx p m data) :args {}) :plug-dig #{:pit :pocket})))))
+          (is (= [{:way :pit :at [0 64 0]}] (map :data (get-in @data [:entries :cover-failed])))
+              "the pit failed where the plug began; the pocket was never tried"))))))
 
 (deftest a-flight-ends-without-the-plug-it-had-under-way
   (let [m (atom {:plugging {:at {:x 0 :y 64 :z 0} :option :plug :ways #{:walls}}})

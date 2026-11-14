@@ -12,6 +12,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shot :as shot]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.flee-walk :as walk]
@@ -93,6 +94,20 @@
   "Counts {class {:k :n}} of option's failures with the ones this flight saw (seen-fail!) added (add-seen)."
   [c option counts]
   (add-seen counts (get-in (ctx/mem c) [:seen-fails option])))
+
+(defn cover-failed!
+  "Body memory :cover-failed {:way :at}: cover way (a shut-in way, or :pillar) begun at feet cell at ({:x :y :z}, default the
+  body's) failed there; kept for ::chain-window-ms, so the next flight there prices it too (fails-here)."
+  ([c way] (cover-failed! c way (sh-sense/feet (:primitives c))))
+  ([c way at] (ctx/remember! c :cover-failed {:way way :at (u/cell-vec at)} {:cap (:cap mem/default-policy) :ttl (settings/get settings ::chain-window-ms)})))
+
+(defn fails-here
+  "The chance cover way fails where the body stands, f its own forecast: f until it failed here (cover-failed!), then
+  also the chance the cause of those failures holds again (1 - cost/retry-chance :cover after them)."
+  [c way f]
+  (let [at (u/cell-vec (sh-sense/feet (:primitives c)))
+        n (count (filter #(= {:way way :at at} (:data %)) (ctx/entries c :cover-failed)))]
+    (if (zero? n) f (- 1 (* (- 1 f) (cost/retry-chance :cover n))))))
 
 (defn near-known
   "The hostiles p can be said to know within radius (ranged ones within ranged-radius), the dead skipped."

@@ -38,10 +38,11 @@
 (declare hide-now! hide-hold! hostiles-known)
 
 (defn ^:async abandon-refuge!
-  "The refuge failed: forget it, never try that option again this flight."
+  "The refuge failed: forget it, its option tried this flight, its cover failed at its anchor (flight/cover-failed!)."
   [c]
-  (let [kind (:kind (:refuge (ctx/mem c)))]
+  (let [{:keys [kind way anchor]} (:refuge (ctx/mem c))]
     (ctx/update-mem! c dissoc :refuge)
+    (when anchor (flight/cover-failed! c (or way kind) anchor))
     (flight/tried! c kind)
     :again))
 
@@ -79,17 +80,22 @@
 (def all-ways #{:walls :pit :pocket})
 
 (defn ^:async plug-in!
+  "One step of jobs.survival.shut-in by ways: :again while it works or once shut in (hidden), nil when it failed; each way
+  it tried and failed fails here (flight/cover-failed!)."
   [c option ways]
-  (let [e (await (ctx/call c option 'jobs.survival.shut-in
+  (let [{:keys [from] :as plugging} (:plugging (ctx/mem c))
+        at (or (when (= option (:option plugging)) from) (sh-sense/feet (:primitives c)))
+        e (await (ctx/call c option 'jobs.survival.shut-in
                            (cond-> {:ways ways :on-lava (settings/get settings ::on-lava) :trespass? (contains? #{:plug-zone :plug-dig-zone} option)}
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh-sense/feet (:primitives c))]
     (cond
-      (= :continue e) (do (ctx/update-mem! c assoc :plugging {:at feet :option option :ways ways}) :again)
+      (= :continue e) (do (ctx/update-mem! c assoc :plugging {:at feet :from at :option option :ways ways}) :again)
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging)
                               (spent/absorb! c (:data e))
-                              (hide-now! c {:kind (case option :plug-zone :plug (:plug-dig-zone :pocket) :plug-dig option) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
+                              (hide-now! c {:kind (case option :plug-zone :plug (:plug-dig-zone :pocket) :plug-dig option) :way (:way (:data e)) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
       :else (do (ctx/update-mem! c dissoc :plugging)
+                (doseq [w (get-in e [:data :tried])] (flight/cover-failed! c w at))
                 (when (= :trespass (get-in e [:data :stops :walls :reason])) (ctx/update-mem! c assoc :zone-walls true))
                 (when (some (comp #{:trespass :no-site} :reason) (vals (select-keys (get-in e [:data :stops]) [:pit :pocket])))
                   (ctx/update-mem! c assoc :zone-dig true))

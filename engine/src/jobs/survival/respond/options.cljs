@@ -200,7 +200,8 @@
   "The cover {:open-s :seconds :fails} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire or a creeper's sight; it fails for a mob in its cell by
   ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, respond.pillar/mob-class), with the refusals this
-  flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb);
+  flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb), and its
+  failures here (flight/fails-here);
   nil when no pillar fits here, a climber or a flyer is near (both reach its top) or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
   (when-let [climb (and (pillar/pillar-item c) (not-any? #(or (combat/climber? %) (combat/flyer? %)) hostiles)
@@ -211,7 +212,7 @@
           refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
                                      (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
       {:open-s (if (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles) seconds s) :seconds seconds
-       :fails (- 1 (* (- 1 refused) (- 1 climb)))
+       :fails (flight/fails-here c :pillar (- 1 (* (- 1 refused) (- 1 climb))))
        :reached (boolean (some combat/enderman? hostiles))})))
 
 (defn covers-in
@@ -232,7 +233,7 @@
 (defn covers
   "shut-in/covers of ways where the body stands, each way's kept (memory ::covers) for check-cache/ttl-ms while what
   they read stays the same (covers-in): one decision prices them once for its answers, its flee search's dead end and
-  its cornered step."
+  its cornered step. Each way's :fails counts its failures where the body stands (flight/fails-here)."
   [c ways]
   (let [in (covers-in c)
         now (ctx/now c)
@@ -241,7 +242,7 @@
         missing (remove (:asked kept) ways)
         kept (cond-> kept (seq missing) (-> (update :v merge (shut-in/covers c missing)) (update :asked into missing)))]
     (when (seq missing) (ctx/update-mem! c assoc ::covers kept))
-    (select-keys (:v kept) ways)))
+    (into {} (map (fn [[w spec]] [w (update spec :fails #(flight/fails-here c w (or % 0)))])) (select-keys (:v kept) ways))))
 
 (defn exits-of
   "{:dawn-s} every cover's spec carries (cost/cover-answer's exits): the mean seconds of night left."
