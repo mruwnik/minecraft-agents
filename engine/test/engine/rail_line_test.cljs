@@ -591,6 +591,7 @@
                 [[(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
                  [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail" {:ways #{:carried}}]
                  [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"zone list"]
+                 [(spec "stone" 63 (kit {})) {"line" (update (line-plan {}) :parts #(filterv (fn [p] (not= "buffers" (:id p))) %))} [] :no-buffer #"add a buffer cell"]
                  [(spec "stone" 63 (kit {})) {} [] :plan #"plan"]]]
           (let [r (await (declines world plans (merge {:plan "line"} extra) zones))
                 w (first (:waits r))]

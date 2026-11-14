@@ -61,7 +61,8 @@
   Start facts:
   - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails); the plan has no cells to build (:no-cells).
   - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell still to build is refused by the access rules
-    (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :least :all (the default) and the ways only :carried, items for
+    (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); the plan wants no block past an end of the line and the
+    world shows none sturdy there (:no-buffer, :cells; add the buffer cell to the plan); with :least :all (the default) and the ways only :carried, items for
     the cells still to build are not all carried (:short {item n}, :up-to; an :any want counts every
     choice carried; only cells seen empty are owed, the warn's :up-to {item n} counts the unseen cells too). With
     :least 1 it builds what is carried.
@@ -148,6 +149,19 @@
   [cells carried]
   (lacking cells carried))
 
+(defn unbuffered
+  "The ends of the line [pos buffer-pos] where the plan wants nothing past the end and the world shows no sturdy block
+  there, so the proof must find :no-buffer however well the rails go in."
+  [c cells]
+  (let [ps (mapv :pos (rail/line cells))
+        planned-at (set (map :pos cells))
+        block-at (block-at c)]
+    (when (> (count ps) 1)
+      (vec (for [[end buffer] [[(peek ps) (rail/beyond ps)] [(first ps) (rail/beyond (rseq ps))]]
+                 :let [b (block-at buffer)]
+                 :when (and (not (planned-at buffer)) b (not (rail/sturdy? b)))]
+             [end buffer])))))
+
 (defn fetch-opts
   "The limits {:how :explore :minutes} for fetching the items still to place, nil when the ways leave only :carried."
   [c]
@@ -159,15 +173,20 @@
   (= :all (or (:least (ctx/frozen-call c)) (:least (:args c)) :all)))
 
 (defn not-ready
-  "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: nothing
-  refused, and with :least :all everything certainly needed carried."
+  "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: a buffer
+  past each end (planned, or sturdy in the world), nothing refused, and with :least :all everything certainly needed carried."
   [c cells]
   (let [all-carried (whole? c)
         no (refused c cells)
+        open-ends (unbuffered c cells)
         owed (plan/owed cells)
         carried (storage/carried-totals (u/inventory (:primitives c)))
         short (short-of owed carried)]
     (cond
+      (seq open-ends) (let [text (str "the plan wants no block past the end of the line at "
+                                      (str/join ", " (map (comp pr-str second) open-ends))
+                                      " and the world has none to stop a cart: add a buffer cell there (a sturdy block) to the plan")]
+                        {:reason :no-buffer :cells (mapv second open-ends) :why text})
       (seq no) (let [text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))]
                  {:reason :refused :refused no :why text})
       (and all-carried (not (fetch-opts c)) (seq short))
