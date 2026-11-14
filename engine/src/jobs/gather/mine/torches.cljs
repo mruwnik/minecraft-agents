@@ -54,22 +54,36 @@
   [c]
   (boolean (:torches (:args c))))
 
+(defn torch-gone?
+  "Whether the body sees the cell as something other than a torch (an unseen cell is taken as unchanged)."
+  [p cell]
+  (let [n (u/seen-name p (zipmap [:x :y :z] cell))]
+    (and (some? n) (not (torch/torch-blocks n)))))
+
+(defn asked?
+  "Whether the site was asked once: hung (its torch still there) or left out. A torch seen gone owes the site again."
+  [c site]
+  (let [asked (:asked (ctx/mem c))]
+    (and (contains? asked site)
+         (let [cell (get asked site)] (not (and cell (torch-gone? (:primitives c) cell)))))))
+
 (defn due-spot
   "The site (a cell vector) a torch is owed at, or nil: jobs.lib.torch-plan over cells (seen, judged by how the body perceives
-  their light) and ahead (not yet cut; dark when the light under the feet is 1 or less), light passing through open cells, the
-  sites being only site, the torches already hung the sources. A site asked once (:asked: hung or left out) is owed no more:
-  a torch the body's remembered light and blocks do not credit would otherwise be owed again every round."
+  their light; the body stood in them, so light passes) and ahead (not yet cut; dark when the light under the feet is 1 or
+  less), the sites being only site, the torches already hung (and still seen as torches) the sources. A site asked once
+  (asked?) is owed no more."
   [c cells ahead site]
-  (when (and site (not (some #{site} (:asked (ctx/mem c)))))
+  (when (and site (not (asked? c site)))
     (let [p (:primitives c)
           feet-light (sense/light-at p (cell-of (u/self-pos c)))
           ahead? (set ahead)
+          own? (set cells)
           plan (tp/plan {:cells (concat cells ahead)
                          :dark? #(if (ahead? %) (or (nil? feet-light) (<= feet-light 1)) (torch/perceived-dark? p %))
-                         :open? #(or (ahead? %) (let [n (u/seen-name p (zipmap [:x :y :z] %))] (and n (not (solid/solid? n)))))
+                         :open? #(or (ahead? %) (own? %) (let [n (u/seen-name p (zipmap [:x :y :z] %))] (and n (not (solid/solid? n)))))
                          :spread (tp/reach (torch/carried-torch p))
                          :spots [site]
-                         :sources (:hung (ctx/mem c))})]
+                         :sources (remove #(torch-gone? p %) (:hung (ctx/mem c)))})]
       (first (:spots plan)))))
 
 (defn vec-of [{:keys [x y z]}] [x y z])
@@ -135,14 +149,14 @@
     (boolean (and (on? c) (pos? (:steps d 0)) (not (:mouth-torch d)) (not= :done (:state (:own-stair d)))))))
 
 (defn booked!
-  "Book a torch hung for site: its cell joins the planner's sources, the site is not asked again."
+  "Book a torch hung for site: its cell joins the planner's sources, the site is not asked again while it stands."
   [c site cell]
-  (ctx/update-mem! c #(-> % (update :hung (fnil conj []) cell) (update :asked (fnil conj []) site))))
+  (ctx/update-mem! c #(-> % (update :hung (fnil conj []) cell) (update :asked assoc site cell))))
 
 (defn left-out!
   "Book the torch step done with no torch hung: the site is not asked again, but lights nothing. An info event of the reason."
   [c site cell reason]
-  (ctx/update-mem! c update :asked (fnil conj []) site)
+  (ctx/update-mem! c update :asked assoc site nil)
   (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
                                            :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
 

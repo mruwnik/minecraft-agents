@@ -12,6 +12,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.look :as lk]
             [jobs.lib.torch-plan :as tp]
+            [jobs.lib.util :as u]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [engine.memory :as mem]
@@ -630,6 +631,41 @@
               (is (= (count torch-cells) (count (set torch-cells))) (str "no torch cell is placed at twice: " (pr-str torch-cells)))
               (is (seq (filter #(< (second %) 63) (dug-cells s))) "the stair goes on down"))
             (finally (set! tp/plan orig))))))))
+
+;; Brindle S9 j1682: the plan lit no cell behind a hung torch because the body's memory of the cells it dug out was not "open".
+(deftest a-torch-lights-through-the-cells-the-body-stood-in-whatever-it-remembers-of-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig tp/plan
+              seen (atom [])]
+          (set! tp/plan (fn [m] (swap! seen conj m) {:spots [] :uncovered []}))
+          (try
+            (let [s (start {:world {:blocks (soil-over-stone 63 56) :drops cobble :inventory pickaxe}})
+                  _ (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3})) {})
+                  _ (await (run-ticks s 100))
+                  orig-seen u/seen-name
+                  m (first (filter #(seq (:cells %)) @seen))]
+              (is (some? m) "the stair asked the plan")
+              (set! u/seen-name (constantly nil))
+              (try (is (every? (:open? m) (:cells m)) "light passes the stair's own cells")
+                   (finally (set! u/seen-name orig-seen))))
+            (finally (set! tp/plan orig))))))))
+
+;; A site is asked once while its hung torch stands (or was left out), and again when the body sees the torch gone.
+(deftest a-site-is-asked-again-when-its-torch-is-seen-gone
+  (let [orig-mem ctx/mem
+        orig-seen u/seen-name]
+    (try
+      (are [asked seen asked?] (do (set! ctx/mem (fn [_] {:asked asked}))
+                                   (set! u/seen-name (fn [_ _] seen))
+                                   (= asked? (mine-torches/asked? {:primitives nil} [1 2 3])))
+        {}              nil         false
+        {[1 2 3] nil}   "air"       true
+        {[1 2 3] [1 3 3]} "wall_torch" true
+        {[1 2 3] [1 3 3]} nil       true
+        {[1 2 3] [1 3 3]} "air"     false)
+      (finally (set! ctx/mem orig-mem) (set! u/seen-name orig-seen)))))
 
 ;; Juniper j108: a tunnel run from the foot of a stair back under it would cut its lowest steps' floors.
 (deftest a-tunnel-under-the-stair-it-came-down-stops-before-it-cuts-the-way-up
