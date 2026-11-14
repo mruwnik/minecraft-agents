@@ -27,7 +27,7 @@
   rule for claiming a job site): its sides across the pen are walled and the body's stand behind it is boxed in with
   the body inside. The side is the one the villager stands in, else the one with the fewest blocks to place or dig
   among those whose cell, stand and near end are seen open (a pen already standing costs least).
-  Each step re-reads the world and does the first owed: place the workstation (jobs.blocks.place, the call's :ways), get
+  Each step re-reads the world and does the first owed: get
   building blocks (jobs.items.obtain) and fill the floors, walls and roofs (jobs.blocks.fill-cells), place a wooden slab
   in the upper half over the workstation (a block of another kind there is dug first), light the cell while it reads dark and
   the body can reach it (jobs.build.light-area, once a call), dig a plug of an empty pen open; with the villager in: wait while another
@@ -86,11 +86,12 @@
 (defn the-villager [c] (villager/find-by-uuid (:primitives c) (:villager (:args c))))
 
 (defn done?
-  "Ok once the villager stands in a shut, lit pen alone (jobs.lib.villager-pen/penned)."
+  "Ok once the villager stands in a shut, lit pen alone (jobs.lib.villager-pen/penned) with the workstation placed."
   [c]
   (let [e (the-villager c)
-        lay (when e (vp/penned (:primitives c) (ws-cell c) e))]
-    (if lay
+        lay (when e (vp/penned (:primitives c) (ws-cell c) e))
+        placed? (= (item-of (:args c)) (vp/name-at (:primitives c) (ws-cell c)))]
+    (if (and lay placed?)
       (contract/ok :penned "the villager is shut in its pen" :result {:side (:side lay) :cell (:cell lay)})
       (contract/later :penning "the villager is not shut in a pen yet"))))
 
@@ -227,8 +228,7 @@
     (cond
       (nil? e) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})
-      (or (nil? block) (bs/air block)) (await (workstation! c ws))
-      (not= (item-of (:args c)) block) (stop! c :condition-failed :occupied {:block block})
+      (and block (not (bs/air block)) (not= (item-of (:args c)) block)) (stop! c :condition-failed :occupied {:block block})
       (seq (vp/owed p (:shut lay))) (await (fill! c :shut (vp/owed p (:shut lay))))
       (not (vp/top-slab? p (:slab lay))) (await (slab! c (:slab lay)))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c))) (not (and in? (vp/plug-shut? p lay)))) (await (light! c (:cell lay)))
@@ -241,6 +241,7 @@
       (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
       (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/owed p (:box lay)) {:in-place true}))
       (not in?) (await (wait-walk-in! c :villager-not-in-pen))
+      (or (nil? block) (bs/air block)) (await (workstation! c ws))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c (:stand lay)))
       (vp/dark? p lay) (await (dark! c lay))
       :else :again)))

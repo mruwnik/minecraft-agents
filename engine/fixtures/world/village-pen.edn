@@ -4,6 +4,8 @@
 ;; the lectern's sides 15/17 0 16 walled, the body boxed in its stand 16 0 15).
 ;; pen-closes-the-stand-beside-a-second-villager (card 7cb975da: a second jobless villager beside the open stand; the
 ;; stand's box is shut, so no cell next to the lectern is left for it).
+;; pen-places-the-lectern-last-once-the-villager-is-in (card 956f6431: no lectern at the start, placed once the villager
+;; stands in the shut pen, with a second jobless villager near).
 ;; Should-fail: pen-villager-that-never-walks-in-ends-not-walked-in (a jobless NoAI villager 6 blocks off: the pen is built,
 ;; its near end stays open, the call ends :not-walked-in after the walking-hour ticks).
 {:defaults
@@ -31,6 +33,15 @@
    :after [[:block [15 0 15] "cobblestone"] [:block [15 1 15] "cobblestone"] [:block [17 0 15] "cobblestone"]
            [:block [17 1 15] "cobblestone"] [:block [16 0 14] "cobblestone"] [:block [16 1 14] "cobblestone"]
            [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"]]}
+  {:name "pen-places-the-lectern-last-once-the-villager-is-in"
+   :blocks [[:fill [16 0 16] [16 0 16] "air"]]
+   :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["lectern" 1]]}
+   :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,44],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:summon "villager" [14.5 0 15.5] "{NoAI:1b,UUID:[I;20260,7,5,45],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000002c" :pos #at [16 0 16] :profession "librarian"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"] [:block [16 0 18] "cobblestone"]
+           [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [16 1 14] "cobblestone"]]}
   {:name "pen-villager-that-never-walks-in-ends-not-walked-in"
    :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,41],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000029" :pos #at [16 0 16] :profession "librarian" :settings {:jobs.lib.villager/take-job-ticks 200}})]]

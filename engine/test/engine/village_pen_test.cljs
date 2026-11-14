@@ -169,6 +169,26 @@
           (is (every? #(vp/solid? (block p %)) (:box (vp/layout ws [-1 0]))) "the box dug open to plug the near end is shut again round the body")
           (is (= [3 64 0] (vp/body-cell p))))))))
 
+(deftest the-workstation-is-placed-last-once-the-villager-is-in-and-the-pen-is-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walk-in (fn [{:keys [p clock]}]
+                        (let [at (+ @clock 10000)]
+                          (add-watch clock :walk-in
+                                     (fn [_ _ _ ms] (when (>= ms at)
+                                                      (remove-watch clock :walk-in)
+                                                      (swap! (fake/state p) assoc-in [:entities 0 :pos] [1.5 64 0.5]))))))
+              bare (update (world (merge shut box)) :blocks dissoc "2,64,0")
+              [result p] (await (run-ticking (assoc bare :entities [(jobless {:x 6 :y 64 :z 3})]
+                                                    :inventory [{:name "lectern" :count 1} {:name "cobblestone" :count 4}])
+                                             {} 400 walk-in))
+              placed (mapv #(.-item (.-args %)) (vt/calls p "place"))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= "lectern" (last placed)) "nothing is placed after the workstation")
+          (is (= 1 (count (filter #{"lectern"} placed))))
+          (is (= "lectern" (block p ws))))))))
+
 (deftest a-second-villager-beside-an-open-stand-is-shut-out-of-the-cells-next-to-the-workstation
   (async done
     (tu/run-async done
