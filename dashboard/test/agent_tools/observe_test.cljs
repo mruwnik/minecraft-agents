@@ -1457,14 +1457,14 @@
 (deftest an-old-body-idle-naming-only-live-jobs-still-wakes
   (idle-wake-check {} (fn [wake] (is (= :idle (:wake wake)) (pr-str wake)))))
 
-(deftest a-read-the-busy-body-misses-does-not-end-the-wait-before-its-deadline
+(deftest a-read-the-busy-body-misses-three-times-does-not-end-the-wait-before-its-deadline
   (with-fixture ["300ms"]
     (fn [f]
-      (let [missed (atom #{})
+      (let [missed (atom {})
             get! (fn [socket endpoint options]
-                   (if (contains? @missed endpoint)
+                   (if (<= 3 (get @missed endpoint 0))
                      ((:get! f) socket endpoint options)
-                     (do (swap! missed conj endpoint)
+                     (do (swap! missed update endpoint (fnil inc 0))
                          (js/Promise.reject (doto (js/Error. "slow") (aset "code" "ETIMEDOUT"))))))]
         (-> (observe/wait-observe (:req f) get! nil (fn [_] (js/Promise.resolve nil)))
             (.then (fn [result] (is (= :timeout (:wake result)) (pr-str result)))))))))

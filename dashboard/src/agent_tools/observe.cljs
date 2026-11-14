@@ -84,17 +84,21 @@
 
 (declare step aborted?)
 
+(defn- get-until-deadline!
+  "get! of endpoint in the wait's own time slices, again after each 3 s timeout until the wait's deadline: a busy body
+  can miss several reads and the wait only ends at its own deadline."
+  [{:keys [request get! signal deadline] :as w} endpoint]
+  (-> (get! (:socket-path request) endpoint
+            {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})
+      (.catch (fn [error]
+                (if (and (= "ETIMEDOUT" (code-of error)) (< (js/Date.now) @deadline) (not (aborted? w)))
+                  (get-until-deadline! w endpoint)
+                  (throw error))))))
+
 (defn- read!
   "GET `endpoint` from the body's events socket as EDN, within the wait's deadline."
-  [{:keys [request get! signal deadline] :as w} endpoint]
-  (js-await [response (-> (get! (:socket-path request) endpoint
-                                {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})
-                          ;; A busy body can miss one 3 s read; the wait only ends at its own deadline.
-                          (.catch (fn [error]
-                                    (if (and (= "ETIMEDOUT" (code-of error)) (< (js/Date.now) @deadline) (not (aborted? w)))
-                                      (get! (:socket-path request) endpoint
-                                            {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})
-                                      (throw error)))))]
+  [w endpoint]
+  (js-await [response (get-until-deadline! w endpoint)]
     (when-not (and (= 200 (:status response)) (http/edn-response? (:content-type response)))
       (throw (coded (if (= 404 (:status response)) "EOBSERVEUNAVAILABLE" "EBADRESPONSE") (:text response))))
     (data/read-edn (:text response))))
