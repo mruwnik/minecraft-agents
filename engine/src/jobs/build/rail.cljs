@@ -26,7 +26,9 @@
   beside it when placed, so a line with corners and slopes is built in line order, standing on the line.
     1. Work is ordered station by station along the chain (plan.rail/line), from the end nearer the body at the
        start. At each station: the cells below the rail (bed, redstone block), then the rail, then what stands beside
-       it (torch, lever, with its own bed).
+       it (torch, lever, with its own bed). Ground where the rail or the clear cells above it go is cut first (a
+       jobs.blocks.dig child, as jobs.build.from-plan digs a wrong block); ground under the line holding a sturdy
+       block stays.
     2. Each round places cells in that order while they are within reach. When the next is not, it walks to the rail
        behind it, else to a cell beside it as jobs.build.from-plan does.
     3. A rail has settled once every neighbour it has in the chain is a rail in the world. A settled rail of the wrong
@@ -141,12 +143,13 @@
 
 (defn idle?
   "Whether the builder has nothing to do: nothing placeable with what is carried, no unseen cell with its item
-  carried, no settled wrong shape."
+  carried, no ground to cut where the line goes, no settled wrong shape."
   [c cells]
   (let [carried (storage/carried-totals (u/inventory (:primitives c)))
         ps (mapv :pos (rail/line cells))]
     (and (empty? (plan/buildable cells carried {}))
          (not-any? #(pos? (get carried (:item %) 0)) (plan/unseen cells {}))
+         (empty? (plan/digging (cells-of c)))
          (empty? (wrong-shapes c ps)))))
 
 ;; ------------------------------------------------------------------ steps
@@ -234,6 +237,13 @@
       (empty? (fp-cells/in-reach c [cell])) (await (walk-to! c ps from cells cell))
       :else (await (dig-away! c pos)))))
 
+(defn ^:async cut-step!
+  "Dig the ground at cell where the line goes (jobs.build.from-plan's dig-one!), walking into reach first."
+  [c ps from cells cell]
+  (if (seq (fp-cells/in-reach c [cell]))
+    (if (= :continue (await (fp-book/dig-one! c cell (give-up)))) :continue :again)
+    (await (walk-to! c ps from cells cell))))
+
 (defn finish!
   "End the build with its result as the ending's data: done when nothing is missing or wrong, else by what holds the
   rest back (as jobs.build.from-plan)."
@@ -262,9 +272,12 @@
         buildable (plan/buildable cells (storage/carried-totals (u/inventory p)) closed)
         todo (plan/placeable c (plan/permitted c buildable))
         underfoot (filter #((plan/body-cells (u/self-pos c)) (:pos %)) buildable)
-        unseen (plan/unseen cells closed)]
+        unseen (plan/unseen cells closed)
+        cut (first (work-order ps from (remove #(contains? closed (:pos %)) (plan/digging cells))))
+        cut-first? (and cut (= cut (first (work-order ps from (cons cut todo)))))]
     (cond
       (seq bad) (await (fix-step! c ps from cells (first bad)))
+      cut-first? (await (cut-step! c ps from cells cut))
       (seq todo) (let [{:keys [placed next]} (await (place-run! c (work-order ps from todo)))]
                    (if (and (zero? placed) next) (await (walk-to! c ps from cells next)) :again))
       (seq underfoot) (await (walk-to! c ps from cells (first (work-order ps from underfoot))))
@@ -272,13 +285,17 @@
       :else (finish! c cells))))
 
 (defn cells-of
-  "The judged cells of the plan in the args, nil when it cannot be read."
+  "The judged cells of the plan in the args (plan/prepared: a wrong block where the line goes is to dig), nil when it
+  cannot be read. Ground of the line (plan.rail/ground) holding a sturdy block is never dug."
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
         answer (known/plan c plan)]
     (when (and answer (not (:broken answer)))
-      (plan/loosened (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil)))))
+      (let [carried (set (keys (storage/carried-totals (u/inventory p))))
+            cells (plan/prepared (plan/judged p answer part carried nil) carried {} (plan/own-kept c))
+            kept? (plan/kept-ground c cells true)]
+        (mapv #(cond-> % (kept? %) (dissoc :dig? :short?)) cells)))))
 
 (defn work-s "Mean seconds the open cells of the plan take (jobs.build.from-plan's cell time)." [c]
   (* (count (plan/owed (check-cache/cached c [:cells-of (:args c)] #(cells-of c)))) (fp-walk/cell-s)))

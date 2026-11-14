@@ -203,14 +203,15 @@
 
 ;; ---------------------------------------------------------------- wrong blocks
 
-(deftest sturdy-natural-ground-under-the-line-is-no-wrong-block-of-the-builder
+(deftest sturdy-natural-ground-under-the-line-stays-and-a-bed-that-is-not-sturdy-is-dug-and-filled
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world (assoc (ground "grass_block" 63) (h/cell-key 5 63 0) "farmland")
-              [result seen] (await (build! {:inventory (kit {}) :blocks world :self {:pos {:x 0 :y 64 :z 3}}}
-                                           {"line" (line-plan {})} {}))]
-          (is (= [[5 63 0]] (mapv :pos (get-in result [:built :wrong]))) "only the bed cell that is not sturdy is wrong"))))))
+              [result _ p] (await (build! {:inventory (kit {}) :blocks world :self {:pos {:x 0 :y 64 :z 3}}}
+                                          {"line" (line-plan {})} {}))]
+          (is (true? (:ok? result)))
+          (is (= ["cobblestone" "grass_block"] [(h/block-at p 5 63 0) (h/block-at p 6 63 0)])))))))
 
 (deftest ground-that-is-sturdy-everywhere-leaves-no-wrong-block
   (async done
@@ -390,6 +391,18 @@
               [result _ p] (await (build-route! slope-route {} (route-world slope-route {} lower) {}))]
           (is (true? (:ok? result)))
           (is (every? #(= "cobblestone" (h/block-at p % (+ 62 (- % 19) 1) 0)) [21 22 23 24]) "the bed under each climbing rail"))))))
+
+(deftest ground-where-the-line-goes-is-cut-before-the-rails-go-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [straight [[0 64 0] [29 64 0]]
+              bump (into {} (for [x [10 11 12] y [64 65]] [(h/cell-key x y 0) "dirt"]))
+              world (update (route-world straight {} flat-top) :blocks merge bump)
+              [result _ p] (await (build-route! straight {} world {}))]
+          (is (true? (:ok? result)))
+          (is (= ["rail" "rail" "rail"] (mapv #(h/block-at p % 64 0) [10 11 12])))
+          (is (not-any? #{"dirt"} (map #(h/block-at p % 65 0) [10 11 12])) "the cell above each rail is cut clear"))))))
 
 (deftest the-body-stands-on-the-line-it-builds-not-beside-it
   (async done
