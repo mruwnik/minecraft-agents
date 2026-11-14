@@ -235,3 +235,8 @@
           (is (true? (:combined r)) (pr-str r))
           (is (= [[4 64 0]] (mapv (juxt :x :y :z) @dug)) "the 9 points short take three ores as priced; the nearest is dug first, and its pay was enough")
           (is (= 0 (level p)) "the two levels earned went on the book"))))))
+
+(deftest a-fetch-may-walk-off-to-look-for-what-it-lacks
+  (is (true? (get-in ac/args [:explore :default])))
+  (is (true? (:explore (ac/fetch-opts {:args {:explore true}} "anvil"))))
+  (is (false? (:explore (ac/fetch-opts {:args {:explore false}} "anvil")))))

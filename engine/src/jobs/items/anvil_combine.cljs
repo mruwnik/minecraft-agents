@@ -46,7 +46,8 @@
 (a/defargs args
   {:item {:doc "name of the carried item to put the book on" :spec a/item? :default nil}
    :enchant {:doc "the enchantment the book holds, e.g. \"mending\"" :spec a/name? :default nil}
-   :anvil {:doc "the anvil position {:x :y :z}; nil: the nearest seen, else one carried or fetched and put down" :spec ::a/pos :default nil}})
+   :anvil {:doc "the anvil position {:x :y :z}; nil: the nearest seen, else one carried or fetched and put down" :spec ::a/pos :default nil}
+   :explore {:doc "walk off to look for what a fetch lacks (iron for an anvil) when it is not in sight" :spec boolean? :default true}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds the walk and the visit may take, fetches aside (a guess until measured)." :spec (a/num-in 0 nil)}
@@ -159,7 +160,7 @@
     (contract/ok :combined "the item holds the enchantment" :units :items :done 1 :left 0 :result {:combined true})
     (contract/later :combining "anvil: the round puts the book on" :units :items :done 0 :left 1 :result {:combined false})))
 
-(defn fetch-opts [c slot] (when-let [o (need/fetch-opts c)] (assoc o :slot slot)))
+(defn fetch-opts [c slot] (when-let [o (need/fetch-opts c)] (assoc o :slot slot :explore (:explore (:args c)))))
 
 (defn fetches
   "[item slot] of each fetch the call still owes: the item when none without the enchantment is carried, the anvil when
