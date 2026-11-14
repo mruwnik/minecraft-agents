@@ -241,7 +241,7 @@
                    (if-let [near (:near (meta ends))] (back-off-of c near) (await (back-off-search! c chasers))))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
         enderman? (angry-enderman? c hostiles)
-        weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim? enderman? (when enderman? (hold-walks c))))
+        weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim? enderman? (when enderman? (hold-walks c)) (await (rc/fight-walk-q c weighed-mobs))))
         win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed)))
         prices (:prices weighed)
         pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)

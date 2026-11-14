@@ -21,6 +21,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.hostile-loss :as hostile-loss]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pl]
             [jobs.lib.ready :as ready]
@@ -300,6 +301,16 @@
             leaves)
     answers))
 
+(defn ^:async fight-walk-q
+  "go-to's quote of the walk a cornered fight makes (fight!: :hold, so a melee mob is waited for, never walked to): to the
+  first mob of hostiles it goes for that the body has seen (hostile/fought, hostile/sighted?) when that one shoots; nil
+  when the fight walks nowhere."
+  [c hostiles]
+  (let [p (:primitives c)
+        t (first (filter hostile/sighted? (hostile/fought p hostiles)))]
+    (when (and t (combat/ranged? t))
+      (await (pick/quote! c (hostile/fight-walk-args p t))))))
+
 (defn cornered-answers
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers),
   with a back-off step to take (back-off-of's :target; nil: none or tried), :back-off the walk away
@@ -309,10 +320,10 @@
   counted over) held where hostiles but the enderman reach the body (cost/hold-answer), each whole hide this flight held
   (memory :held-s) counted as one the danger outlasted: the hold lasts while it is the cheapest. The stand is priced
   against every hostile that hits a body standing there: each melee mob by its arrival, each creeper's blast, each
-  shooter with a line of fire (danger?) or not seen (hostile-loss/unseen-shooters). home?: the body is in its home room."
+  shooter with a line of fire (danger?) or not seen (hostile-loss/unseen-shooters). home?: the body is in its home room; walk-q: go-to's quote of the walk the fight makes (fight-walk-q)."
   ([c hostiles home? back-off swim? enderman?] (cornered-answers c hostiles home? back-off swim? enderman? nil))
-  ([c hostiles home? back-off swim? enderman? walks]
-  (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off))
+  ([c hostiles home? back-off swim? enderman? walks & [walk-q]]
+  (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off) walk-q)
         p (:primitives c)
         hold (fn [o mobs] (cost/hold-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs mobs
                                             :walk-s (get walks o 0) :then (vec (remove nil? (vals (dissoc a :stand))))

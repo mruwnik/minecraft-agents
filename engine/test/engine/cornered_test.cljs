@@ -29,6 +29,7 @@
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.respond-choose :as choose]
             [jobs.survival.respond.cornered :as pick]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.shot :as shot]
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost :as cost]
@@ -1842,6 +1843,27 @@
               lost (await (cornered nil))]
           (is (< (:fight (:prices lost)) (:fight (:prices placed))) "a shot whose way shows a line of fire: the shooter shoots on through the fight")
           (is (= (key (apply min-key val (:prices placed))) (first (:order placed))) "the cheapest option comes first"))))))
+
+;; Brindle S9: the cornered fight walked 14 blocks down into an unseen cave to a skeleton, priced as the straight way to it
+(deftest a-cornered-fight-is-priced-with-go-tos-quote-of-the-walk-to-the-shooter-it-goes-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quote! walk-pick/quote!
+              asked (atom [])
+              fight-price (fn ^:async fight-price [mob q]
+                            (set! walk-pick/quote! (fn [_ args] (swap! asked conj args) (js/Promise.resolve q)))
+                            (try
+                              (let [{:keys [seen]} (await (beset-round [mob (assoc (zombie 0.5 64 -2.5) :id 8 :visible false)] (constantly nil)))]
+                                (:fight (:prices (first (filter #(= :retreat.cornered (:kind %)) @seen)))))
+                              (finally (set! walk-pick/quote! quote!))))
+              skeleton (assoc (skeleton 6.5 64 0.5) :visible true)
+              short (await (fight-price skeleton {:uses {:job-time [2 2 6] :health [0 0 0]}}))
+              dark (await (fight-price skeleton {:uses {:job-time [60 60 180] :health [0 0 0]} :risk {:walk-hp 6}}))]
+          (is (< short dark) "a long walk through the dark with its risk is dearer than a short lit one")
+          (reset! asked [])
+          (await (fight-price (zombie 4 64 0) {:uses {:job-time [60 60 180]}}))
+          (is (= [] (filterv #(= {:x 4 :y 64 :z 0} (:pos %)) @asked)) "a melee mob is waited for, not walked to: no walk to it quoted"))))))
 
 (deftest a-body-shot-by-an-unseen-skeleton-does-not-walk-up-to-a-melee-mob-to-fight-it
   (async done

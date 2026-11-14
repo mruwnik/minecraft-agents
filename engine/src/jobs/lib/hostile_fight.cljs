@@ -290,8 +290,8 @@
   (and (= "drowned" (.-name e)) (breath/swimming? (:primitives c)) (not (danger-q/seen-only? e))))
 
 (defn fight-answer
-  "The answer of fighting the mobs of near the fight goes for (fought, nearest first; nil when none) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
-  none: its lower bound) and the fight with near and the
+  "The answer of fighting the mobs of near the fight goes for (fought, nearest first; nil when none) for cost/decide: the walk there (walk-hp and the mean
+  seconds of walk-q, go-to's quote of it, dark and unseen cells priced as go-to plans them; none: its lower bound, the straight way to the first) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
   felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows, :caught its fight gone bad (at the prior of the health its blasts leave) with the
   same walk, felt blows and blasts. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
@@ -313,7 +313,8 @@
             stats (cost/armour-stats (:equipment fight))
             {:keys [rate hardest]} (incoming c)
             a (cost/fight-answer fight)
-            seconds (+ (:seconds a) (/ (danger-q/mob-distance p (first fought)) cost/walk-speed))
+            walk-s (second (get-in walk-q [:uses :job-time]))
+            seconds (+ (:seconds a) (if (and (number? walk-s) (js/isFinite walk-s)) walk-s (/ (danger-q/mob-distance p (first fought)) cost/walk-speed)))
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
             sighted (if lone-creeper? [] (sighted-blasting c near seconds))
             spot (danger-q/mob-pos p (first fought))
@@ -491,10 +492,10 @@
 
 (defn cornered-answers
   "cost/cornered-answers of c's body to hostiles and the shooters not seen (hostile-loss/mobs-of): the fight (fight-answer), each of covers {way {:open-s :seconds}} and,
-  with walk?, the walk away (:flee, flee-answer caught by its way as caught; nil when a mob keeps up)."
-  [c hostiles covers walk? caught]
+  with walk?, the walk away (:flee, flee-answer caught by its way as caught; nil when a mob keeps up). walk-q: go-to's quote of the fight's walk."
+  [c hostiles covers walk? caught & [walk-q]]
   (let [p (:primitives c)
-        fight (fight-answer c hostiles (constantly nil))]
+        fight (fight-answer c hostiles (constantly nil) walk-q)]
     (cond-> (cost/cornered-answers {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (hostile-loss/mobs-of p (ctx/view c) hostiles)
                                     :fight fight :covers covers})
       walk? (assoc :flee (flee-answer c hostiles fight nil caught)))))
