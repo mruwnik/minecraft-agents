@@ -15,7 +15,6 @@
  {:from jobs.movement.boat-recover :to jobs.movement.boat-launch :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.movement.cross-water :to jobs.movement.boat-launch :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.movement.run-away :to jobs.movement.chase :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
- {:from jobs.storage.haul :to jobs.storage.deposit :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.storage.haul :to jobs.storage.withdraw :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.strip.all :to jobs.strip.site :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.survival.extinguish :to jobs.survival.eat :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}

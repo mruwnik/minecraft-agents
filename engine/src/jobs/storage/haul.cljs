@@ -10,7 +10,7 @@
             [jobs.lib.least :as least]
             [jobs.lib.util :as u]
             [jobs.lib.chests :as chests]
-            [jobs.storage.deposit :as deposit]
+            [jobs.lib.deposit-pick :as deposit]
             [jobs.storage.withdraw]))
 
 (def doc

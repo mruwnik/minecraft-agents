@@ -19,7 +19,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as ew]
-            [jobs.storage.deposit :as dep]))
+            [jobs.lib.deposit-pick :as dep]))
 
 (defn setup
   ([world] (setup world (tu/tmp-dir)))

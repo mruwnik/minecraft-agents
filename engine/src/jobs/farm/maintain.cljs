@@ -23,7 +23,7 @@
             [jobs.lib.reserve :as rsv]
             [jobs.lib.sense :as sense]
             [jobs.lib.storage :as storage]
-            [jobs.storage.deposit :as deposit]
+            [jobs.lib.deposit-pick :as deposit-pick]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.lib.work-place :as work-place]
@@ -125,7 +125,7 @@
 (defn spare
   "{name n} a deposit of the farm goods would put away now over keep: the deposit job's own pick, so a step that is called always has something to move."
   [c keep]
-  (deposit/spare-items (assoc c :args {:items :farm-goods :carry keep})))
+  (deposit-pick/spare-items (assoc c :args {:items :farm-goods :carry keep})))
 
 (defn broken
   "{:plan-cells :broken}: the plan's cells (diff/plan-cells, every part) and those the body has seen broken (diff/diff);

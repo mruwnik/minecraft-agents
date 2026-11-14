@@ -1,5 +1,6 @@
 (ns jobs.storage.deposit
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.deposit-pick :as pick :refer [to-deposit wanted-names spare-items]]
             [jobs.lib.crops :as crops]
             [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
@@ -58,22 +59,6 @@
    :make-chests? {:doc "when every storage chest is full, put a new one beside them (carried, else fetched or crafted by the call's :ways; #{:carried} places only a carried one, no-chest-item otherwise); false stops with reason all-chests-full" :spec boolean? :default true}
    :ignore-zones? :shared})
 
-(defn to-deposit
-  "The next carried stack to put away and how many of it: {:stack s :count n}
-  or nil. With wanted names, the first carried stack of the first name (in
-  wanted's order) that has spare; with none (nil), the first stack in
-  inventory order that is not a tool or armour and has spare. A name has spare
-  when its carried total exceeds its keep (a map of name to count, default 0);
-  n is the stack count, cut so the keep stays carried."
-  ([items wanted] (to-deposit items wanted {}))
-  ([items wanted keep]
-   (let [spare (fn [stack] (- (storage/carried items (:name stack)) (get keep (:name stack) 0)))
-         pick (fn [stack] (when (pos? (spare stack))
-                            {:stack stack :count (min (:count stack) (spare stack))}))]
-     (if wanted
-       (some (fn [n] (some #(when (= n (:name %)) (pick %)) items)) wanted)
-       (some #(when-not (storage/tool? (:name %)) (pick %)) items)))))
-
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a put-away may last: the walk, the transfers and a chest placed." :spec (a/num-in 0 nil)}
    ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}})
@@ -86,25 +71,6 @@
 (def safe? (price/stays ready/safe-at-chest (price/trip-s ready/chest-place price/chest-act-s)))
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
-
-(defn wanted-names
-  "The :items names: the farm goods for :farm-goods, nil for none given. The reserve register applies to a chooser, not to named items."
-  [items]
-  (if (= :farm-goods items) crops/farm-goods items))
-
-(defn spare-items
-  "{name n} the call would put away now: the carried names the pick rules allow, each by its spare over the keep."
-  [c]
-  (let [{items :items keep :carry} (:args c)
-        carried (u/inventory (:primitives c))
-        goods (found/goods (ctx/view c))
-        inventory (remove #(contains? goods (:name %)) carried)
-        keeps (if (and items (not= :farm-goods items)) keep (merge-with max (reserve/held c :deposit) keep))]
-    (loop [left inventory, acc {}]
-      (if-let [pick (to-deposit left (wanted-names items) keeps)]
-        (let [n (:name (:stack pick))]
-          (recur (remove #(= n (:name %)) left) (assoc acc n (- (storage/carried left n) (get keeps n 0)))))
-        acc))))
 
 (defn offer-owed?
   "Whether the :chest argument took something this call and is still to be offered to the :chest place (not once refused)."
