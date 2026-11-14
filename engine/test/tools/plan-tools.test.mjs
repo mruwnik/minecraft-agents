@@ -560,3 +560,19 @@ test('adopt refuses a bad box, a missing body and a box where nothing was seen',
     assert.deepEqual((await bad(['--body', 'Probe', '--box=0,63,0:5,64,0'])).value.reason, keyword('nothing-seen'))
   } finally { fx.close() }
 })
+
+test('blueprints save --from-plan cuts a part into a blueprint that places the same cells', async () => {
+  const fx = fixture()
+  try {
+    const plan = '{:id "src" :parts [{:id "wall" :box [[3 64 5] [5 65 5]] :want "stone"}]}'
+    assert.equal((await invoke('plan', fx, ['add', 'src', '--edn', plan, '--by', 'tester'])).code, 0)
+    const saved = await invoke('blueprints', fx, ['save', 'cut', '--from-plan', 'src/wall', '--by', 'tester'])
+    assert.equal(saved.code, 0)
+    const placed = '{:id "dst" :parts [{:id "p" :blueprint "cut" :at [3 64 5]}]}'
+    assert.equal((await invoke('plan', fx, ['add', 'dst', '--edn', placed, '--by', 'tester'])).code, 0)
+    const geo = async id => (await invoke('plan', fx, ['show', id, '--geometry'])).value.geometry
+    assert.deepEqual(await geo('dst'), await geo('src'))
+    const missing = await invoke('blueprints', fx, ['save', 'x', '--from-plan', 'src/nope', '--by', 'tester'])
+    assert.equal(missing.code, 2)
+  } finally { fx.close() }
+})

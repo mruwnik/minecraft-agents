@@ -20,7 +20,7 @@
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
   {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  adopt <id> --box=x,y,z:x,y,z --body <name> --by <name> [--any=x,y,z:x,y,z]... [--pen=x,y,z:x,y,z --herd <mob>:<count>] [--dry-run] [--raw]   (the plan of what that body has seen in the box: every seen block as it is (terrain too), crops (any growth stage) and saplings as plant wants; unseen cells, air and flowing water are left out; --any marks an area as whatever (repeatable; no cell in it is recorded, the part is claimed); --pen adds the part pen (box and herd) that animals.maintain runs from; the result counts the parts and unseen cells and names plan cells outside your zones)\n  route <id> --from=x,y,z --to=x,y,z --body <name> --by <name> [--tunnel N --bridge N --launch 3..5 --nodes N] [--dry-run] [--raw]   (a rail line between two rail cells (the cell above the ground) over the ground that body has seen, avoiding other owners' zones; the line cuts, fills, tunnels through rock 2+ above the rail and bridges drops 2+ below or water where that costs less than going round; --tunnel/--bridge cap the longest span (0: none); --nodes caps the search states (default about 0.9 GB of them); the plan carries the :spans and jobs.build.rail-line builds them first; the result lists the materials)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory, flushed from the running body first; :seen-note says when it could not be and the data is the file on disk); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
-   :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (deletes the global blueprint file)\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
+   :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> (--edn '<blueprint-map>' | --from-plan <plan>/<part>) --by <name> [--revision <digest>] [--dry-run] [--raw]   (--from-plan cuts the blueprint from what that saved plan part places, :any where it names no cell)\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (deletes the global blueprint file)\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
 
@@ -130,7 +130,7 @@
 
 (defn parsed-args [kind argv]
   (let [options (merge (into {} (map (fn [k] [k {:type "string"}])
-                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body :at :heading :to-y :from :to :tunnel :bridge :launch :nodes :box :pen :herd]))
+                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body :at :heading :to-y :from :from-plan :to :tunnel :bridge :launch :nodes :box :pen :herd]))
                        {:state {:type "string"} :worlds {:type "string"}
                         :repo {:type "string" :default repo-root}
                         :blueprint {:type "string" :multiple true}
@@ -151,6 +151,7 @@
                   (= command "check") (into [:body :inventory :blueprint :raw :geometry :large :limit :offset])
                   (mutations command) (into [:by :revision :dry-run :raw :large])
                   (#{"add" "edit" "save"} command) (conj :edn)
+                  (= command "save") (conj :from-plan)
                   (= command "mineshaft") (into [:at :heading :to-y])
                   (= command "route") (into [:from :to :body :tunnel :bridge :launch :nodes])
                   (= command "adopt") (into [:box :body :any :pen :herd]))]
@@ -179,7 +180,11 @@
     (when (and (:large v) (not (:raw v)) (not (:geometry v))) (fail! :bad-option "--large requires --raw or --geometry"))
     (when (and (:geometry v) (not (#{"show" "validate" "check"} command))) (fail! :bad-option "--geometry is only valid for show, validate or check"))
     (when (and (:dry-run v) (not (mutations command))) (fail! :bad-option "--dry-run is only valid for mutations"))
-    (when (and (#{"add" "edit" "save" "validate"} command) (nil? (:edn v))) (fail! :bad-option (str command " requires --edn")))
+    (when (and (#{"add" "edit" "validate"} command) (nil? (:edn v))) (fail! :bad-option (str command " requires --edn")))
+    (when (and (= command "save") (not= 1 (count (filter some? [(:edn v) (:from-plan v)]))))
+      (fail! :bad-option "save requires exactly one of --edn and --from-plan <plan>/<part>"))
+    (when (and (:from-plan v) (not (re-matches #"[^/]+/.+" (:from-plan v))))
+      (fail! :bad-option "--from-plan must be <plan>/<part>"))
     (when (and (mutations command) (or (not (string? (:by v))) (str/blank? (:by v)) (> (count (:by v)) 80)))
       (fail! :actor-required "mutations require --by (up to 80 characters)"))
     (when (and (#{"add" "route" "adopt"} command) (some? (:revision v))) (fail! :bad-option "add is create-only and does not take --revision"))
@@ -390,6 +395,19 @@
                                  :expected-revision (:revision req) :dry-run (boolean (:dry-run req))})
       (.then (fn [result] (write (cond-> result (:dry-run req) (assoc :next :review-preview))) 0))))
 
+(defn plan-part-edn
+  "The EDN of the blueprint cut from --from-plan <plan>/<part> (what part-blueprint makes of the saved plan)."
+  [req ctx]
+  (let [at (.indexOf (:from-plan req) "/")
+        plan-id (.slice (:from-plan req) 0 at) part-id (.slice (:from-plan req) (inc at))
+        doc (data/read-document ctx :plan plan-id)
+        _ (when-not doc (fail! :not-found (str "no plan " plan-id " in " (:world ctx))))
+        plan (:plan (parse/parse (:text doc) plan-id))
+        blueprints (:values (checks/parse-docs (current-docs ctx :blueprint) parse/parse-blueprint :blueprint))
+        result (shape/part-blueprint plan blueprints part-id (:id req))]
+    (when (:error result) (fail! :bad-plan (:error result)))
+    (pr-str result)))
+
 (defn mutate-blueprint [req ctx write]
   (let [old (data/read-document ctx :blueprint (:id req))
         value (edn-value (:edn req) "edn")]
@@ -505,7 +523,7 @@
       (= command "show") (let [doc (data/read-document ctx :blueprint (:id req))]
                             (when-not doc (fail! :not-found (str "no global blueprint " (:id req))))
                             (write (blueprint-output doc (:raw req))) 0)
-      (= command "save") (mutate-blueprint req ctx write)
+      (= command "save") (mutate-blueprint (cond-> req (:from-plan req) (assoc :edn (plan-part-edn req ctx))) ctx write)
       (= command "remove") (remove-blueprint req ctx write)
       (= command "validate") (let [value (edn-value (:edn req) "edn")]
                                 (when-not (= (:id value) (:id req)) (fail! :bad-blueprint (str "blueprint :id must be \"" (:id req) "\"")))
