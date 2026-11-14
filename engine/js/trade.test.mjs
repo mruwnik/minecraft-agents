@@ -39,7 +39,7 @@ const offer = ({ cost = ['emerald', 2], cost2 = null, gives = ['bread', 3], uses
 const stack = (name, count) => ({ name, count })
 
 // A hand-made bot. Like mineflayer, a trade only lands in the inventory when the window is closed.
-const makeBot = ({ target = villager(), stock = [], trades = [offer()], free = 5, open = 'now', confirm = true, tradeThrows = null, landsBeforeThrow = false, hang = false, landTimes = null, closeAfter = null, at = vec3(0, 64, 0) } = {}) => {
+const makeBot = ({ target = villager(), stock = [], trades = [offer()], xp = null, free = 5, open = 'now', confirm = true, tradeThrows = null, landsBeforeThrow = false, hang = false, landTimes = null, closeAfter = null, at = vec3(0, 64, 0) } = {}) => {
   const bot = new EventEmitter()
   const calls = []
   const items = [...stock]
@@ -63,10 +63,12 @@ const makeBot = ({ target = villager(), stock = [], trades = [offer()], free = 5
     entity: { id: 4, position: at, height: 1.62 },
     inventory,
     currentWindow: null,
+    _client: new EventEmitter(),
     openVillager: async e => {
       calls.push(['openVillager', e.uuid])
       if (open === 'never') return new Promise(() => {})
       if (open === 'late') await sleep(200)
+      if (xp !== null) bot._client.emit('trade_list', { windowId: win.id, trades, villagerLevel: 1, experience: xp })
       bot.currentWindow = win
       return win
     },
@@ -194,6 +196,12 @@ test('offers: adjusted price, second cost, uses and the sold-out flags', async (
     ]
   })
   assert.deepEqual(names(bot), ['openVillager', 'closeWindow'])
+})
+
+test('offers: the window\'s xp shows a villager that traded, though a restock set its uses back to 0', async () => {
+  const restocked = await run(makeBot({ target: villager({ metadata: { [VILLAGER_DATA]: data('minecraft:librarian', 1) } }), trades: [offer({ uses: 0 })], xp: 1 }), { op: 'offers' })
+  assert.equal(restocked.xp, 1)
+  assert.equal(restocked.offers[0].uses, 0)
 })
 
 test('offers: an enchanted book names its stored enchantment and level', async () => {

@@ -39,7 +39,8 @@
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
   matches, else
-  - condition-failed: :gone, :baby, :locked (an offer was already used, or the villager is above level 1: it has traded), :other-job, :occupied (another block at :pos),
+  - condition-failed: :gone, :baby, :locked (an offer was already used, the villager is above level 1 or its window shows xp: it has
+    traded, and the game keeps a traded villager's job; a picked one is ruled out for the next nearest), :other-job, :occupied (another block at :pos),
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible :no-job: the villager took no job in ::take-job-ticks game ticks of its walking hours, nor after one more
@@ -278,7 +279,7 @@
              (u/progress! c)
              (tw/emit-offers! c :roll.offers villager r offers)
              (cond
-               (or (some #(pos? (:uses % 0)) offers) (< 1 (or (.-level r) 1))) :locked
+               (or (some #(pos? (:uses % 0)) offers) (< 1 (or (.-level r) 1)) (pos? (or (.-xp r) 0))) :locked
                offer {:found offer}
                :else :miss))
       "gone" (stop! c (villager/gone-cause c))
@@ -714,7 +715,7 @@
             r (await (read-offers! c))]
         (cond
           (:found r) (found! c (:found r))
-          (= :locked r) (stop! c :locked)
+          (= :locked r) (rule-out! c :locked)
           (= :miss r) (if out-of-tries?
                         (stop! c :no-match)
                         (await (dig! c)))

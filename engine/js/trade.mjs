@@ -21,6 +21,14 @@ const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const closeWindow = bot => { if (bot.currentWindow) bot.closeWindow(bot.currentWindow) }
 
+// The villager's xp as the window's xp bar shows it, from the trade_list packet (mineflayer keeps only its trades)
+function watchXp (bot) {
+  const seen = {}
+  const on = packet => { seen.xp = packet.experience }
+  bot._client?.on('trade_list', on)
+  return { seen, stop: () => bot._client?.removeListener('trade_list', on) }
+}
+
 // The window, or null when it did not open in time; a window that arrives later is closed so it cannot stay open
 async function openWindow (bot, target, timeScale) {
   const opened = bot.openVillager(target)
@@ -149,7 +157,8 @@ export async function tradeWith (bot, ctx, a, { timeScale = 1, reach }) {
   if (mobFields(bot, target).baby === true) return { status: 'cannot', reason: 'no-offers', why: 'baby', profession, level }
 
   // the profession reading can be wrong, so a villager that reads jobless is tried: a player opens it too
-  const win = await openWindow(bot, target, timeScale)
+  const xp = watchXp(bot)
+  const win = await openWindow(bot, target, timeScale).finally(xp.stop)
   if (!win) {
     const why = noOffersWhy(profession, false)
     return why ? { status: 'cannot', reason: 'no-offers', why, profession, level } : { status: 'failed', reason: 'window-did-not-open' }
@@ -158,7 +167,7 @@ export async function tradeWith (bot, ctx, a, { timeScale = 1, reach }) {
   try {
     ctx.alive()
     if (win.trades.length === 0) return { status: 'cannot', reason: 'no-offers', why: 'none', profession, level }
-    if (a.op === 'offers') return { status: 'ok', uuid: a.villager, profession, level, offers: win.trades.map((t, i) => offerRow(bot, t, i)) }
+    if (a.op === 'offers') return { status: 'ok', uuid: a.villager, profession, level, ...(xp.seen.xp != null && { xp: xp.seen.xp }), offers: win.trades.map((t, i) => offerRow(bot, t, i)) }
     return await buy(bot, ctx, win, a, timeScale)
   } finally {
     closeWindow(bot)

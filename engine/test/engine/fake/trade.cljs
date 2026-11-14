@@ -70,5 +70,5 @@
       why [w {:status "cannot" :reason "no-offers" :why why :profession profession :level level}]
       (:busy e) [w {:status "failed" :reason "window-did-not-open"}]
       (empty? rows) [w {:status "cannot" :reason "no-offers" :why "none" :profession profession :level level}]
-      (= op "offers") [w {:status "ok" :uuid villager :profession profession :level level :offers rows}]
+      (= op "offers") [w (cond-> {:status "ok" :uuid villager :profession profession :level level :offers rows} (:xp e) (assoc :xp (:xp e)))]
       :else (buy w i rows a))))

@@ -190,6 +190,26 @@
           (is (= {:found false :status :stopped :reason :locked} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
 
+(deftest a-villager-whose-window-shows-xp-is-locked-without-a-dig-though-a-restock-cleared-its-uses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")] {:xp 1})]} {}))]
+          (is (= {:found false :status :stopped :reason :locked} (select-keys result [:found :status :reason])))
+          (is (zero? (digs p))))))))
+
+(deftest a-picked-villager-that-traded-is-passed-over-for-the-next-nearest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [traded (librarian [(offer "paper")] {:id 3 :uuid "v-2" :xp 1 :pos {:x 0 :y 64 :z 0.5}})
+              [result p seen] (await (roll {:entities [traded (librarian [(offer "paper")])]
+                                            :scripts [[(offer "enchanted_book")]]}
+                                           {:villager nil}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= ["v-2" "v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen))))
+          (is (= "lectern" (workstation p))))))))
+
 (deftest a-villager-above-level-1-is-locked-without-a-dig
   (async done
     (tu/run-async done

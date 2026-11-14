@@ -64,7 +64,7 @@
   "Say what the villager offers (profession, level, every offer with its enchantments), as a player reads the window."
   [c kind villager r offers]
   (ctx/emit! c kind :info
-             {:villager villager :profession (.-profession r) :level (.-level r) :offers offers
+             {:villager villager :profession (.-profession r) :level (.-level r) :xp (.-xp r) :offers offers
               :enchants (vec (for [o offers e (get-in o [:gives :enchants])] (str (:name e) " " (:level e))))
               :text (str "villager " villager " (" (.-profession r) " " (.-level r) ") offers: "
                          (str/join "; " (map offer-text offers)))}))
