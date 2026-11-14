@@ -422,29 +422,43 @@ test('route runs over rails already laid on the way and over ground cover at rai
   } finally { fx.close() }
 })
 
-test('route needs --tunnel to cut through a hill and --bridge to span a chasm, and writes them as the plan\'s :spans', async () => {
+test('route tunnels through a hill by default and writes it as the plan\'s :spans; --tunnel 0 forbids it', async () => {
   const fx = fixture()
   try {
     await writeSeen(fx, 'Probe', groundCells({ hills: [[18, 26, 66]], chasms: [] }), Date.now() - 1000)
-    const closed = await invoke('plan', fx, ROUTE)
+    const closed = await invoke('plan', fx, [...ROUTE, '--tunnel', '0'])
     assert.equal(closed.code, 2)
     assert.deepEqual(closed.value.reason, keyword('no-route'))
-    assert.match(closed.value.message, /--tunnel/)
-    const tunnelled = await invoke('plan', fx, [...ROUTE, '--tunnel', '12'])
+    const tunnelled = await invoke('plan', fx, ROUTE)
     assert.equal(tunnelled.code, 0, tunnelled.output)
     assert.deepEqual(tunnelled.value.route.spans.map(s => s.kind), [keyword('tunnel')])
     assert.match(fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'line.edn'), 'utf8'), /:spans \[\{:kind :tunnel/)
   } finally { fx.close() }
 })
 
-test('route bridges a seen drop of 2 or more with --bridge', async () => {
+test('route bridges a seen drop of 2 or more and a lake by default; --bridge 0 forbids it', async () => {
   const fx = fixture()
   try {
     await writeSeen(fx, 'Probe', groundCells({ chasms: [[18, 24, 60]] }), Date.now() - 1000)
-    assert.deepEqual((await invoke('plan', fx, ROUTE)).value.reason, keyword('no-route'))
-    const bridged = await invoke('plan', fx, [...ROUTE, '--bridge', '10'])
+    assert.deepEqual((await invoke('plan', fx, [...ROUTE, '--bridge', '0'])).value.reason, keyword('no-route'))
+    const bridged = await invoke('plan', fx, ROUTE)
     assert.equal(bridged.code, 0, bridged.output)
     assert.deepEqual(bridged.value.route.spans.map(s => s.kind), [keyword('bridge')])
+    const lake = groundCells().map(([x, y, z, name]) => (x >= 18 && x <= 24 && y >= 61 && y <= 63 ? [x, y, z, 'water'] : [x, y, z, name]))
+    await writeSeen(fx, 'Probe', lake, Date.now() - 1000)
+    const over = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    assert.equal(over.code, 0, over.output)
+    assert.deepEqual(over.value.route.spans.map(s => s.kind), [keyword('bridge')])
+  } finally { fx.close() }
+})
+
+test('route cuts a bump of one block and fills a dip of one at rail height rather than climbing them', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells({ hills: [[12, 14, 64]], chasms: [[24, 26, 62]] }), Date.now() - 1000)
+    const made = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    assert.equal(made.code, 0, made.output)
+    assert.deepEqual(made.value.route.waypoints, [[2, 64, 5], [38, 64, 5]])
   } finally { fx.close() }
 })
 
