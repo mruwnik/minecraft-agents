@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.movement.go-to.headroom :as headroom]
             [jobs.movement.go-to.tuning :as tuning]
+            [jobs.lib.access :as access]
             [jobs.lib.breath :as breath]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
@@ -101,11 +102,21 @@
    :night-risk "leaving the shelter at night costs more hp than the call's worth buys"
    :zone "a stair or dig is refused by another's zone, claim or plan (pass :ignore-zones? or ask)"})
 
+(defn zone-words
+  "Whose zone, claim or plan refused a way ({:zones :claims :plans :owners}), else the general :zone words."
+  [{:keys [owners] :as e}]
+  (let [fields (access/refusal-text e)]
+    (if (str/blank? fields)
+      (escalation-reason-words :zone)
+      (str "a stair or dig is refused by " fields (when (seq owners) (str " of " (str/join ", " owners))) " (pass :ignore-zones? or ask)"))))
+
 (defn escalation-words
-  "A failed way out of a shut-in body, or :into a walled-in goal, in words: {:step :reason|:why :n :into}; a child's
-  wait (:wait) names its own reason."
-  [{:keys [step reason why n wait into]}]
-  (let [r (some-> (or (:reason wait) reason why) (as-> k (or (escalation-reason-words k) (str/replace (name k) "-" " "))))]
+  "A failed way out of a shut-in body, or :into a walled-in goal, in words: {:step :reason|:why :n :into}, a :zone one
+  naming whose (zone-words); a child's wait (:wait) names its own reason."
+  [{:keys [step reason why n wait into] :as e}]
+  (let [k (or (:reason wait) reason why)
+        r (cond (= :zone k) (zone-words e)
+                k (or (escalation-reason-words k) (str/replace (name k) "-" " ")))]
     (case step
       :spent (str "gave up after " n " ways " (if into "in" "out"))
       :none (str "no way " (if into "in" "out") (some->> r (str ": ")))

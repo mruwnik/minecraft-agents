@@ -176,7 +176,7 @@
           (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks (built-wall wall) :inventory [{:name "dirt" :count 9}]})
                                                   'jobs.movement.go-to {:pos [8 64 0] :range 1} claimed-ring))]
             (is (= false (:arrived @out)) wall)
-            (is (= {:step :none :why :zone} (:escalation @out)) wall)
+            (is (= {:step :none :why :zone :zones ["ring"] :owners ["Miles"]} (:escalation @out)) wall)
             (is (empty? (events-of seen :go-to.escalated)) wall)
             (is (empty? (calls p "dig")) wall)))))))
 
@@ -299,7 +299,8 @@
               {:keys [out p]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
                                                {:pos [8 64 0] :range 1} zones))]
           (is (false? (:arrived @out)))
-          (is (= {:step :none :why :zone} (:escalation @out)))
+          (is (= {:step :none :why :zone :zones ["vault"] :owners ["Miles"]} (:escalation @out)))
+          (is (= "no way out: a stair or dig is refused by zone vault of Miles (pass :ignore-zones? or ask)" (result/escalation-words (:escalation @out))))
           (is (empty? (dug-cells p))))))))
 
 (deftest go-to-never-digs-in-another-s-zone-and-leaves-by-a-wall-that-is-free
@@ -352,9 +353,9 @@
           (is (seq (events-of (:seen own) :go-to.restored)) "its own cells are put back")
           (is (empty? (events-of (:seen free) :go-to.restored)) "natural ground is left open"))))))
 
-(deftest go-to-into-its-own-house-goes-round-to-its-door-rather-than-cut-the-house
-  ;; Tamsin H11 (card 7f632862): go-home from a tunnel beside its house cut in through the wall, floor and bed; a way in
-  ;; ends in its holes, which stay its stand, so the put-back the own cut is priced at is never made
+(deftest go-to-into-its-own-house-prices-a-cut-of-its-wall-like-any-own-build
+  ;; the plan holding the goal is the body's own: cutting its wall costs the dig and the put-back, here less than digging
+  ;; out of the closet through stone and round to the door, and the wall is put back once the body is in
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -364,9 +365,26 @@
               {:keys [out p seen]} (await (run-job! {:self {:pos {:x 4 :y 64 :z 0}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
                                                     'jobs.movement.go-to {:pos [0 64 0] :range 1} {:plans {"hut" hut}}))]
           (is (= {:arrived true} @out) (pr-str @out))
-          (is (seq (dug-cells p)) "it digs out of the closet")
-          (is (not-any? (fn [[x y z]] (and (<= -3 x 3) (<= 64 y 66) (<= -3 z 3))) (dug-cells p)) "but not through its own house")
-          (is (empty? (events-of seen :go-to.dug-own-build))))))))
+          (is (some #{[3 64 0] [3 65 0]} (dug-cells p)) "it cuts its east wall")
+          (is (seq (events-of seen :go-to.dug-own-build)))
+          (is (= ["dirt" "dirt"] [(block p [3 64 0]) (block p [3 65 0])]) "and puts it back"))))))
+
+(deftest go-to-out-of-a-hollow-under-its-own-floor-cuts-the-floor-of-the-goal-s-plan
+  ;; S21: an old stair hollow under its own house floor, in stone ringed by bedrock under the house; every way up cuts the
+  ;; floor of the plan that holds the goal, an own build priced at its dig and put-back, not another's refusal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hut (shape/with-author {:id "hut" :parts [{:id "shell" :box [[-3 63 -3] [3 66 3]] :want "oak_planks"}]} "Fake")
+              inside (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z))
+              blocks (apply dissoc (merge (box -8 55 -8 12 63 8 "bedrock") (box -8 63 -8 12 63 8 "stone") (box -2 59 -2 2 62 2 "stone")
+                                          (box -3 63 -3 3 66 3 "oak_planks"))
+                            (concat inside ["0,60,0" "0,61,0" "0,62,0" "3,64,0" "3,65,0"]))
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 60 :z 0}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    'jobs.movement.go-to {:pos [0 64 0] :range 1} {:plans {"hut" hut}}))]
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (some #(= 63 (second %)) (dug-cells p)) "it cuts up through its floor")
+          (is (seq (events-of seen :go-to.dug-own-build))))))))
 
 (deftest go-to-pillars-out-of-a-pit-walled-by-its-own-plan-rather-than-cut-the-walls
   (async done
@@ -547,7 +565,7 @@
                                                                    :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
           (is (= false (:arrived @out)))
-          (is (= {:step :none :why :zone} (:escalation @out)))
+          (is (= {:step :none :why :zone :zones ["vault"] :owners ["Miles"]} (:escalation @out)))
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
 

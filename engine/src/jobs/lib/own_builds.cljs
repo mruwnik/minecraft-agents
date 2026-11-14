@@ -73,17 +73,10 @@
   "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), it is
   not a shelter block the call keeps for a hostile (mem :seal-kept) nor a plug of the body's against water (as its
   stairs, stair-memory/kept-plugs: the water behind it runs down the way), and unless own? the body's own builds
-  (own-build-fn) are spared: a way through them is priced (own-cut-fn) and chosen apart. Even then the own plan covering
-  goal (a cell) is spared: a way into the build the body is going to ends in its holes, which stay its stand and way in
-  (go-to restore skips them :needed or :occupied), so the put-back own-cut-fn prices is never made."
-  ([c] (may-dig-fn c false nil))
-  ([c own?] (may-dig-fn c own? nil))
-  ([c own? goal]
-   (let [own-build (if own?
-                     (let [own-plan (own-plan-fn c)
-                           home (some-> goal own-plan)]
-                       (if home #(when (= home (own-plan %)) :plan) (constantly nil)))
-                     (own-build-fn c))
+  (own-build-fn) are spared: a way through them is priced (own-cut-fn) and chosen apart."
+  ([c] (may-dig-fn c false))
+  ([c own?]
+   (let [own-build (if own? (constantly nil) (own-build-fn c))
          ;; tidy/refusal's input read once: a route search asks of hundreds of cells
          rules (delay (access/rules-input c {:ignore-zones? false}))
          kept (into (:seal-kept (ctx/mem c) #{}) (smem/kept-plugs c))]

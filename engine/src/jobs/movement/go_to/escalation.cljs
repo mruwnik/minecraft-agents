@@ -202,14 +202,28 @@
 
 (def priced-steps #{:stair :pillar :dig-route :bridge :fill-gap})
 
+(defn way-cells
+  "The cells way e from feet and a climb's later ways (:then, each from its :from) cut, seen or not: a stair's cuts, a dig route's cells."
+  [e feet]
+  (mapcat (fn [{:keys [step heading steps from cells]}]
+            (case step
+              :stair (escape/stair-cuts from (escape/heading-dirs heading) steps)
+              :dig-route (map :cell cells)
+              nil))
+          (cons (assoc e :from feet) (:then e))))
+
 (defn own-cells
-  "The cells of the body's own builds way e from feet cuts that it has sensed: a stair's planned cells, a dig
-  route's, and those of the dig routes of a climb's later ways."
-  [p e feet own-s]
-  (->> (concat (if (= :dig-route (:step e)) (:cells e) (planned-cells p e feet))
-               (mapcat :cells (filter #(= :dig-route (:step %)) (:then e))))
-       (map :cell)
-       (filter #(pos? (own-s %)))))
+  "The cells of the body's own builds way e from feet cuts (way-cells; own-s: their put-back, an unseen one's placing)."
+  [e feet own-s]
+  (filter #(pos? (own-s %)) (way-cells e feet)))
+
+(defn refused-by
+  "Whose zone, claim or plan refuses the cells of way e from feet not seen open that may-dig? spares: access/refusal-fields
+  of their verdicts (tidy/refusal) and the zones' and claims' :owners, empty ones left out."
+  [c e feet may-dig?]
+  (let [open? #(bs/air (u/seen-name (:primitives c) (zipmap [:x :y :z] %)))
+        vs (keep #(tidy/refusal c :dig (zipmap [:x :y :z] %)) (remove #(or (open? %) (may-dig? %)) (way-cells e feet)))]
+    (into {} (filter (comp seq val)) (assoc (access/refusal-fields vs) :owners (vec (distinct (keep :owner vs)))))))
 
 (defn own-way
   "The way that cuts the body's own builds (own) when it beats base, the way that spares them: base is none, or a priced
@@ -221,7 +235,7 @@
     (nil? own) nil
     (= :searching (:step own)) (when (= :none (:step base)) own)
     (#{:none :approach} (:step own)) nil
-    :else (let [cut-s (reduce + 0 (map own-s (own-cells p own feet own-s)))]
+    :else (let [cut-s (reduce + 0 (map own-s (own-cells own feet own-s)))]
             (when (and (pos? cut-s)
                        (or (= :none (:step base))
                            (and (priced-steps (:step base)) (< (+ (escape-way/price p feet own own-s) cut-s) (escape-way/price p feet base)))))
@@ -349,7 +363,7 @@
                        (wworld/rock-guess? (:primitives c) (:unknown c)))
         ;; a stair over guesses priced as a dig route is: past the call's worth it is none
         past? (fn [from w] (and (= :stair (:step w))
-                                (past-worth? (+ (escape-way/price (:primitives c) from w (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) w from (:own-s opts)))))
+                                (past-worth? (+ (escape-way/price (:primitives c) from w (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells w from (:own-s opts)))))
                                              (way-guesses (:primitives c) w from) (:guess-risk opts) worth)))
         ;; the way a body could make from the cell it would approach, when it is one that is past the worth
         past-from? (fn [from] (past? from (escape-way/choose (:primitives c) from goal spare (update opts :skip (fnil conj #{}) :approach))))
@@ -422,7 +436,7 @@
                                       (or (own-stair c feet goal) (choose spare opts))
                                       (gap-fill c result (:skip opts))
                                       (drop-fill c result (:skip opts) feet))))
-        choosable? #(not= :none (:step (worth-it (choose % opts))))
+        open-way (delay (worth-it (choose (constantly true) opts)))
         ;; the only way on is a drop the planner will not take (a loaded pit it cannot climb back out of): a shut-in body takes it, then digs out from the bottom
         drop-in (let [{:keys [kind at]} (when (= :one-way (some-> (:reason result) keyword)) (:one-way result))]
                   (when (and (= :drop (some-> kind keyword)) at (not (one-way/too-deep? (second feet) (second at) (second goal))) (not= :closed (some-> (:one-way (:args c)) keyword)) (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
@@ -435,7 +449,7 @@
                                                 (when-not (and s (= :past-worth (:why e)) (past-from? s)) s))))
         ;; a way through the body's own builds, priced against the one that spares them (own-way)
         priced-own (delay (when (and (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet))) (own-may-beat? (:primitives c) feet e))
-                            (some-> (own-way (:primitives c) feet e (choose (may-dig-fn c true goal) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)
+                            (some-> (own-way (:primitives c) feet e (choose (may-dig-fn c true) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)
                                     worth-it)))
         own (delay (when-not (= :none (:step @priced-own)) @priced-own))
         e (cond
@@ -444,7 +458,7 @@
             spot {:step :approach :pos spot}
             drop-in {:step :approach :pos drop-in}
             @own @own
-            (choosable? (constantly true)) {:step :none :why :zone}
+            (not= :none (:step @open-way)) (merge {:step :none :why :zone} (refused-by c @open-way feet spare))
             :else (or @priced-own e))
         e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)
         hold (delay (start-hold c pos feet e))]
@@ -855,7 +869,7 @@
             feet (end/feet-cell c)
             goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
             plan (fn [floors-unseen-ok?]
-                   (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c) goal) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (pickaxe-fetch c (fetch-tool? c))
+                   (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (pickaxe-fetch c (fetch-tool? c))
                                 (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c) :plugs (stair-mem/plugs-of c)
                                                      :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m)) :bound-s (call-budget-s c) :tolls (walk-tolls c)}
                                                     (range-opts c pos)))))

@@ -1,7 +1,7 @@
-;; Card 7f632862 (Tamsin H11): go-to's goal inside a plan the body made never cuts that plan to get in; its put-back would never
-;; be made (the holes stay the stand and the way in). Hut: dirt shell x 2..8, z 2..8, y 0..1, roof y 2 (plan "home", the
-;; body's), door gap [2 0 5]/[2 1 5] on the west wall; the body stands in a closet [9 0 5] of a stone block x 9..13, y 0..3,
-;; z 2..8, its west side the hut's east wall [8 0 5]/[8 1 5]. Cutting that wall is the cheap way; old go-to took it.
+;; Cards 7f632862, 8cd37950: go-to's goal inside a plan the body made; that plan's cells are priced like any own build
+;; (the dig and the put-back), never refused. Hut: dirt shell x 2..8, z 2..8, y 0..1, roof y 2 (plan "home", the body's),
+;; door gap [2 0 5]/[2 1 5] on the west wall; the body stands in a closet [9 0 5] of a stone block x 9..13, y 0..3,
+;; z 2..8, its west side the hut's east wall [8 0 5]/[8 1 5].
 {:defaults
  {:tags [:movement :go-to :places]
   :time :any
@@ -12,16 +12,16 @@
   :body {:at [9.5 0 5.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
   :limit-s 150}
  :cases
- [;; should-succeed: digs out of the closet through stone and walks in by the door; no cell of the hut is dug
-  {:name "goes-round-to-its-door"
+ [;; should-succeed: cutting the dirt wall and putting it back costs less than digging out through stone round to the door
+  {:name "cuts-its-wall-and-puts-it-back"
    :blocks [[:fill [2 0 5] [2 1 5] "air"]]
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [5 0 5] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :go-to.dug-own-build} :for-s 140 :of-job true}]
+            {:event {:source :job :kind :go-to.dug-own-build} :within-s 140 :of-job true}]
    :after [[:block [8 0 5] "dirt"] [:block [8 1 5] "dirt"] [:body-near [5.5 0 5.5] 2]]}
-  ;; should-stop: a hut with no door is not cut open to get in
-  {:name "doorless-own-hut-is-not-cut"
+  ;; should-succeed: a hut with no door is cut open to get in
+  {:name "doorless-own-hut-is-cut-open"
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [5 0 5] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :go-to.dug-own-build} :for-s 140 :of-job true}]
-   :after [[:block [8 0 5] "dirt"] [:block [8 1 5] "dirt"] [:block [2 0 5] "dirt"]]}]}
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:event {:source :job :kind :go-to.dug-own-build} :within-s 140 :of-job true}]
+   :after [[:body-near [5.5 0 5.5] 2]]}]}
