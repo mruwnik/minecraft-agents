@@ -14,8 +14,8 @@ const tool = (enchants = []) => ({ name: 'iron_pickaxe', count: 1, enchants })
 const book = (id = 21) => ({ name: 'enchanted_book', count: 1, enchants: [], componentMap: new Map([['stored_enchantments', { data: { enchantments: [{ id, level: 1 }] } }]]) })
 
 // A hand-made bot and anvil window as mineflayer hands it out: slots 0 and 1 the inputs, 2 the result, 3..38 the
-// pockets. Once both inputs lie in it the server sends the result and its level cost (window property 0); like the
-// server it gives back what lies in the inputs when the window closes.
+// pockets. Once both inputs lie in it the server sends the result and its level cost (window property 0) at once,
+// before the move's promise settles; like the server it gives back what lies in the inputs when the window closes.
 const makeBot = ({ block = 'anvil', pockets = [], level = 10, cost = 2, combines = true, windowType = 'minecraft:anvil' } = {}) => {
   const bot = new EventEmitter()
   const calls = []
@@ -29,10 +29,8 @@ const makeBot = ({ block = 'anvil', pockets = [], level = 10, cost = 2, combines
   const client = new EventEmitter()
   const offer = () => {
     if (!(combines && win.slots[0] && win.slots[1])) return
-    setTimeout(() => {
-      win.slots[2] = tool([{ name: 'mending', lvl: 1 }])
-      client.emit('craft_progress_bar', { windowId: win.id, property: 0, value: cost })
-    }, 1)
+    win.slots[2] = tool([{ name: 'mending', lvl: 1 }])
+    client.emit('craft_progress_bar', { windowId: win.id, property: 0, value: cost })
   }
   return Object.assign(bot, {
     calls,

@@ -3,7 +3,10 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -13,10 +16,10 @@
 (def mending {:name "enchanted_book" :count 1 :enchants [{:name "mending" :level 1}]})
 (def sharpness {:name "enchanted_book" :count 1 :enchants [{:name "sharpness" :level 1}]})
 
-(defn start [world prepare]
+(defn start [world prepare jobs]
   (let [[seen sink] (tu/legacy-capture-sink)
         p (prepare (tu/seeing-all (tu/fake-on-floor world)))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create {:primitives p :jobs (merge registry/jobs jobs) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -40,15 +43,16 @@
 (defn inv [p] (mapv #(cond-> {:name (.-name %) :count (.-count %)} (.-enchants %) (assoc :enchants (js->clj (.-enchants %) :keywordize-keys true)))
                     (.-inventory (.self p))))
 (defn level [p] (.-level (.-experience (.self p))))
-(defn block [p k] (get (js->clj (.-blocks (.-world p))) k))
+(defn block [p {:keys [x y z]}] (some-> (.blockAt p #js {:x x :y y :z z}) .-name))
 
 (def anvil-world {:blocks {spot "anvil"} :inventory [pickaxe mending] :self {:experience {:level 5}}})
 
 (defn ^:async combine!
   "Run the job over world with args; [result p seen]."
   ([world args] (combine! world args identity))
-  ([world args prepare]
-   (let [{:keys [eng p seen]} (start world prepare)
+  ([world args prepare] (combine! world args prepare nil))
+  ([world args prepare jobs]
+   (let [{:keys [eng p seen]} (start world prepare jobs)
          result (await (child-outcome eng ['jobs.items.anvil-combine (merge {:item "iron_pickaxe" :enchant "mending"} args)] 60))]
      [result p seen])))
 
@@ -82,7 +86,7 @@
 
 (def give-up-rows
   [["no book holds the enchantment" {:inventory [pickaxe sharpness]} {} :no-book]
-   ["the anvil asks more levels than the body has" {:self {:experience {:level 1}}} {} :too-few-levels]
+   ["a mending book asks two levels, the body has one: refused before an anvil is fetched" {:blocks {} :self {:experience {:level 1}}} {} :too-few-levels]
    ["no level at all" {:self {:experience {:level 0}}} {} :too-few-levels]
    ["the block given is no anvil" {:blocks {spot "crafting_table"}} {:anvil {:x 1 :y 64 :z 0}} :not-an-anvil]
    ["the anvil given is gone" {:blocks {}} {:anvil {:x 1 :y 64 :z 0}} :no-anvil]
@@ -123,7 +127,7 @@
           (is (= "anvil" (.-item (.-args placed))))
           (is (= 1 (count (calls p "anvil"))))
           (is (some #(= "anvil" (:name %)) (inv p)) "dug up again and carried")
-          (is (not= "anvil" (block p (str (:x cell) "," (:y cell) "," (:z cell))))))))))
+          (is (not= "anvil" (block p cell))))))))
 
 (deftest an-anvil-that-broke-is-forgotten-and-the-next-one-used
   (async done
@@ -153,3 +157,51 @@
           (is (= :nothing-possible (get-in r [:ending :kind])))
           (is (= "anvil gave up: anvil-failed: window-did-not-open" (:text r)))
           (is (seq (calls p "anvil"))))))))
+
+(defn slow-obtain
+  "jobs.items.obtain whose round runs 100 s three times, then gives (give!) and ends done."
+  [rounds give!]
+  (assoc (get registry/jobs 'jobs.items.obtain)
+         :can-start? (constantly (contract/ok :stub "a stub"))
+         :quote-of (constantly {:uses {:job-time [1 1 1]}})
+         :round (fn ^:async slow [c]
+                  (if (< (swap! rounds inc) 4)
+                    (do (swap! clock + 100000) :continue)
+                    (do (give!) (ctx/end c :done nil {}))))))
+
+(deftest a-fetch-that-runs-for-minutes-is-not-cut-by-the-visit-s-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [body (atom nil)
+              rounds (atom 0)
+              stub (slow-obtain rounds #(fake/add-item! @body "iron_pickaxe" 1))
+              [r p] (await (combine! (assoc anvil-world :inventory [mending]) {} #(reset! body %) {'jobs.items.obtain stub}))]
+          (is (= 4 @rounds) "the fetch ran 300 s, past the visit's 120 s")
+          (is (true? (:combined r)) (pr-str r))
+          (is (= 1 (count (calls p "anvil")))))))))
+
+(deftest an-anvil-put-down-with-no-pickaxe-to-keep-its-drop-is-left-standing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (combine! (assoc anvil-world :blocks {} :inventory [{:name "iron_sword" :count 1} mending {:name "anvil" :count 1}])
+                                     {:item "iron_sword" :ways #{:carried}}))
+              placed (first (calls p "place"))
+              cell (js->clj (.-pos (.-args placed)) :keywordize-keys true)]
+          (is (true? (:combined r)))
+          (is (= "anvil" (block p cell)) "not dug by hand, its drop lost"))))))
+
+(deftest the-quote-holds-the-price-of-each-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              priced (assoc (get registry/jobs 'jobs.items.obtain) :can-start? (constantly (contract/later :not-worth "a stub" :price 500)))
+              asker {:round (fn ^:async ask [c]
+                              (reset! out (await (ctx/quote c 'jobs.items.anvil-combine {:item "iron_pickaxe" :enchant "mending"})))
+                              (ctx/end c :done nil))}
+              {:keys [eng]} (start (assoc anvil-world :inventory [mending]) identity {'jobs.items.obtain priced 'asker asker})]
+          (core/submit! eng (tu/order '(asker {})) {})
+          (await (run-until-empty eng 5))
+          (is (<= 500 (first (get-in @out [:uses :job-time]))) (pr-str @out)))))))

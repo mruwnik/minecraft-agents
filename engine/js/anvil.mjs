@@ -70,13 +70,14 @@ async function levelMoves (bot, from, timeScale) {
 }
 
 async function combine (bot, ctx, win, a, timeScale, before) {
-  const item = pocketsOf(win).find(p => p.item.name === a.item && !holds(bot, p.item, a.enchant))
-  await bot.moveSlotItem(item.slot, LEFT)
-  const book = pocketsOf(win).find(p => p.item.name === BOOK && holds(bot, p.item, a.enchant))
-  await bot.moveSlotItem(book.slot, RIGHT)
-  ctx.alive()
+  // the server may send the cost before the move's promise settles
   const cost = watchCost(bot, win)
   try {
+    const item = pocketsOf(win).find(p => p.item.name === a.item && !holds(bot, p.item, a.enchant))
+    await bot.moveSlotItem(item.slot, LEFT)
+    const book = pocketsOf(win).find(p => p.item.name === BOOK && holds(bot, p.item, a.enchant))
+    await bot.moveSlotItem(book.slot, RIGHT)
+    ctx.alive()
     if (!await resultArrives(win, cost.seen, timeScale)) return { status: 'cannot', reason: 'not-combinable' }
     const need = cost.seen.cost
     if (need >= TOO_EXPENSIVE) return { status: 'cannot', reason: 'too-expensive', need }

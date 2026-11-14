@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
@@ -22,12 +23,16 @@
   "Put the enchantment of a carried enchanted book on a carried :item at an anvil (a Mending book on an iron pickaxe).
   The goal: a carried :item holds :enchant. The anvil is :anvil, else the nearest seen, else a carried one put down
   beside the body, else one fetched (jobs.lib.need: obtain crafts it from iron) and put down; an anvil this call put
-  down is dug up again when it ends. A missing :item is fetched from the ways the call allows. The book is never
+  down is dug up again when it ends, with a tool that keeps the drop (fetched when the call's ways allow and an anvil
+  is worth its price), else left standing. A missing :item is fetched from the ways the call allows. The book is never
   fetched (no job gets a book with a given enchantment: buy it with jobs.village.trade). The level cost is the
-  server's, read at the anvil.
+  server's, read at the anvil; it is at least the book's (min-levels), checked before anything is fetched.
+  Quote: the walk and the visit, plus each fetch's price (need/item-price). :spend :job-time: the visit's ::job-time-s
+  plus fetch-time/one-unit-s for each thing the call may fetch (the item, and the anvil unless :anvil is given), as
+  a parent's job time holds its children's.
   Ends :done with {:combined true :item :enchant :enchants [{:name :level}] :level-cost :levels-spent :xp-level :text}.
   Impossible: :bad-args (no item or enchantment name). Conditions (a listed root job waits): :no-book (no carried
-  enchanted book holds :enchant), :no-item (not carried, the call's :ways #{:carried}), :too-few-levels (no level at all),
+  enchanted book holds :enchant), :no-item (not carried, the call's :ways #{:carried}), :too-few-levels (fewer levels than the book's least cost, data :need :have),
   :no-anvil (none given, seen or carried, after one look round, and the ways allow no fetch). A failed fetch ends as
   {:reason :need} with its ending as the :because. Condition-failed in the round: :no-book, :no-item, :no-anvil (the
   anvil is gone and none other is known), :not-an-anvil, :too-few-levels (data :need :have), :not-combinable,
@@ -40,7 +45,7 @@
    :anvil {:doc "the anvil position {:x :y :z}; nil: the nearest seen, else one carried or fetched and put down" :spec ::a/pos :default nil}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds the walk and the visit may take, fetches aside (a guess until measured)." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to use the anvil, in blocks." :spec (a/int-in 0 nil)}
    ::visit-s {:default 5 :doc "Seconds the visit at the anvil takes (the quote)." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
@@ -51,7 +56,12 @@
 (def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(defn default-time
+  "The call's default :spend :job-time: ::job-time-s, and fetch-time/one-unit-s for the item and for the anvil unless one is given."
+  [{:keys [anvil]}]
+  (+ (settings/get settings ::job-time-s) (* (fetch-time/one-unit-s) (if anvil 1 2))))
+
+(def defaults {:spend {:job-time default-time}})
 
 (def book "enchanted_book")
 (def anvil-names ["anvil" "chipped_anvil" "damaged_anvil"])
@@ -79,6 +89,21 @@
 (defn carried-anvil? [c] (pos? (storage/carried (u/inventory (:primitives c)) "anvil")))
 (defn xp-level [c] (or (some-> (.self (:primitives c)) .-experience .-level) 0))
 
+(def book-multiplier
+  "The anvil's level cost per level of a book's enchantment, by the enchantment's rarity: 1 for those not named."
+  (merge (zipmap ["blast_protection" "respiration" "aqua_affinity" "depth_strider" "frost_walker" "fire_aspect" "looting"
+                  "sweeping_edge" "fortune" "punch" "flame" "luck_of_the_sea" "lure" "impaling" "riptide" "multishot"
+                  "mending" "wind_burst"] (repeat 2))
+         (zipmap ["thorns" "silk_touch" "infinity" "channeling" "binding_curse" "vanishing_curse" "soul_speed" "swift_sneak"] (repeat 4))))
+
+(defn min-levels
+  "The least level cost of the carried books holding :enchant: its multiplier times its level (the item's prior work
+  only adds); 1 with no such book."
+  [c]
+  (let [enchant (:enchant (:args c))
+        levels (for [stack (stacks c book) e (.-enchants stack) :when (= enchant (.-name e))] (or (.-level e) 1))]
+    (* (get book-multiplier enchant 1) (if (seq levels) (apply min levels) 1))))
+
 (defn find-anvil
   "The nearest anvil the body has seen within the radius and not found gone in this call, or nil."
   [c]
@@ -96,7 +121,8 @@
       (goal? c) nil
       (not (book? c)) {:reason :no-book :why (str "no carried enchanted book holds " enchant)}
       (and (not (plain? c)) (empty? (need/fetch-how c))) {:reason :no-item :why (str "no " item " without " enchant " carried")}
-      (zero? (xp-level c)) {:reason :too-few-levels :need 1 :why "no experience level"})))
+      (< (xp-level c) (min-levels c)) {:reason :too-few-levels :need (min-levels c) :have (xp-level c)
+                                       :why (str "the book asks at least " (min-levels c) " levels, the body has " (xp-level c))})))
 
 (defn no-anvil
   "Look :no-anvil while none is given, seen or carried and no look round has run; then ok when the ways allow a fetch, else later."
@@ -114,12 +140,37 @@
     (contract/ok :combined "the item holds the enchantment" :units :items :done 1 :left 0 :result {:combined true})
     (contract/later :combining "anvil: the round puts the book on" :units :items :done 0 :left 1 :result {:combined false})))
 
-(defn quote-of [c]
+(defn fetch-opts [c slot] (when-let [o (need/fetch-opts c)] (assoc o :slot slot)))
+
+(defn fetches
+  "[item slot] of each fetch the call still owes: the item when none without the enchantment is carried, the anvil when
+  none is known or carried; none when the ways allow no fetch."
+  [c]
+  (when (and (need/fetch-opts c) (not (goal? c)))
+    (cond-> []
+      (not (plain? c)) (conj [(:item (:args c)) :need-item])
+      (not (or (anvil-at c) (carried-anvil? c))) (conj ["anvil" :need-anvil]))))
+
+(defn fetch-s "Seconds the fetches cost (need/item-price each), skipping skip (an item name)." [c skip]
+  (reduce + 0 (for [[item slot] (fetches c) :when (not= item skip)] (need/item-price c item 1 (fetch-opts c slot) nil))))
+
+(defn visit-s [c]
   (let [anvil (anvil-at c)
         walk (/ (if anvil (u/dist (u/self-pos c) anvil) anvil-radius) (cost/walk-blocks-per-s))
         visit (settings/get settings ::visit-s)]
-    {:uses {:job-time [visit (+ walk visit) (+ walk (* 3 visit))]
+    [visit (+ walk visit) (+ walk (* 3 visit))]))
+
+(defn quote-of [c]
+  (let [f (fetch-s c nil)]
+    {:uses {:job-time (mapv #(+ f %) (visit-s c))
             :items {book [0 1 1]}}}))
+
+(defn fetch-worth
+  "The worth of the fetch of item: the call's less the rest after it (cost/worth-left): the other fetch and the visit;
+  nil when the rest has no price (the fetch inherits the call's worth)."
+  [c item]
+  (let [rest-s (+ (fetch-s c item) (second (visit-s c)))]
+    (when (js/isFinite rest-s) (cost/worth-left c rest-s))))
 
 ;; ------------------------------------------------------------------ the round
 
@@ -147,9 +198,11 @@
   (if (cost/try-again? c kind) :again (give-up! c reason extra)))
 
 (defn ^:async fetched
-  "nil once the fetch of n of item ended done, :continue while it waits, else its ending as the job's."
-  [c item opts]
-  (let [e (await (need/item! c item 1 opts))]
+  "nil once the fetch of one item (at fetch-worth, priced when it starts) ended done, :continue while it waits, else its
+  ending as the job's."
+  [c item slot]
+  (let [w (when (nil? (get-in (ctx/mem c) [:children slot])) (fetch-worth c item))
+        e (await (need/item! c item 1 (cond-> (fetch-opts c slot) w (assoc :worth w))))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) nil
           :else (finish! c (:kind e) (:cause e) {}))))
@@ -161,7 +214,7 @@
   (cond
     (plain? c) nil
     (empty? (need/fetch-how c)) (give-up! c :no-item {})
-    :else (or (await (fetched c (:item (:args c)) {:how (need/fetch-how c) :slot :need-item})) :again)))
+    :else (or (await (fetched c (:item (:args c)) :need-item)) :again)))
 
 (defn ^:async put-down!
   "No anvil known: put a carried one down beside the body (fetching one first when the ways allow). :again once it
@@ -170,7 +223,7 @@
   (if-not (carried-anvil? c)
     (if (empty? (need/fetch-how c))
       (give-up! c :no-anvil {:why "none known or carried"})
-      (or (await (fetched c "anvil" {:how (need/fetch-how c) :slot :need-anvil})) :again))
+      (or (await (fetched c "anvil" :need-anvil)) :again))
     (let [r (await (free-spot/place-beside! c "anvil" [:anvil-spot] {}))]
       (cond
         (= :continue r) :continue
@@ -238,14 +291,19 @@
                (:ok (access/may? (access/rules-input c {}) :dig spot)))
       spot)))
 
+(defn anvil-worth "Seconds an anvil is worth: making one from nothing (cost/goal-value)." []
+  (:value (cost/goal-value [{:name "anvil" :count 1}])))
+
 (defn ^:async cleanup
-  "However the call ended: dig up the anvil this call put down (jobs.blocks.dig child, :continue while it waits).
-  Nothing-possible :anvil-left (data :anvil) when the dig did not end done."
+  "However the call ended: dig up the anvil this call put down (jobs.blocks.dig child at the anvil's worth, the drop
+  kept: a pickaxe fetched from the call's ways, :continue while it waits). Nothing-possible :anvil-left (data :anvil)
+  when the dig did not end done: the anvil stands."
   [c _]
   (let [spot (pickup-spot c)]
     (if-not spot
       (ctx/end c :done nil {})
-      (let [r (waits/waiting-out c (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :ways #{:carried} :on-fluid :fail})))]
+      (let [r (waits/waiting-out c (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop true :ways (need/call-ways c)
+                                                                                 :worth (anvil-worth) :on-fluid :fail})))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c assoc :picked-up true)
