@@ -632,25 +632,19 @@
               (is (seq (filter #(< (second %) 63) (dug-cells s))) "the stair goes on down"))
             (finally (set! tp/plan orig))))))))
 
-;; Brindle S9 j1682: the plan lit no cell behind a hung torch because the body's memory of the cells it dug out was not "open".
-(deftest a-torch-lights-through-the-cells-the-body-stood-in-whatever-it-remembers-of-them
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [orig tp/plan
-              seen (atom [])]
-          (set! tp/plan (fn [m] (swap! seen conj m) {:spots [] :uncovered []}))
-          (try
-            (let [s (start {:world {:blocks (soil-over-stone 63 56) :drops cobble :inventory pickaxe}})
-                  _ (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3})) {})
-                  _ (await (run-ticks s 100))
-                  orig-seen u/seen-name
-                  m (first (filter #(seq (:cells %)) @seen))]
-              (is (some? m) "the stair asked the plan")
-              (set! u/seen-name (constantly nil))
-              (try (is (every? (:open? m) (:cells m)) "light passes the stair's own cells")
-                   (finally (set! u/seen-name orig-seen))))
-            (finally (set! tp/plan orig))))))))
+;; Light passes the body's own cell whatever memory says of it, but a site it never stood in (a stair turned since its
+;; last step) passes light only as memory sees it: a wall there is no way for light.
+(deftest only-the-bodys-own-cell-passes-light-unseen
+  (let [orig [tp/plan u/seen-name u/self-pos ctx/mem]
+        seen (atom nil)]
+    (set! tp/plan (fn [m] (reset! seen m) {:spots [] :uncovered []}))
+    (set! u/seen-name (fn [_ _] "stone"))
+    (set! u/self-pos (fn [_] {:x 0.5 :y 64 :z 0.5}))
+    (set! ctx/mem (fn [_] {}))
+    (try
+      (mine-torches/due-spot {:primitives #js {:self (fn [] #js {:inventory #js []})}} [[1 65 0] [0 64 0]] [[-1 63 0]] [1 65 0])
+      (is (= [true false] (map (:open? @seen) [[0 64 0] [1 65 0]])) "the feet cell passes light, the walled site does not")
+      (finally (let [[a b c d] orig] (set! tp/plan a) (set! u/seen-name b) (set! u/self-pos c) (set! ctx/mem d))))))
 
 ;; A site is asked once while its hung torch stands (or was left out), and again when the body sees the torch gone.
 (deftest a-site-is-asked-again-when-its-torch-is-seen-gone
@@ -664,8 +658,19 @@
         {[1 2 3] nil}   "air"       true
         {[1 2 3] [1 3 3]} "wall_torch" true
         {[1 2 3] [1 3 3]} nil       true
-        {[1 2 3] [1 3 3]} "air"     false)
+        {[1 2 3] [1 3 3]} "air"     false
+        [[1 2 3]]       "air"       true)
       (finally (set! ctx/mem orig-mem) (set! u/seen-name orig-seen)))))
+
+;; A body restarted on memory saved as a vector of sites books its next torch beside them.
+(deftest a-torch-booked-over-an-older-asked-vector-keeps-its-sites
+  (let [orig [ctx/update-mem!]
+        m (atom {:asked [[1 2 3]]})]
+    (set! ctx/update-mem! (fn [_ f & args] (apply swap! m f args)))
+    (try
+      (mine-torches/booked! nil [4 5 6] [4 6 6])
+      (is (= {[1 2 3] nil [4 5 6] [4 6 6]} (:asked @m)))
+      (finally (set! ctx/update-mem! (first orig))))))
 
 ;; Juniper j108: a tunnel run from the foot of a stair back under it would cut its lowest steps' floors.
 (deftest a-tunnel-under-the-stair-it-came-down-stops-before-it-cuts-the-way-up
