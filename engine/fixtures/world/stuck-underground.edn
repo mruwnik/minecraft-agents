@@ -1,6 +1,7 @@
 ;; Card 2e405a35 (D9): the :stuck-underground trigger walks an idle body that sits 6 or more blocks under its home out of its hole. A stone mass x 0..31
 ;; z 8..24, y 0..11 with an air room around the body at [16 0 16] and a ramp of open cells up to the surface (y 12) at x 30; the home is a torch on the surface.
 ;; Should-succeed: no job for :idle-s 20, buried, home 12 above: the trigger fires go-home once and the body ends within 5 of the home.
+;; Should-succeed too: a listed job that only waits (wait-for-light in the dark) keeps it no longer, once body.idle is on record.
 ;; Should-fail: a home only 4 above never fires it.
 {:defaults
  {:tags [:survival :stuck-underground] :time :any
@@ -26,6 +27,14 @@
    :blocks [[:set [31 12 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [31 12 16]}) [:now]]]
    :expect [{:count-event {:source :reflex :kind :fired :context {:reflex-id :stuck-underground}} :for-s 100 :at-least 1 :at-most 1}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :stuck-underground}} :within-s 140}]
+   :after [[:body-near [31.5 12 16.5] 5]]}
+  {:name "a-listed-job-that-only-waits-walks-out-too"
+   :blocks [[:set [31 12 16] "torch"]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [31 12 16]}) [:now]]
+         [:job (jobs.time.wait-for-light {:worth 1200})]]
+   :expect [{:event {:source :body :kind :idle} :within-s 60}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :stuck-underground}} :for-s 100 :at-least 1 :at-most 1}
             {:event {:source :reflex :kind :ended :context {:reflex-id :stuck-underground}} :within-s 140}]
    :after [[:body-near [31.5 12 16.5] 5]]}
   {:name "home-only-four-above-never-fires"

@@ -1,6 +1,7 @@
 (ns engine.stuck-underground-test
   "The :stuck-underground trigger: an idle body deep underground walks home."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [triggers.survival.stuck-underground :as su]))
@@ -48,3 +49,20 @@
     (read 100000 #{"j1"})
     (is (false? (read 125000 #{})))
     (is (true? (read 250000 #{})))))
+
+(deftest a-listed-job-that-leaves-the-body-idle-keeps-it-stuck-no-longer
+  (let [now (atom 1000)
+        store (mem/open (tu/tmp-dir) {:now #(deref now)})
+        p (tu/seeing-all (tu/fake-on-floor {:floor [-4 -4 4 4] :self {:pos {:x 0.5 :y 50 :z 0.5}}
+                                                      :blocks (assoc roof "1,52,0" "stone")}))
+        read (fn [t] (reset! now t) (su/stuck-underground p (mem/view store) su/defaults nil #{"j1"}))]
+    (mem/write! store :home {:pos {:x 30 :y 64 :z 0}} mem/place-policy)
+    (read 1000)
+    (is (false? (read 125000)) "a job listed and no body.idle record: the job works")
+    (reset! now 126000)
+    (mem/write! store :body-idle {:jobs [] :idle-ms 10000})
+    (is (false? (read 200000)))
+    (is (true? (read 246000)) "idle-s after the clock restarted under the working job")
+    (swap! (fake/state p) assoc-in [:self :pos] [1.5 50 0.5])
+    (is (false? (read 247000)) "leaving its cell restarts the clock")
+    (is (false? (read 400000)) "and only a new body.idle record makes it idle again")))
