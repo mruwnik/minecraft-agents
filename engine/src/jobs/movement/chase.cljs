@@ -21,6 +21,7 @@
   - limit-reached {:reason :leg :line :job-time} with {:arrived false :leg true :nearer bool} when the leg's seconds ran out
     (also mid-search): :nearer says the body got more than 1 block closer. A leg that got no nearer is no failure: the next
     leg is aimed afresh.
+  - the same for a thing that moves (:entity, :player) when go-to gave up with its walk no nearer: it went elsewhere meanwhile.
   - go-to's own ending otherwise (a give-up with its :why, a refusal), unchanged.
   :continue while the go-to child waits on the world. Quote: one leg.")
 
@@ -83,6 +84,11 @@
   [e]
   (and (= :limit-reached (:kind e)) (= :job-time (:line (:cause e)))))
 
+(defn no-progress?
+  "Whether go-to's ending e is a give-up because the walk ended no nearer."
+  [e]
+  (and (= :nothing-possible (:kind e)) (= :no-progress (:why (:cause e)))))
+
 (defn forward
   "go-to's ending e as this job's own, with e as its :because."
   [c e]
@@ -97,7 +103,7 @@
     (cond
       (= :continue e) :continue
       (:arrived (:data e)) (ctx/end c :done nil {:arrived true})
-      (leg-end? e) (ctx/end c :limit-reached {:reason :leg :line :job-time}
+      (or (leg-end? e) (and (no-progress? e) (or (:entity (:args c)) (:player (:args c))))) (ctx/end c :limit-reached {:reason :leg :line :job-time}
                             {:arrived false :leg true
                              :nearer (< (u/dist (u/self-pos c) aim) (- before (settings/get settings ::nearer-by)))})
       :else (forward c e))))

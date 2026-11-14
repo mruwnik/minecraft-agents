@@ -82,6 +82,23 @@
                  (select-keys r [:kind :cause :data])))
           (is (= :nothing-possible (:kind (:because r)))))))))
 
+(def no-progress #(ctx/end %1 :nothing-possible {:reason :unreachable :why :no-progress} {:arrived false :why :no-progress}))
+
+(deftest a-walk-that-ended-no-nearer-toward-a-moving-entity-is-a-leg-not-a-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run-chase {:entities [(cow 12)]} {:entity 7 :range 1 :leg-s 4} (atom []) (fn [c _] (no-progress c))))]
+          (is (= {:kind :limit-reached :data {:arrived false :leg true :nearer false}}
+                 (select-keys r [:kind :data]))))))))
+
+(deftest a-walk-that-ended-no-nearer-toward-a-fixed-cell-is-a-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run-chase {} {:pos {:x 12 :y 64 :z 0} :range 1 :leg-s 4} (atom []) (fn [c _] (no-progress c))))]
+          (is (= :nothing-possible (:kind r))))))))
+
 (deftest a-player-is-found-by-name-and-an-unseen-entity-falls-back-to-pos
   (async done
     (tu/run-async done
