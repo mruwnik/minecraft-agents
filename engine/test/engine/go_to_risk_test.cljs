@@ -639,12 +639,15 @@
        (is (= ["zombie"] (mapv :cause (death-spot/recent (view 3600000 [{:t (- now 600000) :data {:pos (update spot :x + 3) :cause "zombie" :death-t (- now 600000)}}]))))
            "a hit beside a death is the death's spot")))))
 
-(deftest a-recent-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day
+(deftest a-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day-and-past-its-fade
+  ;; Brindle S9: three deaths in one cave 9-11 h old weighed nothing and the body walked back in
   (let [c (ready-test/ctx-of day-world)
         on-way (with-death c {:x 80 :y 64 :z 5} "husk" 60000)
         off-way (with-death c {:x 50 :y 64 :z 5} "husk" 60000)]
     (is (zero? (:death-hp (risk/estimate c far-goal))))
     (is (pos? (:death-hp (estimate-unseen on-way far-goal))))
+    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "husk" 32400000) far-goal)))
+        "9 h old: the spot, never seen lit, may have spawned a like mob")
     (is (zero? (:death-hp (estimate-unseen off-way far-goal))))))
 
 (deftest the-planner-keeps-away-from-a-recent-death-until-a-mob-death-spot-is-seen-lit
@@ -849,14 +852,14 @@
         "only a chicken jockey's rider stays")))
 
 (defn dark-share
-  "present-share of each death or near-death spot by a mob in dark-spot-world (simulation distance 10), at difficulty (1 easy, 2 normal), its records `entries`;
-  over its weight with :unfaded. Its body's death is dear (ready-test/dear-death's 15000 s): a hit to 2 hp is a near-death.
+  "present-share of each death or near-death spot by a mob in dark-spot-world (simulation distance 10), at difficulty (1 easy, 2 normal), its records `entries`.
+  Its body's death is dear (ready-test/dear-death's 15000 s): a hit to 2 hp is a near-death.
   The clock is the long-inhabited late one (day 63, world age 3.6M ticks), where a loot-picker's special multiplier is 1."
-  [difficulty entries & [unfaded]]
+  [difficulty entries]
   (with-redefs [threat/simulation-distance (constantly 10)]
     (settings/with-settings {::threat/difficulty difficulty :jobs.lib.cost.death/extra-s 15000}
       #(let [c (assoc (doto (ready-test/ctx-of (assoc-in dark-spot-world [:self :worldAge] 3600000)) (-> :primitives fake/state (swap! assoc :days 63))) :view (fn [] {:now 36000000 :data {:policies {:deaths core/deaths-policy} :entries entries}}))]
-         (mapv (fn [d] (/ (death-spot/present-share c (assoc d :mob (:cause d))) (if unfaded (:weight d) 1))) (filter :mob? (death-spot/recent c)))))))
+         (mapv (fn [d] (death-spot/present-share c (assoc d :mob (:cause d)))) (filter :mob? (death-spot/recent c)))))))
 
 (defn died [cause age-ms] {:deaths [{:t (- 36000000 age-ms) :data {:pos {:x 80 :y 64 :z 5} :cause cause :death-t (- 36000000 age-ms)}}]})
 (defn pct [x] (js/Math.round (* 1000 x)))
@@ -885,22 +888,21 @@
                  (:death-hp (risk/estimate (with-sighting (ready-test/ctx-of day-world) "creeper" at 10000 {}) far-goal))))
         "its place seen lit since: not there")))
 
-(deftest a-dark-death-spot-holds-a-spawned-mob-at-the-measured-share-falling-with-its-fade-and-none-once-the-body-went-far
+(deftest a-dark-death-spot-holds-a-spawned-mob-at-the-measured-share-however-old-and-none-once-the-body-went-far
   ;; the body 75 blocks off, the spot all dark
-  (let [[ten] (dark-share 1 (died "creeper" 600000))
-        [hundred] (dark-share 1 (died "creeper" 6000000))
-        since-back #(* (- 1 (/ %1 7200000)) (threat/spawned-there %2))
-        later-fall {:t 35999000 :data {:pos {:x 300 :y 64 :z 5} :cause "fall" :death-t 35999000}}]
-    (is (< 0 hundred ten 0.5) "a dark spot is no sure mob, and the older record says less")
-    (is (= [(pct (since-back 60000 50))] (mapv pct (dark-share 1 (merge (died "creeper" 60000) respawned-far))))
+  (let [later-fall {:t 35999000 :data {:pos {:x 300 :y 64 :z 5} :cause "fall" :death-t 35999000}}]
+    (is (< 0 (first (dark-share 1 (died "creeper" 600000))) 0.5) "a dark spot is no sure mob")
+    (is (= [(pct (threat/spawned-there 32400))] (mapv pct (dark-share 1 (died "creeper" 32400000))))
+        "9 h old, past the killer's fade: a like mob spawned since, as in a fresh record's dark")
+    (is (= [(pct (threat/spawned-there 50))] (mapv pct (dark-share 1 (merge (died "creeper" 60000) respawned-far))))
         "the respawn 128 blocks off despawned the creeper and any spawned there: only the 50 s since the body came back count")
-    (is (= [(pct (since-back 600000 1))] (mapv pct (dark-share 1 (update (died "creeper" 600000) :deaths conj later-fall)))) "a later death far off is where the body was")))
+    (is (= [(pct (threat/spawned-there 1))] (mapv pct (dark-share 1 (update (died "creeper" 600000) :deaths conj later-fall)))) "a later death far off is where the body was")))
 
 (deftest a-spot-that-may-spawn-holds-a-spawned-mob-at-the-measured-rate-of-any-light-and-a-seen-lit-one-none
   ;; the measured rate already covers spots of any light: a half-lit field is priced as a dark one
   (let [shares #(mapv pct (with-redefs [death-spot/lit? %] (dark-share 1 (merge (died "creeper" 600000) respawned-far))))
         dark (shares (constantly false))]
-    (is (= [(pct (* (- 1 (/ 600000 7200000)) (threat/spawned-there 50)))] dark))
+    (is (= [(pct (threat/spawned-there 50))] dark))
     (is (= dark (shares (fn [_ {:keys [x]}] (< x 80)))))
     (is (= [0] (shares (constantly true))))))
 
@@ -911,15 +913,16 @@
 
 (deftest only-a-loot-picker-above-easy-that-could-pick-up-a-drop-it-equips-outlives-the-body-going-far
   (let [spawned (threat/spawned-there 50)]
+    ;; kept: the killer's own share, times its weight (a death's 2 h fade, a near-death's 1 h :hurt ttl, a minute in)
     (are [difficulty entries kept] (= (pct (- 1 (* (- 1 kept) (- 1 spawned))))
-                                      (pct (first (dark-share difficulty (merge entries respawned-far) :unfaded))))
-      2 (died "zombie" 60000) 0.5522
-      2 (died-with "zombie" 60000 ["dirt"]) 0.5522
-      2 (died-with "skeleton" 60000 ["dirt" "oak_planks"]) 0.0099
-      2 (died-with "skeleton" 60000 ["iron_boots"]) 0.5544
-      1 (died "zombie" 60000) 0.0049
+                                      (pct (first (dark-share difficulty (merge entries respawned-far)))))
+      2 (died "zombie" 60000) (* 0.5522 (/ 119 120))
+      2 (died-with "zombie" 60000 ["dirt"]) (* 0.5522 (/ 119 120))
+      2 (died-with "skeleton" 60000 ["dirt" "oak_planks"]) (* (threat/custom-kept "skeleton") (/ 119 120))
+      2 (died-with "skeleton" 60000 ["iron_boots"]) (* 0.5544 (/ 119 120))
+      1 (died "zombie" 60000) (* 0.0049 (/ 119 120))
       2 (died "creeper" 60000) 0
-      2 {:hurt [{:t (- 36000000 60000) :data {:health 2 :pos {:x 80 :y 64 :z 5} :attacker {:name "zombie"}}}]} 0.0049)))
+      2 {:hurt [{:t (- 36000000 60000) :data {:health 2 :pos {:x 80 :y 64 :z 5} :attacker {:name "zombie"}}}]} (* 0.0049 (/ 59 60)))))
 
 (deftest a-death-spot-counts-as-lit-only-when-seen
   (let [p (:primitives (ready-test/ctx-of day-world))
