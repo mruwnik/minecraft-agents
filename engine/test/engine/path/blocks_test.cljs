@@ -207,3 +207,9 @@
   (is (= 3 (count (b/state-ids table "hay_block"))))
   (is (= [(fx/state-id "stone" {})] (b/state-ids table "stone")))
   (is (nil? (b/state-ids table "no_such_block"))))
+
+(deftest bowls-are-no-floor
+  (doseq [[name props] [["composter" {:level 0}] ["composter" {:level 7}] ["cauldron" {}] ["hopper" {:facing "down"}]]]
+    (is (= [1 0] [(at "hollow" name props) (at "floor" name props)]) name))
+  (doseq [[name props] [["stone" {}] ["oak_stairs" {:half "bottom"}] ["oak_slab" {:type "top"}] ["oak_fence" {}] ["chest" {:type "single"}]]]
+    (is (zero? (at "hollow" name props)) name)))

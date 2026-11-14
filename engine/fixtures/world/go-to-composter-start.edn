@@ -1,0 +1,14 @@
+;; Card 77eb960d: a body sunk in a composter's bowl (feet 1/8 over the inner floor) plans out over the rim and arrives, instead of a plan that drops off a rim it never climbs.
+;; Ground = stone up to y 0 (body level 1); a composter at [10 1 10].
+{:defaults {:tags [:movement :planner]
+            :plot {:height 8}
+            :blocks [[:fill [0 -3 0] [31 0 31] "stone"]]
+            :limit-s 60
+            :time :any}
+ :cases
+ [{:name "walks-out-of-a-composter-bowl"
+   :blocks [[:set [10 1 10] "composter"]]
+   :body {:at [10.5 1.125 10.5]}
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 1 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:body-near [14.5 1 14.5] 1.5]]}]}

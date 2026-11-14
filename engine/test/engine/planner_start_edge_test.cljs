@@ -123,3 +123,16 @@
 (deftest an-airborne-body-beside-a-stand-does-not-start-from-the-side-cell
   (is (= ["none" "start-not-standable"]
          ((juxt :status :reason) (pod-run [hole] {:age "2" :facing "north"} {:py 65.5})))))
+
+(def composter [2 64 4 2 64 4 "composter"])
+
+(deftest a-composter-is-no-floor-to-cross-a-corridor-over
+  ;; its top is a rim round an opening the 0.6-wide body sinks into: a walk over it never gets across
+  (is (= "none" (:status (run (world {:fill [[-2 64 4 1 66 4 "stone"] [3 64 4 40 66 4 "stone"] composter]})
+                              (near 2 64 7) {} {:x 2 :y 64 :z 2})))))
+
+(deftest start-sunk-in-a-composter-plans-from-a-side-cell-not-the-rim
+  (let [[status reason first-cell] (status+first (run (world {:fill [composter]}) (near 8 64 8) {} {:x 2 :y 64 :z 4 :px 2.5 :py 64.125 :pz 4.5}))]
+    (is (= ["found" nil] [status reason]))
+    (is (not= [2 65 4] first-cell) "a plan from the rim asks for a drop the body cannot do")
+    (is (= 64 (second first-cell)))))

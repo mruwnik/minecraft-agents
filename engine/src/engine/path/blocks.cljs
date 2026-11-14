@@ -123,6 +123,24 @@
       hit
       (let [v (leaves-gaps? shapes)] (.set gaps k v) v))))
 
+(defn- covered-by?
+  "true when the sample point x z (blocks) lies inside the xz projection of one of shapes"
+  [^js shapes x z]
+  (some (fn [^js b] (and (> x (aget b 0)) (< x (aget b 3)) (> z (aget b 2)) (< z (aget b 5)))) shapes))
+
+(defn- hollow-top?
+  "true when the boxes reaching the block's top close the whole outer ring but leave its middle open (composter, cauldron,
+  hopper): a 0.6-wide body standing over the opening sinks into the bowl, so the top is no floor."
+  [^js shapes top]
+  (let [tops (.filter shapes (fn [^js b] (== top (js/Math.round (* 16 (aget b 4))))))
+        at (fn [i] (/ (+ i 0.5) FOOTPRINT))
+        ring (concat (for [i (range FOOTPRINT)] [i 0]) (for [i (range FOOTPRINT)] [i (dec FOOTPRINT)])
+                     (for [i (range FOOTPRINT)] [0 i]) (for [i (range FOOTPRINT)] [(dec FOOTPRINT) i]))
+        middle (for [i (range 6 10) j (range 6 10)] [i j])]
+    (and (pos? (.-length tops))
+         (every? (fn [[i j]] (covered-by? tops (at i) (at j))) ring)
+         (not-any? (fn [[i j]] (covered-by? tops (at i) (at j))) middle))))
+
 (defn- sixteenths [v] (js/Math.round (* v 16)))
 
 (defn- kind-of [name props top]
@@ -152,7 +170,7 @@
 
 (defn build-state-table
   "The planner's block table of a prismarine registry: typed arrays indexed by state id (top, base, kind, hazard, stairUp, climb,
-  climbName, facing, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, wet, magma,
+  climbName, facing, hollow, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, wet, magma,
   dripleaf, decays, farmland, boxStart, boxCount, boxes, offsetMax, partial, nameIds), as a JS object. nameIds is a Map of block name to
   its [first last] state id (see state-ids)."
   [registry]
@@ -173,6 +191,7 @@
         climb-name (js/Uint8Array. size)
         facing (js/Uint8Array. size) ;; ladder and trapdoor facing: 1 east, 2 west, 3 south, 4 north
         special (js/Uint8Array. size) ;; partial collision or climbable: the states a search must look closer at near a cell
+        hollow (js/Uint8Array. size) ;; a bowl (composter, cauldron, hopper): the rim is a full-height wall round an opening a body sinks into
         floor (js/Uint8Array. size) ;; height a body can stand on, 1/16 of the cell: the top, but none for a ladder
         flowing (js/Uint8Array. size) ;; water that is not a source: it pushes the body; 2: falling water (a waterfall), which stops no fall
         bubble (js/Uint8Array. size) ;; bubble column: 1 lifts (drag=false, over soul sand), 2 drags down (drag=true, over magma)
@@ -227,7 +246,8 @@
         (aset activator id (cond (test? BUTTON name) ACT-BUTTON (= name "lever") ACT-LEVER (test? PLATE name) ACT-PLATE :else 0))
         (when (or (= (aget activator id) ACT-BUTTON) (= (aget activator id) ACT-LEVER))
           (aset attach id (attach-of props)))
-        (aset floor id (cond (= name "scaffolding") WHOLE (zero? (aget climb-name id)) (aget top id) :else 0))
+        (aset hollow id (if (and (== (aget top id) WHOLE) (hollow-top? shapes WHOLE)) 1 0))
+        (aset floor id (cond (= name "scaffolding") WHOLE (pos? (aget hollow id)) 0 (zero? (aget climb-name id)) (aget top id) :else 0))
         (aset flowing id (if (= name "water") (let [level (js/Number (prop props "level"))] (cond (zero? level) 0 (>= level 8) 2 :else 1)) 0))
         (aset bubble id (if (= name "bubble_column") (if (true? (prop props "drag")) 2 1) 0))
         (aset wet id (if (or (= (aget kind id) WATER) (true? (prop props "waterlogged"))) 1 0))
@@ -247,7 +267,7 @@
           (aset stair-up id (get STAIR-UP (prop props "facing") 0)))))
     #js {:top top :base base :kind kind :hazard hazard :stairUp stair-up :climb climb :climbName climb-name :facing facing
          :openable openable :openState open-state :openKind open-kind :doorHalf door-half :activator activator :attach attach
-         :floor floor :special special :flowing flowing :bubble bubble :wet wet :magma magma :dripleaf dripleaf :decays decays :farmland farmland
+         :floor floor :hollow hollow :special special :flowing flowing :bubble bubble :wet wet :magma magma :dripleaf dripleaf :decays decays :farmland farmland
          :boxStart box-start :boxCount box-count :boxes (js/Float32Array.from floats) :offsetMax offset-maxes :partial partial :nameIds name-ids}))
 
 (defn state-ids
