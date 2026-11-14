@@ -57,9 +57,9 @@
       {:exposed? (not (covered? (sh-sense/feet p)))})))
 
 (defn hold-for-flee!
-  "room-lib/hold-for-flee! for the home and the goal the flee search plans to this step."
+  "room-lib/hold-for-flee! for the home leg of the flee search this step; the goal only as the fallback."
   [c]
-  (room-lib/hold-for-flee! c [(home-pos c) (respond.goal/active c)]))
+  (room-lib/hold-for-flee! c (home-pos c) (respond.goal/active c)))
 
 (defn survey
   "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead or the shooters' fire, fire-on,
