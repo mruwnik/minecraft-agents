@@ -12,12 +12,12 @@
             [jobs.lib.stair-memory :as smem]
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.places :as places]
-            [jobs.lib.price :as price]
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
             [jobs.lib.util :as u]
-            [jobs.lib.look :refer [cell-of headings]]
+            [jobs.lib.look :as look :refer [cell-of headings]]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.block-sets :as bs]
-            [jobs.gather.mine.targets :refer [base-ore main-block work-s step-cell within-keep-clear within-own-zone]]
+            [jobs.gather.mine.targets :refer [base-ore kinds main-block work-s step-cell within-keep-clear within-own-zone]]
             [jobs.gather.mine.end :refer [add-cut stop!]]
             [jobs.gather.mine.way-set :as ways]
             [jobs.gather.mine.torches :refer [mouth-torch-due? stair-torch-due? torch-step!]]
@@ -159,10 +159,25 @@
         (= :done (:status res)) (shaft-used! c res)
         :else (shaft-none! c (:reason res) (:shaft res) (:steps res))))))
 
+(defn new-stair-steps
+  "Steps a new stair from the feet cuts in place of the walk down to a stair foot at height y: down to y, or for a stone-type
+  block with no tunnel level only down to stone (any stone is the goal): to the highest seen stone of its kinds below the
+  feet (the scan's radius), else :descend-limit, whichever is fewer."
+  [c y]
+  (let [args (:args c)
+        feet (cell-of (u/self-pos c))
+        down (- (:y feet) y)]
+    (if (and (nil? (tunnel-level args)) (contains? stone-types (main-block args)))
+      (let [stone (->> (look/seen-blocks (:primitives c) {:names (vec (kinds args)) :radius (:radius args) :max 128 :live? true})
+                       (keep #(let [sy (:y (:pos %))] (when (< sy (:y feet)) sy)))
+                       seq)]
+        (min down (if stone (- (:y feet) (apply max stone)) (:descend-limit args))))
+      down)))
+
 (defn ^:async own-stair-bottom
   "The lowest stand of a stair this body cut earlier (memory :stair-way) worth walking down: its top level with the body (4 up or
-  down), its bottom 3 or more below the feet and not below the tunnel level, and go-to's whole way to the bottom no longer than cutting a
-  stair down to it (price/walk-back-worth?). {:cell [x y z] :heading name}, or nil."
+  down), its bottom 3 or more below the feet and not below the tunnel level, and go-to's whole way to the bottom no dearer than cutting
+  new-stair-steps (walk-pick/walk-back-worth?). {:cell [x y z] :heading name}, or nil."
   [c]
   (let [feet (cell-of (u/self-pos c))
         dim (.-dimension (.self (:primitives c)))
@@ -178,7 +193,7 @@
                {:cell bottom :heading (:heading b)})]
     (loop [[w & more] (sort-by (comp second :cell) ways)]
       (when w
-        (let [worth (await (price/walk-back-worth? c (child/walk-back-args :stair-own (:cell w)) (stair-time/steps-s :down (- (:y feet) (second (:cell w))))))]
+        (let [worth (await (walk-pick/walk-back-worth? c (child/walk-back-args :stair-own (:cell w)) (stair-time/steps-s :down (new-stair-steps c (second (:cell w))))))]
           (cond
             (= :searching worth) :searching
             worth w
@@ -227,7 +242,7 @@
         cell (or at top)]
     (when (and cell (nil? (get-in (ctx/mem c) [:children :stair])) (not= cell (access/cell (cell-of (u/self-pos c)))))
       (let [far? (> (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (settings/get settings ::back-reach))
-            worth (when far? (await (price/walk-back-worth? c (child/walk-back-args :stair-back cell) (stair-time/steps-s :down (max 0 (- (:y (u/self-pos c)) (cell 1)))))))]
+            worth (when far? (await (walk-pick/walk-back-worth? c (child/walk-back-args :stair-back cell) (stair-time/steps-s :down (max 0 (- (:y (u/self-pos c)) (cell 1)))))))]
        (cond
         (= :searching worth) :continue
         (and far? (not worth))

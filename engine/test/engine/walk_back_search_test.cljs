@@ -1,16 +1,20 @@
 (ns engine.walk-back-search-test
-  "The walk back to a place (jobs.lib.price/walk-back-worth?) and the dig-route searches it can leave running."
+  "The walk back to a place (jobs.lib.walk-pick/walk-back-worth?) and the dig-route searches it can leave running."
   (:require [cljs.test :refer [deftest is async]]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
+            [engine.mine-support :refer [soil-over-stone]]
+            [jobs.gather.mine.descent :as descent]
             [jobs.lib.dig-route :as dig-route]
-            [jobs.lib.price :as price]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.movement.go-to.escalate-choose :as choose]))
+
+(defn quoting [mean] (let [q (js/Promise.resolve {:uses {:job-time [0 mean ##Inf]} :route {:found true}})] (fn ([_ _ _] q) ([_ _ _ _] q))))
 
 (defn ^:async worth [route ways]
   (with-redefs [ctx/quote (let [q (js/Promise.resolve {:uses {:job-time [0 10 ##Inf]} :route route})] (fn ([_ _ _] q) ([_ _ _ _] q)))]
-    (await (price/walk-back-worth? {} {:pos [0 0 0] :range 0 :ways ways} 20))))
+    (await (walk-pick/walk-back-worth? {:primitives (tu/fake {})} {:pos [0 0 0] :range 0 :ways ways} 20))))
 
 (deftest a-route-not-found-is-a-cheap-walk-back-only-when-its-ways-dig
   (async done
@@ -20,6 +24,30 @@
         (is (false? (await (worth {:found false :reason :no-path} #{:walk}))) "a dead end walked is no walk back")
         (is (true? (await (worth {:found false :reason :no-path :escalating true} #{:walk :clear-seal :dig-route}))) "a dig finds the rest")
         (is (= :searching (await (worth {:found false :reason :searching} #{:walk}))))))))
+
+(deftest a-walk-back-is-priced-by-its-risk-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (with-redefs [ctx/quote (let [q (js/Promise.resolve {:uses {:job-time [0 10 ##Inf]} :route {:found true} :risk {:hp 10 :lethal-hp 0}})]
+                                  (fn ([_ _ _] q) ([_ _ _ _] q)))]
+          (is (false? (await (walk-pick/walk-back-worth? {:primitives (tu/fake {})} {:pos [0 0 0] :range 0 :ways #{:walk}} 20)))
+              "10 s of walk that costs half the body's health is dearer than 20 s of work"))))))
+
+;; Brindle S20: stone 5 under its lawn, it walked 100 blocks to the foot of an old stair 15 deep because cutting 15 steps
+;; was dearer; a stair to stone stops at the stone.
+(deftest a-stone-dig-walks-its-old-stair-only-when-that-is-cheaper-than-a-stair-down-to-stone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake {:blocks (soil-over-stone 63 59) :self {:pos [0.5 64 0.5]}}))
+              old-stair [{:data {:dim "overworld" :floors (vec (for [i (range 1 11)] [i (- 63 i) 0]))}}]
+              bottom (fn ^:async bottom [args] (with-redefs [ctx/entries (constantly old-stair) ctx/quote (quoting 25)]
+                                          (await (descent/own-stair-bottom {:primitives p :args args}))))]
+          (is (nil? (await (bottom {:block "stone" :descend-limit 12})))
+              "5 steps to the seen stone cost 18 s, less than the 25 s walk to the foot 10 below")
+          (is (= [10 54 0] (:cell (await (bottom {:block "iron_ore" :level 40}))))
+              "to an ore's level the walk saves cutting all 10 steps (36 s)"))))))
 
 (def open-ground (merge (box -1 64 -2 12 80 2 "air") (box -1 63 -2 12 63 2 "stone")))
 

@@ -147,7 +147,7 @@
 
 (def back-ways "A walk back to a line the body was cutting digs through a cliff, as a player with a pickaxe would; no stair or pillar inside a stair." #{:walk :clear-seal :dig-route})
 
-(defn walk-back-args "The walk (and, via jobs.lib.price/walk-back-worth?, the quote) of a way back to `cell`: one place for its ways." [slot cell]
+(defn walk-back-args "The walk (and, via jobs.lib.walk-pick/walk-back-worth?, the quote) of a way back to `cell`: one place for its ways." [slot cell]
   (assoc (walk-into-args slot cell) :ways back-ways))
 
 (defn ^:async walk-into!*

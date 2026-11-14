@@ -3,6 +3,7 @@
             [jobs.lib.bridge :as bridge]
             [engine.args :as a]
             [jobs.lib.price :as price]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.sense :as sense]
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.ready :as ready]
@@ -303,7 +304,7 @@
   "The body is off the stair's line (a reflex walked it away): a go-to child (slot :return) back to the stair's cell of
   step at-step, while another walk back is worth its price (cost/try-again? :walk, the returns since the last step taken
   and this one its failures), when within return-reach or go-to quotes a whole way back no longer
-  than cutting the steps done again (jobs.lib.price/walk-back-worth?). :continue while it walks, :again once it ended, nil
+  than cutting the steps done again (jobs.lib.walk-pick/walk-back-worth?). :continue while it walks, :again once it ended, nil
   when another return is not worth it, the walk back is dearer, or the last one did not get back and the body stands where it
   ended (the same walk again, nothing changed)."
   [c]
@@ -313,7 +314,7 @@
         redo-s (stair-time/steps-s dir (or at-step 0))]
     (when (and (not= missed (reach/standing-vec (:primitives c))) (cost/try-again? c :walk {:fails (inc (or returns 0))}))
      (let [worth (or (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach))
-                     (await (price/walk-back-worth? c (child/walk-back-args :return cell) redo-s)))]
+                     (await (walk-pick/walk-back-worth? c (child/walk-back-args :return cell) redo-s)))]
       (cond
        (= :searching worth) :continue
        worth
