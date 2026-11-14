@@ -595,6 +595,18 @@
             (is (= :stair (:step e)))
             (is (not= :east (:heading e)) "the heading with no tool is ruled out, the others stay")))))))
 
+(deftest a-failed-approach-marks-its-cell-approached-so-it-is-not-chosen-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (merge in-pit {:blocks pit}))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [10 64 0] :range 1 :worth tu/order-worth} :round 1})]
+          (.setOwner (:primitives eng) "tx")
+          (ctx/update-mem! c assoc :fruitless 1 :escalations 1 :give-up {:tries 0 :status :no-path}
+                           :escalation {:step :approach :pos [3 61 0]} :escalation-from [0 61 0] :holes-before 0)
+          (await (esc/escalation-next! c {:x 10 :y 64 :z 0} {:step :approach :reason :unreachable}))
+          (is (contains? (:approached (ctx/mem c)) [3 61 0])))))))
+
 (deftest go-to-cancelled-mid-dig-route-notes-the-cell-dug-so-far
   (async done
     (tu/run-async done

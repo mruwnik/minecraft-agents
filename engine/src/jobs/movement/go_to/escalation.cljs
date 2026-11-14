@@ -653,14 +653,15 @@
   (escalated! c pos detail false))
 
 (defn ^:async escalation-next!
-  "The child changed nothing: try the next method (escalate!, never the same step twice, while worth-another?) after a go-to.escalation-stopped warn, giving up with detail when none is left."
+  "The child changed nothing: try the next method (escalate!, never the same step twice, while worth-another?; a failed approach's cell counts as approached) after a go-to.escalation-stopped warn, giving up with detail when none is left."
   [c pos {:keys [step] :as detail}]
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
                                                                         (some-> (:reason detail) name)
                                                                         "; trying another way")))
   (ctx/update-mem! c #(cond-> (-> % (update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)) (:escalation-from (ctx/mem c))))
                                   (assoc :last-failed detail))
-                        (= :stair step) (update :fruitless dec)))
+                        (= :stair step) (update :fruitless dec)
+                        (= :approach step) (update :approached (fnil conj #{}) (some-> (:escalation (ctx/mem c)) :pos vec))))
   (await (escalate! c pos detail)))
 
 (defn other-heading?
