@@ -4,13 +4,16 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.goal-worth-test :as gw]
             [engine.memory :as mem]
             [engine.settings :as settings]
             [engine.night-support :refer [night noon sleep-count!]]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
+            [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
+            [jobs.lib.walk-pick :as pick]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.shut-in-night :as sin]))
 
@@ -285,3 +288,21 @@
           (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
             (is (< (:exposed prices) (:bed prices)) "the work goes on here through the night, so the skip saves nothing the walk to the bed costs")
             (is (not= :bed pick))))))))
+
+(deftest a-bed-whose-walk-outlasts-the-night-skips-none-of-it
+  ;; Brindle S2: a dark walk of ~1000 blocks to the respawn bed was priced as a skipped night and won over sheltering
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bed {:x 30 :y 64 :z 0}
+              c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night})) {}
+                           {:view (fn [] {:now 0 :data {:entries {:respawned [{:t 0 :data {:pos bed}}]}}})
+                            ::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})
+              left (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))
+              walk-s 100
+              far (await (bed-down/answers c {:bed bed :walk-s walk-s :walk-secs (* 2 left)}))
+              half (await (bed-down/answers c {:bed bed :walk-s walk-s :walk-secs (/ left 2)}))]
+          (is (pos? left))
+          (is (>= (:bed far) (+ left walk-s)) "the whole night is lost walking, as staying up loses it, and the walk's price comes on top")
+          (is (> (:bed far) (:shelter far)) "digging in here beats a bed reached only after the night")
+          (is (>= (:bed half) (+ (/ left 2) walk-s)) "the half of the night walked is not skipped"))))))

@@ -199,7 +199,7 @@
   (let [free (await (bed-down/answers c {:bed bed :walk-s 0 :log-out? (log-out-wanted? c)}))
         walk (:bed-walk (ctx/mem c))
         with-walk (when (and (bed-down/overdue? c) (= bed (:bed walk)))
-                    (:bed (await (bed-down/answers c {:bed bed :walk-s (:walk-s walk) :log-out? (log-out-wanted? c)}))))]
+                    (:bed (await (bed-down/answers c {:bed bed :walk-s (:walk-s walk) :walk-secs (:walk-secs walk) :log-out? (log-out-wanted? c)}))))]
     (walk-worth free answer with-walk)))
 
 (defn ^:async bed-down-step
@@ -533,14 +533,15 @@
       (places/retract-if-missing! c :bed pos "missing"))))
 
 (defn walk-hp-s
-  "Seconds the hp a walk to pos along go-to's quoted route r is expected to cost: spawns over its dark seconds (the planner's
-  :dark-seconds over jobs.lib.cost/dark-factor of the kit, at the spawn-rate of the kit's height) and the fight with the hostiles known near pos
-  (jobs.lib.price/way-fight-hp), priced by jobs.lib.price/stay-risk-s."
+  "Seconds the hp a walk to pos along go-to's quoted route r is expected to cost: its dark seconds (the planner's :dark-seconds
+  over jobs.lib.cost/dark-factor of the kit) within the night left, exposed as a stay is (bed-down/exposed-price) at the
+  spawn-rate of a dark cell at the kit's height, with the hostiles known near pos."
   [c pos r]
   (let [secs (or (:seconds r) 0)
         kit (wworld/kit-of c)
-        dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))]
-    (price/stay-risk-s c (cost/spawn-rate (get-in kit [:at :y])) dark-s (price/way-fight-hp c pos))))
+        [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
+        dark-s (min secs left (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))]
+    (bed-down/exposed-price c (cost/spawn-rate (get-in kit [:at :y])) dark-s pos)))
 
 (defn bed-walk-price
   "{:walk :walk-hp :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
@@ -548,7 +549,7 @@
   staying put (spawns at the feet, spawn-light/night-chance, over shelter-s, the seconds the body stays open here: sheltering
   here closes them out, the night left when nothing can; over the walk's seconds when already enclosed: spawns at the feet go
   on); the hostiles known near
-  the body), both priced by jobs.lib.price/stay-risk-s and jobs.lib.cost/fight-damage (:walk-hp, :stay); :walk also costs jobs.lib.cost/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
+  the body), both priced by bed-down/exposed-price (:walk-hp, :stay); :walk also costs jobs.lib.cost/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
   quoted route."
   [c bed r shelter-s]
   (let [p (:primitives c)
@@ -557,7 +558,7 @@
         hp (walk-hp-s c bed r)]
     {:walk (+ hp (cost/commute-s (sh/in-ground? p (ctx/view c)) secs shelter-s))
      :walk-hp hp
-     :stay (price/stay-risk-s c here (if (pos? shelter-s) shelter-s secs) (price/way-fight-hp c (u/self-pos c)))}))
+     :stay (bed-down/exposed-price c here (if (pos? shelter-s) shelter-s secs) (u/self-pos c))}))
 
 (defn budget-priced
   "The quoted route of q. A partial walk no whole way is known for yet, not none (its search spent go-to's node budget,
@@ -577,7 +578,7 @@
   "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose hp (bed-walk-price
   :walk-hp) is no more than staying put costs, sheltering here taking the rest of the night at most (bed-down/dig-in-time-s), or
   lying in that bed, its walk priced in, is the cheapest of bed-down/answers by price (overdue or not): a body on
-  dark open ground walks (its price with the work it costs, :walk, kept in job memory :bed-walk {:bed :walk-s} for night-answer, which weighs it). Else :bed-walk-unsafe {:pos bed :state} is remembered (sh-beds/bed-to-use skips the bed while the body's cell and the hostiles near the way are as priced) with a
+  dark open ground walks (its price with the work it costs, :walk, and its seconds, kept in job memory :bed-walk {:bed :walk-s :walk-secs} for night-answer, which weighs it). Else :bed-walk-unsafe {:pos bed :state} is remembered (sh-beds/bed-to-use skips the bed while the body's cell and the hostiles near the way are as priced) with a
   night.bed-walk-unsafe info, and false. :searching (nothing remembered) while go-to's quote still searches: no route is known yet, not none."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
@@ -590,8 +591,8 @@
           :searching
         (or (and (:found r)
                  (or (<= walk-hp stay)
-                     (= :bed (bed-down/cheapest-priced (await (bed-down/answers c {:bed bed :walk-s walk :log-out? (log-out-wanted? c)})))))
-                 (do (ctx/update-mem! c assoc :bed-walk {:bed bed :walk-s walk}) true))
+                     (= :bed (bed-down/cheapest-priced (await (bed-down/answers c {:bed bed :walk-s walk :walk-secs (:seconds r) :log-out? (log-out-wanted? c)})))))
+                 (do (ctx/update-mem! c assoc :bed-walk {:bed bed :walk-s walk :walk-secs (:seconds r)}) true))
             (do (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state (:primitives c) (ctx/view c) bed)} sh-beds/walk-unsafe-policy)
                 (ctx/emit! c :night.bed-walk-unsafe :info
                            {:bed bed :found (boolean (:found r)) :walk-s walk :stay-s stay
@@ -706,7 +707,7 @@
   with one of them, :log-out with bed-way and log-out-wanted?, :home with home (walkable-home's)."
   [c bed carried? bed-way home]
   (let [walk (:bed-walk (ctx/mem c))
-        prices (await (bed-down/answers c {:bed bed :walk-s (when (= bed (:bed walk)) (:walk-s walk)) :log-out? (and bed-way (log-out-wanted? c))
+        prices (await (bed-down/answers c {:bed bed :walk-s (when (= bed (:bed walk)) (:walk-s walk)) :walk-secs (when (= bed (:bed walk)) (:walk-secs walk)) :log-out? (and bed-way (log-out-wanted? c))
                                            :home (some-> home (assoc :seconds (get-in home [:route :seconds])))}))]
     (if (or bed carried?) prices (dissoc prices :bed :sealed))))
 
