@@ -27,7 +27,7 @@
   (jobs.lib.torch-plan, light spreads 13 cells, 9 for a soul torch through open cells). Area: :boxes (each two opposite corners) and/or :cells. The
   cells that matter are those the body has seen as spawn ground (sense/spawnable?: air, air, solid floor) that it perceives
   dark (jobs.lib.torch/perceived-dark?); torches already standing count through that light read, the ones this call hung
-  count at once. An area cell not seen yet that touches a seen open cell is walked to first (once) to look, unless go-to's
+  count at once. An area cell not seen yet that touches a seen open cell is walked to on foot first (once) to look, unless go-to's
   quote of the walk (walk-pick/quoted-s) costs more than the call is worth less the look walks before it: then it stays unlooked. Each step hangs one torch with a jobs.blocks.place child (walks in reach; a missing torch is fetched
   by it with the call's :ways), at the spot lighting most of the dark cells still owed. A spot whose place fails is not tried again.
 
@@ -143,6 +143,11 @@
          (sort-by #(u/dist here (zipmap [:x :y :z] %)))
          first)))
 
+(def look-ways
+  "A look walk only walks: a pillar or dug way built to look would fill or open the very cells being lit (a pillar in the
+  dark feet cell takes it out of the spawn ground, so the call ends done with no torch hung)."
+  #{:walk})
+
 (defn ^:async look-at!
   "Walk next to the unseen cell (a dark cell shows from close by) and look round there, once: :again, or :continue while
   the quote's search or the walk waits. A walk whose go-to quote (walk-pick/quoted-s) costs more than what the call is
@@ -151,7 +156,7 @@
   [c cell]
   (let [pos (zipmap [:x :y :z] cell)
         {:keys [looking look-s] :or {look-s 0}} (ctx/mem c)
-        q (when-not (= cell looking) (await (walk-pick/quote! c {:pos pos :range 1 :one-way :closed})))
+        q (when-not (= cell looking) (await (walk-pick/quote! c {:pos pos :range 1 :one-way :closed :ways look-ways})))
         price (when q (walk-pick/quoted-s c q))
         left (- (ctx/worth c) look-s)]
     (cond
@@ -164,7 +169,7 @@
           :again)
       :else
       (let [_ (when (and price (js/isFinite price)) (ctx/update-mem! c assoc :look-s (+ look-s price)))
-            r (await (near/go-near! c pos 1 {}))]
+            r (await (near/go-near! c pos 1 {:ways look-ways}))]
         (if (= :partial r)
           (do (ctx/update-mem! c assoc :looking cell) :continue)
           (do (await (look/look-around! c))

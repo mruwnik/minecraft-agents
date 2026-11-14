@@ -153,6 +153,21 @@
           (is (= :done (:status r)) (pr-str r))
           (is (seq (:unlooked r)) "the far part is reported unlooked, not lit"))))))
 
+;; Brindle S9: the look walk pillared into the body's own dark feet cell, which then no longer counted as spawn ground,
+;; so the call ended done with no torch hung and dark-work fired again, 43 times.
+(deftest a-look-walk-only-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (for [x (range 0 61)] [x 0])
+              env (world corridor (constantly false) torches)
+              walks (atom [])
+              r (await (tu/with-near-spy walks #(tu/child-outcome (:eng env) job {:boxes [[[0 64 0] [60 64 0]]]} 400)))
+              look-walks (filter (fn [[_ range]] (= 1 range)) @walks)]
+          (is (= :done (:status r)) (pr-str r))
+          (is (seq look-walks) "the far part is out of sight from the start")
+          (is (every? (fn [[_ _ opts]] (= #{:walk} (:ways opts))) look-walks) (pr-str look-walks)))))))
+
 (deftest a-cell-looked-at-from-where-the-body-stands-is-not-looked-at-again
   (async done
     (tu/run-async done

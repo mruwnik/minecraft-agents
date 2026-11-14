@@ -1,0 +1,21 @@
+;; Card 97a88811 (Brindle S9): a dig down a dark one-wide mine stair (3 high, stepping down 1 a block, x 41..46 at z 16) off the
+;; end of a dark hall (x 4..40, feet y 8, so no safe small room). light-area's look walk used to pillar into the body's own
+;; dark feet cell, end done with no torch hung, and dark-work fired again every ~13 s. Should-succeed: a torch is hung, no
+;; look walk under dark-work escalates (pillar, dig), dark-work fires at most twice, the ore is dug.
+{:defaults
+ {:tags [:torch :survival :jobs] :time :any :register [{:trigger :dark-work}]
+  :plot {:light :dark :height 14 :length 52 :width 34}
+  :blocks [[:fill [2 0 2] [50 12 30] "stone"] [:fill [4 8 16] [40 9 16] "air"]
+           [:fill [41 7 16] [41 9 16] "air"] [:fill [42 6 16] [42 8 16] "air"] [:fill [43 5 16] [43 7 16] "air"]
+           [:fill [44 4 16] [44 6 16] "air"] [:fill [45 3 16] [45 5 16] "air"] [:fill [46 2 16] [46 4 16] "air"]
+           [:set [47 2 16] "iron_ore"]]
+  :body {:at [43.5 5 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "dig-down-a-dark-stair-hangs-a-torch-without-a-pillar"
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [47 2 16]})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dark-work}} :within-s 60}
+            {:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 100 :at-least 1}
+            {:count-event {:source :job :kind :go-to.escalated :context {:reflex-id :dark-work}} :for-s 100 :at-most 0}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :dark-work}} :for-s 100 :at-most 2}]
+   :after [[:item "raw_iron" [:>= 1]]]}]}
