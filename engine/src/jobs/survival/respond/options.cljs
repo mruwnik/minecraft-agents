@@ -160,13 +160,15 @@
   (hurt/causes-of (:data e)))
 
 (defn hit-on-the-run!
-  "Whether a melee chaser hit the body since the previous flight step: health lost with a hitter near, or a hurt entry
-  naming a melee hostile within close-radius (a fed body heals the hit within a second, so health alone misses it). A chaser
-  that hits it cannot be outrun. Noted in job memory (:hit-on-the-run), with the health, for the cornered options' odds."
+  "Whether a melee chaser hit the body since the previous flight step while it ran (a leg was walked since then, ran!):
+  health lost with a hitter near, or a hurt entry naming a melee hostile within close-radius (a fed body heals the hit
+  within a second, so health alone misses it). A chaser that hits a running body cannot be outrun; blows taken standing
+  (a search, a fight) say nothing of that. Noted in job memory (:hit-on-the-run), with the health, for the cornered
+  options' odds."
   [c]
   (let [p (:primitives c)
         health (.-health (.self p))
-        {:keys [step-health step-at]} (ctx/mem c)
+        {:keys [step-health step-at ran-at]} (ctx/mem c)
         now (ctx/now c)
         near (near-hostiles c)
         names (->> near
@@ -177,7 +179,8 @@
         named? (and step-at (some #(some names (hurt-by %)) (ctx/since c :hurt step-at)))
         entries (when step-at (ctx/since c :hurt step-at))
         mob-or-unlogged? (or (empty? entries) (some #(hurt/mob-hit? (:data %)) entries))
-        hit? (boolean (or (and step-health (< health step-health) (seq (hitters c near)) mob-or-unlogged?) named?))]
+        hit? (boolean (and step-at ran-at (>= ran-at step-at)
+                           (or (and step-health (< health step-health) (seq (hitters c near)) mob-or-unlogged?) named?)))]
     (ctx/update-mem! c assoc :step-health health :step-at now :hit-on-the-run hit?)
     hit?))
 
@@ -322,6 +325,11 @@
   (into {} (for [e (near-hostiles c) :when (and (not (true? (.-remembered e))) (danger-q/seen-only? e))]
              [(.-id e) [(.-name e) (danger-q/mob-distance (:primitives c) e)]])))
 
+(defn ran!
+  "Note that the body walked a leg of the flight now (memory :ran-at, read by hit-on-the-run!)."
+  [c]
+  (ctx/update-mem! c assoc :ran-at (ctx/now c)))
+
 (defn ^:async leg-step!
   "One flee step to target as a jobs.movement.run-away child of at most leg-s seconds (y-margin (16) blocks past body and target bound its route): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt).
   A target with a judged route (:route meta) is walked along that route only (go-to's :route), to within range of the target
@@ -340,6 +348,7 @@
                            (cond-> {:pos target :range (if end (max range (js/Math.ceil (u/dist target end))) range) :leg-s leg-s}
                              y-margin (assoc :y-margin y-margin)
                              route (assoc :route route))))
+        _ (ran! c)
         res (when (contract/ending? r) (:data r))
         _ (when (#{:goal-not-standable :off-route} (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)

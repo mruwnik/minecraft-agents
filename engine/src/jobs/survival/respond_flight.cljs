@@ -42,7 +42,7 @@
   A mob that attacks at close range within ::hostile-radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
   not a creeper or an enderman): no flee step. After the door and room steps (1., 2., the race at each chaser's own
   speed) it takes the cornered options (4.) without the back-off.
-  4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step, or the body is in a closed room with a melee mob within close-radius and carries no weapon or block, or melee mobs within close-radius hit it respond.options/::beaten-hits (2) times, or a ranged mob ::shot-hits (2) times, within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
+  4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body on a leg run since the last step, or the body is in a closed room with a melee mob within close-radius and carries no weapon or block, or melee mobs within close-radius hit it respond.options/::beaten-hits (2) times, or a ranged mob ::shot-hits (2) times, within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
      ::hostile-radius: holds a second (wait, why cornered) and looks again; after the respond.state ::no-gain-steps setting (20) of such steps or holds with no gain the flight ends :keeps-off. With one within ::hostile-radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 16 blocks, not beside the enderman (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins: one on a drowned only heard, or out of a swing's reach, never does): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
@@ -131,6 +131,7 @@
   [c room way]
   (say-once! c room)
   (let [e (await (ctx/call c :room 'jobs.survival.shut-in {:ways #{:room} :at (:inside way) :flee? true}))]
+    (cornered/ran! c)
     (when-not (or (= :continue e) (= :done (:kind e)) (room-lib/inside? (:primitives c) room)) (failed! c room))
     :again))
 

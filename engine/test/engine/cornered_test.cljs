@@ -2453,3 +2453,10 @@
             (is (pos? (:shot-spots step)))
             (is (< (first (:target step)) 0) "away from the shot, west"))
           (is (not-any? #(= :retreat.cornered (:kind %)) @seen)))))))
+
+(deftest blows-taken-while-the-body-stood-are-no-hit-on-the-run
+  (let [p (tu/fake-on-floor {:self {:health 14} :entities [(zombie 1.5 64 0.5)]})
+        hit? (fn [m] (with-stub-mem #(with-redefs [ctx/now (constantly 1000) ctx/since (constantly [])]
+                                      (cornered/hit-on-the-run! (stub-ctx p (atom m))))))]
+    (is (false? (hit? {:step-health 16 :step-at 500})) "lost while the step searched or fought: no leg walked since")
+    (is (true? (hit? {:step-health 16 :step-at 500 :ran-at 700})) "lost on a leg walked since the last step")))
