@@ -158,42 +158,52 @@
           (is (= {:status :stopped :reason :not-walked-in} (select-keys result [:status :reason])) (pr-str result))
           (is (nil? (block p [0 64 0]))))))))
 
+(defn walk-in-after
+  "The fake villager walks into the pen's cell 10 s of clock after the run starts."
+  [{:keys [p clock]}]
+  (let [at (+ @clock 10000)]
+    (add-watch clock :walk-in
+               (fn [_ _ _ ms] (->> [ms] (filter #(>= % at))
+                                   (run! (fn [_] (remove-watch clock :walk-in)
+                                           (swap! (fake/state p) assoc-in [:entities 0 :pos] [1.5 64 0.5]))))))))
+
+(defn lured-in
+  "The fake villager walks into the pen's cell the moment the lectern stands at ws (a jobless villager paths to a free
+  workstation it can reach); lured then holds the cells of the pen's shut and box not solid at that moment."
+  [lured]
+  (fn [{:keys [p]}]
+    (let [lay (vp/layout ws [-1 0])]
+      (add-watch (fake/state p) :lure
+                 (fn [_ s _ w]
+                   (->> [w] (filter #(= "lectern" (get-in % [:blocks ws])))
+                        (run! (fn [w] (remove-watch s :lure)
+                                (reset! lured (vec (remove #(vp/solid? (get-in w [:blocks %])) (concat (:shut lay) (:box lay)))))
+                                (swap! s assoc-in [:entities 0 :pos] [1.5 64 0.5])))))))))
+
 (deftest the-near-end-is-plugged-once-the-villager-walks-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [walk-in (fn [{:keys [p clock]}]
-                        (let [at (+ @clock 10000)]
-                          (add-watch clock :walk-in
-                                     (fn [_ _ _ ms] (when (>= ms at)
-                                                      (remove-watch clock :walk-in)
-                                                      (swap! (fake/state p) assoc-in [:entities 0 :pos] [1.5 64 0.5]))))))
-              [result p] (await (run-ticking (assoc (world (merge shut box)) :entities [(jobless {:x 6 :y 64 :z 3})]
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box)) :entities [(jobless {:x 6 :y 64 :z 3})]
                                                     :inventory [{:name "cobblestone" :count 4}])
-                                             {} 400 walk-in))]
+                                             {} 400 walk-in-after))]
           (is (= :done (:status result)) (pr-str result))
           (is (= ["cobblestone" "cobblestone"] [(block p [0 64 0]) (block p [0 65 0])]))
           (is (every? #(vp/solid? (block p %)) (:box (vp/layout ws [-1 0]))) "the box dug open to plug the near end is shut again round the body")
           (is (= [3 64 0] (vp/body-cell p))))))))
 
-(deftest the-workstation-is-placed-last-once-the-villager-is-in-and-the-pen-is-shut
+(deftest a-villager-outside-walks-in-to-the-workstation-placed-once-the-pen-is-shut-and-the-body-boxed-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [walk-in (fn [{:keys [p clock]}]
-                        (let [at (+ @clock 10000)]
-                          (add-watch clock :walk-in
-                                     (fn [_ _ _ ms] (when (>= ms at)
-                                                      (remove-watch clock :walk-in)
-                                                      (swap! (fake/state p) assoc-in [:entities 0 :pos] [1.5 64 0.5]))))))
-              bare (update (world (merge shut box)) :blocks dissoc "2,64,0")
+        (let [lured (atom :never)
+              bare (update (world shut) :blocks dissoc "2,64,0")
               [result p] (await (run-ticking (assoc bare :entities [(jobless {:x 6 :y 64 :z 3})]
-                                                    :inventory [{:name "lectern" :count 1} {:name "cobblestone" :count 4}])
-                                             {} 400 walk-in))
-              placed (mapv #(.-item (.-args %)) (vt/calls p "place"))]
+                                                    :inventory [{:name "lectern" :count 1} {:name "cobblestone" :count 30} {:name "torch" :count 2}])
+                                             {} 600 (lured-in lured)))]
           (is (= :done (:status result)) (pr-str result))
-          (is (= "lectern" (last placed)) "nothing is placed after the workstation")
-          (is (= 1 (count (filter #{"lectern"} placed))))
+          (is (= [] @lured) "the lectern goes down only once the box round the body is shut")
+          (is (= ["cobblestone" "cobblestone"] [(block p [0 64 0]) (block p [0 65 0])]))
           (is (= "lectern" (block p ws))))))))
 
 (deftest a-second-villager-beside-an-open-stand-is-shut-out-of-the-cells-next-to-the-workstation
@@ -223,6 +233,15 @@
                                      {} 200 lights))]
           (is (= :done (:status result)) (pr-str result))
           (is (= 1 (count (filter #{"torch" "wall_torch"} (vals (:blocks @(fake/state p))))))))))))
+
+(deftest a-pen-still-dark-after-its-light-ends-dark-once-the-same-light-is-read-twice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (run (assoc (world (merge shut plug box)) :entities [(jobless {:x 1 :y 64 :z 0})]
+                                          :time 1000 :light {} :light-default [0 0] :inventory [{:name "torch" :count 2}])
+                                   {} 200))]
+          (is (= {:status :stopped :reason :dark :light 0} (select-keys result [:status :reason :light :unseen])) (pr-str result)))))))
 
 (deftest walking-ticks-of-a-gap-count-only-the-walking-hours-in-it
   (are [from to n] (= n (- (villager/walk-ticks-before to) (villager/walk-ticks-before from)))

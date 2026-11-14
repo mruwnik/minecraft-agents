@@ -425,7 +425,29 @@
     (add-watch clock :age (fn [_ _ _ ms] (swap! (fake/state p) assoc-in [:self :worldAge] (js/Math.floor (/ ms 50)))))
     env))
 
-(deftest a-penned-villager-that-takes-no-job-ends-no-job-naming-the-other-job-sites-without-another-break
+(defn claimed-elsewhere
+  "Another villager holds the claim on the standing lectern: v-1 takes no job until the lectern is broken (the break
+  drops every claim), then rolls as rolls-offers! makes it."
+  [scripts]
+  (fn [{:keys [p] :as env}]
+    (add-watch (fake/state p) :claim
+               (fn [_ s _ w]
+                 (->> [w] (remove #(= "lectern" (get-in % [:blocks ws-pos])))
+                      (run! (fn [_] (remove-watch s :claim) (rolls-offers! p scripts))))))
+    env))
+
+(deftest a-penned-villager-kept-from-its-free-workstation-by-anothers-claim-takes-it-after-one-break
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(jobless)] :keeps-job? true
+                                       :wrap (comp (claimed-elsewhere [[(offer "enchanted_book")]]) (ticking! 1000))}
+                                      {}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
+          (is (= 1 (digs p)))
+          (is (= "lectern" (workstation p))))))))
+
+(deftest a-penned-villager-that-takes-no-job-ends-no-job-naming-the-other-job-sites-after-one-break
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -434,7 +456,7 @@
                                       {:settings {:jobs.lib.villager/take-job-ticks 200}}))]
           (is (= {:found false :reason :no-job :status :stopped} (select-keys result [:found :reason :status])))
           (is (= [{:name "composter" :pos {:x 6 :y 64 :z 0}}] (:sites result)))
-          (is (zero? (digs p)) "shut in alone beside a free workstation, a villager no second break would help")
+          (is (= 1 (digs p)) "one break drops another villager's claim; a second would change nothing")
           (is (= "lectern" (workstation p))))))))
 
 (deftest a-jobless-villager-is-waited-for-in-game-ticks-of-its-walking-hours-not-in-daytime-seconds

@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
             [jobs.lib.cost.ways :as cost-ways]
+            [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
@@ -32,10 +33,12 @@
   in the upper half over the workstation (a block of another kind there is dug first), light the cell while it reads dark and
   the body can reach it (jobs.build.light-area, once a call), dig a plug of an empty pen open; with the villager in: wait while another
   villager shares the cell, fill the near end (from the stand, digging the box's entry first to walk out); then step
-  into the stand (digging the entry when the box is shut), shut the box round the body from inside, wait for the
-  villager to walk in (a jobless one to the free workstation, one employed at it to work), and light a shut pen still
-  dark from the stand (its light reaches the cell under the top slab). A cell still dark a poll after
-  the light child ended done ends nothing-possible :dark.
+  into the stand (digging the entry when the box is shut), shut the box round the body from inside, place the
+  workstation, if missing, from the stand (it is the lure: with the box shut the pen's cell is the only one next to it a
+  villager can path to, the game's rule for claiming it), wait for the villager to walk in (a jobless one to the free
+  workstation, one employed at it to work), and light a shut pen still dark from the stand (its light reaches the cell
+  under the top slab). A cell still dark after the light child ended done is looked at when unknown, then read each
+  poll: the same light twice ends nothing-possible :dark.
   The wait counts game ticks of the villagers' walking hours (jobs.lib.villager/take-job-ticks, 1240); reason
   :villager-not-in-pen by day, :night-villager-not-in-pen at night (villagers walk to no job site then).
   Needs: a villager id, a profession with a workstation, the cell (else impossible :bad-args); building blocks, a wooden
@@ -197,14 +200,23 @@
       :else (stop! c :nothing-possible :unreachable {:text "could not step into the stand behind the workstation"}))))
 
 (defn ^:async dark!
-  "The cell reads dark after the light child ended done: wait a poll for the light to read (it follows the torch),
-  then end nothing-possible :dark."
+  "The cell reads dark after the light child ended done. Unknown to the body: look at it (still unknown after a look:
+  :dark). Known: wait a poll while its light changes from the last read (it follows the torch); the same light read
+  twice ends nothing-possible :dark."
   [c lay]
-  (if (:light-waited (ctx/mem c))
-    (stop! c :nothing-possible :dark {:cell (:cell lay) :text "the pen's cell still reads dark after the light child ended done"})
-    (do (ctx/update-mem! c assoc :light-waited true)
-        (await (child/pause! c (villager/poll-s) :pen-light-settling))
-        :continue)))
+  (let [cell (zipmap [:x :y :z] (:cell lay))
+        light (sh-sense/cell-light (:primitives c) cell)
+        m (ctx/mem c)
+        dark #(stop! c :nothing-possible :dark (merge {:cell (:cell lay) :text "the pen's cell still reads dark after the light child ended done"} %))]
+    (cond
+      (and (nil? light) (:dark-looked m)) (dark {:unseen true})
+      (nil? light) (do (ctx/update-mem! c assoc :dark-looked true)
+                       (await (look/look-at! c (:cell lay)))
+                       :again)
+      (= light (:light-read m)) (dark {:light light})
+      :else (do (ctx/update-mem! c assoc :light-read light)
+                (await (child/pause! c (villager/poll-s) :pen-light-settling))
+                :continue))))
 
 (defn ^:async wait-walk-in!
   "Wait a poll for the villager to walk in (or another to walk out), counting walking-hour ticks; past
@@ -240,8 +252,8 @@
         (await (fill! c :plug (vp/owed p (:plug lay)))))
       (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
       (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/owed p (:box lay)) {:in-place true}))
-      (not in?) (await (wait-walk-in! c :villager-not-in-pen))
       (or (nil? block) (bs/air block)) (await (workstation! c ws))
+      (not in?) (await (wait-walk-in! c :villager-not-in-pen))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c (:stand lay)))
       (vp/dark? p lay) (await (dark! c lay))
       :else :again)))

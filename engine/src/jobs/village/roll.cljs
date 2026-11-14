@@ -38,7 +38,8 @@
   its pen (jobs.lib.villager-pen/penned: alone in a lit one-wide cell, the workstation under a top slab plugging its far
   end, its other sides shut, the body boxed in behind it); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
   round looks for) is this call's. A villager that reads another job is never rolled: a named one ends :other-job, else the
-  nearest other in sight is picked. Waits (:continue) for the penned villager to take its job; villagers take jobs only by day, so at night the wait's reason is
+  nearest other in sight is picked. Waits (:continue) for the penned villager to take its job, breaking and placing the workstation once (a roll) when
+  that costs less than the wait for another villager's claim on it to lapse; villagers take jobs only by day, so at night the wait's reason is
   :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children; :ways (default all) goes to the place child, so #{:carried} places only a workstation already carried (else it waits :need, nothing is fetched or crafted). Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
@@ -189,7 +190,7 @@
     (fn [e] (and (not-nitwit? e) (not (other-job? c e)) (not (contains? out (villager/ident e)))))))
 
 (def villager-keys "Memory about the villager picked, dropped when another is picked."
-  [:chosen :seen :away-since :view :view-tries :last-seen :flanked :memory-walked :night-waited :vantage :job-at :job-ticks])
+  [:chosen :seen :away-since :view :view-tries :last-seen :flanked :memory-walked :night-waited :vantage :job-at :job-ticks :claim-reset])
 
 (defn pick!
   "The villager rolled: :villager, else the nearest adult that is no nitwit (saying which one it picked, once)."
@@ -429,11 +430,21 @@
 (defn ^:async wait-take-job!
   "The penned villager has no job with the workstation placed: wait while game ticks of the villagers' walking hours
   (villager/count-ticks!; none pass at night, when villagers take no job) stay under villager/take-job-ticks, then end
-  :no-job naming the other job sites seen (:sites)."
+  :no-job naming the other job sites seen (:sites). Another villager may hold the claim on it, which the game drops only
+  after those ticks: once walking-hour ticks have passed with no job, by day, the workstation is broken and placed again
+  (dig!, once for the villager picked: the break drops every claim, the slab keeps the villager in, and it is then the
+  only villager that reaches the workstation) when that (cost/reset-s) costs less than the wait left."
   [c]
-  (if (< (villager/count-ticks! c) (villager/take-job-ticks))
-    (await (wait-job! c :villager-takes-no-job))
-    (ctx/end c :nothing-possible :no-job (data-of c {:sites (villager/job-sites c (:pos (:args c)))}))))
+  (let [n (villager/count-ticks! c)
+        left-s (/ (settings/ticks->ms (- (villager/take-job-ticks) n)) 1000)]
+    (cond
+      (>= n (villager/take-job-ticks))
+      (ctx/end c :nothing-possible :no-job (data-of c {:sites (villager/job-sites c (:pos (:args c)))}))
+      (and (pos? n) (not (:claim-reset (ctx/mem c))) (not (sh-sense/night? (:primitives c)))
+           (< (cost/reset-s (item-of (:args c))) left-s))
+      (do (ctx/update-mem! c assoc :claim-reset true)
+          (await (dig! c)))
+      :else (await (wait-job! c :villager-takes-no-job)))))
 
 (defn penned? [c e] (some? (vp/penned (:primitives c) (b/cell (:pos (b/parse (:args c)))) e)))
 
