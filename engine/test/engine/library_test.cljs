@@ -429,6 +429,19 @@
           (is (= [] (debts eng)) "both debts cleared")
           (is (= {:kind :completed} (end-of seen))))))))
 
+(deftest plant-sapling-without-a-spot-leaves-a-debt-past-the-replant-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"5,63,5" "dirt"} :inventory [{:name "oak_sapling" :count 2}]})]
+          (doseq [x [5 150]]
+            (mem/write! (:store eng) :forestry/replant {:pos {:x x :y 64 :z 5} :species "oak"} {:cap 50 :ttl :forever}))
+          (core/submit! eng (tu/order (list 'jobs.forestry.plant-sapling {:species "oak"})) {})
+          (await (run-until-empty eng 8))
+          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 5 :y 64 :z 5}))))
+          (is (= [150] (mapv #(get-in % [:pos :x]) (debts eng))) "the far debt stays owed, not walked to")
+          (is (= {:kind :completed} (end-of seen))))))))
+
 (deftest plant-sapling-at-a-position-and-not-yet-without-a-sapling
   (async done
     (tu/run-async done

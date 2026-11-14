@@ -19,7 +19,7 @@
             [jobs.lib.pace :as pace]))
 
 (def doc
-  "Plant a sapling at :at, or at the cheapest replant debt (spot-price: the walk over the chance the spot can be planted; then at the next, until none is owed), and clear that debt. A debt on a planned crop plot, or on a cell another block fills, is dropped, never planted.
+  "Plant a sapling at :at, or at the cheapest replant debt (spot-price: the walk over the chance the spot can be planted; then at the next, until none within jobs.lib.trees/replant-reach is owed), and clear that debt. A debt on a planned crop plot, or on a cell another block fills, is dropped, never planted.
   With no :species a debt whose sapling is carried comes before older ones.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless the call's :ways are #{:carried}
@@ -91,13 +91,13 @@
 
 (defn current-target
   "The spot to plant: :at, else the cheapest debt (spot-price; the oldest of equals); of the debts whose sapling is carried first when no species is asked.
-  Debts whose cell is unloaded, that failed lately or where the body would be due home before night (sh/home-due-at?)
-  come last: the replant-owed trigger holds for the others only."
+  Only debts within trees/replant-reach count (a farther one waits until the body is near), so a call ends once those are planted.
+  Debts that failed lately or where the body would be due home before night (sh/home-due-at?) are left out."
   [c]
   (let [all (debts c)
         p (:primitives c)
         reachable (filterv #(and (u/block-at p (:pos %)) (debt-near-body? p (:pos %)) (not (sh/home-due-at? p (ctx/view c) (:pos %)))) (without-stalled (ctx/view c) all))
-        ds (sort-by #(spot-price c %) (if (seq reachable) reachable all))
+        ds (sort-by #(spot-price c %) reachable)
         carried (when-not (:species (:args c)) (seq (with-sapling ds (u/inventory (:primitives c)))))]
     (target-of (or carried ds) (:args c))))
 
