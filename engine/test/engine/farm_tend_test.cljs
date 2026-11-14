@@ -189,6 +189,9 @@
           (is (= 1 (count (calls s "useOn"))))
           (is (= "dirt" (block-at s 3 63 2))))))))
 
+(deftest the-water-memory-keeps-every-fields-cells
+  (is (= 3000 (tend-box/water-cap 2900 100)) "a second large field adds to the first's cells instead of evicting them"))
+
 (deftest water-lost-cells-are-handed-to-irrigate-as-preferred
   (is (= [{:x 3 :y 63 :z 2}]
          (:prefer (:args (:call (decide/decide :irrigate {:irrigate true :area box}

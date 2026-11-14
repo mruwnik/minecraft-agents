@@ -65,7 +65,7 @@
   :field is counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
   :skipped :refused :short}, fertilize {:used}.
   A box field remembers the ground cells it has seen as water; one now seen solid is never tilled (irrigate is told to prefer it as the spot for water).
-  Limits: a dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
+  Limits: a dirt lane inside the box counts as a bed unless :till is false or it was once seen as water. A ripe crop that cannot be reached
   keeps the check passing on every run (harvest gives up on it and the run still ends).
   {:plan id} (optionally :part; with neither :part nor :parts every crop part of the plan is worked) makes the plan's crop cells the field. Only crops harvest knows
   (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same steps run

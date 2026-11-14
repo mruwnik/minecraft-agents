@@ -46,14 +46,20 @@
     (filterv #(let [n (u/seen-name p %)] (and n (not (bs/fluids n)) (not (bs/air n))))
              (sort-by (juxt :x :z) (remembered-water c box)))))
 
+(defn water-cap
+  "The cap of the water memory once `fresh` more cells join the `held` it has: it holds every field's water, so one field's cells never evict another's."
+  [held fresh]
+  (+ held fresh))
+
 (defn note-water!
   "Remember the ground cells of the box seen as water now."
   [c]
   (let [box (ground-box (fa/arg-box c))
-        known (remembered-water c box)]
-    (doseq [{:keys [pos name]} (ground-layer (:primitives c) box)
-            :when (and (= "water" name) (not (known pos)))]
-      (ctx/remember! c water-kind {:pos pos} {:cap 2048 :ttl :forever}))))
+        known (remembered-water c box)
+        fresh (filterv #(and (= "water" (:name %)) (not (known (:pos %)))) (ground-layer (:primitives c) box))
+        cap (water-cap (count (ctx/entries c water-kind)) (count fresh))]
+    (doseq [{:keys [pos]} fresh]
+      (ctx/remember! c water-kind {:pos pos} {:cap cap :ttl :forever}))))
 
 (defn unripe-in-box
   "The unripe crop cells of the box, read around its centre."
