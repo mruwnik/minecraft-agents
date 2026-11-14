@@ -70,7 +70,7 @@
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
-   ::take-job-ticks {:default 1240 :doc "Game ticks of the villagers' walking hours (walk-hours?) a villager may stay jobless with the workstation placed: then the workstation is broken and placed once more, and past that the call ends :no-job. The game's rule: a jobless villager looks for a free job site every 20-40 ticks and drops a claim on another site after 1200 ticks of walking to it, so past 1240 it holds a site it reaches (or ours is out of its way)." :spec (a/int-in 1 nil)}
+   ::take-job-ticks {:default 1240 :doc "Game ticks of the villagers' walking hours (10-9000, 11000-12000) a villager may stay jobless with the workstation placed: then the workstation is broken and placed once more, and past that the call ends :no-job. The game's rule: a jobless villager looks for a free job site every 20-40 ticks and drops a claim on another site after 1200 ticks of walking to it, so past 1240 it holds a site it reaches (or ours is out of its way)." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (villager/poll-s))
@@ -428,20 +428,24 @@
                                  (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0)) (assoc :drop-ids (:ids r))))
                                      (await (back-steps! c)))))))))))
 
-(defn walk-hours?
-  "Whether villagers walk at time of day t (ticks): the game's idle, work and play hours (10-9000, 11000-12000), not
-  the meeting or the rest."
+(defn walk-ticks-before
+  "Ticks of villagers' walking hours (10-9000, 11000-12000) in the span from time 0 to time t, t any whole number of ticks."
   [t]
-  (let [t (mod t 24000)]
-    (or (<= 10 t 8999) (<= 11000 t 11999))))
+  (let [day (js/Math.floor (/ t 24000))
+        m (- t (* day 24000))
+        span (fn [from to] (max 0 (- (min m to) from)))]
+    (+ (* day 9990) (span 10 9000) (span 11000 12000))))
 
 (defn count-ticks!
-  "Add to :job-ticks the game ticks (world age) since the last count, when villagers walk now; the count it gives."
+  "Add to :job-ticks the game ticks (world age) of villagers' walking hours since the last count (the part of that span
+  inside those hours, whatever the gap); the count it gives."
   [c]
   (let [self (.self (:primitives c))
         age (.-worldAge self)
+        t (.-timeOfDay self)
         {:keys [job-at job-ticks]} (ctx/mem c)
-        n (+ (or job-ticks 0) (if (and age job-at (walk-hours? (.-timeOfDay self))) (max 0 (- age job-at)) 0))]
+        gap (if (and age job-at t) (max 0 (- age job-at)) 0)
+        n (+ (or job-ticks 0) (- (walk-ticks-before t) (walk-ticks-before (- t gap))))]
     (ctx/update-mem! c assoc :job-at age :job-ticks n)
     n))
 
@@ -696,8 +700,9 @@
       (bs/air block)
       (cond
         (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true :expect-carried (expect-after-unseen-break c pos item)) :again)
-        ;; the workstation is gone: wait for the villager to lose the job, then place it back
-        (and e (not= "unemployed" profession)) (await (wait-lose-job! c))
+        ;; the workstation is gone: wait for the villager to lose the job, then place it back (one that took another job
+        ;; never will: place at once, the next step ends :other-job)
+        (and e (not= "unemployed" profession) (not (other-job? c e))) (await (wait-lose-job! c))
         (< (u/carried-count p item) (cond-> (:expect-carried (ctx/mem c)) (:spare (ctx/mem c)) dec)) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))

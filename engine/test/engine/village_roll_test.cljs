@@ -407,6 +407,23 @@
               "at the villagers' meeting hour (day, no walking) nothing counts toward the wait")
           (is (zero? (digs p)) "no break and place again: 300 daytime seconds used to send one"))))))
 
+(deftest walking-ticks-of-a-gap-count-only-the-walking-hours-in-it
+  (are [from to n] (= n (- (roll/walk-ticks-before to) (roll/walk-ticks-before from)))
+    11500 11700 200
+    9500 12500 1000
+    11500 36000 10490
+    -500 500 490))
+
+(deftest a-villager-that-took-another-job-while-the-workstation-was-out-is-not-waited-for-the-workstation-goes-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "farmer" :level 1})] :keeps-job? true
+                                       :inventory [{:name "lectern" :count 1}] :blocks {ws-key "air"}}
+                                      {:spend {:wall-time 30}}))]
+          (is (= {:found false :status :stopped :reason :other-job} (select-keys result [:found :status :reason])))
+          (is (= "lectern" (workstation p))))))))
+
 (deftest a-named-villager-with-another-job-ends-other-job-without-a-break
   (async done
     (tu/run-async done
