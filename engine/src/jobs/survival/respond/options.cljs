@@ -68,10 +68,8 @@
                        :doc "Of n pillars of a flight (built, or failed for a mob: a refused block or a knockback with a hostile near the cell, or a mob in the cell), k failed so, one per situation (a flight's feet cell and class), by the melee hostiles when it began (respond.pillar/mob-class): :beside, one whose box overlaps a cell the pillar fills, :clear none. The trial and probe bodies' logs on 2026-10-28 (a refusal is physics given the class, which staged scenes do not skew). Recount: node tools/event-counts.mjs wall-places."}
    ::pillar-s {:default 1 :doc "Seconds a cornered pillar takes to lift the body out of a melee mob's reach (a jump and a place a block): the blows it costs then are weighed against the fight's." :spec (a/num-in 0 nil)}
    ::flight-timeout-s {:default 5 :doc "Seconds bounding one step of the flight: the mob moves, so the next step aims again." :spec (a/num-in 0 nil)}
-   ::enderman-close {:default 3 :doc "Blocks within which an enderman counts as angry though it has not hurt the body yet (a calm one does not come this near)." :spec (a/num-in 0 nil)}
    ::creeper-keep {:default 5 :doc "Blocks within which a creeper stops the fight walking toward a mob on its side: the fight swings from where the body stands, never a step nearer the creeper." :spec (a/num-in 0 nil)}})
 (defn flight-timeout-s [] (settings/get settings ::flight-timeout-s))
-(defn enderman-close [] (settings/get settings ::enderman-close))
 (defn creeper-keep [] (settings/get settings ::creeper-keep))
 
 (defn fist-sweeps [] (settings/get settings ::fist-sweeps))
@@ -134,14 +132,15 @@
     (flight/near-known (:primitives c) (set (flight/dead-ids c)) radius :fire-range)))
 
 (defn angry-enderman?
-  "Whether one of hostiles is an enderman that is angry (the client's flag), hurt the body this flight (its health is under the flight's start) or
-  stands within enderman-close: a calm one is walked away from like any mob, never sealed against. Once found angry it stays so for the flight
-  while one is known within follow range (the client's flag does not hold, and the enderman may teleport out of the near radius: the body must not leave the water it stepped into)."
+  "Whether one of hostiles is an enderman that is angry: the client flags it so (a stare or a blow provokes it), or an
+  enderman hurt the body this flight. A calm one is walked away from like any mob, never sealed against, however near.
+  Once found angry it stays so for the flight while one is known within follow range (the client's flag does not hold,
+  and the enderman may teleport out of the near radius: the body must not leave the water it stepped into)."
   [c hostiles]
   (let [p (:primitives c)
-        hurt? (boolean (some-> (:flight-start (ctx/mem c)) (->> (body/mob-hit-since? (ctx/view c)))))
-        angry? (boolean (or (and (:angry-enderman (ctx/mem c)) (some combat/enderman? (concat hostiles (flight/known-chasers p))))
-                            (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) (enderman-close)))) hostiles)))]
+        hurt? (boolean (some-> (:flight-start (ctx/mem c)) (->> (body/hit-by-since? (ctx/view c) "enderman"))))
+        angry? (boolean (or (and (or hurt? (:angry-enderman (ctx/mem c))) (some combat/enderman? (concat hostiles (flight/known-chasers p))))
+                            (some #(and (combat/enderman? %) (true? (.-angry %))) hostiles)))]
     (when angry? (ctx/update-mem! c assoc :angry-enderman true))
     angry?))
 

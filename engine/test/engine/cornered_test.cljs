@@ -1370,7 +1370,7 @@
     (is (nil? (cover/cover-fn p [#js {:name "skeleton" :visible false :pos #js {:x 6.5 :y 64 :z 0.5}}]))
         "a heard-only skeleton gives no line of fire to judge")))
 
-(def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
+(def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :angry true :pos {:x x :y y :z z} :health 40}))
 
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
   (async done
@@ -1406,7 +1406,7 @@
                                       :entities [(assoc (enderman -2.5 64 0.5) :angry true)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :pos [3.5 64 1.5])
-                                                                        (swap! (fake/state p) assoc :entities [(enderman -14.5 64 0.5)]) r)))))
+                                                                        (swap! (fake/state p) assoc :entities [(assoc (enderman -14.5 64 0.5) :angry false)]) r)))))
           (core/submit! eng (order eng retreat) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "steer"))) "the one step into the water, no flee step out of it once the enderman looks calm")
@@ -1578,13 +1578,31 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 6 64 0.5)]})]
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(dissoc (enderman 6 64 0.5) :angry)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng (order eng retreat) {})
           (await (core/tick! eng))
           (is (neg? (:x (first-move eng))) "away from it")
           (is (zero? (count (calls p "place")))))))))
+
+(deftest an-enderman-is-angry-only-when-flagged-so-or-it-hurt-the-body
+  ;; e340bc3e: a zombie's blow, or a calm enderman 2 blocks off, made the enderman angry: the body sealed itself in beside the zombie and died
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[angry hurt-by want] [[false "zombie" false] [false "enderman" true] [true nil true]]]
+          (let [out (atom nil)
+                {:keys [eng]} (setup {:entities [(assoc (enderman 2.5 64 0.5) :angry angry) (zombie 0.5 64 -1.5)]}
+                                     (assoc fj/jobs 'test.angry {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+                                                                 :round (fn ^:async angry-round [c]
+                                                                          (ctx/update-mem! c assoc :flight-start (- (ctx/now c) 5000))
+                                                                          (reset! out (cornered/angry-enderman? c (cornered/near-hostiles c)))
+                                                                          (ctx/end c :done nil))}))]
+            (when hurt-by (mem/write! (:store eng) :hurt {:amount 2 :attacker {:name hurt-by}} {:cap 50 :ttl 60000}))
+            (core/submit! eng (order eng '(test.angry)) {})
+            (await (core/tick! eng))
+            (is (= want @out) (str "flag " angry ", hurt by " hurt-by))))))))
 
 (deftest escape-order-by-situation
   (is (= [:water :roof :plug :pillar :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))

@@ -111,6 +111,11 @@
   [view t]
   (boolean (some #(hurt/mob-hit? (:data %)) (mem/since view :hurt t))))
 
+(defn hit-by-since?
+  "Whether the view has a :hurt entry since t (ms) that one of kind mob-name dealt (its attacker's name)."
+  [view mob-name t]
+  (boolean (some #(some #{mob-name} (hurt/causes-of (:data %))) (mem/since view :hurt t))))
+
 (defn mob-hits-since
   "The :hurt entries of the view since t (ms) that may be a mob's blow, as [{:t :amount}], oldest first."
   [view t]
