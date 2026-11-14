@@ -425,7 +425,7 @@ test('route runs over rails already laid on the way and over ground cover at rai
 test('route tunnels through a hill by default and writes it as the plan\'s :spans; --tunnel 0 forbids it', async () => {
   const fx = fixture()
   try {
-    await writeSeen(fx, 'Probe', groundCells({ hills: [[18, 26, 66]], chasms: [] }), Date.now() - 1000)
+    await writeSeen(fx, 'Probe', groundCells({ hills: [[18, 26, 69]], chasms: [] }), Date.now() - 1000)
     const closed = await invoke('plan', fx, [...ROUTE, '--tunnel', '0'])
     assert.equal(closed.code, 2)
     assert.deepEqual(closed.value.reason, keyword('no-route'))
@@ -439,14 +439,14 @@ test('route tunnels through a hill by default and writes it as the plan\'s :span
 test('route bridges a seen drop of 2 or more and a lake by default; --bridge 0 forbids it', async () => {
   const fx = fixture()
   try {
-    await writeSeen(fx, 'Probe', groundCells({ chasms: [[18, 24, 60]] }), Date.now() - 1000)
+    await writeSeen(fx, 'Probe', groundCells({ chasms: [[18, 24, 59]] }), Date.now() - 1000)
     assert.deepEqual((await invoke('plan', fx, [...ROUTE, '--bridge', '0'])).value.reason, keyword('no-route'))
     const bridged = await invoke('plan', fx, ROUTE)
     assert.equal(bridged.code, 0, bridged.output)
     assert.deepEqual(bridged.value.route.spans.map(s => s.kind), [keyword('bridge')])
     const lake = groundCells().map(([x, y, z, name]) => (x >= 18 && x <= 24 && y >= 61 && y <= 63 ? [x, y, z, 'water'] : [x, y, z, name]))
     await writeSeen(fx, 'Probe', lake, Date.now() - 1000)
-    const over = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    const over = await invoke('plan', fx, ['route', 'lake', ...ROUTE.slice(2), '--dry-run'])
     assert.equal(over.code, 0, over.output)
     assert.deepEqual(over.value.route.spans.map(s => s.kind), [keyword('bridge')])
   } finally { fx.close() }
@@ -481,7 +481,7 @@ test('route refuses bad cells, a missing body or by, and an unseen world; --dry-
     const bad = args => invoke('plan', fx, ['route', 'line', '--body', 'Probe', '--by', 'Router', ...args])
     assert.deepEqual((await bad(['--from=1,2', '--to=5,64,5'])).value.reason, keyword('bad-from'))
     assert.deepEqual((await bad(['--from=1,64,5', '--to=1,64,5'])).value.reason, keyword('bad-to'))
-    assert.deepEqual((await bad(['--from=1,64,5', '--to=9,64,5', '--tunnel', '-1'])).value.reason, keyword('bad-span'))
+    assert.deepEqual((await bad(['--from=1,64,5', '--to=9,64,5', '--tunnel=-1'])).value.reason, keyword('bad-span'))
     assert.deepEqual((await bad(['--from=1,64,5', '--to=9,64,5', '--nodes', '0'])).value.reason, keyword('bad-nodes'))
     assert.deepEqual((await invoke('plan', fx, ['route', 'line', '--by', 'Router', '--from=1,64,5', '--to=9,64,5'])).value.reason, keyword('body-required'))
     assert.deepEqual((await invoke('plan', fx, ['route', 'line', '--body', 'Probe', '--from=1,64,5', '--to=9,64,5'])).value.reason, keyword('actor-required'))
