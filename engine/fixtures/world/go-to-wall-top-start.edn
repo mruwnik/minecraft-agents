@@ -1,0 +1,21 @@
+;; A body resting on a fence or wall top (1.5 high: no stand for the planner) plans from the side cell it steps off to
+;; and arrives, instead of every walk ending start-not-standable (a body that fell onto a pen wall from a tree's canopy).
+;; Ground = stone up to y 0 (body level 1).
+{:defaults {:tags [:movement :planner]
+            :plot {:height 8}
+            :blocks [[:fill [0 -3 0] [31 0 31] "stone"]]
+            :limit-s 60
+            :time :any}
+ :cases
+ [{:name "walks-off-a-pen-wall-on-a-block"
+   :blocks [[:set [10 1 10] "cobblestone"] [:set [10 2 10] "cobblestone_wall"]]
+   :body {:at [10.5 3.5 10.5]}
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 1 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:body-near [14.5 1 14.5] 1.5]]}
+  {:name "walks-off-a-fence-top"
+   :blocks [[:set [10 1 10] "oak_fence"]]
+   :body {:at [10.5 2.5 10.5]}
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 1 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:body-near [14.5 1 14.5] 1.5]]}]}

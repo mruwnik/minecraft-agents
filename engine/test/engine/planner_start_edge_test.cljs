@@ -140,3 +140,13 @@
 (deftest a-start-sunk-in-a-composter-marks-the-rim-to-climb-over
   (is (= 65 (:over (first (get-in (run (world {:fill [composter]}) (near 8 64 8) {} {:x 2 :y 64 :z 4 :px 2.5 :py 64.125 :pz 4.5})
                                   [:path :steps]))))))
+
+(deftest start-on-a-wall-or-fence-top-steps-off-to-the-side-stand
+  ;; the top (1.5 high) is no stand for the search; a body that fell onto it still plans, from the nearest side cell
+  ;; it steps off to, marked to walk there first at the feet's height
+  (are [fill py first-cell] (let [r (run (world {:fill fill}) (near 8 64 8) {} {:x 2 :y (js/Math.floor py) :z 4 :px 2.7 :py py :pz 4.45})]
+                              (= ["found" nil first-cell py] (conj (status+first r) (:over (first (get-in r [:path :steps]))))))
+    [[2 64 4 2 64 4 "cobblestone_wall"]] 65.5 [3 64 4]
+    [[2 64 4 2 64 4 "oak_fence"]] 65.5 [3 64 4]
+    ;; a wall on a block (a pen wall): the side stand is 2.5 under the feet
+    [[2 64 4 2 64 4 "cobblestone"] [2 65 4 2 65 4 "cobblestone_wall"]] 66.5 [3 64 4]))

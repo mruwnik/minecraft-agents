@@ -488,6 +488,29 @@
     (when (and (some? py) (== 1 (aget (.-hollow ^js (.-table search)) id)) (< py rim))
       rim)))
 
+(defn- post-top
+  "The feet height of a body at from resting on the top of the block under its floored cell when that top reaches into
+  the cell (a fence or wall, 1.5 high: the search stands nothing on it), or nil: stepping off, the feet stay that high."
+  [^Search search ^js from]
+  (let [py (.-py from) fy (.-y from)
+        top (aget (.-top ^js (.-table search)) (.stateAt ^js (.-snapshot search) (.-x from) (dec fy) (.-z from)))
+        at (+ (dec fy) (/ top WHOLE))]
+    (when (and (some? py) (> top WHOLE) (<= (js/Math.abs (- py at)) (/ 1 WHOLE)))
+      at)))
+
+(defn- side-stand
+  "[x y z]: the highest stand in column x z from y fy down that a body with feet at py steps off to: no higher than half a
+  block over the feet, its drop at most the search's max-drop, nothing with collision above it in the column; nil when none."
+  [^Search search x z fy py]
+  (loop [y fy]
+    (let [h (.nodeH search x y z)
+          d (- py (+ y (/ h WHOLE)))]
+      (cond
+        (> (- py y) (inc (.-max-drop search))) nil
+        (>= h 0) (when (<= -0.5 d (.-max-drop search)) [x y z])
+        (let [id (.stateAt ^js (.-snapshot search) x y z)] (or (== id UNLOADED) (pos? (aget (.-top ^js (.-table search)) id)))) nil
+        :else (recur (dec y))))))
+
 (defn- start-query
   "query with its start cell moved for a body on the edge of a block: when from (the floored body position) is no
   place to stand but from.px/pz is given, the first cell the body's box (HITBOX-HALF) overlaps (hitbox-cells) that stands with
@@ -495,8 +518,8 @@
   under the feet (the low half of a stairs block: the body steps down off it). A body whose feet are above the floored
   cell's floor (a stair, whose stand the search puts in the cell above it) otherwise starts from the cell above when that stands;
   one whose feet are up to 1/16 over the stand of the cell below (a short floor) starts from the cell below; one whose feet
-  are above the floored cell's floor with nothing else to stand on (resting on a cocoa pod, whose cell has no stand) starts
-  from the nearest side cell that stands, which the body steps off to. Unchanged when the floored cell stands or no cell does.
+  are above the floored cell's floor with nothing else to stand on (resting on a cocoa pod, whose cell has no stand, or on a
+  fence or wall top) starts from the nearest side cell with a stand at or below it (side-stand), which the body steps off to. Unchanged when the floored cell stands or no cell does.
   search: a search of query, initialised."
   [^Search search ^js query]
   (let [^js from (.-from query)
@@ -519,22 +542,23 @@
         ;; floor held up, so the floored cell has nothing under it but the cell below stands
         below? (and (some? py) (let [h (.nodeH search fx (dec fy) fz)]
                                  (and (>= h 0) (<= 0 (- py (+ (dec fy) (/ h WHOLE))) (/ 1 WHOLE)))))
-        ;; resting on a partial block (cocoa pod) or sunk in a bowl (composter) in the floored cell, its top within 1/16 of the feet (not airborne): no cell
-        ;; under the box stands, so the body steps off to the nearest side cell whose stand is at most half a block over the feet and at most a block under
+        ;; resting on a partial block (cocoa pod) or sunk in a bowl (composter) in the floored cell, or on a fence or wall top
+        ;; under it (post-top), its top within 1/16 of the feet (not airborne): no cell under the box stands, so the body
+        ;; steps off to the nearest side cell that has a stand (side-stand)
         beside (when (and (some? px) (some? pz) (some? py) (> py (+ fy (/ 1 WHOLE)))
                           (or (some? (bowl-rim search from))
+                              (some? (post-top search from))
                               (<= (js/Math.abs (- py (+ fy (/ (aget (.-top ^js (.-table search)) (.stateAt ^js (.-snapshot search) fx fy fz)) WHOLE)))) (/ 1 WHOLE))))
-                 (first (filter (fn [[x z]] (let [h (.nodeH search x fy z)]
-                                              (and (>= h 0) (<= -0.5 (- py (+ fy (/ h WHOLE))) 1))))
-                                (sort-by (fn [[x z]] (+ (js/Math.abs (- (+ x 0.5) px)) (js/Math.abs (- (+ z 0.5) pz))))
-                                         [[(dec fx) fz] [(inc fx) fz] [fx (dec fz)] [fx (inc fz)]]))))]
+                 (some (fn [[x z]] (side-stand search x z fy py))
+                       (sort-by (fn [[x z]] (+ (js/Math.abs (- (+ x 0.5) px)) (js/Math.abs (- (+ z 0.5) pz))))
+                                [[(dec fx) fz] [(inc fx) fz] [fx (dec fz)] [fx (inc fz)]])))]
     (cond
       (>= (.-start-h search) 0) query
       (some? edge) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first edge) :z (second edge)})})
       (some? step-off) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first step-off) :z (second step-off)})})
       above? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (inc fy)})})
       below? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (dec fy)})})
-      (some? beside) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first beside) :z (second beside)})})
+      (some? beside) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first beside) :y (second beside) :z (nth beside 2)})})
       :else query)))
 
 (defn- with-start-air
@@ -603,11 +627,13 @@
                                         :maxNodes (js/Math.min (option options "maxNodes" 200000) (js/Math.max 1 (.-n-nodes search)))}))
 
 (defn- with-rim
-  "r with its first step marked over: the rim a body sunk in a bowl (bowl-rim of query's start) climbs out over to it."
+  "r with its first step marked over: the rim a body sunk in a bowl (bowl-rim of query's start) climbs out over to it, or
+  the fence or wall top a body steps off (post-top)."
   [^js r ^Search search ^js query]
   (let [^js from (.-from query)
         ^js step0 (some-> (.-path r) .-steps (aget 0))
-        rim (bowl-rim search from)]
+        bowl (bowl-rim search from)
+        rim (if (some? bowl) bowl (post-top search from))]
     (when (and (some? step0) (some? rim) (not (and (== (.-x step0) (.-x from)) (== (.-z step0) (.-z from)))))
       (unchecked-set step0 "over" rim))
     r))
