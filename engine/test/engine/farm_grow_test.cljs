@@ -2,6 +2,7 @@
   "jobs.farm.grow against the fake world: a standing field is used, never started again; no field is made."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.triggers :as triggers]
@@ -123,6 +124,26 @@
         (let [looks (await (relook-calls 2400000 [[8 0] [-8 0]]))]
           (is (some #{[8.5 0.5]} looks) "a look at the crop east of the body")
           (is (some #{[-7.5 0.5]} looks) "and one at the crop west of it, behind the first look"))))))
+
+(deftest a-field-whose-chunk-unloaded-is-read-from-memory
+  (let [p (tu/seeing-all (tu/fake (ft/world (ft/farm "wheat" 3 [[40 2]] [[40 2]]) {:unloaded ["40,64,2"]})))]
+    (aset p "seenBlockAt" (fn [pos] #js {:name "wheat" :properties #js {:age 3} :pos pos "age-ms" 5000}))
+    (with-redefs [ctx/mem (constantly {:area {:min [40 63 2] :max [40 64 2]}})]
+      (is (= [{:name "wheat" :pos {:x 40 :y 64 :z 2} :age 3 :age-ms 5000}] (grow/remembered {:primitives p :args {:crop "wheat"}}))
+          "an unloaded chunk is a field away, not no field"))))
+
+(deftest a-crop-out-of-the-harvest-radius-that-could-have-ripened-is-walked-back-to-and-looked-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (ft/world (ft/farm "wheat" 2 [[36 2]] [[36 2]]) ft/wheat-drops {:inventory kit}))
+              p (:p s)
+              seen-blocks (aget p "seenBlocks")]
+          (aset p "seenBlocks" (fn [q] (let [bs (seen-blocks q)] (doseq [b bs] (aset b "age-ms" 2400000)) bs)))
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.grow {:count 2 :spend {:job-time 600}})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (some #(= [36.5 2.5] [(.-x (.-pos (.-args %))) (.-z (.-pos (.-args %)))]) (ft/calls s "look")) "it walked back and looked at the crop")
+          (is (= 9 (get (ft/inv s) "wheat_seeds")) "no new field was sown"))))))
 
 (deftest a-growing-field-in-a-plan-of-the-bodys-own-is-waited-for
   (async done

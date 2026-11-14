@@ -25,7 +25,7 @@
   2. A crop seen, none ripe: look again (one sight pass per group of crops one look covers) when a crop's memory is old enough that it could have ripened since (within the harvest radius), then wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
   3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; a failed seed fetch with :count seeds carried sows what is carried; wheat seeds are
      broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body, the field worth a 3-day food reserve: cost/food-search-worth) and work it with jobs.farm.tend (till,
-     irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance.
+     irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance, its chunks loaded or not; a crop out of the harvest radius that could have ripened since it was seen is walked back to (a go-to child) and looked at.
   Needs: a source of a hoe and seed (the fetch jobs say what lacks), a field spot in range, a zone list.
   Done once :count of the crop's item is carried. Ends nothing-possible with the failed child's cause: :no-spot (find-spot found none),
   :not-planted (three tends planted nothing), :no-light (the spot could not be lit), or a fetch's :need/:tool; limit-reached :timeout after :spend :job-time.
@@ -84,8 +84,19 @@
     {:uses {:job-time [0 (settings/get settings ::wait-s) (job-time-of (:args c))]}
      :yields {:items {(item-of (:crop (:args c))) [0 n n]}}}))
 
+(defn field-cell
+  "A field cell as the body knows it, {:name :age :age-ms}: as sensed, else (its chunk unloaded) as remembered, since memory
+  outlives the chunk; nil when never seen."
+  [p pos]
+  (if-let [^js b (u/sensed p pos)]
+    (when-not (true? (.-unknown b))
+      {:name (.-name b) :age (some-> (.-properties b) (aget "age") js/Number) :age-ms (.-ageMs b)})
+    (let [b (look/seen-block p pos)]
+      (when (and b (not (:unknown b)))
+        {:name (:name b) :age (some-> (get-in b [:properties :age]) js/Number) :age-ms (:age-ms b)}))))
+
 (defn remembered
-  "The crops of :crop the body remembers in its field's area (any distance), as seen-crops gives them."
+  "The crops of :crop the body remembers in its field's area (any distance, loaded or not), as seen-crops gives them."
   [c]
   (let [{:keys [min max]} (:area (ctx/mem c))
         crop (:crop (:args c))
@@ -93,9 +104,9 @@
     (when min
       (vec (for [x (range (min 0) (inc (max 0))) y (range (min 1) (inc (max 1))) z (range (min 2) (inc (max 2)))
                  :let [pos {:x x :y y :z z}
-                       b (u/seen-block p pos)]
-                 :when (and b (= crop (.-name b)))]
-             {:name crop :pos pos :age (some-> (aget (.-properties b) "age") js/Number) :age-ms (aget b "age-ms")})))))
+                       b (field-cell p pos)]
+                 :when (= crop (:name b))]
+             (assoc (dissoc b :name) :name crop :pos pos))))))
 
 (defn standing
   "The crops of :crop the body has seen standing (its field's remembered cells first, then those near the body), that its zones allow cutting (its own plans' crops too) and no harvest gave up on (the cells it left)."
@@ -110,14 +121,40 @@
 
 (defn ripe? [crop b] (some-> (:age b) (>= (crops/ripe-age crop))))
 
+(defn could-have-ripened?
+  "Whether a seen crop's memory is old enough that it could have ripened since (the mean ripening time from the age it was
+  seen at, cost/ripen-s)."
+  [crop b]
+  (some-> (:age-ms b) (> (* 1000 (cost/ripen-s crop 1 1 (or (:age b) 0))))))
+
 (defn stale
-  "The crops of seen within the harvest radius whose memory is old enough that the crop could have ripened since (the mean ripening time from the age it was seen at, cost/ripen-s): judged from what the body saw before, not from what it sees."
+  "The crops of seen within the harvest radius that could have ripened since they were seen: judged from what the body saw before, not from what it sees."
   [c seen]
   (let [me (u/self-pos c)
         crop (:crop (:args c))]
-    (filterv #(and (some-> (:age-ms %) (> (* 1000 (cost/ripen-s crop 1 1 (or (:age %) 0)))))
-                   (<= (u/dist (:pos %) me) crops/cut-radius))
-             seen)))
+    (filterv #(and (could-have-ripened? crop %) (<= (u/dist (:pos %) me) crops/cut-radius)) seen)))
+
+(defn away
+  "The nearest crop of seen beyond the harvest radius that could have ripened since it was seen (a field the body left), or nil."
+  [c seen]
+  (let [me (u/self-pos c)
+        crop (:crop (:args c))]
+    (->> seen
+         (filter #(and (could-have-ripened? crop %) (> (u/dist (:pos %) me) crops/cut-radius)))
+         (sort-by #(u/dist (:pos %) me))
+         first)))
+
+(defn ^:async walk-back!
+  "Walk (a go-to child, priced at the grow's worth) to within the harvest radius of crop b of seen, out of it, that could
+  have ripened: :again there, :continue while the walk goes on; a walk that failed gives up the crops of seen within the
+  harvest radius of b (as a failed harvest does) and goes :again."
+  [c seen b]
+  (let [e (await (child/call-walk* c :walk {:pos (:pos b) :range crops/cut-radius}))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) :again
+      :else (do (ctx/update-mem! c update :given-up into (keep #(when (<= (u/dist (:pos %) (:pos b)) crops/cut-radius) (:pos %)) seen))
+                :again))))
 
 (defn ^:async relook!
   "Group the stale crops by what one look covers (look/cone-groups) and, per group, turn to its middle and take one sight pass, so ripeness is judged from sight."
@@ -221,6 +258,9 @@
           (= :continue e) :continue
           (not= :done (:kind e)) (do (ctx/update-mem! c update :given-up into (or (seq (:skipped (:data e))) [(:pos ripe)])) :again)
           :else :again))
+
+      (away c seen)
+      (await (walk-back! c seen (away c seen)))
 
       (seq seen)
       (do (child/progress! c :tend)
