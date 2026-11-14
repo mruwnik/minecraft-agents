@@ -635,6 +635,26 @@
     (is (> (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far)))
     (is (= (cost/experience-cost {:level 10}) (- (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far))))))
 
+(deftest a-death-costs-the-walk-from-the-respawn-to-the-goal-and-what-is-carried
+  (let [home {:x 0 :y 64 :z 0}
+        out {:x 400 :y 64 :z 0}
+        bare {:respawn home :level 0}
+        walk #(+ (value/trip) (:cost (value/walk-cost {:distance %})))
+        kit (:value (cost/goal-value (map #(hash-map :name % :count 1)
+                                          ["iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots" "iron_sword" "iron_pickaxe"])))]
+    (is (= (walk 0) (cost/death-cost (assoc bare :goal home) out)) "bare, its goal at the respawn: the death is the walk it saves")
+    (is (= (walk 400) (cost/death-cost (assoc bare :goal out) out)) "bare, its goal 400 blocks off where it dies")
+    (is (= (walk 20) (cost/death-cost (assoc bare :goal out) {:x 20 :y 64 :z 0})) "on its way out: the 380 blocks still to walk are no loss")
+    (is (= (walk 400) (cost/death-cost bare out)) "no goal known: the walk back to where it dies")
+    (is (< (* 10 (walk 0)) (cost/death-cost (assoc bare :goal home :carried kit) {:x 5 :y 64 :z 0})) "an iron kit beside its respawn is dear")))
+
+(deftest a-death-body-reads-the-goal-of-the-open-walk
+  (let [p (fake/create {:self {:pos [40 64 3] :worldSpawn [0 64 0]}})
+        view #(hash-map :data {:entries {:walk-goal [{:t 1 :data {:job "j1" :slots [] :goal %}}]}} :now 2)]
+    (is (= {:x 400 :y 64 :z 0} (:goal (cost/death-body p (view {:x 400 :y 64 :z 0})))))
+    (is (= {:x 400 :y 64 :z 0} (:goal (cost/death-body p (view [400 64 0])))) "a vector goal")
+    (is (nil? (:goal (cost/death-body p (hash-map :data {} :now 2)))) "no open walk")))
+
 (deftest a-death-loses-what-the-trial-piles-lost-while-the-walk-back-beats-the-despawn-else-its-whole-load
   (let [lost #(- (cost/death-cost (assoc % :carried 3000) far) (cost/death-cost % far))]
     (is (< (js/Math.abs (- (lost {:respawn {:x 0 :y 64 :z 0}}) (* 3000 (- 1 (value/counted-chance (settings/get death/settings ::death/pile-returns))))))

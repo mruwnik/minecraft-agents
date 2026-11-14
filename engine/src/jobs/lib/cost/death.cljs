@@ -5,7 +5,7 @@
   by the answer the body would take to each). Pure.
 
   body: {:level experience levels, :respawn {:x :y :z} where it would wake (its bed, else world spawn), :carried the seconds the carried items are
-  worth (item-value), :health and :food (default 20: nothing refilled)}.
+  worth (item-value), :health and :food (default 20: nothing refilled), :goal {:x :y :z} where its job goes on (none: where it dies)}.
 
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
   as terrain-danger.
@@ -108,12 +108,29 @@
   [body at]
   (+ (value/trip) (:cost (value/walk-cost {:distance (walk-back-blocks body at)}))))
 
+(defn- blocks [from to]
+  (js/Math.hypot (- (:x from) (:x to)) (- (or (:y to) (:y from)) (:y from)) (- (:z from) (:z to))))
+
+(defn goal-walk-blocks
+  "Blocks of walk a death at `at` adds on the way to the body's :goal: from the :respawn to the goal less what a living
+  body at `at` still walks to it, never under 0 (a death is not priced as a way home, 27a22c58); walk-back-blocks with no
+  :goal or no :respawn."
+  [{:keys [respawn goal] :as body} at]
+  (let [at (or at (:at body))]
+    (if (and respawn goal at)
+      (max 0 (- (blocks respawn goal) (blocks at goal)))
+      (walk-back-blocks body at))))
+
 (defn death-cost
-  "Seconds a death at `at` ({:x :y :z}) costs: experience-cost, the walk back (back-cost: its job resumes there), the
-  lost-share of the :carried items and the ::extra-s setting, less refill-s, never under 0."
+  "Seconds a death at `at` ({:x :y :z}) costs: experience-cost, the cheaper of the walk back by the pile (back-cost) with
+  the lost-share of the :carried items and the walk to the :goal (goal-walk-blocks) with all of them, the ::extra-s
+  setting, less refill-s, never under 0."
   [body at]
-  (max 0 (- (+ (settings/get settings ::extra-s) (experience-cost body) (back-cost body at) (* (lost-share body at) (or (:carried body) 0)))
-            (refill-s body))))
+  (let [carried (or (:carried body) 0)
+        by-pile (+ (back-cost body at) (* (lost-share body at) carried))
+        to-goal (+ (value/trip) (:cost (value/walk-cost {:distance (goal-walk-blocks body at)})) carried)]
+    (max 0 (- (+ (settings/get settings ::extra-s) (experience-cost body) (min by-pile to-goal))
+              (refill-s body)))))
 
 (defn blow-outcome
   "{:dies :lived} of blows of about hit hp, damage hp of them expected, against the health and absorption of body: dies the

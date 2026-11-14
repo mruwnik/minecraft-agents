@@ -23,7 +23,7 @@
     tolls    farm-tolls, zone-tolls, flood-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; gate-tolls: a
              stocked pen's gates at the herd's loss while one stands open; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
-    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience and the ::extra-s setting (default 0); spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, find-worth, items-find-worth, search-radius: what a find is worth, how far its legs may go; opening-price, hold-price: opening a shelter to mobs against holding on in it; leg-start, leg-price, dig-leg-price: a walk or dig leg's clock seconds and hp lost, never under its straight line; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
+    death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items or to the goal plus the experience and the ::extra-s setting (default 0); spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, find-worth, items-find-worth, search-radius: what a find is worth, how far its legs may go; opening-price, hold-price: opening a shelter to mobs against holding on in it; leg-start, leg-price, dig-leg-price: a walk or dig leg's clock seconds and hp lost, never under its straight line; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     destroy  destroyed-s, destroyed-fn, cut-fn (a cut cell's dig with it): what digging a cell destroys, in seconds of replacing it (a crop's growth, farmland's dirt and till, a build put back with put-back-s; natural terrain and tree wood nothing, a log that looks placed (horizontal, in a line, joined to planks or glass) a build) (jobs.lib.cost.destroy).
@@ -61,6 +61,7 @@
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.table :as table]
             [jobs.lib.cost.value :as value]
+            [jobs.lib.goal :as goal]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -733,14 +734,17 @@
 
 (defn death-body
   "The body of p as the death costs read it: :level, :respawn (respawn-of), :carried (the goal-value of the inventory, its
-  replacement cost), and :health and :food, what a respawn refills."
+  replacement cost), :health and :food, what a respawn refills, and :goal, the open walk the body was last bound for
+  (jobs.lib.goal), where its job goes on."
   [p view]
-  (let [self (.self p)]
-    {:level (or (some-> self .-experience .-level) 0)
-     :respawn (respawn-of p view)
-     :carried (:value (goal-value (u/inventory p)))
-     :health (.-health self)
-     :food (.-food self)}))
+  (let [self (.self p)
+        g (some-> view (mem/latest goal/kind) :data :goal)]
+    (cond-> {:level (or (some-> self .-experience .-level) 0)
+             :respawn (respawn-of p view)
+             :carried (:value (goal-value (u/inventory p)))
+             :health (.-health self)
+             :food (.-food self)}
+      g (assoc :goal (if (vector? g) (zipmap [:x :y :z] g) g)))))
 
 (defn death-s
   "Seconds a death of the body of p costs at `at` (default its feet): death-cost of death-body."
