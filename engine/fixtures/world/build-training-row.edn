@@ -7,6 +7,8 @@
 ;; slides into the villager's cell is out of reach from the corridor and the back passage, and is taken crouched in the emptied lectern cell.
 ;; training-cell-roll-ends-no-job-when-the-villager-takes-none: a villager without AI never claims the lectern: one more break, then no-job.
 ;; training-cell-roll-cut-while-crouched-in-the-cell-lets-the-body-out: the roll is cut while the body is crouched in the emptied cell (it must stay crouched under the slab); a go-to then walks it out.
+;; Before a break the roll's pen child boxes the body in the corridor beside the lectern (carried cobblestone) and lights it; the
+;; cell's back seal reads as the pen's shut plug.
 ;; Should-succeed: every case.
 {:defaults
  {:tags [:build :village] :time :day :time-why :villager-schedule
@@ -43,7 +45,7 @@
             [:set [12 1 12] "air"] [:fill [14 0 12] [14 1 12] "air"] [:fill [12 0 13] [12 1 13] "air"]
             [:set [14 0 13] "oak_fence_gate[facing=south]"] [:set [14 1 13] "air"] [:fill [14 0 14] [14 1 14] "air"]
             [:set [12 0 14] "lectern"] [:set [12 1 14] "oak_slab[type=top]"]]
-   :body {:at [12.5 0 15.5] :yaw 0 :inventory [["iron_pickaxe" 1]]}
+   :body {:at [12.5 0 15.5] :yaw 0 :inventory [["iron_pickaxe" 1] ["cobblestone" 8] ["torch" 4]]}
    :limit-s 600
    :act [[:summon "villager" [12.5 0 13.5] "{UUID:[I;20261,1,3,2],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
@@ -55,11 +57,11 @@
             [:set [12 1 12] "air"] [:fill [14 0 12] [14 1 12] "air"] [:fill [12 0 13] [12 1 13] "air"]
             [:set [14 0 13] "oak_fence_gate[facing=south]"] [:set [14 1 13] "air"] [:fill [14 0 14] [14 1 14] "air"]
             [:set [12 0 14] "lectern"] [:set [12 1 14] "oak_slab[type=top]"]]
-   :body {:at [12.5 0 15.5] :yaw 0 :inventory [["iron_pickaxe" 1]]}
+   :body {:at [12.5 0 15.5] :yaw 0 :inventory [["iron_pickaxe" 1] ["cobblestone" 8] ["torch" 4]]}
    :limit-s 300
    :act [[:summon "villager" [12.5 0 13.5] "{NoAI:1b,UUID:[I;20261,1,3,4],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
-         [:job (jobs.village.roll {:worth 1200 :villager "00004f25-0000-0001-0000-000300000004" :pos #at [12 0 14] :profession "librarian" :want "netherite_ingot" :ways #{:carried} :settings {:jobs.village.roll/take-job-s 20}})]]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f25-0000-0001-0000-000300000004" :pos #at [12 0 14] :profession "librarian" :want "netherite_ingot" :ways #{:carried} :settings {:jobs.lib.villager/take-job-ticks 400}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-job}} :within-s 240 :of-job true}]
    :after [[:block [12 0 14] "lectern"] [:block [12 1 14] "oak_slab"]]}
   {:name "training-cell-roll-cut-while-crouched-in-the-cell-lets-the-body-out"
@@ -67,7 +69,7 @@
             [:set [12 1 12] "air"] [:fill [14 0 12] [14 1 12] "air"] [:fill [12 0 13] [12 1 13] "air"]
             [:set [14 0 13] "oak_fence_gate[facing=south]"] [:set [14 1 13] "air"] [:fill [14 0 14] [14 1 14] "air"]
             [:set [12 0 14] "lectern"] [:set [12 1 14] "oak_slab[type=top]"]]
-   :body {:at [12.5 0 15.5] :yaw 0 :inventory [["iron_pickaxe" 1]]}
+   :body {:at [12.5 0 15.5] :yaw 0 :inventory [["iron_pickaxe" 1] ["cobblestone" 8] ["torch" 4]]}
    :limit-s 700
    :act [[:summon "villager" [12.5 0 13.5] "{UUID:[I;20261,1,3,3],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]

@@ -2,6 +2,9 @@
 ;; 16 0 16). Live-only facts: whether an AI librarian claims the lectern placed again (day only), loses the profession when it
 ;; is broken, and whether the trade primitive reads fresh offers each time. Offers do not name an enchantment, so :want is
 ;; "enchanted_book" (a first-tier librarian may or may not offer one: the roll ends found or no-match after ::max-rolls).
+;; A roll breaks only with the villager penned (jobs.lib.villager-pen): rolled cases stand the pen in :blocks (villager cell 16 0 17,
+;; a glowstone roof lighting it, the body boxed in its stand 16 0 15; the walled cases close their own cell the same way);
+;; jobless villagers are penned by the roll's pen child from carried blocks.
 ;; roll-three-times-in-one-call: three rerolls in one call (no villager offers a netherite ingot), then no-match; the report counts every lectern picked up (yields = uses).
 ;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
 ;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
@@ -21,30 +24,51 @@
   :limit-s 240}
  :cases
  [{:name "roll-librarian"
-   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-with-carried-ways-places-the-workstation-it-broke"
-   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,13],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,13],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-00050000000d" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :ways #{:carried} :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-with-a-book-map-stops-on-any-listed-book"
-   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,12],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,12],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-00050000000c" :pos #at [16 0 16] :profession "librarian" :want nil :enchant {"mending" 1 "unbreaking" 1 "protection" 1 "sharpness" 1 "efficiency" 1 "knockback" 1 "silk_touch" 1 "fortune" 1 "looting" 1 "power" 1 "feather_falling" 1 "respiration" 1 "aqua_affinity" 1 "thorns" 1 "depth_strider" 1 "frost_walker" 1 "fire_protection" 1 "blast_protection" 1 "projectile_protection" 1 "sweeping_edge" 1 "fire_aspect" 1 "punch" 1 "flame" 1 "infinity" 1 "luck_of_the_sea" 1 "lure" 1 "loyalty" 1 "impaling" 1 "riptide" 1 "channeling" 1 "multishot" 1 "piercing" 1 "quick_charge" 1 "soul_speed" 1 "swift_sneak" 1 "smite" 1 "bane_of_arthropods" 1 "binding_curse" 1 "vanishing_curse" 1} :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-three-times-in-one-call"
-   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,9],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,9],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000009" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-match :report {:uses {:items {"lectern" 3}} :yields {:items {"lectern" 3}}}}} :within-s 230 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-sealed-cell-from-the-corridor-never-digs-a-wall"
    :plot {:floor "grass_block" :height 8}
    :blocks [[:fill [11 -1 15] [14 2 17] "stone" :hollow] [:fill [14 -1 12] [21 2 20] "stone" :hollow]
-            [:set [14 0 16] "air"] [:set [14 1 16] "air"] [:set [13 0 16] "lectern"]]
-   :body {:at [15.5 0 16.5] :yaw 90 :settle-s 2}
+            [:set [14 0 16] "air"] [:set [14 1 16] "air"] [:set [13 0 16] "lectern"]
+            [:set [13 1 16] "oak_slab[type=top]"] [:set [12 2 16] "glowstone"] [:fill [15 0 16] [15 1 16] "stone"]]
+   :body {:at [14.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [12.5 0 16.5] "{UUID:[I;20260,7,5,10],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-00050000000a" :pos #at [13 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
@@ -60,7 +84,8 @@
             [:set [17 1 16] "bamboo_slab[type=top]"]
             [:set [15 1 16] "andesite"]
             [:set [15 0 16] "air"]
-            [:fill [14 0 18] [14 1 18] "air"]]
+            [:fill [14 0 18] [14 1 18] "air"]
+            [:set [16 2 16] "glowstone"] [:set [18 2 16] "stone"] [:fill [18 0 15] [18 1 15] "stone"] [:fill [18 0 17] [18 1 17] "stone"] [:fill [19 0 16] [19 1 16] "stone"]]
    :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [16.4 0 16.5] "{UUID:[I;20260,7,5,11],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
@@ -75,7 +100,8 @@
             [:fill [13 -1 14] [15 3 18] "stone" :hollow]
             [:set [17 0 16] "lectern[facing=east]"]
             [:set [17 1 16] "bamboo_slab[type=top]"]
-            [:set [17 -1 16] "blue_ice"]]
+            [:set [17 -1 16] "blue_ice"]
+            [:set [16 2 16] "glowstone"] [:set [18 2 16] "stone"] [:fill [18 0 15] [18 1 15] "stone"] [:fill [18 0 17] [18 1 17] "stone"] [:fill [19 0 16] [19 1 16] "stone"]]
    :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [16.4 0 16.5] "{UUID:[I;20260,7,5,14],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
@@ -92,7 +118,7 @@
             [:set [17 1 16] "bamboo_slab[type=top]"]
             [:set [17 -1 16] "blue_ice"]
             [:fill [18 -1 15] [19 6 17] "dirt"]
-            [:fill [18 0 16] [18 1 16] "air"]]
+            [:fill [18 0 16] [18 1 16] "air"] [:set [16 2 16] "glowstone"]]
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [18 2 15] #at [19 6 17]] :want "dirt"}]}]
    :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [16.4 0 16.5] "{UUID:[I;20260,7,5,31],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
@@ -105,8 +131,12 @@
    :plot {:floor "grass_block" :height 8}
    :mobs :keep
    :blocks [[:fill [12 -1 12] [20 3 20] "stone" :hollow] [:fill [13 0 13] [19 2 19] "air"]
-            [:set [13 1 13] "torch"] [:set [19 1 19] "torch"] [:set [16 0 16] "lectern"]]
-   :body {:at [14.5 0 16.5] :yaw 270 :settle-s 2}
+            [:set [13 1 13] "torch"] [:set [19 1 19] "torch"] [:set [16 0 16] "lectern"]
+            [:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0 :settle-s 2}
    :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,17],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 3]
@@ -136,6 +166,7 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :occupied}} :within-s 40 :of-job true}]}
   {:name "roll-at-night-names-the-villager-and-the-reason"
    :time :night :time-why :villager-schedule
+   :body {:inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,7],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :roll.villager :data {:villager "00004f24-0000-0007-0000-000500000007"}} :within-s 40 :of-job true}
@@ -158,7 +189,7 @@
             {:no-event {:source :job :kind :stopped :data {:reason :gone}} :for-s 90}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-villager-behind-the-body-is-looked-for-not-gone"
-   :body {:at [14.5 0 16.5] :yaw 90}
+   :body {:at [14.5 0 16.5] :yaw 90 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,8],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
@@ -166,8 +197,11 @@
             {:no-event {:source :job :kind :stopped :data {:reason :gone}} :for-s 30}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-cell-behind-the-body-is-looked-at"
-   :body {:at [8.5 0 16.5] :yaw 90}
-   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,5],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]]
+   :body {:at [8.5 0 16.5] :yaw 90 :inventory [["cobblestone" 4]]}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,5],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000005" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}
@@ -190,9 +224,13 @@
             {:event {:source :job :kind :stopped :data {:reason :not-walked-in}} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}
   {:name "roll-with-a-spare-places-it-before-the-pickup-with-a-free-composter-near"
-   :blocks [[:set [26 0 16] "composter"]]
-   :body {:at [14.5 0 16.5] :yaw 270 :inventory [["lectern" 1]]}
-   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,35],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :blocks [[:set [26 0 16] "composter"]
+            [:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0 :inventory [["lectern" 1]]}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,35],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000023" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :owed}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed} :within-s 220 :of-job true}]
