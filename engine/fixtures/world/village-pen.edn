@@ -1,6 +1,9 @@
 ;; jobs.village.pen (card fa6de3f8): a villager shut in alone in a one-wide cell beside its lectern (16 0 16), a top slab over
 ;; the lectern, the near end plugged once it stands in. NoAI villagers: they stand where summoned (no gravity, no walk).
-;; Should-succeed: pen-shuts-in-a-villager-beside-the-lectern (cell 16 0 17 along +z: walls, roof, top slab, plug at 16 0 18).
+;; Should-succeed: pen-shuts-in-a-villager-beside-the-lectern (cell 16 0 17 along +z: walls, roof, top slab, plug at 16 0 18;
+;; the lectern's sides 15/17 0 16 walled, the body boxed in its stand 16 0 15).
+;; pen-closes-the-stand-beside-a-second-villager (card 7cb975da: a second jobless villager beside the open stand; the
+;; stand's box is shut, so no cell next to the lectern is left for it).
 ;; Should-fail: pen-villager-that-never-walks-in-ends-not-walked-in (a jobless NoAI villager 6 blocks off: the pen is built,
 ;; its near end stays open, the call ends :not-walked-in after the walking-hour ticks).
 {:defaults
@@ -8,7 +11,7 @@
   :time :day :time-why :villager-schedule
   :plot {:floor "grass_block"}
   :blocks [[:fill [16 0 16] [16 0 16] "lectern"]]
-  :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 16] ["oak_slab" 2] ["torch" 4]]}
+  :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
   :limit-s 240}
  :cases
  [{:name "pen-shuts-in-a-villager-beside-the-lectern"
@@ -17,7 +20,17 @@
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"] [:block [16 2 16] "cobblestone"]
            [:block [16 2 17] "cobblestone"] [:block [15 0 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
-           [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]]}
+           [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]
+           [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [16 2 15] "cobblestone"]
+           [:block [15 1 15] "cobblestone"] [:block [17 1 15] "cobblestone"] [:block [16 1 14] "cobblestone"]]}
+  {:name "pen-closes-the-stand-beside-a-second-villager"
+   :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,42],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:summon "villager" [14.5 0 15.5] "{NoAI:1b,UUID:[I;20260,7,5,43],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000002a" :pos #at [16 0 16] :profession "librarian"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:block [15 0 15] "cobblestone"] [:block [15 1 15] "cobblestone"] [:block [17 0 15] "cobblestone"]
+           [:block [17 1 15] "cobblestone"] [:block [16 0 14] "cobblestone"] [:block [16 1 14] "cobblestone"]
+           [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"]]}
   {:name "pen-villager-that-never-walks-in-ends-not-walked-in"
    :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,41],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000029" :pos #at [16 0 16] :profession "librarian" :settings {:jobs.lib.villager/take-job-ticks 200}})]]

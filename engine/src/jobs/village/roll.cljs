@@ -36,7 +36,7 @@
   spare goes in the moment the villager reads jobless and the drop is picked up after, so the villager has no time to
   claim another free job site. Before a break, and while a jobless villager is waited for, the villager must stand shut in
   its pen (jobs.lib.villager-pen/penned: alone in a lit one-wide cell, the workstation under a top slab plugging its far
-  end); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
+  end, its other sides shut, the body boxed in behind it); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
   round looks for) is this call's. A villager that reads another job is never rolled: a named one ends :other-job, else the
   nearest other in sight is picked. Waits (:continue) for the penned villager to take its job; villagers take jobs only by day, so at night the wait's reason is
   :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children; :ways (default all) goes to the place child, so #{:carried} places only a workstation already carried (else it waits :need, nothing is fetched or crafted). Re-reads the world every step, so a restart finds a missing
@@ -640,6 +640,16 @@
   [c]
   (or (await (to-stand! c)) (await (place! c))))
 
+(defn ^:async leave-box!
+  "The body stands boxed in its stand behind the workstation (jobs.lib.villager-pen/exit-cell) and must walk: dig the
+  box's entry (jobs.blocks.dig child, slot :exit, by hand when no tool harvests it); the pen child shuts it again
+  before the next break. :again, :continue, the stop, or nil when the body is not boxed in."
+  [c]
+  (when-let [cell (vp/exit-cell (:primitives c) (b/cell (:pos (b/parse (:args c)))))]
+    (let [r (await (child! c :exit 'jobs.blocks.dig (cond-> {:pos (u/cell-pos cell) :collect true :need-drop false}
+                                                      (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+      (if (ending-or-wait? r) r :again))))
+
 (defn ^:async look-for!
   "The villager is out of view: walk to the cell when far from it and none was seen yet, look from where it was seen and
   round, from the cell beside the workstation, then at where the body last saw it (once a sighting), then by day toward
@@ -653,7 +663,8 @@
       (await (villager/find-in-view! c (rollable c) look/hazards-only)) :again
       (and (not (:seen m)) (not (:flanked m))) (await (flank! c pos))
       :else
-      (or (await (villager/approach-remembered! c villager (reach) (:last-seen m)))
+      (or (await (leave-box! c))
+          (await (villager/approach-remembered! c villager (reach) (:last-seen m)))
           (cond
             (sh-sense/night? (:primitives c)) (do (ctx/update-mem! c assoc :night-waited true)
                                                   (await (wait-job! c :night-villager-out-of-view)))
@@ -698,7 +709,7 @@
       (= "nitwit" profession) (stop! c :nitwit)
       (other-job? c e) (rule-out! c :other-job)
       (= "unemployed" profession) (if (penned? c e) (await (wait-take-job! c)) (await (pen! c)))
-      (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c e))
+      (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (or (await (leave-box! c)) (await (walk! c e)))
       :else
       (let [r (await (read-offers! c))]
         (cond

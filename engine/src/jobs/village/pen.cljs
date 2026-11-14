@@ -23,13 +23,19 @@
   "Shut the villager :villager in alone, in a lit one-wide cell beside the workstation of :profession at :pos
   (jobs.lib.villager-pen): the cell floored, walled three high, roofed over it and the workstation, a top slab over the
   workstation (a broken workstation leaves a gap a villager cannot pass and a sneaking body reaches through), its near
-  end plugged once the villager stands in it. The side is the one the villager stands in, else the one with the fewest
-  blocks to place or dig among those whose cell and near end are seen open (a pen already standing costs least).
+  end plugged once the villager stands in it. No other villager may path to a cell next to the workstation (the game's
+  rule for claiming a job site): its sides across the pen are walled and the body's stand behind it is boxed in with
+  the body inside. The side is the one the villager stands in, else the one with the fewest blocks to place or dig
+  among those whose cell, stand and near end are seen open (a pen already standing costs least).
   Each step re-reads the world and does the first owed: place the workstation (jobs.blocks.place, the call's :ways), get
-  building blocks (jobs.items.obtain) and fill the floor, walls and roof (jobs.blocks.fill-cells), place a wooden slab
-  in the upper half over the workstation (a block of another kind there is dug first), light the cell while it reads dark
-  (jobs.build.light-area, once a call: its done is the verdict), dig a plug of an empty pen open, step out of the pen behind the workstation, wait for the villager
-  to walk in (a jobless one to the free workstation, one employed at it to work), then fill the near end.
+  building blocks (jobs.items.obtain) and fill the floors, walls and roofs (jobs.blocks.fill-cells), place a wooden slab
+  in the upper half over the workstation (a block of another kind there is dug first), light the cell while it reads dark and
+  the body can reach it (jobs.build.light-area, once a call), dig a plug of an empty pen open; with the villager in: wait while another
+  villager shares the cell, fill the near end (from the stand, digging the box's entry first to walk out); then step
+  into the stand (digging the entry when the box is shut), shut the box round the body from inside, wait for the
+  villager to walk in (a jobless one to the free workstation, one employed at it to work), and light a shut pen still
+  dark from the stand (its light reaches the cell under the top slab). A cell still dark a poll after
+  the light child ended done ends nothing-possible :dark.
   The wait counts game ticks of the villagers' walking hours (jobs.lib.villager/take-job-ticks, 1240); reason
   :villager-not-in-pen by day, :night-villager-not-in-pen at night (villagers walk to no job site then).
   Needs: a villager id, a profession with a workstation, the cell (else impossible :bad-args); building blocks, a wooden
@@ -37,8 +43,9 @@
   A building child that ends done with its piece still unbuilt ends the call nothing-possible :not-built (:piece).
   Ends done when the pen holds the villager (jobs.lib.villager-pen/penned; result {:side [dx dz] :cell [x y z]}), else condition-failed
   :villager-out-of-view, :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
-  :no-room (no side has its cell and near end open), :not-walked-in (the villager stayed out for the whole wait; :sites
-  names the other job sites seen), or a child's ending. What it built stays: the next call finds the pen standing.")
+  :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :dark, :not-walked-in (the villager
+  stayed out for the whole wait; :sites names the other job sites seen), or a child's ending. What it built stays: the
+  next call finds the pen standing.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -128,12 +135,13 @@
                    #(not= item (vp/name-at (:primitives c) ws))))))
 
 (defn ^:async fill!
-  "Fill cells with building blocks, fetched first when too few are carried (the call's ways)."
-  [c slot cells]
+  "Fill cells with building blocks, fetched first when too few are carried (the call's ways); extra goes to the
+  fill-cells child."
+  [c slot cells & [extra]]
   (let [{:keys [short]} (choose/fillers-for c :build (count cells))
         opts (need/fetch-opts c)]
     (cond
-      (zero? short) (await (built! c slot (await (child! c slot 'jobs.blocks.fill-cells {:cells cells :clear-loose true}))
+      (zero? short) (await (built! c slot (await (child! c slot 'jobs.blocks.fill-cells (merge {:cells cells :clear-loose true} extra)))
                                    #(= cells (vp/owed (:primitives c) cells))))
       (nil? opts) (stop! c :condition-failed :need {:any-of (choose/filler-names c :build) :count short})
       :else (let [e (await (need/blocks! c (choose/filler-names c :build) short opts))]
@@ -163,30 +171,39 @@
                          #(not (vp/top-slab? p cell)))))))))
 
 (defn ^:async light!
-  "Light the cell (jobs.build.light-area) once a call: its done is the verdict, whatever the cell reads after."
-  [c lay]
-  (let [r (await (child! c :light 'jobs.build.light-area {:cells [(:cell lay)]}))]
+  "Light cell (jobs.build.light-area) once a call: the pen's own while the body can reach it, else the stand, whose
+  light reaches the pen's cell under the top slab."
+  [c cell]
+  (let [r (await (child! c :light 'jobs.build.light-area {:cells [cell]}))]
     (when (= :again r) (ctx/update-mem! c assoc :lit true))
     r))
 
-(defn ^:async reopen! [c lay]
-  (let [cell (first (vp/to-reopen (:primitives c) lay))]
-    (await (built! c :reopening (await (child! c :reopen 'jobs.blocks.dig {:pos cell :collect true}))
+(defn ^:async dig-open!
+  "Dig the first solid cell of cells (a plug of an empty pen, the box's entry) so a villager or the body walks through;
+  the box's own filler is dug by hand when no tool harvests it."
+  [c slot lay k]
+  (let [cell (first (vp/solids (:primitives c) (k lay)))]
+    (await (built! c slot (await (child! c slot 'jobs.blocks.dig (cond-> {:pos cell :collect true} (= :entry k) (assoc :need-drop false))))
                    #(vp/solid? (vp/name-at (:primitives c) cell))))))
 
-(defn in-pen? [c lay] (contains? (set (cons (:cell lay) (:plug lay))) (b/feet-cell c)))
-
-(defn ^:async step-out!
-  "Walk out of the pen to the cell behind the workstation, where the roll is made from, so the villager can walk in and
-  the plug shuts the body out."
-  [c ws lay]
-  (let [[dx dz] (:side lay)
-        [x y z] ws
-        r (await (child/call-walk* c :out {:pos {:x (- x dx) :y y :z (- z dz)} :range 1 :ways #{:walk}}))]
+(defn ^:async step-in!
+  "Walk into the stand behind the workstation, where the roll is made from and the box is shut round the body."
+  [c lay]
+  (let [r (await (child/call-walk* c :stand {:pos (u/cell-pos (:stand lay)) :range 0 :ways #{:walk}}))]
     (cond
       (= :continue r) :continue
-      (and (:arrived (:data r)) (not (in-pen? c lay))) :again
-      :else (stop! c :nothing-possible :unreachable {:text "could not step out of the pen"}))))
+      (and (:arrived (:data r)) (vp/at-stand? (:primitives c) lay)) :again
+      :else (stop! c :nothing-possible :unreachable {:text "could not step into the stand behind the workstation"}))))
+
+(defn ^:async dark!
+  "The cell reads dark after the light child ended done: wait a poll for the light to read (it follows the torch),
+  then end nothing-possible :dark."
+  [c lay]
+  (if (:light-waited (ctx/mem c))
+    (stop! c :nothing-possible :dark {:cell (:cell lay) :text "the pen's cell still reads dark after the light child ended done"})
+    (do (ctx/update-mem! c assoc :light-waited true)
+        (await (child/pause! c (villager/poll-s) :pen-light-settling))
+        :continue)))
 
 (defn ^:async wait-walk-in!
   "Wait a poll for the villager to walk in (or another to walk out), counting walking-hour ticks; past
@@ -209,17 +226,23 @@
         in? (boolean (and lay (vp/inside? lay e)))]
     (cond
       (nil? e) (stop! c :condition-failed :villager-out-of-view)
-      (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell and a near end open for a villager")})
+      (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})
       (or (nil? block) (bs/air block)) (await (workstation! c ws))
       (not= (item-of (:args c)) block) (stop! c :condition-failed :occupied {:block block})
       (seq (vp/owed p (:shut lay))) (await (fill! c :shut (vp/owed p (:shut lay))))
       (not (vp/top-slab? p (:slab lay))) (await (slab! c (:slab lay)))
-      (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c lay))
-      (and (not in?) (seq (vp/to-reopen p lay))) (await (reopen! c lay))
-      (in-pen? c lay) (await (step-out! c ws lay))
+      (and (vp/dark? p lay) (not (:lit (ctx/mem c))) (not (and in? (vp/plug-shut? p lay)))) (await (light! c (:cell lay)))
+      (and (not in?) (seq (vp/solids p (:plug lay)))) (await (dig-open! c :reopen lay :plug))
+      (and in? (seq (vp/others-in p lay (villager/ident e)))) (await (wait-walk-in! c :other-villager-in-pen))
+      (and in? (not (vp/plug-shut? p lay)))
+      (if (and (vp/at-stand? p lay) (not (vp/way-in? p lay)))
+        (await (dig-open! c :exit lay :entry))
+        (await (fill! c :plug (vp/owed p (:plug lay)))))
+      (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
+      (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/owed p (:box lay)) {:in-place true}))
       (not in?) (await (wait-walk-in! c :villager-not-in-pen))
-      (seq (vp/others-in p lay (villager/ident e))) (await (wait-walk-in! c :other-villager-in-pen))
-      (not (vp/plug-shut? p lay)) (await (fill! c :plug (vp/owed p (:plug lay))))
+      (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c (:stand lay)))
+      (vp/dark? p lay) (await (dark! c lay))
       :else :again)))
 
 (defn ^:async round

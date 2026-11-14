@@ -71,9 +71,12 @@
 
 (def pen
   "The villager's pen at ws-pos along +x (jobs.lib.villager-pen): its cell [3 64 0] (in-pen) floored, walled, roofed,
-  a top slab over the lectern, its near end [4 64 0] plugged; the body stands behind the lectern."
+  a top slab over the lectern, its near end [4 64 0] plugged, the lectern's sides walled; the body boxed in behind it."
   {:blocks {"3,63,0" "stone" "3,64,1" "stone" "3,65,1" "stone" "3,66,1" "stone" "3,64,-1" "stone" "3,65,-1" "stone"
-            "3,66,-1" "stone" "3,66,0" "stone" "2,66,0" "stone" "2,65,0" "oak_slab" "4,64,0" "stone" "4,65,0" "stone"}
+            "3,66,-1" "stone" "3,66,0" "stone" "2,66,0" "stone" "2,65,0" "oak_slab" "4,64,0" "stone" "4,65,0" "stone"
+            "2,64,1" "stone" "2,64,-1" "stone" "1,63,0" "stone" "1,66,0" "stone" "1,64,1" "stone" "1,65,1" "stone"
+            "1,64,-1" "stone" "1,65,-1" "stone" "0,64,0" "stone" "0,65,0" "stone"
+            "0,63,0" "stone" "1,63,1" "stone" "1,63,-1" "stone"}
    :states {"2,65,0" {:type "top"}}
    :self {:pos {:x 1.5 :y 64 :z 0.5}}})
 
@@ -99,7 +102,10 @@
                                                  :spend {:wall-time 600}} args) 300))]
     [result p seen]))
 
-(defn digs [p] (count (vt/calls p "dig")))
+(defn digs
+  "The breaks of the workstation (a box dug open to walk out of is no roll)."
+  [p]
+  (count (filter #(let [a (.-pos (.-args %))] (= ws-pos [(.-x a) (.-y a) (.-z a)])) (vt/calls p "dig"))))
 (defn workstation [p] (get-in @(fake/state p) [:blocks ws-pos]))
 
 (deftest roll-bad-args-need-villager-pos-item-and-want
@@ -800,7 +806,7 @@
                                        :inventory [{:name "lectern" :count 1}]
                                        :self {:pos {:x 2 :y 64 :z 0}}
                                        :floor [2 0 2 0]
-                                       :blocks {ws-key "air"}}
+                                       :blocks {ws-key "air" "1,63,0" "air" "0,63,0" "air" "1,63,1" "air" "1,63,-1" "air"}}
                                       {}))]
           (is (= {:found false :status :stopped :reason :place-failed} (select-keys result [:found :status :reason])))
           (is (= "air" (workstation p))))))))
@@ -920,8 +926,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}
-                                       :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+        (let [env (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}}))
               _ (shifts-body-and-hides-villager-after-break! env [(offer "enchanted_book")])
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls]))))))))
@@ -986,5 +991,5 @@
               inside (->> marks (drop-while #(not= :open %)) rest (take-while #(not= :close %)))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation p)))
-          (is (some #{:to-cell} (take-while #(not= :open %) marks)) "the walk to the cell comes before the section")
+          (is (some #{:to-cell :stand} (take-while #(not= :open %) marks)) "the walk to the cell (into the pen's stand) comes before the section")
           (is (not-any? #{:walk :to-stand} inside) (str "no walk while the workstation is out: " (pr-str inside))))))))

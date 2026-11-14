@@ -3,8 +3,10 @@
   the workstation W, along a side d. V is floored, walled three high on both sides, roofed, and V and W lie under one
   roof; W plugs V's far end with a top slab above it, so a broken W leaves a gap 1.5 high, too low for a villager (1.95)
   and room for a sneaking body (1.5) to reach in. The near end O (the cell beyond V, feet and head) stays open until the
-  villager stands in V, then it is plugged. V must hold no other villager. jobs.village.pen lights V while it waits for
-  the villager; a pen that holds it is not judged by its light (the villager fills the cell)."
+  villager stands in V, then it is plugged. A villager claims a job site it can path to a cell next to (the game's
+  AcquirePoi: reach 1, by Manhattan distance), so W's other sides are shut too: the two across d walled at feet height,
+  and the body's stand S behind W (opposite V) boxed in, floor, roof and both cells of its three other sides, with the
+  body in it. V must hold no other villager and read lit."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.torch :as torch]
             [jobs.lib.util :as u]
@@ -13,16 +15,23 @@
 (def sides "The four horizontal sides [dx dz] a pen may run along from the workstation." [[1 0] [-1 0] [0 1] [0 -1]])
 
 (defn layout
-  "The cells of the pen at workstation cell [x y z] along side [dx dz]: :cell V, :shut (floor, walls, roof: built first),
-  :slab (the cell above W), :plug (O, feet and head), :side."
+  "The cells of the pen at workstation cell [x y z] along side [dx dz]: :cell V, :shut (V's floor, walls and roof, W's
+  roof, W's sides across d, S's floor and roof: built first), :slab (the cell above W), :plug (O, feet and head), :stand
+  S, :box (S's three other sides, feet and head: shut round the body), :entry (the box's side away from W)."
   [[x y z] [dx dz :as side]]
   (let [[vx vz] [(+ x dx) (+ z dz)]
-        walls (for [s [1 -1] dy [0 1 2]] [(+ vx (* s dz)) (+ y dy) (+ vz (* s dx))])]
+        [sx sz] [(- x dx) (- z dz)]
+        across (fn [cx cz dys] (for [s [1 -1] dy dys] [(+ cx (* s dz)) (+ y dy) (+ cz (* s dx))]))
+        entry [[(- sx dx) y (- sz dz)] [(- sx dx) (inc y) (- sz dz)]]]
     {:side side
      :cell [vx y vz]
-     :shut (vec (concat [[vx (dec y) vz]] walls [[vx (+ y 2) vz] [x (+ y 2) z]]))
+     :shut (vec (concat [[vx (dec y) vz]] (across vx vz [0 1 2]) [[vx (+ y 2) vz] [x (+ y 2) z]]
+                        (across x z [0]) [[sx (dec y) sz] [sx (+ y 2) sz]]))
      :slab [x (inc y) z]
-     :plug [[(+ vx dx) y (+ vz dz)] [(+ vx dx) (inc y) (+ vz dz)]]}))
+     :plug [[(+ vx dx) y (+ vz dz)] [(+ vx dx) (inc y) (+ vz dz)]]
+     :stand [sx y sz]
+     :box (vec (concat (across sx sz [0 1]) entry))
+     :entry entry}))
 
 (defn name-at "The seen block name at cell [x y z], or nil." [p cell] (u/seen-name p (u/cell-pos cell)))
 
@@ -70,9 +79,28 @@
         s? #(solid? (name-at p %))]
     (or (s? head) (and (s? [x y z]) (s? [x (+ y 2) z])))))
 
+(defn body-cell [p] (feet-cell (.self p)))
+
+(defn at-stand? "Whether the body stands in the stand S." [p lay] (= (:stand lay) (body-cell p)))
+
+(defn way-in?
+  "Whether a side of the box is seen open, feet and head, for the body to walk into S through."
+  [p lay]
+  (boolean (some (fn [pair] (every? #(bs/passable? (name-at p %)) pair)) (partition 2 (:box lay)))))
+
+(defn exit-cell
+  "The first solid cell of the box's entry when the body stands boxed in the stand of a pen at workstation cell ws (no
+  side open to walk out by), else nil."
+  [p ws]
+  (some (fn [side]
+          (let [lay (layout ws side)]
+            (when (and (at-stand? p lay) (not (way-in? p lay)))
+              (first (filter #(solid? (name-at p %)) (:entry lay))))))
+        sides))
+
 (defn penned
   "The layout of the pen at workstation cell ws holding villager entity e (id its ident): shut, the slab on top, the
-  near end plugged, no other villager in it; nil when there is none."
+  near end plugged, no other villager in it, lit, the body boxed in its stand; nil when there is none."
   [p ws e]
   (let [id (villager/ident e)]
     (some (fn [side]
@@ -81,33 +109,38 @@
                          (empty? (owed p (:shut lay)))
                          (plug-shut? p lay)
                          (top-slab? p (:slab lay))
-                         (empty? (others-in p lay id)))
+                         (empty? (others-in p lay id))
+                         (not (dark? p lay))
+                         (at-stand? p lay)
+                         (empty? (owed p (:box lay))))
                 lay)))
           sides)))
 
-(defn to-reopen
-  "The plug cells standing solid: dug so a villager outside can walk in."
-  [p lay]
-  (filterv #(solid? (name-at p %)) (:plug lay)))
+(defn solids
+  "The cells standing solid (to dig: a plug of an empty pen, the box's entry)."
+  [p cells]
+  (filterv #(solid? (name-at p %)) cells))
 
 (defn work
   "Blocks a pen still needs placed or dug (unseen cells counted as owed): its price in blocks. in?: the villager
   stands in it, so the plug stays."
   [p lay in?]
   (+ (count (owed p (:shut lay)))
+     (count (owed p (:box lay)))
      (if (top-slab? p (:slab lay)) 0 1)
-     (cond (not in?) (+ (count (:plug lay)) (count (to-reopen p lay)))
+     (cond (not in?) (+ (count (:plug lay)) (count (solids p (:plug lay))))
            (plug-shut? p lay) 0
            :else (count (owed p (:plug lay))))))
 
 (defn choose
-  "The side to pen villager e at workstation cell ws: one whose cell e stands in, else one whose cell is seen open and
-  whose near end is seen (open, or solid to dig), the one with the fewest blocks to place or dig (a pen already standing
-  costs least). nil when no side has room."
+  "The side to pen villager e at workstation cell ws: one whose cell e stands in, else one whose cell and stand are
+  seen open and whose near end is seen (open, or solid to dig), the one with the fewest blocks to place or dig (a pen
+  already standing costs least). nil when no side has room."
   [p ws e]
   (let [lays (map #(layout ws %) sides)
         in (when e (filter #(inside? % e) lays))
         room (filter #(and (open? p (:cell %))
+                           (open? p (:stand %))
                            (every? (fn [cell] (let [n (name-at p cell)] (and n (not (bs/fluids n))))) (:plug %)))
                      lays)]
     (if (seq in)
