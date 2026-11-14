@@ -164,11 +164,13 @@
 
 (defn ^:async walk-out-at-dusk
   "[x the body ends at, the walk's wait, its seconds, the :sent-back entry] of a go-to from x 0 to x 12 at dusk, the
-  home at x 2, no trigger armed; seed?: the walk was cut at x 9 and the body is back home."
-  [seed?]
+  home at x 2, no trigger armed; cut-at: the x where a cut found the walk, the body back home since, else nil."
+  [cut-at]
   (let [{:keys [eng p]} (st/setup {:time 12000 :floor [-30 -30 30 30]})
-        seed {:open (gcut/session-id) :goal {:x 12 :y 64 :z 0} :closest 3 :ref 3 :last-dist 3 :prev {:x 9.5 :y 64 :z 0.5}}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'sent-back-parent (sent-back-parent (when seed? seed))))]
+        seed (when cut-at
+               (let [d (js/Math.abs (- 12 cut-at))]
+                 {:open (gcut/session-id) :goal {:x 12 :y 64 :z 0} :closest d :ref d :last-dist d :prev {:x cut-at :y 64 :z 0.5}}))
+        eng (assoc eng :jobs (assoc (:jobs eng) 'sent-back-parent (sent-back-parent seed)))]
     (mem/write! (:store eng) :home {:pos {:x 2 :y 64 :z 0}} mem/place-policy)
     (let [id (core/submit! eng (tu/order '(sent-back-parent)) {})]
       (await (st/tick-n eng 20))
@@ -181,12 +183,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[x w wait-s sent] (await (walk-out-at-dusk true))]
+        (let [[x w wait-s sent] (await (walk-out-at-dusk 9.5))]
           (is (< x 1) "the body stays home")
           (is (= {:reason :risky :wait :dawn} w))
           (is (> wait-s 500) "the night's 546 s come after the 27 s to nightfall")
           (is (= {:place :home :to {:x 0 :y 64 :z 0}} (select-keys sent [:place :to]))))
-        (let [[x _ _ sent] (await (walk-out-at-dusk false))]
+        (let [[x w _ sent] (await (walk-out-at-dusk -3.5))]
+          ;; the way out of home first led away from the goal: home is nearer it than where the cut found the body
+          (is (< x 1) "sent back nearer the goal, the body stays home")
+          (is (= {:reason :risky :wait :dawn} w))
+          (is (= :home (:place sent))))
+        (let [[x _ _ sent] (await (walk-out-at-dusk nil))]
           (is (> x 10) "never sent back, the walk goes")
           (is (nil? sent)))))))
 

@@ -1,7 +1,7 @@
 (ns jobs.lib.sent-back
-  "A walk the body was sent back from at dusk or by night, learned from its own walks: a cut walk that resumes farther
-  from its goal, in shelter (a closed room, the ground) or home, with the sky dark or home due where the cut found it and
-  no hostile near the way (that one is go-to's own send-back), was sent back for the night. One :sent-back entry
+  "A walk the body was sent back from at dusk or by night, learned from its own walks: a cut walk that resumes in shelter
+  (a closed room, the ground) or home when the cut found it outside that shelter, with the sky dark or home due where the
+  cut found it and no hostile near the way (that one is go-to's own send-back), was sent back for the night. One :sent-back entry
   {:to cell :place kind :at time-of-day :until world-day-time}, kept until the world clock reaches that morning (a sleep
   or a time skip ends it early), holds walks out of that place (walk-risk): walked
   now, the same cut sends them back again."
@@ -48,14 +48,15 @@
 
 (defn note!
   "Write the :sent-back entry when the walk's restart is one (see the ns doc): from, where the cut found the body
-  ({:x :y :z}); hostiles?, whether a hostile is known near the way. The entry, else nil."
+  ({:x :y :z}), sheltered by another kind than where it restarts (a meal or a fight in place is no send-back); hostiles?,
+  whether a hostile is known near the way. The entry, else nil."
   [c from hostiles?]
   (let [p (:primitives c)
         view (ctx/view c)
         pos (u/self-pos c)
         kind (place-kind p view pos)
         t (.-timeOfDay (.self p))]
-    (when (and kind (not hostiles?) (or (sh-sense/dark-outside? p) (sh/home-due-at? p view from)))
+    (when (and kind (not= kind (place-kind p view from)) (not hostiles?) (or (sh-sense/dark-outside? p) (sh/home-due-at? p view from)))
       (let [dt (day-time p)
             entry {:to (sh-sense/feet p) :place kind :at t :until (some-> dt (+ (until-morning-ticks t))) :text (str "sent back into " (name kind) " at " t "; walks out wait for dawn")}]
         (ctx/remember! c :sent-back entry (policy t))

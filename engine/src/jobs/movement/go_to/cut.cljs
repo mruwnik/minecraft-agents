@@ -222,18 +222,18 @@
 
 (base/on-warm-start! ::session new-session!)
 
+(defn cut-restart?
+  "Whether the call restarting with memory m was left open in this session for the same goal: its walk was cut. Whether
+  the cut sent the body back for the night is sent-back/note!'s, by where the cut found it and where it restarts, not by
+  the distance to the goal (a way out of home that first heads away from its goal restarts nearer it)."
+  [m goal]
+  (and (= (session-id) (:open m)) (= goal (:goal m))))
+
 (defn cut-restart-farther?
   "Whether a call restarting at dist from goal, with memory m, was left open in this session for the same goal (its walk
   was cut) and restarts more than margin farther than the cut found the body."
   [m goal dist margin]
-  (and (= (session-id) (:open m)) (= goal (:goal m)) (> dist (+ (:last-dist m dist) margin))))
-
-(defn sent-back-restart?
-  "Whether the restart is a send-back for the :sent-back entry: a cut walk restarting farther than the cut found the body
-  by more than half a block (float noise; a hut door sends the body back only a block or two). No cut, or none farther
-  (a meal or a fight in place), is not one."
-  [m goal dist]
-  (cut-restart-farther? m goal dist 0.5))
+  (and (cut-restart? m goal) (> dist (+ (:last-dist m dist) margin))))
 
 (defn cut-state
   "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :last-dist
@@ -243,7 +243,7 @@
   cut found the body, is a send-back (a reflex sent it back; a meal, a breath, a fight in place or knockback do not, on a
   detour neither): a send-back of the cell the walk was left at and the walk undone, from m's :trail."
   [m goal dist]
-  (let [cut? (and (= (session-id) (:open m)) (= goal (:goal m)))
+  (let [cut? (cut-restart? m goal)
         closest (min dist (if cut? (:closest m dist) dist))
         ref (if cut? (:ref m closest) closest)
         improved? (>= (- ref closest) (cut-progress))
@@ -262,7 +262,7 @@
 
 (defn note-restart!
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
-  was cut. The cut state; a restart for which sent-back-restart? holds notes it (sent-back/note!)."
+  was cut. The cut state; a cut restart (cut-restart?) is offered to sent-back/note!."
   [c pos]
   (let [m (merge (ctx/mem c) (dissoc (get @approaches (:id c)) :call))
         dist (u/dist (u/self-pos c) pos)
@@ -270,7 +270,7 @@
     (fresh-record! c)
     (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
     (goal/note! c pos)
-    (when (and (:prev m) (sent-back-restart? m pos dist))
+    (when (and (:prev m) (cut-restart? m pos))
       (sent-back/note! c (:prev m) (boolean (seq (way-hostiles c pos)))))
     state))
 
