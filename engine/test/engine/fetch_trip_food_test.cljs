@@ -4,7 +4,9 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.get-food-rounds-test :refer [setup]]
+            [engine.memory :as mem]
             [engine.test-util :as tu]
+            [jobs.lib.reserve :as reserve]
             [jobs.survival.fetch-trip-food]))
 
 (defn ^:async ending-of
@@ -61,3 +63,12 @@
         (let [{:keys [eng]} (setup {:self {:food 5}})
               e (await (ending-of eng {:carry 8 :go-on? true}))]
           (is (= [:nothing-possible :no-food] [(:kind e) (:cause e)])))))))
+
+(deftest a-fetched-trip-keeps-its-food-from-a-deposit-but-not-from-a-meal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:food 20} :inventory [{:name "bread" :count 20}]})
+              _ (await (ending-of eng {:carry 8}))
+              es (reserve/entries (mem/view (:store eng)))]
+          (is (= [[:food :all #{:eat}]] (map (juxt :tag :count :not) es)) "the trip's food is reserved against a deposit, not against eating"))))))
