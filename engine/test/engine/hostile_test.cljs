@@ -2320,6 +2320,18 @@
       (hostile-fight/swim-out c [{:name "zombie"}]))
     (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
 
+;; Brindle S9: afloat, a zombie heard 5 blocks off was priced as never hit, then fled from at the health its blows left: fight 4385 s
+(deftest afloat-a-heard-land-mob-is-fought-and-a-heard-drowned-is-left
+  (let [lake (merge (into {} (for [x (range -6 7) z (range -2 3) [y n] [[61 "stone"] [62 "water"] [63 "water"] [64 "water"] [65 "water"] [66 "air"] [67 "air"]]]
+                               [(str x "," y "," z) n]))
+                    (into {} (for [x (range 7 14) z (range -2 3) y (range 61 68)] [(str x "," y "," z) (if (< y 66) "stone" "air")])))
+        heard-afloat? (fn [n] (let [p (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks lake
+                                                :entities [{:id 5 :name n :kind "hostile" :pos {:x 4.5 :y 64 :z 0.5} :health 20 :visible false}]})
+                                    c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 0 :data {}}) :id "j1" :slots []}]
+                                (hostile-fight/heard-afloat? c (first (danger-q/known-hostiles p 16 {:ranged-radius 16})))))]
+    (is (not (heard-afloat? "zombie")) "a land mob heard comes into sight and is fought")
+    (is (heard-afloat? "drowned") "a drowned keeps under the surface: the fight never lands a blow")))
+
 (deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-close-and-flees-it-hurt
   ;; both sides by a wide margin (fight 292 vs flee 324 s unhurt at 3 blocks; fight 693 vs flee 454 s at 8 hp from 10): a near skeleton is cheaper closed on than walked away from (the fight's hp cost the food that heals them, Q142), a hurt body cannot pay the arrows of the approach
   (async done

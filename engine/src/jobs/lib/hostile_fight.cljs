@@ -284,9 +284,10 @@
 (declare hit-and-back-ok? flee-answer)
 
 (defn heard-afloat?
-  "Whether e is only heard while the body swims: an attack has no target to swing at (ends :no-target), so the fight never lands a blow."
+  "Whether e is a drowned only heard while the body swims: it keeps under the surface, out of sight, so an attack has no
+  target to swing at (ends :no-target) and the fight never lands a blow. A land mob heard comes to the body and is seen (reaches?)."
   [c e]
-  (and (breath/swimming? (:primitives c)) (not (danger-q/seen-only? e))))
+  (and (= "drowned" (.-name e)) (breath/swimming? (:primitives c)) (not (danger-q/seen-only? e))))
 
 (defn fight-answer
   "The answer of fighting the mobs of near the fight goes for (fought, nearest first; nil when none) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
