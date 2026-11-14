@@ -751,6 +751,7 @@
               fresh (rooms/verdicts p rooms threats true 0 nil)]
           (is (= [true] (mapv :home? rooms)) "the home")
           (is (= [:unpriced] (mapv :why (:verdicts late))) "three cells left of the step's search: the home's walk search is cut")
+          (is (= [:unpriced] (mapv :why (:verdicts (rooms/verdicts p rooms threats true (/ budget 2) nil)))) "half the step's search spent: the walk search to the door is left, the flee search keeps the other half")
           (is (<= (:spent-s late) budget) (str (:spent-s late)))
           (is (= [nil] (mapv :why (:verdicts fresh))) "a step with its search to spend runs home")
           (is (< 0 (:spent-s fresh) budget) (str (:spent-s fresh))))))))

@@ -504,6 +504,16 @@
   (let [{:keys [cell in?]} (:home-room (ctx/mem c))]
     (when (= cell (cell-key (sh-sense/feet (:primitives c)))) in?)))
 
+(defn with-flee-share
+  "f run under *search* with half the step's budget held back: a walk search to a door (way-in) is cut where the other half
+  would start, so the flee search that plans the home and goal after the survey keeps it. The floods that judge the rooms
+  run on the whole budget (one costs more than half of it)."
+  [f]
+  (let [m reach/*search*
+        held (/ (cost/search-budget-s) 2)]
+    (when m (vswap! (:left m) - held))
+    (try (f) (finally (when m (vswap! (:left m) + held))))))
+
 (defn way-in
   "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach.room/walk-steps to the room
   cell inside it): {:cell :inside :steps}, nil when it finds none. Its searches run under reach/*search*, a fresh
@@ -514,10 +524,11 @@
     (let [feet (sh-sense/feet p)]
       (reach-room/kept p (str "way-in|" (cell-key feet) "|" (pr-str (map :inside (:doors room))))
                        (fn [_]
-                         (->> (:doors room)
-                              (keep (fn [d] (when-let [n (reach-room/walk-steps p feet (:inside d))] (assoc d :steps n))))
-                              (sort-by :steps)
-                              first))))))
+                         (with-flee-share
+                           #(->> (:doors room)
+                                 (keep (fn [d] (when-let [n (reach-room/walk-steps p feet (:inside d))] (assoc d :steps n))))
+                                 (sort-by :steps)
+                                 first)))))))
 
 (defn race-won?
   "Whether the body, at its own speed (food), walks way-in's steps before any melee threat gets to a door of room:
