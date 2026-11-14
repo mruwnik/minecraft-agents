@@ -231,7 +231,9 @@
 
 (deftest the-replant-owed-trigger-holds-while-a-debt-s-sapling-is-carried
   (let [debt [[:forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"}]]]
-    (is (true? (holds ro/replant-owed {} debt [sapling])))
+    (is (true? (holds ro/replant-owed (fm/ground [[6 0]]) debt [sapling])))
+    (is (false? (holds ro/replant-owed (assoc (fm/ground [[6 0]]) (fm/k 6 66 0) "oak_log") debt [sapling]))
+        "a log over the cell leaves no room: plant-sapling would refuse it at start")
     (is (false? (holds ro/replant-owed {} debt)) "no sapling carried: the trigger never fetches")
     (is (false? (holds ro/replant-owed {} [] [sapling])) "nothing owed")
     (is (false? (holds ro/replant-owed {} debt [{:name "birch_sapling" :count 1}])) "another species")
@@ -239,7 +241,7 @@
         "the debt's cell is not loaded: the walk would end :not-loaded and refire")
     (is (false? (holds ro/replant-owed {} (conj debt [trees/stalled-kind {:pos {:x 6 :y 64 :z 0}}]) [sapling]))
         "plant-sapling failed there lately: no refire")
-    (is (true? (holds ro/replant-owed {} (conj debt [trees/stalled-kind {:pos {:x 9 :y 64 :z 0}}]) [sapling]))
+    (is (true? (holds ro/replant-owed (fm/ground [[6 0]]) (conj debt [trees/stalled-kind {:pos {:x 9 :y 64 :z 0}}]) [sapling]))
         "another cell's note leaves the debt owed")
     (is (false? (holds ro/replant-owed (assoc (fm/ground [[6 0]]) (fm/k 6 64 0) "crafting_table") debt [sapling]))
         "a block the body put on the stump cell: nothing to plant there")

@@ -78,13 +78,13 @@
 
 (defn unfit
   "Why a sapling of species cannot grow at pos, as a cause {:reason ..}, or nil (unseen ground, room or light is no refusal)."
-  [c pos species]
-  (let [p (:primitives c)
-        under (u/seen-name p (lib/down pos))
+  [p pos species]
+  (let [under (u/seen-name p (lib/down pos))
         space (when (rule/headroom-of species) (rule/growth-space p pos species))
         here (u/seen-name p pos)
         light (when (and here (tree-free? here)) (light-at p pos))]
     (cond
+      (#{"crimson" "warped"} species) nil
       (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
       (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
       (and light (< light (settings/get settings ::min-light))) {:reason :too-dark :pos pos :light light})))
@@ -96,7 +96,7 @@
   (let [p (:primitives c)]
     (cond
       (#{"crimson" "warped"} species) 1
-      (unfit c pos species) 0
+      (unfit p pos species) 0
       (or (nil? (u/seen-name p (lib/down pos)))
           (nil? (u/seen-name p pos))
           (= :unloaded (:state (when (rule/headroom-of species) (rule/growth-space p pos species))))
@@ -151,7 +151,7 @@
   "Why the current target's spot cannot grow its sapling (unfit), or nil."
   [c]
   (let [t (current-target c)]
-    (when (and t (not (#{"crimson" "warped"} (:species t)))) (unfit c (:pos t) (:species t)))))
+    (when t (unfit (:primitives c) (:pos t) (:species t)))))
 
 (def spot-unfit
   (checks/refusing :spot-fit "the spot has soil, light and room" target-unfit))
