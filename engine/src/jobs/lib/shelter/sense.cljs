@@ -15,14 +15,23 @@
    ::room-roof-height {:default 16 :spec (a/int-in 1 nil)
                        :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}})
 
-(def floor-sink
-  "How far below the next cell a partial floor leaves the body's feet: soul sand and mud are 14/16 high, farmland and paths 15/16."
-  0.125)
+(defn floor-top
+  "How high above its cell's floor the collision of the block the body feels in cell {:x :y :z} reaches (farmland and paths .9375, soul sand and mud .875, a bottom slab .5, a full block 1), 0 when it feels none or has no raw world to read it from."
+  [p {:keys [x y z] :as cell}]
+  (let [^js raw (look/raw-of p)]
+    (if (and raw (u/feel p cell))
+      (let [id (.stateAt raw x y z)]
+        (if (neg? id) 0 (or (.-top (.stateInfo raw id)) 0)))
+      0)))
 
 (defn feet
-  "The cell the body's feet stand in, not the farmland, path, soul sand or mud block under them."
+  "The cell the body's feet stand in: the cell above the block under it when that block's collision top is at or below the body's y, else the cell its y is in."
   [p]
-  (solid/cell (update (u/self-pos {:primitives p}) :y + floor-sink)))
+  (let [pos (u/self-pos {:primitives p})
+        cell (solid/cell pos)
+        top (floor-top p cell)]
+    (cond-> cell
+      (and (pos? top) (>= (:y pos) (+ (:y cell) top))) (update :y inc))))
 
 (defn solid-at? [p pos] (solid/solid? (u/seen-name p pos)))
 
