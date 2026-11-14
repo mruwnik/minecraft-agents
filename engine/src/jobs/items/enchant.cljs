@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
             [jobs.lib.storage :as storage]
@@ -17,7 +18,9 @@
 (def doc
   "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within the table-radius setting), reads
   the three offers with the item lying in the table, chooses one and enchants. Needs the item, lapis and levels; a missing item or
-  lapis is fetched (jobs.lib.need) from the ways the call allows. Quote: A, a walk and a visit.
+  lapis is fetched (jobs.lib.need) from the ways the call allows. Quote: a walk and a visit, plus each fetch's price
+  (need/item-price). :spend :job-time: the visit's ::job-time-s plus fetch-time/one-unit-s for each of the item and
+  the lapis, as a parent's job time holds its children's.
   An offer costs its slot number in lapis, and in levels at least its level cost and its slot number. The
   choice: :slot 1-3 takes that offer alone. Otherwise :choice \"best\" takes the dearest offer the body can pay and
   \"cheapest\" the lowest level cost it can pay (the lower slot on a tie). Offers dearer than :max-level-cost
@@ -47,7 +50,7 @@
 
 (a/defargs settings
   {::table-radius {:default 16 :doc "How far to look for a table, in blocks." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 120 :doc "Seconds the walk and the visit may take, fetches aside (a guess until measured)." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::visit-s {:default 5 :doc "Seconds the offers and the enchant take at the table (the quote)." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
@@ -59,7 +62,12 @@
 (def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(defn default-time
+  "The call's default :spend :job-time: ::job-time-s, and fetch-time/one-unit-s for each of the item and the lapis."
+  [_]
+  (+ (settings/get settings ::job-time-s) (* 2 (fetch-time/one-unit-s))))
+
+(def defaults {:spend {:job-time default-time}})
 
 (defn problem
   "The cause {:reason :bad-args} when no item name is given."
@@ -120,11 +128,22 @@
     (contract/ok :enchanted "enchanted" :units :items :done 1 :left 0 :result {:enchanted true})
     (contract/later :enchanting "enchant: the round ends the call" :units :items :done 0 :left 1 :result {:enchanted false})))
 
+(defn fetch-s
+  "Seconds fetching what is not carried costs (need/item-price of the item and the lapis), 0 when nothing is fetched."
+  [c]
+  (let [o (need/fetch-opts c)
+        {:keys [item]} (:args c)]
+    (if (or (nil? o) (under-way? c) (not (string? item)))
+      0
+      (reduce + 0 (for [[name n] [[item 1] [lapis (lapis-wanted c)]] :when (zero? (carries c name))]
+                    (need/item-price c name n o nil))))))
+
 (defn quote-of [c]
   (let [table (or (:table (:args c)) (find-table (:primitives c) (table-radius)))
         walk (/ (if table (u/dist (u/self-pos c) table) (table-radius)) (cost/walk-blocks-per-s))
-        visit (settings/get settings ::visit-s)]
-    {:uses {:job-time [visit (+ walk visit) (+ walk (* 3 visit))]
+        visit (settings/get settings ::visit-s)
+        f (fetch-s c)]
+    {:uses {:job-time [(+ f visit) (+ f walk visit) (+ f walk (* 3 visit))]
             :items {"lapis_lazuli" [1 2 3]}}}))
 
 ;; ------------------------------------------------------------------ the choice

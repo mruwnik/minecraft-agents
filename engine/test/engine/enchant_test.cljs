@@ -3,8 +3,10 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -63,13 +65,15 @@
 (def sword {:name "diamond_sword" :count 1})
 (defn lapis [n] {:name "lapis_lazuli" :count n})
 
-(defn start [world]
-  (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor world))
-        dir (tu/tmp-dir)
-        make (fn [] (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
-                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
-    {:eng (make) :make make :p p :seen seen}))
+(defn start
+  ([world] (start world nil))
+  ([world jobs]
+   (let [[seen sink] (tu/legacy-capture-sink)
+         p (tu/seeing-all (tu/fake-on-floor world))
+         dir (tu/tmp-dir)
+         make (fn [] (core/create {:primitives p :jobs (merge registry/jobs jobs) :triggers triggers/all :dir dir :now #(deref clock)
+                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
+     {:eng (make) :make make :p p :seen seen})))
 
 (defn ^:async run-until-empty [eng n]
   (loop [i 0]
@@ -100,8 +104,9 @@
 (defn ^:async enchant!
   "Run the job over world with args; [result p seen]."
   ([world args] (enchant! world args identity))
-  ([world args prepare]
-   (let [{:keys [eng p seen]} (start world)
+  ([world args prepare] (enchant! world args prepare nil))
+  ([world args prepare jobs]
+   (let [{:keys [eng p seen]} (start world jobs)
          _ (prepare p)
          result (await (child-outcome eng ['jobs.items.enchant (merge {:item "diamond_sword"} args)] 40))]
      [result p seen])))
@@ -320,3 +325,20 @@
         (let [[r p] (await (enchant! (assoc table-world :self {:experience {:level 5}}) {} tu/seeing-after-look))]
           (is (seq (calls p "look")))
           (is (true? (:enchanted r))))))))
+
+(deftest a-lapis-fetch-that-runs-for-minutes-is-not-cut-by-the-visit-s-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [body (atom nil)
+              rounds (atom 0)
+              stub (assoc (get registry/jobs 'jobs.items.obtain)
+                          :can-start? (constantly (contract/ok :stub "a stub"))
+                          :quote-of (constantly {:uses {:job-time [1 1 1]}})
+                          :round (fn ^:async slow [c]
+                                   (if (< (swap! rounds inc) 4)
+                                     (do (swap! clock + 100000) :continue)
+                                     (do (fake/add-item! @body "lapis_lazuli" 3) (ctx/end c :done nil {})))))
+              [r] (await (enchant! (assoc table-world :inventory [sword]) {} #(reset! body %) {'jobs.items.obtain stub}))]
+          (is (= 4 @rounds) "the fetch ran 300 s, past the visit's 120 s")
+          (is (true? (:enchanted r)) (pr-str r)))))))
