@@ -275,15 +275,22 @@
     (update answer :cells #(surface/follow-plan (:plan answer) % (top-fn c)))))
 
 (defn with-supports
-  "The cells of part, and the cells of other parts under them, down the column: a part's cell stands on them, so the part builds them first."
-  [cells part]
+  "The cells that are mine?, and the cells under them, down the column: a cell stands on them, so the build does them first."
+  [cells mine?]
   (let [by-pos (into {} (map (juxt :pos identity)) cells)
-        mine (filter #(= part (:part %)) cells)
+        mine (filter mine? cells)
         below (fn [cell] (by-pos (update (:pos cell) 1 dec)))
         supports (->> mine
                       (mapcat #(take-while (fn [x] (and x (not= :clear (:want x)))) (rest (iterate below %))))
-                      (remove #(= part (:part %))))]
+                      (remove mine?))]
     (distinct (concat mine supports))))
+
+(defn only-set
+  "The set of [x y z] of the call's :cells (nil for none given)."
+  [only]
+  (when (some? only) (into #{} (map (comp (juxt :x :y :z) a/cell)) only)))
+
+(defn in-part? [part] #(= part (:part %)))
 
 (defn nothing-to-place-text
   "When part of the plan has only :clear cells (nothing to place), a text saying so and where its :herd is read, else nil."
@@ -299,7 +306,7 @@
   "The plan's cells (of part, and the cells of other parts they stand on) judged against the world, each with the :item to place it with. A generic wood want
   (jobs.lib.build.wood) is wanted in species sp first, any other counts where it stands."
   [p answer part carried sp]
-  (->> (if (nil? part) (:cells answer) (with-supports (:cells answer) part))
+  (->> (if (nil? part) (:cells answer) (with-supports (:cells answer) (in-part? part)))
        (mapv #(-> % (cond-> sp (update :want wood/resolve-want sp)) (update :want wood/resolve-bed)))
        (#(shape/plan-minus-world % (partial world-block p)))
        (allot carried)))
@@ -406,14 +413,23 @@
   [c]
   (fill/max-depth (fill-worth c)))
 
-(defn planned
-  "{:cells judged} for the plan in the args, or {:trouble text}."
+(defn not-in-plan
+  "The call's :cells that no cell of the plan has, nil when none."
   [c]
-  (let [{:keys [plan part]} (:args c)
-        found (surfaced c (known/plan c plan))
+  (when-let [only (only-set (:cells (:args c)))]
+    (let [in-plan (into #{} (map :pos) (:cells (known/plan c (:plan (:args c)))))]
+      (not-empty (vec (sort (remove in-plan only)))))))
+
+(defn planned
+  "{:cells judged} for the plan in the args (only the call's :cells and the plan cells they stand on, when given), or {:trouble text}."
+  [c]
+  (let [{:keys [plan part cells]} (:args c)
+        only (only-set cells)
+        known-plan (known/plan c plan)
+        found (surfaced c (cond-> known-plan (and only (:cells known-plan)) (update :cells with-supports (comp only :pos))))
         filled (when (:cells found)
                  (fill/with-fill (partial world-block (:primitives c)) (fill-worth c) (partial fill-price c) (places/min-y (:primitives c))
-                                 (if part (with-supports (:cells found) part) (:cells found))))
+                                 (if part (with-supports (:cells found) (in-part? part)) (:cells found))))
         answer (cond-> found (:fill filled) (update :cells into (:fill filled)))
         usable? (and answer (not (:broken answer)))
         carried-map (when usable? (storage/carried-totals (u/inventory (:primitives c))))

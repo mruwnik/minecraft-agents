@@ -1,0 +1,18 @@
+;; build.from-plan :cells: only the listed cells of the plan are owed.
+;; Wall [10 0 10]-[13 0 10] of dirt, all four cells empty, dirt carried; the call lists [11 0 10] only.
+;; Should-succeed: [11 0 10] is placed and the job completes. Should-fail (control): without :cells all four are placed.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8}
+  :body {:at [11.5 0 13.5] :settle-s 2 :inventory [["dirt" 16]]}
+  :plans [{:id "row" :metadata {:by "$body"} :parts [{:id "wall" :box [#at [10 0 10] #at [13 0 10]] :want "dirt"}]}]
+  :limit-s 120}
+ :cases
+ [{:name "only-the-listed-cell-is-placed"
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:row" :cells [#at [11 0 10]]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [11 0 10] "dirt"] [:block [10 0 10] "air"] [:block [12 0 10] "air"] [:block [13 0 10] "air"]]}
+  {:name "no-cells-arg-places-the-whole-wall"
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:row"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [10 0 10] "dirt"] [:block [11 0 10] "dirt"] [:block [12 0 10] "dirt"] [:block [13 0 10] "dirt"]]}]}

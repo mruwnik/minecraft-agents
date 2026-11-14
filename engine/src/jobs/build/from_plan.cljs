@@ -98,6 +98,7 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part, and the cells of other parts it stands on (down the column), built first" :spec a/name? :default nil}
+   :cells {:doc "only these cells [x y z] of the plan, and the plan cells they stand on (down the column), are owed, looked at or walked to; a listed cell the plan has no cell at is ignored and named in the result as :not-in-plan; nil: every cell" :spec (a/coll-of a/position?) :default nil}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell), :falling-block (a dig under sand or gravel that falls in)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :explore {:doc "walk off to look for blocks and tools that are not in sight when the plan lacks them" :spec boolean? :default true}
    :worth {:doc "seconds the build is worth to the caller, which the fills under a floor with nothing to click beside it (dirt columns, priced as earthwork and the dirt's obtain) must stay within together, or the build is :later :not-worth as a whole; nil: no cap (a fill priced ##Inf is still refused)" :spec (a/num-in 0 nil) :default nil}

@@ -208,6 +208,18 @@
           (is (= "dirt" (block p [4 64 3])))
           (is (zero? (:placed result 0))))))))
 
+(deftest only-the-listed-cells-are-built-and-a-listed-cell-outside-the-plan-is-named
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [built (into {"3,64,2" "oak_fence_gate" "2,65,2" "torch"}
+                          (map (fn [[x y z]] [(h/cell-key x y z) "oak_fence"]) (remove #{[4 64 3] [4 64 4]} ring)))
+              {:keys [eng p]} (start {:blocks built :inventory kit} {"pen" (pen-plan)})
+              result (await (child-outcome eng job {:plan "pen" :cells [[4 64 3] [9 9 9]]} 200))]
+          (is (= [[[4 64 3] "oak_fence"]] (places p)))
+          (is (= "air" (block p [4 64 4])))
+          (is (= [[9 9 9]] (:not-in-plan result))))))))
+
 (deftest a-cell-refused-three-times-is-given-up
   (async done
     (tu/run-async done

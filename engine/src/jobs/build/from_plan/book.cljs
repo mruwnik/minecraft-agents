@@ -166,7 +166,8 @@
 (defn result-data
   "What the build left (text/summary), with the failed fetches of the call."
   [c cells]
-  (assoc-fetch-failed c (summary c cells (ctx/mem c) (plan/sturdy-ground? c))))
+  (cond-> (assoc-fetch-failed c (summary c cells (ctx/mem c) (plan/sturdy-ground? c)))
+    (seq (plan/not-in-plan c)) (assoc :not-in-plan (plan/not-in-plan c))))
 
 (defn ending-of
   "The ending of a build with nothing more to do: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the placed cells meet the call's
