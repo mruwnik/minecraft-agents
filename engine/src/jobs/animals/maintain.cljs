@@ -9,6 +9,7 @@
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.animal-spare :as spare]
+            [jobs.lib.build.diff :as diff]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
@@ -24,8 +25,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.waits :as waits]
-            [jobs.lib.hunting :as hunting]
-            [jobs.lib.world :as known]))
+            [jobs.lib.hunting :as hunting]))
 
 (def meta {:tags [:goal]})
 
@@ -33,10 +33,11 @@
   "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over seven steps in this
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
-  - :mend: a fence, gate or wall cell of the plan beside the box was seen as something else (blown away), or the box
-    read herd judges by names a leak a patch mends (:gap, :climb, :perch-in), or an open gate no job holds open (no :plan: shut by pen-check): with :plan the plan's fence is built again
-    (jobs.build.pen over the whole :plan, at the pass's worth with a :mob), without one the box is patched from the read
-    (jobs.animals.pen-check over :box). Only cells the body has seen count; a gap that stays rests the pen.
+  - :mend: with :plan, a plan cell in the box or one column round it was seen broken (jobs.lib.build.diff: a fence blown
+    away, a block an animal climbs out on; a gate swung open is the pen-gate trigger's): jobs.build.repair over the parts
+    of those cells at their diff/worth. Without a plan, the box read herd judges by names a leak a patch mends (:gap,
+    :climb, :perch-in) or an open gate no job holds open: jobs.animals.pen-check patches :box. Only cells the body has
+    seen count; a gap that stays rests the pen.
   - :herd (jobs.animals.herd, :target less the babies at most; never with adults plus babies at :target): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
     adults of the kind are listed outside the box (in no enclosure, on ground the zones let it take from) whose cost/animal-worth beats the
     walk (cost/walk-cost) to each and on to the pen; herd brings the box up to the pair plus those strays, fetching and searching within ::herd-radius (64) of the body.
@@ -63,7 +64,7 @@
   pass took in sight. Each pass emits one maintain.pass info with that count and how each step went (every leak named).
 
   Ends :done after the pass, with {:mob :target :adults :babies (that count) :steps {step
-  summary}}; condition-failed with the same data when every step was skipped and the herd is below :target: the first lack among the skips (:no-food, :no-shears, :too-few-adults, the text naming each), else :nothing-to-do. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  summary}}; condition-failed with the same data when every step was skipped and the herd is below :target: the first lack among the skips (:no-food, :no-shears, :too-few-adults, the text naming each), else :nothing-to-do. Summaries: mend {:closed? :reason} (box) or {:broken} (plan), herd {:reason :inside :brought :leaks} (a stopped pass's text names the leaks), breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box (raised or lowered with the ground when the plan has :surface true), and :mob and :target from its :herd
@@ -97,7 +98,7 @@
 (def steps [:mend :herd :breed :cull :shear :collect :deposit])
 
 (def jobs
-  {:mend 'jobs.build.pen
+  {:mend 'jobs.build.repair
    :herd 'jobs.animals.herd
    :breed 'jobs.animals.breed
    :cull 'jobs.animals.cull
@@ -148,24 +149,18 @@
                :when (and (= :open-gate why) (not (held cell)))]
            cell))))
 
-(defn missing-barrier
-  "The plan's fence, gate and wall cells beside the box (one column out) that the body has seen as something its plan
-  does not want there, or as a gate standing open that no job holds open or gave up on (jobs.lib.pen-gate), as [x y z]; a cell never
-  seen is no gap."
+(defn broken-pen
+  "{:plan-cells :broken}: with :plan, its cells (diff/plan-cells) and those in the box or one column round it the body has
+  seen broken (diff/diff: a fence blown away, a block an animal climbs out on); none without a plan or when it cannot
+  be read."
   [c]
   (let [{:keys [plan]} (:args c)
-        cells (when plan (:cells (known/plan c plan)))
+        pc (when plan (diff/plan-cells c plan nil))
         {:keys [min max]} (pen-read/arg-box c)
-        beside? (fn [[x _ z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
-        p (:primitives c)
-        held (pg/held-gates (ctx/view c))]
-    (vec (for [{:keys [pos want]} cells
-               :when (and (pen-read/barrier? want) (beside? pos))
-               :let [seen (u/sensed p (u/cell-pos pos))]
-               :when (and seen (not (true? (.-unknown seen)))
-                          (or (not (some #{(.-name seen)} (pen-read/want-blocks want)))
-                              (and (pg/open-gate? seen) (not (held (vec pos))))))]
-           pos))))
+        beside? (fn [{[x _ z] :pos}] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))]
+    (if (or (nil? pc) (:trouble pc))
+      {:broken []}
+      {:plan-cells pc :broken (diff/diff c (filter beside? (:cells pc)))})))
 
 (defn strays
   "How many adults of the kind the body lists within ::herd-radius outside the box, in no closed enclosure and on ground the
@@ -215,10 +210,12 @@
         counted (pen-census c read)
         inventory (u/inventory (:primitives c))
         keep (merge-with max (reserve/held c :deposit) (:carry (:args c)))
-        stored (to-store inventory (produce (:mob (:args c))) keep)]
-    {:gaps (vec (distinct (-> (missing-barrier c)
-                           (into (pen-patch/patch-cells (:leaks read)))
-                           (into (when-not (:plan (:args c)) (open-gate-gaps c (:leaks read)))))))
+        stored (to-store inventory (produce (:mob (:args c))) keep)
+        {:keys [broken] :as pen} (broken-pen c)]
+    (assoc pen
+     :gaps (if (:plan (:args c))
+             (mapv :pos broken)
+             (vec (distinct (into (pen-patch/patch-cells (:leaks read)) (open-gate-gaps c (:leaks read))))))
      :adults (:adults counted)
      :strays (if (and (:mob (:args c)) (< (+ (:adults counted) (:babies counted)) (:target (:args c)))) (strays c) 0)
      :ready (max 0 (- (:adults counted) (count (filter (comp (animals/cooling c) animals/key-of) adults))))
@@ -230,17 +227,16 @@
      :keep keep
      :stored-items (into [] (comp (filter #(some #{(.-name %)} stored)) (map (fn [i] {:name (.-name i) :count (.-count i)}))) inventory)
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
-     :reach (hunting/reach c)}))
+     :reach (hunting/reach c))))
 
 (declare mend-worth)
 
 (defn decide-mend
-  [{:keys [plan box ways mob] :as args} {:keys [gaps] :as facts}]
+  [{:keys [plan box ways] :as args} {:keys [gaps plan-cells broken]}]
   (cond
     (empty? gaps) {:skip :sound}
-    plan {:call {:slot :mend :job (jobs :mend)
-                 :args (cond-> {:plan plan}
-                         mob (assoc :worth (mend-worth args facts))
+    plan {:call {:slot :mend :job 'jobs.build.repair
+                 :args (cond-> {:plan plan :parts (vec (distinct (map :part broken))) :worth (diff/worth plan-cells broken)}
                          (not (need/fetching? ways)) (assoc :ways #{:carried}))}}
     :else {:call {:slot :mend :job ((step-jobs args) :mend)
                   :args (cond-> {:box box}
@@ -375,15 +371,17 @@
 (defn mend-worth
   "Seconds a pass is worth: cost/animal-worth of the animals its herd, breed
   (one pair, one calf) and cull steps would add or kill, the goal-value of the wool its shear and of the drops its collect
-  would take, what the herd would lose through the fence gaps its mend would close (cost/gap-loss) and the goal-value of
-  the produce its deposit would store (none without a :chest)."
-  [{:keys [mob target chest]} {:keys [adults babies strays drops shearable gaps stored-items]}]
+  would take, what its mend is worth (with :plan diff/worth of the broken cells, without one what the herd would lose
+  through the gaps, cost/gap-loss) and the goal-value of the produce its deposit would store (none without a :chest)."
+  [{:keys [mob target chest plan]} {:keys [adults babies strays drops shearable gaps stored-items plan-cells broken]}]
   (let [heads (+ (max 0 (- (herd-target target adults babies strays) adults))
                  (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
                  (max 0 (- adults (max 2 (- target babies)))))
         items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) (when chest stored-items))
                 (= "sheep" mob) (conj {:name "white_wool" :count (* animals/shear-wool shearable)}))]
-    (+ (* heads (cost/animal-worth mob)) (cost/gap-loss mob (+ adults babies) (count gaps)) (:value (cost/goal-value items)))))
+    (+ (* heads (cost/animal-worth mob))
+       (if plan (diff/worth plan-cells broken) (cost/gap-loss mob (+ adults babies) (count gaps)))
+       (:value (cost/goal-value items)))))
 
 (defn worth-of [c] (mend-worth (:args c) (facts c)))
 
@@ -431,7 +429,7 @@
   "What the report keeps of a child's result."
   [step r]
   (case step
-    :mend (select-keys r [:closed? :reason])
+    :mend (select-keys r [:closed? :broken :reason])
     :herd (select-keys r [:reason :inside :brought :leaks])
     :breed {:fed (count (:fed r)) :reason (:reason r)}
     :cull (select-keys r [:killed :remaining :reason])

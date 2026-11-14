@@ -15,6 +15,7 @@
             [engine.build-from-plan-test :as b]
             [engine.pen-build-test :as pb]
             [jobs.animals.maintain :as maintain]
+            [jobs.lib.build.diff :as diff]
             [plan.adopt :as adopt]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.pen :as pen]
@@ -400,13 +401,15 @@
     {:call {:slot :mend :job 'jobs.animals.pen-check :args {:box box}}} {:box box} {:gaps [[1 64 1]]}
     {:call {:slot :mend :job 'jobs.animals.pen-check :args {:box box :ways #{:check :patch}}}} {:box box :ways #{:carried}} {:gaps [[1 64 1]]}
     {:skip :sound} {:box box} {:gaps []}
-    {:skip :sound} {:plan "pen"} {:gaps []}
-    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen"}}} {:plan "pen"} {:gaps [[1 64 1]]}
-    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :ways #{:carried}}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]})
-  (let [args {:plan "pen" :mob "cow" :target 4}
-        facts {:adults 4 :babies 0 :drops [] :shearable 0 :gaps [[1 64 1]] :stored-items []}]
-    (is (= {:plan "pen" :worth (maintain/mend-worth args facts)} (get-in (maintain/decide :mend args facts) [:call :args]))
-        "the mend is built at the pass's worth")))
+    {:skip :sound} {:plan "pen"} {:gaps []})
+  (let [pc {:parts [{:id "cows" :box [[2 64 2] [4 64 4]] :herd {:mob "cow" :target 4}}] :cells []}
+        broken [{:pos [1 64 3] :want "oak_fence" :part "fence"}]
+        facts {:gaps [[1 64 3]] :plan-cells pc :broken broken}
+        worth (diff/worth pc broken)]
+    (is (< (cost/put-back-s "oak_fence") worth) "a fence gap beside the herd box is worth more than its block")
+    (are [args expected] (= {:slot :mend :job 'jobs.build.repair :args expected} (:call (maintain/decide :mend args facts)))
+      {:plan "pen"} {:plan "pen" :parts ["fence"] :worth worth}
+      {:plan "pen" :ways #{:carried}} {:plan "pen" :parts ["fence"] :worth worth :ways #{:carried}})))
 
 (deftest a-trigger-fired-maintain-is-priced-at-its-own-pass
   (async done
@@ -442,9 +445,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (b/start (pb/spec pb/kit (assoc pb/built-pen "4,64,3" "air")) {"pen" ring-pen-plan} [])
+        (let [plan (assoc-in ring-pen-plan [:parts 2 :herd :target] 2)
+              {:keys [eng p]} (b/start (assoc (pb/spec pb/kit (assoc pb/built-pen "4,64,3" "air")) :entities [(cow 1 3.5 3.5) (cow 2 3.5 3.5)])
+                                       {"pen" plan} [])
               result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
-          (is (not= :nothing-to-do (:reason result)) "the gap starts a run"))
+          (is (= {:broken []} (get-in result [:steps :mend])) (pr-str result))
+          (is (= (get pb/built-pen "4,64,3") (b/block p [4 64 3])) "the gap is built again"))
         (let [{:keys [eng]} (b/start (pb/spec pb/kit pb/built-pen) {"pen" ring-pen-plan} [])
               result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
           (is (= :sound (get-in result [:ending :cause :skipped :mend]))))
@@ -453,15 +459,8 @@
                                               :entities [(cow 1 3.5 3.5)])
                                        {"pen" plan} [])
               result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
-          (is (= {:closed? true :reason nil} (get-in result [:steps :mend])) (pr-str result))
-          (is (= "false" (str (some-> (.blockAt p #js {:x 3 :y 64 :z 2}) .-properties .-open))) "a plan gate seen open, held by no job, is mended shut"))
-        (let [plan (assoc-in ring-pen-plan [:parts 2 :herd :target] 1)
-              {:keys [eng]} (b/start (assoc (pb/spec pb/kit pb/built-pen) :states {"3,64,2" {:open true :facing "north"}}
-                                            :entities [(cow 1 3.5 3.5)])
-                                     {"pen" plan} [])
-              _ (mem/write! (:store eng) :gate-gave-up {:cell [3 64 2] :reason :unreachable})
-              result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
-          (is (= :sound (get-in result [:ending :cause :skipped :mend])) "a gate the shut job gave up on is no gap"))))))
+          (is (= :sound (get-in result [:ending :cause :skipped :mend])) (pr-str result))
+          (is (= "true" (str (some-> (.blockAt p #js {:x 3 :y 64 :z 2}) .-properties .-open))) "a plan gate seen open is the pen-gate trigger's to shut, not the mend's"))))))
 
 ;; card f0d2a35a: a box pen with no plan said "mend skipped no-plan" while herd waited on the leak for good
 (deftest a-box-pen-with-no-plan-is-patched-from-the-read
@@ -496,7 +495,7 @@
         (let [plan (update-in ring-pen-plan [:parts 2] assoc :box [[3 64 3] [3 65 3]] :herd {:mob "cow" :target 2})
               {:keys [eng p]} (b/start (pb/spec pb/kit (assoc pb/built-pen "3,64,3" "dirt")) {"pen" plan} [])
               result (await (tu/child-outcome eng 'jobs.animals.maintain {:plan "pen" :part "cows"} 600))]
-          (is (= {:closed? true :reason nil} (get-in result [:steps :mend])) (pr-str result))
+          (is (= {:broken []} (get-in result [:steps :mend])) (pr-str result))
           (is (= "air" (some-> (.blockAt p #js {:x 3 :y 64 :z 3}) .-name)) "the mound is dug"))))))
 
 (deftest the-check-declines-when-the-only-drops-lie-outside-the-box

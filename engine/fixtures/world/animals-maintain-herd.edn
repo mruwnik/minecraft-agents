@@ -25,4 +25,18 @@
          [:summon "cow" [21.5 0 15.5]]
          [:job (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 240 :of-job true}]
-   :after [[:block [18 0 16] "oak_fence_gate[open=false]"]]}]}
+   :after [[:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  ;; Card 1abc02fa: a plan pen's fence cell [18 0 14] broken in the body's view is mended by the :mend step (build.repair).
+  ;; Old code called build.pen over the whole plan; the pin is the step's {:broken []} summary, which build.repair gives.
+  {:name "plan-pen-fence-cell-broken-in-view-is-mended"
+   :blocks [[:set [18 0 14] "air"]]
+   :plans [{:id "pen" :metadata {:by "$body"}
+            :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want "oak_fence"}
+                    {:id "gate" :cells [#at [18 0 16]] :want "oak_fence_gate"}
+                    {:id "cows" :box [#at [19 0 14] #at [23 0 18]] :want "air" :herd {:mob "cow" :target 2}}]}]
+   :body {:inventory [["wheat" 4] ["oak_fence" 2]]}
+   :act [[:summon "cow" [21.5 0 16.5]]
+         [:summon "cow" [21.5 0 15.5]]
+         [:job (jobs.animals.maintain {:worth 1200 :plan "$plan:pen" :part "cows"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :steps {:mend {:broken []}}}} :within-s 240 :of-job true}]
+   :after [[:block [18 0 14] "oak_fence"] [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]]}]}

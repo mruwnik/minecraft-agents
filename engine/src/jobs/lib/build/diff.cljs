@@ -6,7 +6,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.farm :as farm]
-            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.world :as known]
             [plan.shape :as shape]))
 
@@ -43,13 +42,14 @@
                       (not (and (#{:wrong :extra} (:answer %)) (some->> (:found %) (re-find plan/opening-pattern))))))))
 
 (defn herd-gaps
-  "{:mob :target :gaps n} of each part's :herd with broken barrier cells (pen-read/barrier?) one column round its :box."
+  "{:mob :target :gaps n} of each part's :herd with broken cells in its :box or one column round it: a fence or wall
+  missing, or a block where the box wants clear, lets an animal out or climbs it over the fence."
   [parts broken]
   (for [{:keys [box herd]} parts
         :when (and box herd)
         :let [[[x1 _ z1] [x2 _ z2]] box
               beside? (fn [[x _ z]] (and (<= (dec (min x1 x2)) x (inc (max x1 x2))) (<= (dec (min z1 z2)) z (inc (max z1 z2)))))
-              gaps (count (filter #(and (pen-read/barrier? (:want %)) (beside? (:pos %))) broken))]
+              gaps (count (filter (comp beside? :pos) broken))]
         :when (pos? gaps)]
     (assoc herd :gaps gaps)))
 
