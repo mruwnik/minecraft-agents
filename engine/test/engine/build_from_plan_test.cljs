@@ -1187,15 +1187,15 @@
           (is (= [{:pos [4 64 3] :found "dirt" :want "oak_fence"}] (:wrong result)))
           (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (:refused result))))))))
 
-(deftest a-door-or-gate-in-a-wanted-cell-is-kept-and-listed-wrong-never-dug
+(deftest a-door-gate-or-trapdoor-where-the-plan-wants-a-fence-is-dug-and-replaced
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [found ["oak_door" "oak_fence_gate" "oak_trapdoor"]]
           (let [[result p] (await (fence-run {"4,64,3" found} (conj kit {:name "iron_shovel" :count 1}) {} {}))]
-            (is (empty? (h/calls p "dig")) found)
-            (is (= found (block p [4 64 3])))
-            (is (= [4 64 3] (:pos (first (:wrong result)))))))))))
+            (is (some #{[4 64 3]} (map #(let [a (.-args %)] [(.-x (.-pos a)) (.-y (.-pos a)) (.-z (.-pos a))]) (h/calls p "dig"))) found)
+            (is (= "oak_fence" (block p [4 64 3])) found)
+            (is (empty? (:wrong result)) found)))))))
 
 (deftest a-door-is-placed-once-at-its-lower-cell-over-wrong-blocks-and-never-gives-up-the-upper-half
   (async done

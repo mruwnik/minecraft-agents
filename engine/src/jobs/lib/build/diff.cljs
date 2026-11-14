@@ -33,15 +33,15 @@
 (defn diff
   "The cells of `cells` (plan cells) the body has seen differ from their want, judged as from-plan judges them
   (plan/judged, plan/loosened): :missing, :wrong or :extra. A cell never seen, or remembered so long it is likelier
-  changed than not, is :unknown and never listed. Never a cell others-own?, the upper half of a two-block item (its
-  lower half places it), nor a door, gate or trapdoor standing where it should not or swung wrong: from-plan never digs
-  one, and shutting a gate is jobs.maintenance.shut's and the pen-gate trigger's."
+  changed than not, is :unknown and never listed. Never a cell others-own?, nor the upper half of a two-block item (its
+  lower half places it). A door, gate or trapdoor where the plan wants another block is wrong; a wanted one's swung state is no difference
+  (jobs.maintenance.shut and the pen-gate trigger own it)."
   [c cells]
   (->> (plan/judged (:primitives c) {:cells (remove (comp others-own? :want) cells)} nil {} (first wood/species))
        plan/loosened
        (filterv #(and (#{:missing :wrong :extra} (:answer %))
                       (not (plan/companion? (:want %)))
-                      (not (and (#{:wrong :extra} (:answer %)) (some->> (:found %) (re-find plan/opening-pattern))))))))
+                      (not (plan/swung? %))))))
 
 (defn herd-gaps
   "{:mob :target :gaps n} of each part's :herd with broken cells in its :box or one column round it: a fence or wall

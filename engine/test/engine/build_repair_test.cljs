@@ -34,6 +34,10 @@
   (let [{:keys [eng]} (b/start yard-world {"yard" yard} [])]
     (is (= [[4 64 2]] (diff-of eng)) "not the wall cell far out of sight, the crop, the trampled farmland (tend tills it), the :any cell, the open gate")))
 
+(deftest a-door-standing-in-a-wall-cell-is-listed-wrong
+  (let [{:keys [eng]} (b/start (assoc-in yard-world [:blocks "4,64,2"] "oak_door") {"yard" yard} [])]
+    (is (= [[4 64 2]] (diff-of eng)) "the wall wants cobblestone there; the open gate the plan wants is still left alone")))
+
 (deftest a-broken-barrier-beside-a-herd-is-worth-its-gap-loss-more-than-a-plain-wall
   (let [plan {:parts [{:id "pen" :box [[3 64 3] [5 64 5]] :herd {:mob "cow" :target 4}}] :cells []}
         fence (fn [pos] [{:pos pos :want "oak_fence"}])]

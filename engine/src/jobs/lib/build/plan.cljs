@@ -321,6 +321,11 @@
 
 (def opening-pattern #"(_door|_fence_gate|_trapdoor)$")
 
+(defn swung?
+  "Whether a judged cell holds the door, gate or trapdoor its want names, so only its open or swung state differs (the shut and pen-gate jobs own that)."
+  [{:keys [found want]}]
+  (boolean (and (some->> found (re-find opening-pattern)) (= found (shape/want-block want)))))
+
 (defn loosened
   "Cells (as judged) with a replaceable block read as the placement sees it: a wrong cell holding one is :missing
   (placed into directly), a :clear cell holding one is :match unless it is a fluid (a clear cell is meant dry)."
@@ -350,7 +355,7 @@
 
 (defn prepared
   "Cells (as judged) ready for the rounds: loosened; a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
-  that is no container, door or gate, no rail of the wanted kind (its shape settles as its neighbours land), not already misplaced by this job,
+  that is no container, no wanted door or gate only swung wrong, no rail of the wanted kind (its shape settles as its neighbours land), not already misplaced by this job,
   not under a door of the plan that holds (digging it drops the door), is marked :dig? (dug, then placed). So is a block that is
   no replaceable one in a :clear cell (:extra), whatever is carried; a kept block (chest, table ..) there too when own holds [cell block] (the body placed it)."
   [cells carried misplaced own]
@@ -363,7 +368,7 @@
                              (not settling?)
                              (not (door-at (update pos 1 inc)))
                              (or (not (kept/kept? [] found)) (and extra? (contains? own [pos found])))
-                             (not (re-find opening-pattern found)))
+                             (not (swung? cell)))
                   digs? (and (or extra? (and wrong? item (contains? carried item))) (dug?))
                   short? (and wrong? item (not (contains? carried item)) (dug?))]
               (cond-> cell
