@@ -55,6 +55,16 @@
         result (await (child-outcome eng job args 8))]
     [result p seen eng]))
 
+(defn ^:async craft-scene
+  "Like craft, its obtain children given a job-time as long as the scene needs: their default prices a child from the
+  usual cost of the item, which a scene of several fetches and crafts in a few ticks outruns."
+  [world args]
+  (let [orig ctx/call]
+    (set! ctx/call (fn [c slot j a] (orig c slot j (cond-> a (= 'jobs.items.obtain j) (assoc :spend {:job-time 3600})))))
+    (try
+      (await (craft world args))
+      (finally (set! ctx/call orig)))))
+
 (defn ^:async craft-counting-walks
   "Like craft, with the number of go-to calls the job made (one call may take several rounds)."
   [world args]
@@ -762,7 +772,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [trees (into {} (for [x [4 6 8] y [64 65 66]] [(str x "," y ",3") "oak_log"]))
-              [result p] (await (craft {:blocks trees
+              [result p] (await (craft-scene {:blocks trees
                                         :recipes {"oak_fence_gate" {:count 1 :needs {"oak_planks" 2 "stick" 4} :table true}}
                                         :inventory [{:name "oak_log" :count 6} {:name "oak_planks" :count 1}]}
                                        {:item "oak_fence_gate" :count 1}))]
@@ -774,7 +784,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [n [1]]
-          (let [[result p] (await (craft {:blocks table-block
+          (let [[result p] (await (craft-scene {:blocks table-block
                                           :recipes {"oak_fence_gate" {:count 1 :needs {"oak_planks" 2 "stick" 4} :table true}}
                                           :inventory [{:name "oak_log" :count 11} {:name "oak_planks" :count 2}]}
                                          {:item "oak_fence_gate" :count n}))]

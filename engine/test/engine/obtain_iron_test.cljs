@@ -571,7 +571,7 @@
                                 (if-not (:dug (ctx/mem c))
                                   (do (swap! calls inc) (swap! (:clock s) + 120000) (ctx/update-mem! c assoc :dug true) :continue)
                                   (ctx/end c :nothing-possible {:reason :tunnel-length} (merge {:got 0 :reason :tunnel-length} dug)))))]
-            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :worth worth} 60))
+            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :worth worth :spend {:job-time f/scene-s}} 60))
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 

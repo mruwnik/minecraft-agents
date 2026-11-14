@@ -64,7 +64,8 @@
     (let [{:keys [value sd]} (cost/goal-value [{:name "anvil" :count 1}])]
       (is (= (+ value sd) (t "anvil" 1)) "the usual cost and one sd of it")
       (is (< 1000 sd (/ value 3)) "an anvil's ~23 raw iron gathers spread its cost: more slack than a flat 600 s, less than its cost"))
-    (is (= (fetch-time/one-unit-s) (t "cobblestone" 1)) "a cheap fetch gets one unit's time: its looks and walks are not in the gathers' spread")
+    (let [{:keys [value sd]} (cost/goal-value [{:name "cobblestone" :count 1}])]
+      (is (= (+ value sd) (t "cobblestone" 1)) "a cheap fetch gets its usual cost and one sd, no floor"))
     (is (< (js/Math.abs (- (:sd (cost/goal-value [{:name "cobblestone" :count 1}])) (:sd (cost/goal-value [{:name "cobblestone" :count 5}])))) 1e-6)
         "one cobblestone still risks a whole gather call's spread, as five do")
     (is (= (t "oak_log" 1) (obtain/default-time {:any-of ["anvil" "oak_log"]})) "any of several: the cheapest")
@@ -76,7 +77,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (f/bare [{:name "oak_log" :count 2}]) [])
-              e (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 4 :explore false} 30))]
+              e (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 4 :explore false :spend {:job-time f/scene-s}} 30))]
           (is (= :done (:kind e)))
           (is (= {:got 4 :item "oak_planks"} (select-keys (:data e) [:got :item]))))))))
 
@@ -134,7 +135,7 @@
                                  (fake/add-item! (:p s) "oak_planks" 8)
                                  (contract/ending :done nil {:made 8}))
                              (orig c slot j args))))
-          (try (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 8 :explore false} 30))
+          (try (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 8 :explore false :spend {:job-time f/scene-s}} 30))
                (finally (set! ctx/call orig)))
           (is (< 120 (get-in @seen [:spend :job-time]))
               "the craft slot's job time adds up over the obtain's rounds, so its own 120 s default ended a 320-stick craft; the obtain's budget bounds it"))))))
@@ -155,7 +156,7 @@
                                  (mem/write! (:store (:eng s)) :died {:pos {:x 0 :y 64 :z 0}})
                                  (js/Promise.resolve :continue))
                              (orig c slot j args))))
-          (let [e (try (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 8 :explore false} 30))
+          (let [e (try (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 8 :explore false :spend {:job-time f/scene-s}} 30))
                        (finally (set! ctx/call orig)))]
             (is (= :done (:kind e)))
             (is (= 8 (:got (:data e))) "the planks carried before the death went with the body")))))))
@@ -376,7 +377,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (update (f/bare [{:name "oak_planks" :count 2}]) :blocks assoc "14,64,0" "chest") [(assoc f/own-zone :min [-20 60 -20] :max [20 70 20])])
-              e (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false} 30))]
+              e (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false :spend {:job-time f/scene-s}} 30))]
           (is (= :done (:kind e)))
           (is (= 4 (get-in e [:data :got])))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the chest"))))))
@@ -388,7 +389,7 @@
         (let [far-at "400,64,0"
               s (f/start (update (f/bare [{:name "oak_planks" :count 2}]) :blocks assoc far-at "chest") [(assoc f/own-zone :min [-20 60 -20] :max [500 70 20])])
               _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [400 64 0] :items {"stick" 8}} stock/stock-policy)
-              e (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false} 30))]
+              e (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false :spend {:job-time f/scene-s}} 30))]
           (is (= :done (:kind e)))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the far chest"))))))
 
@@ -398,7 +399,7 @@
   [logs]
   (let [s (f/start (f/world {f/chest-at logs}) [f/own-zone])
         _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [-2 64 3] :items {"oak_log" 2}} stock/stock-policy)
-        e (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 4 :explore false} 60))]
+        e (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 4 :explore false :spend {:job-time f/scene-s}} 60))]
     {:e e :via (mapv :via (f/events-of s :obtain.gathering)) :chest (f/chest-items s f/chest-at) :inv (f/inv s)}))
 
 (deftest a-chains-raw-need-booked-in-a-chest-is-taken-from-it

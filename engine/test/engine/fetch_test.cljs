@@ -553,6 +553,10 @@
           (is (empty? (listed s)))
           (is (= {"stone_pickaxe" 1} (select-keys (inv s) ["stone_pickaxe" "iron_pickaxe"]))))))))
 
+(def scene-s
+  "A job-time budget for a scene whose clock the test moves by hand (run-ticks 700 ms a tick, a stub's 30 s): longer than the scene runs."
+  3600)
+
 (deftest obtain-looks-around-before-it-crafts-and-gets-the-item
   (async done
     (tu/run-async done
@@ -561,7 +565,7 @@
                            (assoc :containers {"-2,64,-3" [{:name "oak_planks" :count 8}]}
                                   :inventory [{:name "oak_log" :count 2}]))
                        [own-zone])]
-          (core/submit! (:eng s) (tu/order (list 'jobs.items.obtain {:item "oak_planks" :count 4})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.items.obtain {:item "oak_planks" :count 4 :spend {:job-time scene-s}})) {})
           (await (run-ticks s 30))
           (is (seq (calls s "look")))
           (is (= 4 (get (inv s) "oak_planks"))))))))
@@ -743,7 +747,7 @@
           (set! ctx/call (fn [c slot job args]
                            (if (= :gather-cobblestone slot)
                              (do (swap! n inc) (swap! (:clock s) + 30000) (js/Promise.resolve {:kind :nothing-possible :cause :no-stone-found}))
-                             (orig c slot job args))))
+                             (orig c slot job (cond-> args (= 'jobs.items.obtain job) (assoc :spend {:job-time scene-s}))))))
           (try
             (let [id (await (get-tool! s {:item "stone_pickaxe"} 40))
                   st (last (events-of s :stopped))]
@@ -766,7 +770,7 @@
       (fn ^:async t []
         (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone])]
           (swap! (fake/state (:p s)) assoc-in [:recipes "oak_planks"] {:count 4 :needs {"oak_log" 1000}})
-          (core/submit! (:eng s) (tu/order (list 'jobs.items.obtain {:item "oak_planks" :count 4})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.items.obtain {:item "oak_planks" :count 4 :spend {:job-time scene-s}})) {})
           (await (run-ticks s 30))
           (is (empty? (listed s)))
           (is (= :no-source (:reason (first (events-of s :stopped))))))))))
