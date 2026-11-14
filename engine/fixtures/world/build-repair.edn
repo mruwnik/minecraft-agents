@@ -1,0 +1,27 @@
+;; build.repair: the plan cells the body has seen differ from their want are mended through build.from-plan :cells.
+;; Wall [10 0 10]-[13 0 10] of cobblestone with [11 0 10] empty and [12 0 10] dirt, a planned water cell [14 -1 12] in the floor filled with dirt.
+;; Should-succeed: all three are mended, the job completes. Should-fail (control): a planned cell inside a closed stone box,
+;; empty but never seen, is not listed, so it stays empty while the gap in sight is mended.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8}
+  :body {:at [11.5 0 14.5] :settle-s 2 :inventory [["cobblestone" 16] ["water_bucket" 1]]}
+  :limit-s 150}
+ :cases
+ [{:name "broken-wall-and-filled-water-in-sight-are-mended"
+   :plans [{:id "yard" :metadata {:by "$body"}
+            :parts [{:id "wall" :box [#at [10 0 10] #at [13 0 10]] :want "cobblestone"}
+                    {:id "pool" :cells [#at [14 -1 12]] :want "water"}]}]
+   :blocks [[:set [10 0 10] "cobblestone"] [:set [12 0 10] "dirt"] [:set [13 0 10] "cobblestone"] [:set [14 -1 12] "dirt"]]
+   :act [[:job (jobs.build.repair {:worth 1200 :plan "$plan:yard"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:block [11 0 10] "cobblestone"] [:block [12 0 10] "cobblestone"] [:block [14 -1 12] "water[level=0]"]]}
+  {:name "a-gap-never-seen-is-left"
+   :plans [{:id "yard" :metadata {:by "$body"}
+            :parts [{:id "wall" :box [#at [10 0 10] #at [13 0 10]] :want "cobblestone"}
+                    {:id "hidden" :cells [#at [20 1 20]] :want "cobblestone"}]}]
+   :blocks [[:set [10 0 10] "cobblestone"] [:set [12 0 10] "cobblestone"] [:set [13 0 10] "cobblestone"]
+            [:fill [19 0 19] [21 2 21] "stone"] [:set [20 1 20] "air"]]
+   :act [[:job (jobs.build.repair {:worth 1200 :plan "$plan:yard"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:block [11 0 10] "cobblestone"] [:block [20 1 20] "air"]]}]}

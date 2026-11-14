@@ -31,6 +31,8 @@
 
 (defn cell-s "Seconds one cell of the plan is guessed to take: the quote's figure, and the stay per cell a stand is priced over." [] (settings/get settings ::cell-s))
 
+(defn owed-s "Mean seconds the owed cells (plan/owed) of judged cells take: the build's quote." [cells] (* (count (plan/owed cells)) (cell-s)))
+
 (defn trace!
   "Note the branch a step took and its cell, for the :stalled ending; kept off the job memory so it never counts as progress."
   [c branch cell]

@@ -138,3 +138,10 @@
   [view]
   (into #{} (keep (fn [{:keys [data]}] (some-> (:cell data) ((juxt :x :y :z)))))
         (mem/entries view :opened)))
+
+(defn held-gates
+  "The gates ([x y z]) a job holds open on purpose, gave up on or a walk opened: not a leak, nor a gate to mend."
+  [view]
+  (into (opened-cells view)
+        (concat (held-cells view (* 1000 (:held-s defaults)))
+                (quiet-cells view (* 1000 (:quiet-s defaults))))))

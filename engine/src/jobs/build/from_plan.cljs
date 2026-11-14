@@ -31,7 +31,7 @@
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? sealed-unseen seal-exit shuts-out? off-low-floor support-looks retreat-dists fill-order]]
             [jobs.build.from-plan.book :refer [walk-fail give-up-covered settle-sealed retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
-            [jobs.build.from-plan.walk :refer [give-up cell-s trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here? unpriced price-buried! look-verdict]]
+            [jobs.build.from-plan.walk :refer [give-up owed-s trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here? unpriced price-buried! look-verdict]]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
 (def meta {:tags [:goal]})
@@ -124,7 +124,7 @@
 
 (defn work-s "Mean seconds the open cells of the plan take." [c]
   (let [{:keys [cells trouble]} (judged-plan c)]
-    (* (if trouble 0 (count (owed cells))) (cell-s))))
+    (if trouble 0 (owed-s cells))))
 
 (def safe? (light/lights-itself (ready/safe-at-build work-place/spot work-s) #(:cells (judged-plan %))))
 (declare quote-of)

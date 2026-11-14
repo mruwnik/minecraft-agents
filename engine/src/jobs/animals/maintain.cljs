@@ -138,19 +138,11 @@
        distinct
        vec))
 
-(defn held-gates
-  "The gates ([x y z]) a job holds open on purpose, gave up on or a walk opened (jobs.lib.pen-gate): not a leak."
-  [c]
-  (let [view (ctx/view c)]
-    (into (pg/opened-cells view)
-          (concat (pg/held-cells view (* 1000 (:held-s pg/defaults)))
-                  (pg/quiet-cells view (* 1000 (:quiet-s pg/defaults)))))))
-
 (defn open-gate-gaps
   "The gates of a box pen's read ({:pos :why :open-gate} leaks) that no job holds open, as [x y z]: with no plan there is no
   gate cell to watch, so the read's leak is the gap, shut by the mend."
   [c leaks]
-  (let [held (held-gates c)]
+  (let [held (pg/held-gates (ctx/view c))]
     (vec (for [{:keys [pos why]} leaks
                :let [cell [(:x pos) (:y pos) (:z pos)]]
                :when (and (= :open-gate why) (not (held cell)))]
@@ -166,7 +158,7 @@
         {:keys [min max]} (pen-read/arg-box c)
         beside? (fn [[x _ z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
         p (:primitives c)
-        held (held-gates c)]
+        held (pg/held-gates (ctx/view c))]
     (vec (for [{:keys [pos want]} cells
                :when (and (pen-read/barrier? want) (beside? pos))
                :let [seen (u/sensed p (u/cell-pos pos))]
