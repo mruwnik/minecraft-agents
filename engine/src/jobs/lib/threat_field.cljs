@@ -291,8 +291,8 @@
 (defonce bodies (js/WeakMap.))
 
 (defonce shared-asks #js {:hits 0 :misses 0})
-(heap/gauge! :shared-hits #(.-hits shared-asks))
-(heap/gauge! :shared-misses #(.-misses shared-asks))
+(heap/counter! :shared-hits #(.-hits shared-asks))
+(heap/counter! :shared-misses #(.-misses shared-asks))
 
 (defn world-epoch
   "What a shared value rests on: the change counter of the world p reads (the \"worldEpoch\" fn of the primitives) and,

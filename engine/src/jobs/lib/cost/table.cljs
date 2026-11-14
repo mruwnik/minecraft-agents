@@ -394,11 +394,11 @@
         build (table-builder version overrides basis)]
     (nth (iterate #(build (tool-price-fn md basis* %)) (build (constantly 0))) 2)))
 
-(defonce ^{:doc "Tables table-for built in this process and the ms they took: gauges, so a body.stall says whether a table build held the loop."}
+(defonce ^{:doc "Tables table-for built in this process and the ms they took: counters, so a body.stall says whether a table build held the loop."}
   builds #js {:n 0 :ms 0})
 
-(heap/gauge! :worth-tables #(.-n builds))
-(heap/gauge! :worth-table-ms #(js/Math.round (.-ms builds)))
+(heap/counter! :worth-tables #(.-n builds))
+(heap/counter! :worth-table-ms #(js/Math.round (.-ms builds)))
 
 (def table-for
   "build-table, memoized on what it reads: its arguments and the settings the hp prices come from."

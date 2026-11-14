@@ -17,6 +17,12 @@
 
 (defn gauge! "Report (f) under key k in every sample." [k f] (swap! gauges assoc k f))
 
+(defonce ^{:doc "{key (fn [] number)}: running totals; a sample reports the total, a stall the change during it."} counters (atom {}))
+
+(defn counter! "Report (f), a running total, under key k: the total in every sample, the change since the last on-time stall tick in a stall." [k f] (swap! counters assoc k f))
+
+(defn counts "{key total} of every counter." [] (into {} (map (fn [[k f]] [k (f)])) @counters))
+
 (defn sample
   "{:heap-used :heap-limit :heap-total :external :array-buffers :rss} and one key per gauge."
   []
@@ -25,7 +31,7 @@
     (into {:heap-used (.-used_heap_size h) :heap-limit (.-heap_size_limit h) :heap-total (.-total_heap_size h)
            :external (.-external m) :array-buffers (.-arrayBuffers m) :rss (.-rss m)}
           (map (fn [[k f]] [k (f)]))
-          @gauges)))
+          (concat @gauges @counters))))
 
 (defn loop-max-ms!
   "The longest event-loop delay (ms) since the last call, and starts a fresh window."
@@ -48,11 +54,13 @@
 
 (defn stall-event
   "A :body.stall event when a timer of period-ms, due at last-ms, fired at now-ms more than stall-ms late; else nil.
-  ctx (running-context) and the gauges say what was in flight."
-  [now-ms last-ms period-ms ctx]
+  ctx (running-context), the gauges and the counters' change since prev-counts (counts at last-ms) say what was in flight."
+  [now-ms last-ms period-ms ctx prev-counts]
   (let [late (- now-ms last-ms period-ms)]
     (when (> late stall-ms)
-      (merge {:kind :body.stall :source :body :level :warn :late-ms (js/Math.round late)} ctx (select-keys (sample) (keys @gauges))))))
+      (merge {:kind :body.stall :source :body :level :warn :late-ms (js/Math.round late)} ctx
+             (select-keys (sample) (keys @gauges))
+             (into {} (map (fn [[k v]] [k (- v (get prev-counts k 0))])) (counts))))))
 
 (defn start!
   "Emit a body.heap event through emit! every ms (with :loop-max-ms, the longest loop delay since the last one), and a
@@ -60,11 +68,12 @@
   [emit! ms context-fn]
   (.enable loop-delay)
   (let [t (doto (js/setInterval #(emit! (merge {:kind :body.heap :source :body :level :info :loop-max-ms (loop-max-ms!)} (sample))) ms) (.unref))
-        prev (atom (js/performance.now))
+        prev (atom [(js/performance.now) (counts)])
         w (doto (js/setInterval (fn []
-                                  (let [now (js/performance.now)]
-                                    (some-> (stall-event now @prev stall-ms (context-fn)) emit!)
-                                    (reset! prev now)))
+                                  (let [now (js/performance.now)
+                                        [last-ms last-counts] @prev]
+                                    (some-> (stall-event now last-ms stall-ms (context-fn) last-counts) emit!)
+                                    (reset! prev [now (counts)])))
                                 stall-ms)
             (.unref))]
     #(do (js/clearInterval t) (js/clearInterval w) (.disable loop-delay))))

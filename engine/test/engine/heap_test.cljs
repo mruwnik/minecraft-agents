@@ -14,8 +14,8 @@
 
 (deftest a-timer-more-than-the-stall-threshold-late-is-a-stall-event-with-what-was-running
   (let [ctx {:running "j1" :job ['jobs.mining.dig]}]
-    (is (nil? (heap/stall-event 1900 0 1000 ctx)) "0.9 s late is within the threshold")
-    (let [e (heap/stall-event 21000 0 1000 ctx)]
+    (is (nil? (heap/stall-event 1900 0 1000 ctx {})) "0.9 s late is within the threshold")
+    (let [e (heap/stall-event 21000 0 1000 ctx {})]
       (is (= [:body.stall 20000 "j1" ['jobs.mining.dig]] ((juxt :kind :late-ms :running :job) e)))
       (is (= :warn (:level e))))))
 
@@ -28,3 +28,12 @@
   (let [eng {:running (atom {:id "j1" :round 3})
              :state (atom {:instances {"j1" {:spec {:op :seq :children [{:op :leaf :job 'a.b} {:op :repeat :child {:op :leaf :job 'c.d}}]}}}})}]
     (is (= {:running "j1" :round 3 :job ['a.b 'c.d]} (heap/running-context eng)))))
+
+(deftest a-stall-carries-the-counters-change-since-the-tick-before-not-the-process-totals
+  (let [total (atom 6)]
+    (heap/counter! ::tables #(deref total))
+    (let [before (heap/counts)]
+      (swap! total + 2)
+      (is (= 2 (::tables (heap/stall-event 21000 0 1000 {} before))) "two tables built during the stall, six an hour before")
+      (is (= 8 (::tables (heap/sample))) "body.heap keeps the total"))
+    (swap! heap/counters dissoc ::tables)))
