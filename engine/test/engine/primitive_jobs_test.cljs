@@ -64,11 +64,12 @@
       (is (= 9 (get-in q [:uses :job-time 2])) "3 s of digging, the dig margin 5 and the drop wait 1")
       (is (= [0 1 1] (get-in q [:uses :wear "iron_pickaxe"]))))))
 
-(deftest a-craft-is-quoted-4-s-plus-6-per-item-up-to-the-craft-max-setting
+(deftest a-craft-is-quoted-4-s-plus-the-measured-per-item-time-up-to-the-craft-max-setting
   (let [p (tu/fake {})
         job-time #(get-in (quote-of :craft p {:item "stick" :count %}) [:uses :job-time 2])]
-    (is (= 10 (job-time 1)))
-    (is (= 60 (job-time 20)) "the setting default bounds the quote")
+    (is (= 4.7 (job-time 1)))
+    (is (< (job-time 4) 22.6) "4 planks fit obtain's budget")
+    (is (= 60 (job-time 100)) "the setting default bounds the quote")
     (settings/with-settings {:prim/craft-max-s 8}
       #(is (= 8 (job-time 20)) "an override bounds the quote"))))
 
