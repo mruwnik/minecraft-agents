@@ -365,7 +365,8 @@
   [p]
   (let [cell (reach/cell-of (u/pos-of (.-pos (.self p))))
         per (aget p "perception")
-        k (when per (perception/memo-key per))]
+        ;; a perception that senses no cells (light data alone) has no view to key on
+        k (when (some-> per :st .-sensed) (perception/memo-key per))]
     (if-not k
       (proofs/proofs cell)
       (let [^js st (:st per)
