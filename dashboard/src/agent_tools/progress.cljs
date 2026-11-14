@@ -312,12 +312,21 @@
                                     ids))))]
     (into {} (filter second) (map vector ids texts))))
 
+(defn summary-death
+  "The wake of a death the inner wait only counted (it came before the slice began, so it is no wake of its own), else nil."
+  [wake]
+  (when-let [item (first (filter #(= :died (:event %)) (get-in wake [:summary :items])))]
+    {:wake :died :text (str/join " " (remove nil? [(:cause item) (some->> (:at item) (str "at "))
+                                                   (some->> (:lost item) (str/join ", ") (str "lost "))
+                                                   "respawned"]))}))
+
 (defn wake-verdict
   "nil for a wake of observe's wait the agent need not hear (the wait goes on), else {:wake :text}: :died, :chat,
   :goal-ended (the goal job ended, any way), :gave-up (another listed job ended neither completed nor cancelled) or
   :needs-you (attention, offline, an idle body with a job waiting for a reason not in routine-reasons)."
   [wake goal]
-  (case (:wake wake)
+  (or
+   (case (:wake wake)
     :died {:wake :died :text (str/join " " (remove nil? [(:cause wake) (some->> (:at wake) (str "at "))
                                                         (when (seq (:cancelled-jobs wake))
                                                           (str "cancelled " (str/join "," (map :id (:cancelled-jobs wake)))))
@@ -337,7 +346,8 @@
                       (= goal (:job wake)) {:wake :goal-ended :text (str goal " " (word (:result wake)) " " (clip (:message wake) 120) then)}
                       (#{:completed :cancelled} (:result wake)) nil
                       :else {:wake :gave-up :job (:job wake) :text (str (:job wake) " " (word (:result wake)) " " (clip (:message wake) 120) then)}))
-    nil))
+       nil)
+   (summary-death wake)))
 
 (defn item-text [{:keys [wake event job result message]}]
   (str/join " " (remove nil? [(word (or event result wake)) job (some-> message (clip 80))])))

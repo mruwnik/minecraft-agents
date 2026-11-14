@@ -59,6 +59,14 @@
                                 [["j2" "j3"] nil "kept j2,j3"]]]
     (is (str/includes? (:text (progress/wake-verdict {:wake :died :cause "zombie" :survived survived} goal)) text))))
 
+(deftest a-death-the-slice-only-counted-still-wakes
+  (let [verdict (progress/wake-verdict {:wake :timeout
+                                        :summary {:items [{:event :died :cause "skeleton" :at [-15606 18 -8512] :lost ["bread x9" "bone x2"]}]}}
+                                       "j1")]
+    (is (= :died (:wake verdict)))
+    (is (= "skeleton at [-15606 18 -8512] lost bread x9, bone x2 respawned" (:text verdict))))
+  (is (nil? (progress/wake-verdict {:wake :timeout :summary {:items [{:event :hurt}]}} "j1"))))
+
 (deftest needs-you-names-idle-death-offline-and-manual
   (is (some #(str/includes? % "no jobs") (progress/needs-you {:idle true :health 20})))
   (is (some #(str/includes? % "died") (progress/needs-you {:died {:ago-s 30 :cause "zombie"} :current {:id "j1"}})))

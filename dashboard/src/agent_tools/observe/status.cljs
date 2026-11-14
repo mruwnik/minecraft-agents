@@ -418,7 +418,10 @@
                   (with-meta (clean-pairs :event (:kind e) :job (when-not (= :reflexes category) (get-in e [:context :job-id]))
                                :reflex (get-in e [:context :reflex-id]) :by (some-> (:by d) name) :why (some-> (:why d) name) :item (clip (:item d) 80) :count (:count d)
                                :message (clip (first (filter some? [(:message e) (:error d) (:reason d)])))
-                               :cancelled-jobs (not-empty jobs))
+                               :cancelled-jobs (not-empty jobs)
+                               :cause (when (= :died kind) (some-> (:cause d) (clip 80)))
+                               :at (when (= :died kind) (position (:pos d)))
+                               :lost (when (= :died kind) (not-empty (vec (take lost-shown (lost-items (:inventory d)))))))
                              {:key? (key-category? category)})))
           (assoc summary :more true)))))))
 
