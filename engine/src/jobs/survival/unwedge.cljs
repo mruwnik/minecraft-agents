@@ -25,7 +25,8 @@
   holds still, nothing refires.
   A body not wedged is done at once. Ways :step and :dig (both by default);
   a way left out is not tried, and a run with no way left ends nothing-possible :no-way.
-  Still wedged after max-passes tries ends nothing-possible :still-wedged. Ends :done once the feet cell is free.
+  Still wedged after max-passes tries ends nothing-possible :still-wedged. Ends :done once no full block fills the feet cell (a body sunk in a bowl is not wedged:
+  its walk climbs out, engine.path.executor :over).
   Never yields :continue (only a cut round returns it, unseen).
   Quote: a few passes of ::pass-s.")
 
@@ -51,7 +52,7 @@
 
 (defn done? [c]
   (let [wedged (some? (breath/wedged-cell (:primitives c)))]
-    (checks/goal (not wedged) [:free "the feet cell is free"] [:wedged "wedged in a block"] {:units :cells :left (if wedged 1 0)})))
+    (checks/goal (not wedged) [:free "no full block fills the feet cell"] [:wedged "wedged in a block"] {:units :cells :left (if wedged 1 0)})))
 
 (defn ^:async block!
   "Give up on cell: remember it so the trigger stays quiet there. Resolves the nothing-possible ending."

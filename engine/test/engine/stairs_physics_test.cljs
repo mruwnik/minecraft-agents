@@ -105,7 +105,7 @@
         bot (bot-at from at)]
     (if (nil? steps)
       {:done {:status :no-plan}}
-      (loop [t 0 state (ex/start steps 0) poses []]
+      (loop [t 0 state (ex/start steps 0 (pose-of bot)) poses []]
         (let [pose (pose-of bot)
               {:keys [done controls yaw] :as r} (ex/tick ex/policy state pose)]
           (if (or done (>= t max-ticks))
@@ -156,6 +156,10 @@
 
 (deftest a-goal-on-a-slab-is-walked-to
   (is (= :arrived (status-of [floor-fill [8 64 1 8 64 1 "oak_slab" {:type "bottom"}]] [1 64 1] [8 64 1]))))
+
+(deftest a-body-sunk-in-a-composter-climbs-out-over-its-rim
+  ;; the bowl's floor is 2/16 over the cell's; the 0.6 body fits its 12/16 opening, so only a jump gets it out
+  (is (= :arrived (status-of [floor-fill [8 64 1 8 64 1 "composter" {:level 0}]] [8 64.125 1] [12 64 1]))))
 
 (deftest a-goal-in-the-low-half-of-a-stairs-block-has-no-plan
   (is (= :no-plan (status-of [floor-fill (stairs 8 64 1 "east")] [1 64 1] [8 64 1]))))

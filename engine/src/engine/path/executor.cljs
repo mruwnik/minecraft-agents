@@ -4,7 +4,8 @@
   namespace touches the body, a clock or a socket; steps-of is the one place a JS object is read.
 
   Step:  {:x :y :z :h :move kw :corner bool :px :pz}, plus :cx :cz (crossing point on the boundary the
-         move came in by), :swim true, :opens [...] and :free [fx fz] (corner slides) when present.
+         move came in by), :swim true, :opens [...], :free [fx fz] (corner slides) and :over (the height a body sunk in a
+         bowl climbs over to reach step 0) when present.
          h is the stand height above the cell floor in 1/16 block; px/pz is the point to stand at.
   Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :in-lava :collided}, feet position; :vx :vz (horizontal velocity, blocks
          per tick) and :under-water (the eyes in water) when the body reports them.
@@ -87,6 +88,7 @@
     (.-swim s) (assoc :swim true)
     (.-hatch s) (assoc :hatch true)
     (.-bend s) (assoc :bend true)
+    (some? (.-over s)) (assoc :over (.-over s))
     (some? (.-opens s)) (assoc :opens (vec (js->clj (.-opens s) :keywordize-keys true)))))
 
 (defn steps-of
@@ -520,8 +522,8 @@
     (str "no progress on step " i " (" (pr-str (:move s)) " to " (pr-str [(:x s) (:y s) (:z s)]) ") for "
          (.toFixed (/ (- tick since) 20) 1) " s")))
 
-(defn jump? [policy {:keys [move] :as step} {:keys [y on-ground on-climbable collided]} dist]
-  (let [sy (stand-y step)
+(defn jump? [policy {:keys [move over] :as step} {:keys [y on-ground on-climbable collided] :as pose} dist]
+  (let [sy (if (and over (not (in-cell? step pose))) (max over (stand-y step)) (stand-y step))
         rise (- sy y)]
     (case move
       (:climb-up :jump-climb) (< y (+ sy (:climb-over policy)))
@@ -669,11 +671,14 @@
 
 (defn start
   "The state for walking steps; step 0 is where the plan starts. With the body's pose: a body beside step 0's cell
-  (beside-start?) walks to step 0 first, else the walk begins at step 1."
+  (beside-start?) or sunk in a bowl outside it (:over) walks to step 0 first, else the walk begins at step 1."
   ([steps now-tick] (start steps now-tick nil))
   ([steps _now-tick pose]
    {:steps steps
-    :i (if (and pose (> (count steps) 1) (beside-start? (first steps) pose)) 0 (min 1 (max 0 (dec (count steps)))))
+    :i (if (and pose (> (count steps) 1) (or (beside-start? (first steps) pose)
+                                              (and (:over (first steps)) (not (in-cell? (first steps) pose)))))
+         0
+         (min 1 (max 0 (dec (count steps)))))
     :since 0 :tick 0 :yaw nil}))
 
 (defn coasts-in?

@@ -136,3 +136,7 @@
     (is (= ["found" nil] [status reason]))
     (is (not= [2 65 4] first-cell) "a plan from the rim asks for a drop the body cannot do")
     (is (= 64 (second first-cell)))))
+
+(deftest a-start-sunk-in-a-composter-marks-the-rim-to-climb-over
+  (is (= 65 (:over (first (get-in (run (world {:fill [composter]}) (near 8 64 8) {} {:x 2 :y 64 :z 4 :px 2.5 :py 64.125 :pz 4.5})
+                                  [:path :steps]))))))

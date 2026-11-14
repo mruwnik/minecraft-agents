@@ -478,6 +478,16 @@
          (sort-by (fn [[area x z]] [(- area) x z]))
          (map (fn [[_ x z]] [x z])))))
 
+(defn- bowl-rim
+  "The height of the rim of the bowl block (composter, cauldron, hopper) a body at from is sunk in, or nil: stepping out,
+  the feet must clear it."
+  [^Search search ^js from]
+  (let [py (.-py from) fy (.-y from)
+        id (.stateAt ^js (.-snapshot search) (.-x from) fy (.-z from))
+        rim (+ fy (/ (aget (.-top ^js (.-table search)) id) WHOLE))]
+    (when (and (some? py) (== 1 (aget (.-hollow ^js (.-table search)) id)) (< py rim))
+      rim)))
+
 (defn- start-query
   "query with its start cell moved for a body on the edge of a block: when from (the floored body position) is no
   place to stand but from.px/pz is given, the first cell the body's box (HITBOX-HALF) overlaps (hitbox-cells) that stands with
@@ -512,9 +522,8 @@
         ;; resting on a partial block (cocoa pod) or sunk in a bowl (composter) in the floored cell, its top within 1/16 of the feet (not airborne): no cell
         ;; under the box stands, so the body steps off to the nearest side cell whose stand is at most half a block over the feet and at most a block under
         beside (when (and (some? px) (some? pz) (some? py) (> py (+ fy (/ 1 WHOLE)))
-                          (let [id (.stateAt ^js (.-snapshot search) fx fy fz)]
-                            (or (== 1 (aget (.-hollow ^js (.-table search)) id))
-                                (<= (js/Math.abs (- py (+ fy (/ (aget (.-top ^js (.-table search)) id) WHOLE)))) (/ 1 WHOLE)))))
+                          (or (some? (bowl-rim search from))
+                              (<= (js/Math.abs (- py (+ fy (/ (aget (.-top ^js (.-table search)) (.stateAt ^js (.-snapshot search) fx fy fz)) WHOLE)))) (/ 1 WHOLE))))
                  (first (filter (fn [[x z]] (let [h (.nodeH search x fy z)]
                                               (and (>= h 0) (<= -0.5 (- py (+ fy (/ h WHOLE))) 1))))
                                 (sort-by (fn [[x z]] (+ (js/Math.abs (- (+ x 0.5) px)) (js/Math.abs (- (+ z 0.5) pz))))
@@ -593,18 +602,30 @@
   (js/Object.assign #js {} options #js {:returnable true :goalFlood 0 :stopAtEdge false
                                         :maxNodes (js/Math.min (option options "maxNodes" 200000) (js/Math.max 1 (.-n-nodes search)))}))
 
+(defn- with-rim
+  "r with its first step marked over: the rim a body sunk in a bowl (bowl-rim of query's start) climbs out over to it."
+  [^js r ^Search search ^js query]
+  (let [^js from (.-from query)
+        ^js step0 (some-> (.-path r) .-steps (aget 0))
+        rim (bowl-rim search from)]
+    (when (and (some? step0) (some? rim) (not (and (== (.-x step0) (.-x from)) (== (.-z step0) (.-z from)))))
+      (unchecked-set step0 "over" rim))
+    r))
+
 (defn- result-of
   "The result of a finished search. When the path to its nearest node holds a one-way step, a second search
   (clean-options) supplies the partial end."
   [^Search search snapshot query options]
   (.settle search)
   (let [node (.oneWayNode search)]
-    (if (neg? node)
-      (.resultFrom search -1 nil)
-      (let [^Search clean (new-search snapshot query (clean-options search options))]
-        (.init clean)
-        (.step clean js/Infinity)
-        (.resultFrom search node (.nearest clean))))))
+    (with-rim
+      (if (neg? node)
+        (.resultFrom search -1 nil)
+        (let [^Search clean (new-search snapshot query (clean-options search options))]
+          (.init clean)
+          (.step clean js/Infinity)
+          (.resultFrom search node (.nearest clean))))
+      search query)))
 
 (defn create-search
   "A search to run in steps: #js {step(n) result() nearest()}. options.table and options.space are required."
@@ -661,9 +682,10 @@
                                  (.init c)
                                  (vreset! clean c)
                                  false)))))
-         :result (fn [] (if (neg? @node)
-                          (.resultFrom search -1 nil)
-                          (.resultFrom search @node (.nearest ^Search @clean))))
+         :result (fn [] (with-rim (if (neg? @node)
+                                    (.resultFrom search -1 nil)
+                                    (.resultFrom search @node (.nearest ^Search @clean)))
+                                  search query))
          ;; ends a search sweeping after its edge stop now (Search.endSweep), for a caller out of budget: true when it did
          :endSweep (fn [] (if (some? @clean) (.endSweep ^Search @clean) (.endSweep search)))
          ;; while the search itself is not over: where it has got to (Search.progress), else nil
