@@ -411,6 +411,17 @@ test('route writes the rail plan between two cells over the seen ground, with ma
   } finally { fx.close() }
 })
 
+test('route runs over rails already laid on the way and over ground cover at rail height: neither is ground', async () => {
+  const fx = fixture()
+  try {
+    const cells = groundCells().map(([x, y, z, name]) => [x, y, z, y === 64 && z === 5 && x > 2 && x < 38 ? 'powered_rail' : y === 64 && z !== 5 ? 'short_grass' : name])
+    await writeSeen(fx, 'Probe', cells, Date.now() - 1000)
+    const made = await invoke('plan', fx, ROUTE)
+    assert.equal(made.code, 0, made.output)
+    assert.deepEqual(made.value.route.waypoints, [[2, 64, 5], [38, 64, 5]])
+  } finally { fx.close() }
+})
+
 test('route needs --tunnel to cut through a hill and --bridge to span a chasm, and writes them as the plan\'s :spans', async () => {
   const fx = fixture()
   try {

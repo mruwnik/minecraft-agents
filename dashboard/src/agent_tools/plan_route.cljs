@@ -9,6 +9,10 @@
             [plan.surface :as surface]
             [jobs.lib.surface :as ground]))
 
+(def ^:private line-block
+  "Rails already laid: the line's own cells, not the ground it runs on."
+  #"(^|_)rail$")
+
 (def depth-over-ends "Blocks above and below the ends' levels a column is read in." 6)
 
 (defn cell-arg
@@ -37,7 +41,7 @@
   [name-at [_ fy _] [_ ty _] zones by]
   (let [mid (quot (+ fy ty) 2)
         depth (+ depth-over-ends (abs (- fy ty)))
-        name-fn (fn [pos] (let [n (name-at pos)] (if (and n (re-find surface/on-ground n)) "air" n)))
+        name-fn (fn [pos] (let [n (name-at pos)] (if (and n (or (re-find surface/on-ground n) (re-find line-block n))) "air" n)))
         memo (volatile! {})]
     (fn [x z]
       (let [k [x z]
@@ -60,7 +64,7 @@
 
 (defn no-route-hint [{:keys [tunnel bridge]}]
   (str "no rail line fits the seen ground between the cells (tunnel " tunnel ", bridge " bridge "). Walk and look along the "
-       "way (unseen columns are not ground), or allow --tunnel N through rock 2+ above the rail, --bridge N over a drop 2+ below"))
+       "way (unseen columns are not ground; a line needs flat ground for its launch groups at both ends, so a short one never fits), or allow --tunnel N through rock 2+ above the rail, --bridge N over a drop 2+ below"))
 
 (defn route-plan
   "{:plan <plan map> :summary {...}} for the route from to between the two cells, or {:error reason :message text}.
