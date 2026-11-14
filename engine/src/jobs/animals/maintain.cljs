@@ -19,6 +19,7 @@
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.pen-patch :as pen-patch]
             [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
@@ -45,7 +46,7 @@
   - :shear (jobs.animals.shear): sheep, shears carried (shear fetches them unless the ways are only #{:carried}), an adult not sheared.
   - :collect (jobs.items.collect-drops): items lie in the box, only those item names.
   - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :carry
-    entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
+    entry and the units the reserve register holds (jobs.lib.reserve/held). Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
 
   A body that lists fewer animals of the kind in the box than the target, outside it or inside but not seeing all of it, first walks to the middle of the box (go-to, once; the server
   lists animals only near the body) and counts again; the job starts for that look.
@@ -206,7 +207,8 @@
         read (box-read c)
         counted (pen-census c read)
         inventory (u/inventory (:primitives c))
-        stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))]
+        keep (merge-with max (reserve/held c :deposit) (:carry (:args c)))
+        stored (to-store inventory (produce (:mob (:args c))) keep)]
     {:gaps (vec (distinct (into (missing-barrier c) (pen-patch/patch-cells (:leaks read)))))
      :adults (:adults counted)
      :strays (if (and (:mob (:args c)) (< (+ (:adults counted) (:babies counted)) (:target (:args c)))) (strays c) 0)
@@ -216,6 +218,7 @@
      :shears (boolean (some #(= "shears" (:name %)) inventory))
      :shearable (count (remove #(true? (.-sheared %)) adults))
      :stored stored
+     :keep keep
      :stored-items (into [] (comp (filter #(some #{(.-name %)} stored)) (map (fn [i] {:name (.-name i) :count (.-count i)}))) inventory)
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (hunting/reach c)}))
@@ -273,11 +276,11 @@
     :else {:call {:slot :shear :job (jobs :shear) :args (cond-> {:radius reach} (some? ways) (assoc :ways ways))}}))
 
 (defn decide-deposit
-  [{:keys [chest carry]} {:keys [stored]}]
+  [{:keys [chest]} {:keys [stored keep]}]
   (cond
     (nil? chest) {:skip :no-chest}
     (empty? stored) {:skip :nothing-to-store}
-    :else {:call {:slot :deposit :job (jobs :deposit) :args {:chest chest :items stored :carry carry}}}))
+    :else {:call {:slot :deposit :job (jobs :deposit) :args {:chest chest :items stored :carry keep}}}))
 
 (defn decide-collect
   [_args {:keys [drops reach]}]

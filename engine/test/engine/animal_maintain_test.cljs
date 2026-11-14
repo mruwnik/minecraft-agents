@@ -305,8 +305,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 4 :chest chest} {:inventory carried :entities four-cows :containers {"10,64,0" []}} 20))]
-          (is (= {"beef" 3 "leather" 2} (chest-items s)))
-          (is (= {"wheat" 5 "iron_sword" 1} (inv s)))
+          (is (= {"leather" 2} (chest-items s)))
+          (is (= {"beef" 3 "wheat" 5 "iron_sword" 1} (inv s)) "the beef is the body's food reserve")
           (is (= {:gave-up false} (select-keys (get-in (done-event s) [:steps :deposit]) [:gave-up])))
           (is (true? (finished? s))))))))
 
@@ -314,9 +314,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 4 :chest chest :carry {"beef" 1}} {:inventory carried :entities four-cows :containers {"10,64,0" []}} 20))]
-          (is (= {"beef" 2 "leather" 2} (chest-items s)))
-          (is (= 1 (get (inv s) "beef"))))))))
+        (let [s (await (scenario {:target 4 :chest chest :carry {"leather" 1}} {:inventory carried :entities four-cows :containers {"10,64,0" []}} 20))]
+          (is (= {"leather" 1} (chest-items s)))
+          (is (= 1 (get (inv s) "leather"))))))))
+
+(deftest produce-the-reserve-register-holds-stays-carried-with-no-carry-arg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory carried :entities four-cows :containers {"10,64,0" []}} 50)]
+          (core/submit! (:eng s) (tu/order '(jobs.memory.reserve {:item "leather" :count 2})) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 5 700))
+          (core/submit! (:eng s) (tu/order (spec {:target 4 :chest chest})) {})
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(tu/run-ticks (:eng s) (:clock s) 20 700)))
+          (is (= {} (chest-items s)))
+          (is (= 2 (get (inv s) "leather"))))))))
 
 (deftest without-a-chest-the-produce-stays-carried
   (async done
