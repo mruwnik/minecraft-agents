@@ -11,6 +11,7 @@
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.price :as price]
+            [jobs.lib.reach :as reach]
             [jobs.lib.ready :as ready]
             [jobs.lib.seal :as seal]
             [jobs.lib.spawn-light :as spawn-light]
@@ -157,18 +158,40 @@
      (let [s (arrive-s c arrivals)]
        (cost/counted-chance (get (settings/get settings ::mob-fails) (if (and s (< s (* (way/place-s c) open))) :reached :clear)))))))
 
+(defn shot-exposed-s
+  "Seconds under a shooter's fire while the walls go up: the placements, in the order of wall-placer/facing-first, before no
+  shooter at its spot has a line of fire (jobs.lib.reach/line-of-fire?) to the feet cell; none with no line now. With
+  the line still open after every cell is placed (it comes over the walls) the walls never stop it: all placements and the stay."
+  [c cells shooters]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        arrow-at (reach/arrow-lookup p)
+        ordered (placer/facing-first feet shooters cells)
+        out? (fn [placed]
+               (let [at (fn [x y z] (if (contains? placed [x y z]) :solid (arrow-at x y z)))]
+                 (reach/out-of-fire? at shooters feet)))
+        placed (reductions conj #{} (map (juxt :x :y :z) ordered))
+        n (count (take-while (complement out?) placed))]
+    (if (<= n (count ordered))
+      (* (way/place-s c) n)
+      (+ (* (way/place-s c) (count ordered)) (settings/get settings ::job-time-s)))))
+
 (defn exposed-s
   "Seconds the body stays open: to a melee hostile, every open cell's placement (it walks to the side still open); to a
-  shooter only, the first side's (feet and head), which goes up first (wall-placer/facing-first)."
-  ([c] (exposed-s c (open-count c) (arrivals c)))
-  ([c open arrivals]
-   (* (way/place-s c) (if (arrive-s c arrivals) open (min 2 open)))))
+  shooter only, until the placements in facing-first order leave no line of fire (shot-exposed-s)."
+  ([c] (let [cells (open-cells c)] (exposed-s c (count cells) (arrivals c) cells)))
+  ([c open arrivals] (exposed-s c open arrivals (open-cells c)))
+  ([c open arrivals cells]
+   (if (arrive-s c arrivals)
+     (* (way/place-s c) open)
+     (let [shooters (placer/shooters c)]
+       (if (seq shooters) (shot-exposed-s c cells shooters) (* (way/place-s c) (min 2 open)))))))
 
 (defn cover
   "[quote exposed-s fails] from one look at the open cells and the hostiles' arrivals."
   [c]
   (let [cells (open-cells c) open (count cells) arr (arrivals c)]
-    [(quote-of c cells arr) (exposed-s c open arr) (fails c open arr)]))
+    [(quote-of c cells arr) (exposed-s c open arr cells) (fails c open arr)]))
 
 (def safe? ready/ok)
 (def fit? ready/ok)

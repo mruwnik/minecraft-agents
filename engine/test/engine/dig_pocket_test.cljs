@@ -331,7 +331,9 @@
     (is (zero? (:fails (cover (zombie 2.5) :night))) "for the night a mob in a cell is waited out")
     (is (< (- place-s 1e-9) (:open-s (cover (zombie 6.5) :danger)) (+ place-s 1e-9)) "a melee mob walks to whichever side is still open")
     (is (< (- 1.44 1e-9) (:open-s (cover [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 64 :z 0} :health 20}] :danger)) (+ 1.44 1e-9))
-        "a shooter sees in only by the side facing it, placed first")))
+        "a shooter sees in only by the side facing it, placed first")
+    (is (< 1.44 (:open-s (cover [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 69 :z 0} :health 20}] :danger)))
+        "a shooter above the walls keeps its line over the side cells: the roof and corners must go up before the fire stops")))
 
 (deftest a-night-wall-of-dear-blocks-quotes-its-placing-and-leaves-the-dawn-dig-to-morning-s
   (let [c (fn [item] (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name item :count 20}]})))
