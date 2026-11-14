@@ -139,6 +139,12 @@
             (is (= "diamond" (:item res)))
             (is (= 1 (bd/carried p "beef")) "the first item was got")))))))
 
+(deftest a-bills-item-child-gets-the-job-time-the-bill-has-left
+  (let [c {:id "j1/bill" :primitives (tu/fake {}) :args {:bill {"stone_pickaxe" 1}}
+           :left (fn [] {:spend {:job-time 1200}})}]
+    (is (= {:job-time 1200} (:spend (bill/child-args c "stone_pickaxe" 1))) "not the item's own default")
+    (is (nil? (:spend (bill/child-args (assoc c :left (fn [] {})) "stone_pickaxe" 1))) "no limit: the child's default")))
+
 (deftest a-bill-sets-its-reserve-once-not-every-round
   (let [store (atom [])
         writes (atom 0)

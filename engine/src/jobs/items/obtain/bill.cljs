@@ -3,7 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [bill-of carried-of]]
+            [jobs.items.obtain.base :refer [bill-of carried-of job-time-left]]
             [jobs.lib.armour :as armour]
             [jobs.lib.recipes :as recipes]
             [jobs.lib.game-facts :as facts]
@@ -60,12 +60,15 @@
                        :why "fuel and sticks for the bill" :not not}))))))
 
 (defn child-args
-  "The obtain child's args for item, carrying total in all (its worth the whole bill's, inherited)."
+  "The obtain child's args for item, carrying total in all (its worth the whole bill's, inherited, and the job time the
+  bill has left as its :spend)."
   [c item total]
-  (let [a (:args c)]
-    (into {:item item :count total}
-          (remove (comp nil? val))
-          (select-keys a [:ways :explore :for-plan :avoid]))))
+  (let [a (:args c)
+        left (job-time-left c)]
+    (cond-> (into {:item item :count total}
+                  (remove (comp nil? val))
+                  (select-keys a [:ways :explore :for-plan :avoid]))
+      (< left ##Inf) (assoc :spend {:job-time left}))))
 
 (defn next-call
   "{:slot :item :n} of the child to run: when the first missing item needs furnace material, the material all missing

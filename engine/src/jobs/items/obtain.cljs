@@ -43,13 +43,13 @@
   - :craft and :smelt: a chain planned from the recipes over what is carried (a table is put down when needed); each step a craft or smelt child.
   - :gather, :hunt, :crops, :search: what a chain lacks, or a raw item itself, is felled, mined, fished, cut or scooped (:gather), hunted (:hunt: leather, raw meat, wool, shearing), cut ripe in a field of its own (:crops: wheat, carrot, potato, beetroot) by one child per round; with :search an unseen block or animal need is searched for (jobs.explore.search; :explore false drops it).
   A child that brings in nothing three times ends that way (:tried); a mine for an unseen ore that cut new ground looked, so it mines on while another run pays out of the search worth left (gather/strip-on!).
-  A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child on its own default :spend :job-time. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
+  A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets the bill's job time left as its :spend. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
   A death since the call began starts it again from what is carried: :got counts from the respawn.
 
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only for a child given a :worth; a :look instead, before any look round, while chests are allowed and none is seen or a raw need is unseen, and a look round is within the worth: the price is judged after it).
   Worth (ctx/worth): the caller's, at the root worth-of; each walk of a search for an unseen need is priced against it, within the job time left.
-  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source (with the craft child's cause as :cause when a gather also ended), :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need, for an animal an explore.search for it); limit-reached :timeout after :spend :job-time (default-time: fetch-time/items-s, so a crafted item's budget counts its recipe tree; a bill its items' summed).
+  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source (with the craft child's cause as :cause when a gather also ended), :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need, for an animal an explore.search for it); limit-reached :timeout after :spend :job-time (default-time: fetch-time/items-s, so a crafted item's budget counts its recipe tree; a bill its items' summed; the bill's own :spend passes to each child).
   Quote: the count as yield, time per step and gather, no most for a gather; with no plan, price-of (##Inf when no way would start); a bill two gathers' time per missing item.")
 
 (a/defargs args
@@ -65,7 +65,7 @@
    :explore {:doc "false drops the :search way (the search, priced by what the need is worth, for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 
 (defn default-time
-  "The call's default :spend :job-time: fetch-time/items-s of its count of the item (any of :any-of); a bill the sum of its items' (each child runs on its own)."
+  "The call's default :spend :job-time: fetch-time/items-s of its count of the item (any of :any-of); a bill the sum of its items'."
   [{:keys [count bill] :as a}]
   (if (seq bill)
     (reduce + 0 (map (fn [[item n]] (default-time {:item item :count n})) bill))
