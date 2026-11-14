@@ -368,7 +368,7 @@
                               (assoc (finished search within) :quote-only (not= "found" (.-status ^js (:r within))))))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms :walls walls))
-      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to) #(wplan/cut-descent % (second to) (not (:aimed-goal c)))) :fresh fresh? :walls walls)
+      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to) #(wplan/cut-descent % (second to) (wplan/stood-high c))) :fresh fresh? :walls walls)
             partial? (= "partial" (:status plan))]
         (keep-search! c k (when-not partial? search))
         (cond-> plan partial? (assoc :search-on #(keep-search! c k search)))))))

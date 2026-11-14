@@ -1,0 +1,31 @@
+;; Card 3ded098d: a goal 10 above the start across a dip whose floor is unseen at the start (the rim hides it). Over unseen floors a
+;; walk may dip the speculative cap below the highest floor it stood on in the call; counting that cap from the goal's level instead
+;; refused the first step into the dip.
+;; Stone x 0..40, y 0..9 (surface feet y 10). Trench x 14..16 across the plot, floor feet y 7, steps out at x 15 (8) and x 16 (9);
+;; stair up x 18..26 (feet 11..19), hilltop x 27..31 (feet 20).
+;; Should-succeed: go-to arrives at the hilltop.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 24 :length 48 :light :sky}
+  :blocks [[:fill [0 0 0] [40 9 24] "stone"]
+           [:fill [14 7 0] [16 9 24] "air"]
+           [:fill [15 7 0] [15 7 24] "stone"]
+           [:fill [16 7 0] [16 8 24] "stone"]
+           [:fill [18 10 6] [18 10 14] "stone"]
+           [:fill [19 10 6] [19 11 14] "stone"]
+           [:fill [20 10 6] [20 12 14] "stone"]
+           [:fill [21 10 6] [21 13 14] "stone"]
+           [:fill [22 10 6] [22 14 14] "stone"]
+           [:fill [23 10 6] [23 15 14] "stone"]
+           [:fill [24 10 6] [24 16 14] "stone"]
+           [:fill [25 10 6] [25 17 14] "stone"]
+           [:fill [26 10 6] [26 18 14] "stone"]
+           [:fill [27 10 6] [31 19 14] "stone"]]
+  :body {:at [2.5 10 10.5] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "hilltop-across-an-unseen-dip-arrives"
+   :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [29 20 10] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 110 :of-job true}]
+   :after [[:body-near [29.5 20 10.5] 2]]}]}

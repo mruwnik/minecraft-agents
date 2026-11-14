@@ -420,18 +420,23 @@
 
 (defn cut-descent
   "A plan that goes on over unseen floors (some step has :unseen-floor) is cut before the first step lying deeper below its
-  start, or for a start already below the level of a goal cell (level?; not c's :aimed-goal, a stand-in go-to aimed at for a
-  column or a goal it re-aimed, whose y is a guess) below
-  that level, than one-way/::max-speculative-drop and below the goal's level and its start, whatever the drops that get
-  there (the body would be down in land it has not seen, with no way back; each plan from a lower start would let it go
+  start, or below the highest floor the body stood on in this call (high, nil for none) if that is lower than the goal's
+  level, than one-way/::max-speculative-drop, and below the goal's level and its start, whatever the drops that get there
+  (the body would be down in land it has not seen, with no way back; each plan from a lower start would let it go
   deeper); {:steps kept :refused [x y z]}, else {:steps steps}."
-  [steps goal-y level?]
+  [steps goal-y high]
   (let [y0 (:y (first steps))
-        top (if level? (max y0 (dec goal-y)) y0)
+        top (if high (max y0 (min high (dec goal-y))) y0)
         i (first (keep-indexed (fn [i s] (when (and (pos? i) (< (:y s) y0) (one-way/too-deep? top (:y s) goal-y)) i)) steps))]
     (if (and i (some :unseen-floor steps))
       (let [{:keys [x y z]} (nth steps i)] {:steps (subvec (vec steps) 0 i) :refused [x y z]})
       {:steps steps})))
+
+(defn stood-high
+  "The highest floor y the body stood on in c's call (c's :stood-top), nil for none or for c's :aimed-goal (a stand-in
+  go-to aimed at for a column or a goal it re-aimed, whose y is a guess)."
+  [c]
+  (when-let [f (when-not (:aimed-goal c) (:stood-top c))] (f)))
 
 (defn frontier-path
   "The planner's path to r's frontier (the searched node at the edge of what is loaded, within its reach of the goal, the
@@ -459,7 +464,7 @@
                                         cut (if (and (= :open one-way) speculative?)
                                               (cut-refused all #(one-way-priced? c to %1 %2 %3 speculative?))
                                               {:steps all})]
-                                    (if (and speculative? (not (:refused cut))) (cut-descent (:steps cut) (second to) (not (:aimed-goal c))) cut)))
+                                    (if (and speculative? (not (:refused cut))) (cut-descent (:steps cut) (second to) (stood-high c)) cut)))
         step (or (one-way-of r) (when refused {:kind :drop :at refused}))
         [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))
                       (masked-cut steps (masked-wet-ok c))

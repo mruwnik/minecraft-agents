@@ -76,7 +76,8 @@
 (defn approach-step
   "Approach record m after a tick's pose {:x :y :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
   the blocks walked along x and z away from the goal (a step that ends farther than the last) since the body last came
-  more than 1 block nearer than ever (:anchor, then 0 again), and :trail the cells the poses stood in, each once in a row.
+  more than 1 block nearer than ever (:anchor, then 0 again), :trail the cells the poses stood in, each once in a row, and
+  :top the highest floor y a pose stood on the ground at.
   :jumped once a tick's pose lies jump-blocks or more from the last."
   [m pose d]
   (let [{:keys [prev anchor explored trail] :or {anchor d explored 0 trail []}} m
@@ -87,7 +88,8 @@
         falling? (and (neg? dy) (or (< (:vy pose 0) falling-vy) (:on-ground pose))
                       (< (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) jump-blocks))
         jumped? (and prev (not falling?) (>= (js/Math.hypot (- (:x pose) (:x prev)) dy (- (:z pose) (:z prev))) jump-blocks))]
-    (assoc m :trail (cond-> trail (not= cell (peek trail)) (conj cell)) :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
+    (assoc m :trail (cond-> trail (not= cell (peek trail)) (conj cell)) :last-dist d
+           :top (if (:on-ground pose) (max (cell 1) (:top m (cell 1))) (:top m)) :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
            :jumped (boolean (or jumped? (:jumped m)))
            :jump-from (if jumped? (assoc (select-keys prev [:x :y :z]) :blocks (u/dist prev pose)) (:jump-from m))
              :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
@@ -101,6 +103,12 @@
     (when (and (ctx/alive? c) (record c))
       (when (:jumped (get (swap! approaches update (:id c) approach-step pose (u/dist pose pos)) (:id c)))
         {:status :jumped}))))
+
+(defn stood-top
+  "The highest floor y the body stood on in the call: the walk record's :top and job memory's (earlier attempts' to the same goal), nil for none."
+  [c]
+  (let [tops (keep :top [(record c) (ctx/mem c)])]
+    (when (seq tops) (apply max tops))))
 
 (defn jumped?
   "Whether the body was moved far in one tick (a teleport, a pearl) since the call's record began."
@@ -126,7 +134,7 @@
         spot (when (and repeat? from) (send-back (cell-of from) (:blocks from) (:trail (record c))))]
     (fresh-record! c)
     (ctx/update-mem! c #(-> %
-                            (dissoc :best :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
+                            (dissoc :top :best :starts :tour-walks :edge-mode :waypoint-misses :waypoint-why :waypoints-tried :lookout-walks :lookouts :wall-walked)
                             (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {} :jump-at at :last-dist (u/dist at pos)
                                    :cut-walks (if repeat? (inc (:cut-walks % 0)) 1)
                                    :sent-backs (cond-> (if repeat? (:sent-backs % []) []) spot (conj spot)))))
@@ -262,13 +270,16 @@
 
 (defn note-restart!
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
-  was cut. The cut state; a restart for which sent-back-restart? holds notes it (sent-back/note!)."
+  was cut, and :top, the highest floor the body stood on toward the same goal (stood-top). The cut state; a restart for which
+  sent-back-restart? holds notes it (sent-back/note!)."
   [c pos]
-  (let [m (merge (ctx/mem c) (dissoc (get @approaches (:id c)) :call))
+  (let [mem (ctx/mem c)
+        m (merge mem (dissoc (get @approaches (:id c)) :call))
         dist (u/dist (u/self-pos c) pos)
-        state (cut-state m pos dist)]
+        state (cut-state m pos dist)
+        top (when (= pos (:goal mem)) (some->> [(:top mem) (:top (get @approaches (:id c)))] (keep identity) seq (apply max)))]
     (fresh-record! c)
-    (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
+    (ctx/update-mem! c #(-> % (assoc :open (session-id) :top top) (merge state)))
     (goal/note! c pos)
     (when (and (:prev m) (sent-back-restart? m pos dist))
       (sent-back/note! c (:prev m) (boolean (seq (way-hostiles c pos)))))

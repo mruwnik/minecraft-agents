@@ -904,6 +904,11 @@
   (let [m (reduce (fn [m x] (gcut/approach-step m {:x x :y 64 :z 0.5} 1000)) {} [0.2 0.7 1.5 1.9 0.5])]
     (is (= [[0 64 0] [1 64 0] [0 64 0]] (:trail m)))))
 
+(deftest a-walk-s-top-is-the-highest-floor-stood-on-not-a-jump-s-apex
+  (let [m (reduce (fn [m pose] (gcut/approach-step m pose 1000)) {}
+                  [{:x 0.5 :y 69 :z 0.5 :on-ground true} {:x 1.5 :y 70.2 :z 0.5} {:x 2.5 :y 65 :z 0.5 :on-ground true}])]
+    (is (= 69 (:top m)))))
+
 (deftest the-send-back-chance-is-the-counted-chance-of-sends-in-cut-walks
   (is (= (cost/counted-chance {:k 2 :n 5}) (gcut/send-back-chance {:cut-walks 5 :sent-backs [{} {}]}))))
 

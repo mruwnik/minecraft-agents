@@ -487,6 +487,21 @@
     (is (nil? (check (plan "budget" dead-end) true)) "already touring the edge")
     (swap! gcut/approaches dissoc (:id c))))
 
+;; the highest floor stood on bounds each plan's dip over unseen floors (wplan/cut-descent): a restart of the call (a child's
+;; wait, a cut) must not forget it, or each attempt from a lower start lets the body down another cap
+(deftest the-highest-floor-stood-on-outlasts-an-attempt-toward-the-same-goal
+  (let [mem* (atom {})
+        c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 0.5 :y 62 :z 0.5}}}) mem* {:unknown true}))
+        pos {:x 9 :y 67 :z 0}]
+    (gcut/note-restart! c pos)
+    ((gcut/approach-recorder c pos) {:x 0.5 :y 69 :z 0.5 :on-ground true})
+    ((gcut/approach-recorder c pos) {:x 0.5 :y 62 :z 0.5 :on-ground true})
+    (gcut/note-restart! c pos)
+    (is (= 69 (gcut/stood-top c)) "the next attempt's walk record is fresh; memory keeps the top")
+    (gcut/note-restart! c (assoc pos :x 30))
+    (is (nil? (gcut/stood-top c)) "another goal starts again")
+    (swap! gcut/approaches dissoc (:id c))))
+
 ;; live: KitOak94 (8c28a4a4). With no torch carried each budget-cut plan was walked only up to its first dark step
 ;; (reprice's cut): the whole plan ended nearer the ore, the cut farther than the body had been, and the body drifted off
 (deftest a-plan-cut-at-a-dark-step-is-judged-where-the-cut-ends

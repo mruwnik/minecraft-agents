@@ -672,7 +672,7 @@
           (is (= "partial" (:status far)))
           (is (nil? (:stopped-short far))))))))
 
-(deftest an-unfinished-search-walks-no-deeper-over-unseen-floors-from-below-the-goals-level
+(deftest an-unfinished-search-over-unseen-floors-dips-no-deeper-than-the-cap-below-the-highest-floor-stood-on
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -686,10 +686,11 @@
               _ (doseq [[x y z] stair] (.setState snapshot x y z void))
               _ (set! (.-unknown snapshot) #js {:id void})
               search {:walled walled :limited #js {:progress (fn [] #js {:path (.-path (:r found)) :startDistance 100 :distance 80})}}
-              plan (fn [goal-y] (wsearch/unfinished-plan search 1 nil true (constantly false) (constantly true) (constantly true) (when goal-y #(wplan/cut-descent % goal-y true))))]
-          (is (= 56 (:y (peek (:steps (plan nil))))) "without the goal's level the walk goes down the whole stair")
-          (is (= "partial" (:status (plan 70))))
-          (is (= 64 (:y (peek (:steps (plan 70))))) "5 below a goal at 70 already, it walks no lower over unseen floors"))))))
+              plan (fn [goal-y high] (wsearch/unfinished-plan search 1 nil true (constantly false) (constantly true) (constantly true) (when goal-y #(wplan/cut-descent % goal-y high))))]
+          (is (= 56 (:y (peek (:steps (plan nil nil))))) "without the goal's level the walk goes down the whole stair")
+          (is (= "partial" (:status (plan 70 70))))
+          (is (= 64 (:y (peek (:steps (plan 70 70))))) "having come down from the goal's level, 5 below it already, it walks no lower over unseen floors")
+          (is (= 60 (:y (peek (:steps (plan 70 64))))) "toward a hilltop 6 up across a dip, from a start it never stood above, it dips the cap below the start"))))))
 
 (def flooded-corridor
   (merge (box 8 62 0 40 67 2 "stone") (box 9 64 1 36 65 1 "water")))
