@@ -273,6 +273,20 @@
   (is (= :not-worth (:reason (seen-check "stick" #{:craft :gather} (into {} (for [y (range 64 68)] [(str "40," y ",0") "oak_log"])))))
       "a stick made from a fraction of a log is worth less than a walk of 40 blocks"))
 
+(defn planks-quote
+  "obtain's mean job-time quote for 4 oak planks from nothing, by a body that sees an oak trunk x blocks east."
+  [x]
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks (into {} (for [y (range 64 68)] [(str x "," y ",0") "oak_log"]))}))
+        c {:primitives p :view (constantly (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)})))
+           :args {:item "oak_planks" :count 4 :ways #{:craft :gather} :explore false :ignore-zones? true}}]
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])]
+      (get-in (obtain/quote-of c) [:uses :job-time 1]))))
+
+(deftest the-quote-walks-to-the-seen-tree-and-the-default-budget-covers-any-seen-one
+  (let [near (planks-quote 40) far (planks-quote 60)]
+    (is (> 1e-6 (js/Math.abs (- far near (:cost (cost/walk-cost {:distance 20}))))) "the quote prices the walk to the tree seen")
+    (is (< far (obtain/default-time {:item "oak_planks" :count 4})) "the default budget covers a tree at the edge of sight")))
+
 (deftest a-plans-smelts-cost-the-smelt-price-fuel-included-in-the-steps-the-quote-and-the-gather-cost
   (let [c (ctx {:inventory (kit 0)})
         v (game/version-of (:primitives c))

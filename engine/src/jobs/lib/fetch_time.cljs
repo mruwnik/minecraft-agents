@@ -11,9 +11,10 @@
 (defn one-unit-s [] (settings/get settings ::one-unit-s))
 
 (defn items-s
-  "Seconds a fetch of n (default 1) of any one of names may take: the least over them of its goal-value (the usual cost
-  from nothing: measured gathers and the recipe tree, so an anvil counts its 31 iron) plus one sd of it (Q184)."
+  "Seconds a fetch of n (default 1) of any one of names may take: the least over them of its fetch-value (the usual cost
+  from nothing: measured gathers, the walk to each one's source and the recipe tree, so an anvil counts its 31 iron)
+  plus one sd of it (Q184)."
   ([names] (items-s names 1))
   ([names n]
-   (let [s (if (seq names) (apply min (map #(let [{:keys [value sd]} (cost/goal-value [{:name % :count (or n 1)}])] (+ value sd)) names)) 0)]
+   (let [s (if (seq names) (apply min (map #(let [{:keys [value sd]} (cost/fetch-value [{:name % :count (or n 1)}])] (+ value sd)) names)) 0)]
      (if (js/isFinite s) s 0))))

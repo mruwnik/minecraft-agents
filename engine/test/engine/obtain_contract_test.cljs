@@ -61,11 +61,14 @@
   (let [t #(obtain/default-time {:item %1 :count %2})]
     (is (< (t "raw_iron" 1) (t "raw_iron" 27)) "27 raw iron are many mines, not one")
     (is (< (t "iron_ingot" 27) (t "anvil" 1)) "an anvil is 31 iron from nothing: its budget counts the recipe tree")
-    (let [{:keys [value sd]} (cost/goal-value [{:name "anvil" :count 1}])]
+    (let [{:keys [value sd]} (cost/fetch-value [{:name "anvil" :count 1}])]
       (is (= (+ value sd) (t "anvil" 1)) "the usual cost and one sd of it")
       (is (< 1000 sd (/ value 3)) "an anvil's ~23 raw iron gathers spread its cost: more slack than a flat 600 s, less than its cost"))
-    (let [{:keys [value sd]} (cost/goal-value [{:name "cobblestone" :count 1}])]
+    (let [{:keys [value sd]} (cost/fetch-value [{:name "cobblestone" :count 1}])]
       (is (= (+ value sd) (t "cobblestone" 1)) "a cheap fetch gets its usual cost and one sd, no floor"))
+    (is (< (+ (:value (cost/goal-value [{:name "stone_pickaxe" :count 1}])) (* 2 (:cost (cost/walk-cost {:distance look/memory-radius}))))
+           (t "stone_pickaxe" 1))
+        "a stone pickaxe from nothing walks to a tree and to stone, each as far as a source is seen")
     (is (< (js/Math.abs (- (:sd (cost/goal-value [{:name "cobblestone" :count 1}])) (:sd (cost/goal-value [{:name "cobblestone" :count 5}])))) 1e-6)
         "one cobblestone still risks a whole gather call's spread, as five do")
     (is (= (t "oak_log" 1) (obtain/default-time {:any-of ["anvil" "oak_log"]})) "any of several: the cheapest")

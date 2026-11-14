@@ -746,6 +746,16 @@
    (let [v (value/made-value items :overrides (merge (value/measured-worths @game/version) overrides) :basis (:goal-basis (value/measured-worth @game/version)))]
      (assoc v :sd (value/leaves-sd (:leaves v))))))
 
+(defn fetch-value
+  "goal-value of items with the walk to each gathered item's source added ((distance-of name) blocks, walk-cost), as
+  the measured gathers start beside their source. distance-of nil, or nil for a name: the radius a source counts as
+  seen within (look/memory-radius), the farthest, a broad overestimate (no walk to a source is measured apart)."
+  ([items] (fetch-value items nil))
+  ([items distance-of]
+   (let [v (goal-value items)
+         walk #(:cost (walk-cost {:distance (or (when distance-of (distance-of %)) look/memory-radius)}))]
+     (update v :value + (reduce + 0 (map walk (keys (:leaves v))))))))
+
 (defn field-grow
   "Seconds growing n of crop from a fresh w x h field takes, {:value mean :sd}: the cheapest hoe (none when carried) and the seeds
   short of a cell each got (goal-value), the cells tilled and sown, the water poured, the crop's ripening (ripen-s, ripen-sd),

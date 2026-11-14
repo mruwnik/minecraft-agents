@@ -337,6 +337,20 @@
        (if (infinite? stock) 0 (- (* (dec tunnels) stock)))
        (smelt-s c (reduce + 0 (map :count (filter #(= :smelt (:op %)) (:steps pl))))))))
 
+(defn gathers-s
+  "Seconds a plan's raw needs (raw-needs) take to get: a need from a chest its walk there and back (walk-s), else its
+  cost/fetch-value, the default budget's formula, walked from its nearest seen source (any log as the species seen,
+  else oak's measured gathers); a need with no source seen at that formula's prior."
+  [c pl]
+  (reduce + 0 (for [need (raw-needs c pl)]
+                (if-let [chest (:chest need)]
+                  (walk-s c chest)
+                  (let [src (seen-of c need)
+                        pos (if (map? src) (:pos src) (some-> src .-pos u/pos-of))
+                        name (if (= "log" (:key need)) (or (:name src) "oak_log") (:key need))]
+                    (:value (cost/fetch-value [{:name name :count (:count need)}]
+                                              (when pos (constantly (u/dist (u/self-pos c) pos))))))))))
+
 (defn gathered-s
   "Seconds a gather plan takes: its plan-cost (the death each walk risks with it) and its craft steps."
   [c pl]

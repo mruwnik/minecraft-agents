@@ -7,7 +7,7 @@
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.items.obtain.base :refer [args-error carried-of gather-need-s gathers? holds makes? max-inspections names-of own-worth shortfall tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of gathers? holds makes? max-inspections names-of own-worth shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
@@ -15,7 +15,7 @@
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? explorable-needs gather-held gather-viable?]]
             [jobs.items.obtain.chain :refer [craft-plan smelt-s]]
-            [jobs.items.obtain.plan :refer [craft-s gather-plan walk-s]]
+            [jobs.items.obtain.plan :refer [craft-s gather-plan gathers-s walk-s]]
             [jobs.items.obtain.price :refer [gather-s price-of]]
             [jobs.items.obtain.seen :refer [seen-of]]
             [jobs.items.obtain.why :refer [gather-fix no-source-why tried-text]]
@@ -214,7 +214,8 @@
     (done-of c)))
 
 (defn quote-item
-  "The plan's figures: the count as yield; time guessed per craft and smelt step, a gather's most open."
+  "The plan's figures: the count as yield; time per craft and smelt step and the raw needs' gathers (plan/gathers-s),
+  a gather's most open."
   [c]
   (let [a (:args c)
         names (names-of a)
@@ -224,16 +225,16 @@
         smelts (reduce + 0 (map :count (filter #(= :smelt (:op %)) steps)))
         gathers (count (:gather pl))
         step-s (cost/craft-step-s)
-        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (smelt-s c smelts) (* (gather-need-s) gathers))
+        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (smelt-s c smelts) (if (pos? gathers) (gathers-s c pl) 0))
         item (or (:item pl) (first names))]
     {:uses {:job-time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
      :yields {:items {item [0 n n]}}}))
 
 (defn quote-of
-  "A single item: quote-item. A bill: two gathers' time for each item still to get."
+  "A single item: quote-item. A bill: the cost/fetch-value of the items still to get, from nothing (each child runs on its own)."
   [c]
   (if (:bill (:args c))
-    {:uses {:job-time [0 (* (count (bill/todo c)) 2 (gather-need-s)) ##Inf]}}
+    {:uses {:job-time [0 (reduce + 0 (map (fn [[item n]] (:value (cost/fetch-value [{:name item :count n}]))) (bill/todo c))) ##Inf]}}
     (quote-item c)))
 
 (defn chests-to-try

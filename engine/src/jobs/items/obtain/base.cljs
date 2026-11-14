@@ -13,12 +13,10 @@
   {:jobs.items.obtain.base/max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
    :jobs.items.obtain.base/sapling-leaf-limit {:default 60 :doc "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries." :spec (a/int-in 1 nil)}
    :jobs.items.obtain.base/search-scan-radius {:default 16 :doc "How far round the body each look of a search for a raw need reaches." :spec (a/num-in 0 nil)}
-   :jobs.items.obtain.base/gather-need-s {:default 60 :doc "Guess of the seconds one raw need takes to gather: a walk, a fell or a dig (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/site-radius {:default 96 :doc "How far from the :center cell (a build's site) a search for a raw need goes at most." :spec (a/num-in 1 nil)}})
 (defn max-inspections [] (settings/get settings :jobs.items.obtain.base/max-inspections))
 (defn sapling-leaf-limit [] (settings/get settings :jobs.items.obtain.base/sapling-leaf-limit))
 (defn search-scan-radius [] (settings/get settings :jobs.items.obtain.base/search-scan-radius))
-(defn gather-need-s [] (settings/get settings :jobs.items.obtain.base/gather-need-s))
 (def seen-radius-m "Blocks within which a seen raw block counts as a source and a gather works: all perception remembers (a block past it is unseen)." look/memory-radius)
 (defn seen-radius [] seen-radius-m)
 (defn site-radius [] (settings/get settings :jobs.items.obtain.base/site-radius))
