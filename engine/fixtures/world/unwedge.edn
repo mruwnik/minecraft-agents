@@ -1,6 +1,7 @@
 ;; Wedged reflex + jobs.survival.unwedge (card ab70e479). The body stands in a full block (sand) at its feet cell [16 0 16].
 ;; S: steps to a free side cell, else digs the feet block (shovel carried; water beside is allowed). N: slab, farmland, snow layer,
 ;; soul sand at the feet never fire :wedged. F: lava beside / above the feet cell, bedrock at the feet: no dig, no step into lava,
+;; N: a body riding a minecart sits 0.35 below it, in the rail bed: no :wedged (n-minecart-rider-in-rail-bed).
 ;; the job ending :stopped :blocked and no refire within the quiet period.
 ;; s1 waits for the sand to land: a body saved inside the previous case's sand fires the reflex before t0, which would
 ;; decide the fired/ended expectations before this case's sand falls.
@@ -88,4 +89,11 @@
    :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 bedrock"] [:await {:source :job :kind :stopped :data {:reason :blocked}} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
    :body {:inventory [["iron_pickaxe" 1]]}
    :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 45}]
-   :after [[:block [16 0 16] "bedrock"]]}]}
+   :after [[:block [16 0 16] "bedrock"]]}
+  {:name "n-minecart-rider-in-rail-bed"
+   :blocks [[:set [20 -1 16] "grass_block"] [:set [20 0 16] "rail"]]
+   :act [[:summon "minecart" [20.5 0 16.5] "{}"]
+         [:job (jobs.movement.mount {:worth 1200 :name "minecart"})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.mount"}} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 12 :until {:source :job :kind :completed :data {:name "jobs.movement.mount"}}}]
+   :after [[:block [20 -1 16] "grass_block"]]}]}

@@ -24,7 +24,8 @@
             [engine.perception.rays :as rays]
             [engine.settings :as settings]
             [jobs.lib.dig-look :as look]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.vehicle :as vehicle]))
 
 (declare settings)
 
@@ -98,10 +99,11 @@
     (if (and (swim? y) (swim? (inc y)) (not (head-under? p))) (inc y) y)))
 
 (defn wedged-cell
-  "The feet cell when its block fills the cell, else nil."
+  "The feet cell when its block fills the cell, else nil. A rider is never in the block: a cart rider sits 0.35 below
+  the cart, inside the rail's bed."
   [p]
   (let [cell (feet-cell (.self p))]
-    (when (suffocates-here? p cell) cell)))
+    (when (and (not (vehicle/mounted? p)) (suffocates-here? p cell)) cell)))
 
 (defn only-feet-cell
   "wedged-cell, unless the eye cell is solid too (suffocating's business, breathe digs out); else nil."

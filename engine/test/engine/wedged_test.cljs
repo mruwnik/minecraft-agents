@@ -29,7 +29,12 @@
    ["a path at the feet" {:blocks {"0,64,0" "dirt_path"}} false]
    ["sand at the feet and the eyes: suffocating owns it" {:blocks {"0,64,0" "sand" "0,65,0" "sand"}} false]
    ["only the eye cell solid" {:blocks {"0,65,0" "sand"}} false]
-   ["standing on a full block" {:blocks {"0,63,0" "stone"}} false]])
+   ["standing on a full block" {:blocks {"0,63,0" "stone"}} false]
+   ["riding a cart whose rider sits in the rail bed"
+    {:self {:pos {:x 0.5 :y 64.65 :z 0.5} :vehicle 9}
+     :entities [{:id 9 :name "minecart" :uuid "u-9" :kind "other" :pos {:x 0.5 :y 65 :z 0.5}}]
+     :blocks {"0,64,0" "grass_block"}} false]
+   ["same cell on foot" {:self {:pos {:x 0.5 :y 64.65 :z 0.5}} :blocks {"0,64,0" "grass_block"}} true]])
 
 (deftest trigger-on-every-branch
   (doseq [[label world expected] cases]
