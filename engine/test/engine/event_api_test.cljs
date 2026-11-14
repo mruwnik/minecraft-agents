@@ -670,6 +670,11 @@
         bounded (event-api/bounded-value result 0 (volatile! 32))]
     (is (= {:closed? false :reason :leak :cells 15} (select-keys bounded [:closed? :reason :cells])))))
 
+(deftest catalog-doc-is-cut-at-a-sentence-end
+  (is (= "One. Two." (event-api/sentence-cut "One. Two. Three and more" 15)))
+  (is (= "Short." (event-api/sentence-cut "Short." 100)))
+  (is (= "abcde" (event-api/sentence-cut "abcdefghij" 5)) "no sentence end: cut at the limit"))
+
 (deftest catalog-entry-shows-target-ways-and-defaults
   (let [eng {:jobs {'jobs.demo.go {:doc "go" :args {} :target [:pos] :ways [:walk :stair] :defaults {:spend {:job-time 30 :food (fn [_] 2)} :least 1}}
                     'jobs.demo.old {:doc "old" :args {}}}}

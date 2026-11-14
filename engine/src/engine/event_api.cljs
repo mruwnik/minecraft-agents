@@ -32,7 +32,7 @@
    :engine.event-api/attention-limit {:default 4 :spec (a/int-in 1 nil) :doc "Attention items listed by default."}
    :engine.event-api/catalog-page-limit {:default 20 :spec (a/int-in 1 nil) :doc "Catalog entries a page lists by default."}
    :engine.event-api/max-catalog-page-limit {:default 64 :spec (a/int-in 1 nil) :doc "The most catalog entries a page may list."}
-   :engine.event-api/catalog-doc-limit {:default 1200 :spec (a/int-in 1 nil) :doc "Characters of a job's doc the catalog shows."}
+   :engine.event-api/catalog-doc-limit {:default 3000 :spec (a/int-in 1 nil) :doc "Characters of a job's doc the catalog shows, cut at a sentence end."}
    :engine.event-api/inventory-stack-limit {:default 46 :spec (a/int-in 1 nil) :doc "Stacks /inventory lists."}
    :engine.event-api/enchant-limit {:default 8 :spec (a/int-in 1 nil) :doc "Enchantments listed per item."}})
 
@@ -108,6 +108,16 @@
 
 (defn short-text [x n]
   (when (string? x) (subs x 0 (min n (count x)))))
+
+(defn sentence-cut
+  "Text x whole when it fits n characters, else up to the last sentence end within n (the cut at n when none)."
+  [x n]
+  (when (string? x)
+    (if (<= (count x) n)
+      x
+      (let [head (subs x 0 n)
+            end (.lastIndexOf head ". ")]
+        (if (pos? end) (subs head 0 (inc end)) head)))))
 
 (defn inventory-stack [stack]
   (when (and (map? stack) (string? (:name stack))
@@ -520,7 +530,7 @@
                  true (assoc :tags (tags-of sym entry))
                  (:defaults entry) (update :defaults (partial walk/postwalk #(if (fn? %) :from-args %))))
                {:ok true :kind :job :name sym
-                :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
+                :doc (sentence-cut (:doc entry) (setting "catalog-doc-limit"))
                 :args (bounded-value (effective-defaults sym (a/described sym (:args entry))) 0 (volatile! catalog-args-budget))})))
     "trigger" (let [id (keyword name)
                     entry (get (:triggers eng) id)]
