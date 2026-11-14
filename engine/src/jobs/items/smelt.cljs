@@ -385,7 +385,7 @@
 (defn ^:async acquire-furnace!
   "With no furnace chosen: the nearest one seen, else the remembered one when walking there is cheaper than making one, is
   chosen (nil), else put a carried or fetched one down. nil once a furnace is chosen; :continue while that goes on; a
-  stop when none can be had, after the remembered one at any distance."
+  stop when none can be had, after the remembered one whose walk is within the call's worth."
   [c input]
   (if-let [pos (or (some->> (nearest-furnace c input) (sf/cheaper-than-own c)) (sf/home-furnace c false))]
     (choose-furnace! c pos)

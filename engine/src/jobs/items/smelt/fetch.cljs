@@ -111,12 +111,14 @@
     pos))
 
 (defn home-furnace
-  "The furnace the body remembers (the :furnace place), not one a walk found unreachable: with anywhere? any distance,
-  else only when walk-beats-own?. nil otherwise."
+  "The furnace the body remembers (the :furnace place), not one a walk found unreachable: with anywhere? at any distance
+  whose walk is within the call's worth, else only when walk-beats-own?. nil otherwise."
   [c anywhere?]
   (let [pos (mem/place (ctx/view c) :furnace)]
     (when (and pos (not (contains? (furnace/unreachable-furnaces c) pos))
-               (or anywhere? (walk-beats-own? c pos)))
+               (if anywhere?
+                 (cost/affords? (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) pos)})) (ctx/worth c))
+                 (walk-beats-own? c pos)))
       pos)))
 
 (defn ^:async furnace-fetch!

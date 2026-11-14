@@ -1137,6 +1137,16 @@
           (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])) (pr-str r))
           (is (= 1 (count (furnaces-at p))) "no second furnace was made"))))))
 
+(deftest a-remembered-furnace-far-beyond-the-calls-worth-is-not-walked-to-when-none-can-be-made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:inventory iron-and-coal}
+                                        {:item "raw_iron" :count 3 :worth 5} {}
+                                        #(mem/write! (:store %) :furnace {:pos {:x 1300 :y 64 :z 0}} mem/place-policy)))]
+          (is (= :no-furnace-seen (:reason r)))
+          (is (< (get-in @(fake/state p) [:self :pos :x]) 100) "the body stayed near"))))))
+
 (deftest a-remembered-furnace-is-walked-to-when-that-costs-less-than-making-one
   (async done
     (tu/run-async done
