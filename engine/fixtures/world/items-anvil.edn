@@ -1,7 +1,7 @@
 ;; Card 14eedd08: items.anvil-combine puts a Mending book on an iron pickaxe at an anvil.
 ;; Should-succeed: a seen anvil and 5 levels; a carried anvil put down beside the body, used and dug up again (no count check: a use may chip it).
-;; Should-fail: one level stops :too-few-levels (the anvil asks 2) with book and pickaxe kept; no level at all waits
-;; :too-few-levels at the start check; a Sharpness book only waits :no-book.
+;; Should-fail: one level (a Mending book asks 2) or none waits :too-few-levels at the start check, no anvil fetched, book
+;; and pickaxe kept; a Sharpness book only waits :no-book.
 {:defaults
  {:tags [:items :anvil :jobs]
   :time :any
@@ -23,12 +23,12 @@
          [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
    :expect [{:event {:source :job :kind :completed :data {:combined true :spent {"anvil" 1}}} :within-s 80 :of-job true}]
    :after [[:item "iron_pickaxe" 1] [:item "enchanted_book" 0]]}
-  {:name "anvil-with-one-level-stops-too-few-levels"
-   :blocks [[:set [19 0 16] "anvil"]]
+  {:name "anvil-with-one-level-waits-for-the-book-s-two"
    :act [[:rcon "give $BODY enchanted_book[stored_enchantments={\"minecraft:mending\":1}] 1"]
          [:rcon "xp set $BODY 1 levels"]
          [:job (jobs.items.anvil-combine {:worth 1200 :item "iron_pickaxe" :enchant "mending"})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :too-few-levels}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-levels}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :child_started} :for-s 10}]
    :after [[:item "iron_pickaxe" 1] [:item "enchanted_book" 1]]}
   {:name "anvil-with-no-level-waits-too-few-levels"
    :blocks [[:set [19 0 16] "anvil"]]
