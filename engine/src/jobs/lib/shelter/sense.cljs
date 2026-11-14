@@ -15,7 +15,14 @@
    ::room-roof-height {:default 16 :spec (a/int-in 1 nil)
                        :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}})
 
-(defn feet [p] (solid/cell (u/self-pos {:primitives p})))
+(def floor-sink
+  "How far below the next cell a partial floor leaves the body's feet: soul sand and mud are 14/16 high, farmland and paths 15/16."
+  0.125)
+
+(defn feet
+  "The cell the body's feet stand in, not the farmland, path, soul sand or mud block under them."
+  [p]
+  (solid/cell (update (u/self-pos {:primitives p}) :y + floor-sink)))
 
 (defn solid-at? [p pos] (solid/solid? (u/seen-name p pos)))
 

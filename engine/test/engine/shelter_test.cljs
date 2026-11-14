@@ -230,6 +230,13 @@
     (is (nil? (sh-sense/light-in p cells)) "the dark corner has no sky light: waiting never lights it")
     (is (zero? (sh-sense/light-in p (take 2 cells))) "the lit ones: nothing to wait for")))
 
+(deftest feet-of-a-body-on-a-partial-floor-is-the-cell-above-it
+  (are [y cell-y] (= cell-y (:y (sh-sense/feet (tu/fake {:self {:pos {:x 0.5 :y y :z 0.5}} :blocks {"0,63,0" "farmland"}}))))
+    64 64
+    63.9375 64
+    63.875 64
+    64.5 64))
+
 (deftest light-view-reports-the-light-parts-of-a-cell-and-a-cube-read
   (let [lit (seen-dark cave-blocks {[0 64 0] [0 14] [1 64 0] [0 14]})
         view (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0}})]
