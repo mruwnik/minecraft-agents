@@ -49,6 +49,12 @@
 (deftest a-sapling-is-a-tree-want
   (is (= {:tree "oak"} (-> (run [{:name "oak_sapling"}]) :plan :parts first :want))))
 
+(deftest lights-are-recorded-like-any-seen-block
+  (is (= {"torch" {:cells [[0 0 0]] :want "torch"}
+          "wall_torch" {:cells [[1 0 0]] :want {:block "wall_torch" :facing "north"}}
+          "lantern" {:cells [[2 0 0]] :want "lantern"}}
+         (parts (run [{:name "torch"} {:name "wall_torch" :state {"facing" "north"}} {:name "lantern" :state {"hanging" "true" "waterlogged" "false"}}])))))
+
 (deftest a-gate-is-recorded-by-facing-not-by-open
   (let [r (run [{:name "oak_fence_gate" :state {"facing" "north" "open" "true" "powered" "false" "in_wall" "false"}}])]
     (is (= {"gate" {:cells [[0 0 0]] :want {:block "oak_fence_gate" :facing "north"}}} (parts r)))))

@@ -68,3 +68,30 @@
 (deftest an-alternative-want-that-includes-farmland-is-the-farm-jobs-not-repair
   (is (true? (boolean (diff/others-own? [:any "farmland" "dirt"]))))
   (is (not (diff/others-own? [:any "stone" "dirt"]))))
+
+(def lit-yard
+  "A post with a torch on it and a lantern hanging under a beam, both planned and both gone."
+  {:id "lit"
+   :parts [{:id "post" :cells [[3 64 2]] :want "cobblestone"}
+           {:id "beam" :cells [[5 66 2]] :want "cobblestone"}
+           {:id "lights" :cells [[3 65 2]] :want "torch"}
+           {:id "hung" :cells [[5 65 2]] :want {:block "lantern" :hanging "true"}}]})
+
+(def lit-world
+  {:blocks {"3,64,2" "cobblestone" "5,66,2" "cobblestone"}
+   :sight 10
+   :self {:pos {:x 4.5 :y 64 :z 6.5}}
+   :inventory [{:name "torch" :count 2} {:name "lantern" :count 1}]})
+
+(deftest a-missing-torch-and-lantern-of-a-plan-are-listed-and-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (b/start lit-world {"lit" lit-yard} [])
+              c (core/make-ctx eng {:root "repair" :slots [] :chain [] :token nil :args {}})
+              listed (set (map :pos (diff/diff c (:cells (diff/plan-cells c "lit" nil)))))
+              result (await (tu/child-outcome eng 'jobs.build.repair {:plan "lit"} 300))]
+          (is (= #{[3 65 2] [5 65 2]} listed))
+          (is (= "torch" (b/block p [3 65 2])))
+          (is (= "lantern" (b/block p [5 65 2])))
+          (is (= :done (:status result)) (pr-str result)))))))
