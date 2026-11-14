@@ -93,6 +93,20 @@
           (is (= :done (:status @(:out s))))
           (is (= [2 63 0] (:at @(:out s)))))))))
 
+;; Tamsin S7-R2: the spare's fetch climbed 16 blocks; the stair to a height walked back down to its start.
+(deftest a-stair-to-a-height-on-its-own-line-starts-where-the-spare-fetch-left-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far "10,65,0"
+              s (await (st/stair! {:blocks (assoc st/ground far "chest") :containers {far [{:name "stone_pickaxe" :count 1}]}
+                                   :inventory [worn]}
+                                  {:dir :down :y 63} tu/seeing-all))]
+          (is (contains? (kinds s) :tool.spare))
+          (is (= :done (:status @(:out s))) (pr-str @(:out s)))
+          (is (empty? (filter #(= :start (:slot %)) (st/events-of s :child_started))) "no walk back to where it was asked")
+          (is (= 63 ((:at @(:out s)) 1))))))))
+
 (deftest a-spare-fetch-never-asks-for-a-spare-itself
   (async done
     (tu/run-async done

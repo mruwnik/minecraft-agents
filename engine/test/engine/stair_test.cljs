@@ -473,6 +473,18 @@
             (is (= ending (or (:reason @out) (:status @out))) (str "cell-s " cell-s))
             (is (= (= :done ending) (boolean (seq (events-of s :stair.return)))))))))))
 
+;; Tamsin S7-R2: a heal's food fetch dug the body 33 blocks off a stair up to a height; it ended "off-stair after 0 steps".
+(deftest a-stair-to-a-height-on-its-own-line-goes-on-from-where-a-reflex-left-the-body-and-counts-every-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (into {} (for [x (concat (range -3 13) (range 80 101)) y (range 50 65) z (range -10 11)] [(str x "," y "," z) "stone"]))]
+          (doseq [[args ending] [[{:dir :down :y 61} :done] [{:dir :down :heading :east :y 61} :off-stair]]]
+            (let [{:keys [out] :as s} (await (stair! {:blocks blocks} args (move-at-dig 4 [90 65 0])))]
+                            (is (= ending (or (:reason @out) (:status @out))) (pr-str args))
+              (is (= (= :done ending) (boolean (seq (events-of s :stair.anchored)))) (pr-str args))
+              (is (= (count (events-of s :stair.step)) (:steps @out)) (pr-str args)))))))))
+
 (deftest a-stair-whose-body-stands-past-a-cliff-digs-back-to-its-line
   (async done
     (tu/run-async done

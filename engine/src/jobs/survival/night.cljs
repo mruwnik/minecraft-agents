@@ -650,14 +650,14 @@
         [(cond-> (dissoc prices :bed :sealed :log-out) (not dig?) (dissoc :shelter)) t]))))
 
 (defn stay!
-  "The night in the open here is the cheapest of prices while another way is priced too: the round ends nothing-possible
+  "Staying the night where the body stands, as it is (in the open or not), is the cheapest of prices while another way is priced too: the round ends nothing-possible
   :exposed {:prices :text}, nothing remembered of the site (no :night-exposed), so the trigger fires again after its
   cooldown and the night prices again. The failed sites stay known in the dark (:sheltered :exposed, ending/forget-night!)."
   [c prices]
   (let [shown (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)]
     (hold/sheltered! c :exposed)
     (ctx/end c :nothing-possible :exposed {:prices shown
-                                           :text (str "the night in the open here is the cheapest way through it (seconds: " (pr-str shown) "); priced again at the next firing")})))
+                                           :text (str "staying where it stands, as it is, is the cheapest way through the night (seconds: " (pr-str shown) "); priced again at the next firing")})))
 
 (defn ^:async shelter-answer!
   "The cheapest of shelter-prices (bed-down/cheapest; debug night.answers): dig in here (shelter!), a niche (niche!), a flee

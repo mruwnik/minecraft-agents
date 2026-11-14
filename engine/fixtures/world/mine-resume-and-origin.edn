@@ -6,6 +6,8 @@
 ;; f5ffa4f1: :heading :west beats the way the body faces (east).
 ;; cc56de38: a stair 8 steps down, the body moved 35 off it onto the same mass: the walk back is cheaper than cutting the
 ;; steps again, so it walks back though past ::return-reach. Should-fail: :off-stair (2 steps cut: the far case above).
+;; Stair-to-a-height (card dc6af3e5): a :y stair with no :heading moved far off goes on from where the body stands (stair.anchored),
+;; :steps counting both lines (2 + 8). Should-fail twin: stair-far-from-the-body-is-not-walked-back-to (:heading and :steps).
 ;; Stair-off-on-open-ground: the body is shoved onto the ground south of the rock; a pickaxe digs back to the stair (a cliff between).
 ;; Stone mass x 2..30, z 8..24, y 0..6 (cases 1, 3, 4); the stair case has its own mass.
 {:defaults
@@ -43,6 +45,17 @@
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~50 ~10 ~20"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason #{:off-stair :dig-failed}}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.return} :for-s 120 :until {:source :job :kind :stopped}}]}
+  {:name "stair-to-a-height-goes-on-from-where-the-body-was-moved"
+   :plot {:height 20 :length 64 :width 32}
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:fill [36 0 8] [60 9 24] "stone"]]
+   :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :y #y 2})]
+         [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~50 ~10 ~20"]]
+   :expect [{:event {:source :job :kind :stair.anchored} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:steps 10}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :off-stair}} :for-s 220 :until {:source :job :kind :completed}}]
+   :limit-s 260}
   {:name "stair-far-off-with-many-steps-cut-is-walked-back-to"
    :plot {:height 20 :length 64 :width 32}
    :blocks [[:fill [8 0 8] [60 9 24] "stone"]]

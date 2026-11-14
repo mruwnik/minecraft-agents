@@ -78,7 +78,7 @@
   failed attempts (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). :ignore-zones? skips all access
   refusals but :not-loaded; a cell of a plan this body made refuses :footprint unless the spare-own-builds setting is false.
   :undercuts-way: a cut cell is the floor of an earlier stair of this body (memory :stair-way, written at every end), or a step floor of air at a step of one.
-  :off-stair: off the line and another walk back not worth its price (cost/try-again? :walk, the times found off the line since the last step its failures) or dearer than cutting the steps again. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
+  :off-stair: off the line and another walk back not worth its price (cost/try-again? :walk, the times found off the line since the last step its failures) or dearer than cutting the steps again. A stair whose line is its own (:y given, no :heading or :through) starts its line again where the body stands instead (:stair.anchored; :steps counts every line's steps), and starts where a spare's fetch left it. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
   :base-block names the block in its text; a crafting table is dug (zones and claims guard another's). Data {:steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
   A dig with a worn last tool (not a fresh one) first tries a spare once (trip/tool-ready!), whatever the :settings. A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
@@ -207,7 +207,7 @@
   "The data of a stair now: {:steps :at :dug} and what it placed (jobs.lib.spent) plus detail."
   [c detail]
   (let [m (ctx/mem c)]
-    (merge {:steps (or (:at-step m) 0) :at (reach/standing-vec (:primitives c)) :dug (:dug m [])}
+    (merge {:steps (+ (:prior-steps m 0) (:at-step m 0)) :at (reach/standing-vec (:primitives c)) :dug (:dug m [])}
            (spent/summary (spent/log c)) detail)))
 
 (defn done?
@@ -216,19 +216,20 @@
   [c]
   (let [m (ctx/mem c)
         n (or (:at-step m) 0)
+        cut (+ (:prior-steps m 0) n)
         y (:y (:args c))
         at-y? (and (some? y) (nil? (:origin m)) (== y ((reach/standing-vec (:primitives c)) 1)))]
     (if (or (:finished m) at-y?)
-      (contract/ok :done (str "the stair stands at " (pr-str (reach/standing-vec (:primitives c)))) :units :steps :done n :left 0
+      (contract/ok :done (str "the stair stands at " (pr-str (reach/standing-vec (:primitives c)))) :units :steps :done cut :left 0
                    :result (result-of c {}))
-      (contract/later :cutting "the stair is being cut" :units :steps :done n :left (max 0 (- (or (:target m) n) n))))))
+      (contract/later :cutting "the stair is being cut" :units :steps :done cut :left (max 0 (- (or (:target m) n) n))))))
 
 (defn ^:async cleanup
   "However the stair ends: its :ore-mark is dropped; after one that ended :done the way cut is remembered (:stair-way)."
   [c ending]
   (ore-pick/release-mark! c)
   (when (= :done (:kind ending))
-    (let [steps (:steps (:data ending))
+    (let [steps (:at-step (ctx/mem c) 0)
           {:keys [dir heading]} (:args (with-heading c))]
       (when (and (pos? steps) (not= :level dir))
         (smem/record-way! c (:origin (ctx/mem c)) dir heading steps))))
@@ -258,11 +259,12 @@
   [c reason detail]
   (let [data (result-of c detail)
         steps (:steps data)
+        line-steps (:at-step (ctx/mem c) 0)
         {:keys [dir heading]} (:args c)]
     (if (= :done reason)
       (ctx/end c :done nil data)
-      (do (when (and (pos? steps) (not= :level dir))
-            (smem/record-way! c (:origin (ctx/mem c)) dir heading steps))
+      (do (when (and (pos? line-steps) (not= :level dir))
+            (smem/record-way! c (:origin (ctx/mem c)) dir heading line-steps))
           (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible)
                    (assoc detail :reason reason
                           :text (or (:text detail)
@@ -324,6 +326,30 @@
             (ctx/emit! c :stair.return :info {:to cell :arrived arrived
                                               :text (str "stair " (if arrived "walked back onto" "could not walk back onto") " its line at " (pr-str cell))})))
         (if (= :continue r) :continue :again)))))))
+
+(defn own-line?
+  "Whether the line is the stair's own choice (a :y goal, no :heading or :through from the caller): a line from any cell serves it."
+  [c]
+  (let [{:keys [y through]} (:args c)]
+    (boolean (and (some? y) (nil? through) (:heading (ctx/mem c))))))
+
+(defn anchor-here!
+  "Start the stair's line again at feet (own-line?): the steps cut so far kept in :prior-steps, the old line's way
+  recorded. A body already at or past :y has a stair of 0 steps left. :again."
+  [c feet]
+  (let [{:keys [dir heading]} (:args c)
+        {:keys [origin at-step]} (ctx/mem c)
+        t (geo/target-steps (:args c) feet)]
+    (when (and origin (pos? (or at-step 0)) (not= :level dir))
+      (smem/record-way! c origin dir heading at-step))
+    (when origin
+      (ctx/emit! c :stair.anchored :info {:at feet :from origin
+                                          :text (str "stair goes on from " (pr-str feet) ", off its line from " (pr-str origin) ": its goal is a height")}))
+    (ctx/update-mem! c (fn [m] (-> m
+                                   (assoc :prior-steps (+ (:prior-steps m 0) (:at-step m 0)) :origin feet :at-step 0 :furthest 0
+                                          :target (if (map? t) 0 t))
+                                   (dissoc :returns :missed :checked))))
+    :again))
 
 (declare undermine-settle-ms)
 
@@ -431,6 +457,7 @@
     (cond
       undermining undermining
       (nil? i) (or (await (return! c))
+                   (when (own-line? c) (anchor-here! c feet))
                    {:reason :off-stair :cell feet :origin origin
                     :offset (mapv - feet origin)
                     :why (str "the body is " (pr-str (mapv - feet origin)) " from the stair's start " (pr-str origin)
@@ -497,14 +524,15 @@
       (finish! c (if (:here target) :y-not-beyond-feet :bad-args) {:why (:error target)})
       ;; stone stands for the cells to dig: unseen cells are taken for stone (see the ns doc)
       (do
-        ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
+        ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended,
+        ;; unless its line is its own (a height is its goal)
         (ctx/update-mem! c assoc :start feet)
-        (if (= :continue (await (trip/tool-ready! c "stone" (* 3 target))))
-          :continue
-          (if (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into!* c :start feet))))
-            :continue
-            (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
-                :again)))))))
+        (cond
+          (= :continue (await (trip/tool-ready! c "stone" (* 3 target)))) :continue
+          (own-line? c) (do (ctx/update-mem! c assoc :dug []) (anchor-here! c (reach/standing-vec (:primitives c))))
+          (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into!* c :start feet)))) :continue
+          :else (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
+                    :again))))))
 
 (defn ^:async next!
   "One piece of the stair: walk back after a fetch, a fetch round, the start, a dig, a bridge, a seal or a step. :again,
