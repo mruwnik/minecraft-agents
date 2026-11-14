@@ -7,7 +7,8 @@
 ;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
 ;; roll-villager-heard-behind-a-wall-by-day-is-walked-toward-not-gone: by day a named villager heard behind a wall is walked toward round it (roll.offers), not :gone.
 ;; roll-rebreak-from-afar-walks-to-the-cell-before-the-break: a jobless NoAI villager, the body 10 blocks off: the re-break walks into reach (:to-cell) before the urgent section, then ends :no-job.
-;; Should-fail: nitwit, absent villager (by day), a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
+;; roll-with-a-spare-places-it-before-the-pickup-with-a-free-composter-near: with a spare lectern carried, the spare goes in the moment the job is gone and the drop is picked up after (:owed child), so the villager has no time to claim the composter 10 blocks off.
+;; Should-fail: a named farmer ends :other-job with no dig; nitwit, absent villager (by day), a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
 ;; roll-sealed-in-dirt-never-digs-its-way-out-for-the-drop: the body sealed in a pocket under dirt that is another's (a plan footprint stands for the zone), the lectern drop out of reach: the roll ends without breaking the dirt (the pillar escape's roof dig obeys zones).
 ;; Unseen-cell cases: the body at [8.5 0 16.5] faces west (yaw 90), the lectern is 7 blocks behind it, so it starts unseen; the roll
 ;; looks first (roll-cell-behind-the-body-is-looked-at); a lectern sealed in obsidian stays unseen (roll-cell-sealed-away-ends-cell-unseen).
@@ -184,7 +185,20 @@
   {:name "roll-rebreak-from-afar-walks-to-the-cell-before-the-break"
    :body {:at [26.5 0 16.5] :yaw 90}
    :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,34],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
-         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000022" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/take-job-s 10}})]]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000022" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/take-job-ticks 200}})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :to-cell}} :within-s 90 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-job}} :within-s 200 :of-job true}]
+   :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-with-a-spare-places-it-before-the-pickup-with-a-free-composter-near"
+   :blocks [[:set [26 0 16] "composter"]]
+   :body {:at [14.5 0 16.5] :yaw 270 :inventory [["lectern" 1]]}
+   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,35],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000023" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :owed}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 220 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [26 0 16] "composter"]]}
+  {:name "named-villager-with-another-job-ends-other-job-without-a-dig"
+   :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,36],VillagerData:{profession:\"minecraft:farmer\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000024" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :other-job}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}]}

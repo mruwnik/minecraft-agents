@@ -31,15 +31,19 @@
   toward where one is heard);
   at night it is waited for till day (reason :night-villager-out-of-view), then looked for once more; one seen this call
   is waited for ::away-s by day; then :gone. Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
-  the place again are one urgent section (a night or food reflex waits for it). Waits (:continue) for the villager to take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
+  the place again are one urgent section (a night or food reflex waits for it); with a spare workstation carried, the
+  spare goes in the moment the villager reads jobless and the drop is picked up after, so the villager has no time to
+  claim another free job site. A villager that reads another job is never rolled: a named one ends :other-job, else the
+  nearest other in sight is picked. Waits (:continue) for the villager to take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
   :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children; :ways (default all) goes to the place child, so #{:carried} places only a workstation already carried (else it waits :need, nothing is fetched or crafted). Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
   matches, else
-  - condition-failed: :gone, :baby, :locked (an offer was already used, or the villager is above level 1: it has traded), :occupied (another block at :pos),
+  - condition-failed: :gone, :baby, :locked (an offer was already used, or the villager is above level 1: it has traded), :other-job, :occupied (another block at :pos),
     :cell-unseen.
   - impossible: :nitwit.
-  - nothing-possible :no-job: the villager took no job in ::take-job-s (300) daytime seconds, nor after one more break and place.
+  - nothing-possible :no-job: the villager took no job in ::take-job-ticks game ticks of its walking hours, nor after one more
+    break and place; :sites names the other job-site blocks seen (a free one it may hold a claim on).
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
     read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
 
@@ -65,7 +69,7 @@
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
-   ::take-job-s {:default 300 :doc "Daytime seconds the villager may stay without a job after the workstation is placed: then the workstation is broken and placed once more, and past that the call ends :no-job." :spec (a/int-in 1 nil)}
+   ::take-job-ticks {:default 1240 :doc "Game ticks of the villagers' walking hours (walk-hours?) a villager may stay jobless with the workstation placed: then the workstation is broken and placed once more, and past that the call ends :no-job. The game's rule: a jobless villager looks for a free job site every 20-40 ticks and drops a claim on another site after 1200 ticks of walking to it, so past 1240 it holds a site it reaches (or ours is out of its way)." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (villager/poll-s))
@@ -154,7 +158,7 @@
   {:uses {:job-time [0 (* 30 (max-rolls)) ##Inf]}})
 
 (def failed-conditions "Causes that end condition-failed: the villager or the cell is not right now. The rest are nothing-possible."
-  #{:gone :baby :locked :occupied :cell-unseen})
+  #{:gone :baby :locked :other-job :occupied :cell-unseen})
 
 (defn stop!
   "End with reason (a keyword) as the cause: condition-failed for those in failed-conditions, else nothing-possible."
@@ -172,17 +176,43 @@
 
 (defn not-nitwit? [e] (not= "nitwit" (.-profession e)))
 
+(defn other-job?
+  "Whether villager e reads a job other than the call's :profession: it holds another job site, so it never takes ours
+  and breaking ours does nothing to it."
+  [c e]
+  (let [job (.-profession e)]
+    (boolean (and job (not (#{"unemployed" "nitwit" (:profession (:args c))} job))))))
+
+(defn rollable
+  "A filter of the villagers the call may pick: no nitwit, no other job, none ruled out (rule-out!)."
+  [c]
+  (let [out (:ruled-out (ctx/mem c) #{})]
+    (fn [e] (and (not-nitwit? e) (not (other-job? c e)) (not (contains? out (villager/ident e)))))))
+
+(def villager-keys "Memory about the villager picked, dropped when another is picked."
+  [:chosen :seen :away-since :view :view-tries :last-seen :flanked :memory-walked :night-waited :vantage :job-at :job-ticks :rebroke])
+
 (defn pick!
   "The villager rolled: :villager, else the nearest adult that is no nitwit (saying which one it picked, once)."
   [c]
   (let [before (villager/chosen c)
-        id (villager/pick! c not-nitwit?)]
+        id (villager/pick! c (rollable c))]
     (when (and id (nil? before))
       (let [e (villager/find-by-uuid (:primitives c) id)]
         (ctx/emit! c :roll.villager :info
                    {:villager id :pos (some-> e (.-pos) u/pos-of) :profession (some-> e (.-profession))
                     :text (str "rolls villager " id ": the nearest adult that is no nitwit")})))
     id))
+
+(defn rule-out!
+  "The villager cannot be rolled (reason :other-job or :locked): a named one ends the call; a picked one is left for the
+  nearest other in sight that can be (:again; pick! names it), none ends the call."
+  [c reason]
+  (if (:villager (:args c))
+    (stop! c reason)
+    (let [id (villager/chosen c)]
+      (ctx/update-mem! c #(-> (apply dissoc % villager-keys) (update :ruled-out (fnil conj #{}) id)))
+      (if (some (rollable c) (villager/adults (:primitives c))) :again (stop! c reason)))))
 
 (defn ^:async wait-job!
   "Hold still for a poll, saying why the villager's job is awaited; :continue. At night the reason says villagers
@@ -388,24 +418,50 @@
                            (fn ^:async dig-and-put-back []
                              (let [slot (keyword (str "dig-" (rolls c)))
                                    _ (await (flush-to-cell! c pos))
-                                   _ (ctx/update-mem! c #(-> % (assoc :broken true :job-polls 0 :stand (u/self-pos c) :expect-carried (inc (u/carried-count (:primitives c) (item-of (:args c))))) (dissoc :lose-polled :crouched :reach-drops :recovers)))
-                                   r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+                                   have (u/carried-count (:primitives c) (item-of (:args c)))
+                                   _ (ctx/update-mem! c #(-> % (assoc :broken true :stand (u/self-pos c) :expect-carried (inc have) :spare (pos? have))
+                                                             (dissoc :lose-polled :job-at :job-ticks :drop-ids :crouched :reach-drops :recovers)))
+                                   r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect (zero? have)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
                                (if (ending-or-wait? r)
                                  r
-                                 (do (ctx/update-mem! c update :rolls (fnil inc 0))
+                                 (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0)) (assoc :drop-ids (:ids r))))
                                      (await (back-steps! c)))))))))))
 
+(defn walk-hours?
+  "Whether villagers walk at time of day t (ticks): the game's idle, work and play hours (10-9000, 11000-12000), not
+  the meeting or the rest."
+  [t]
+  (let [t (mod t 24000)]
+    (or (<= 10 t 8999) (<= 11000 t 11999))))
+
+(defn count-ticks!
+  "Add to :job-ticks the game ticks (world age) since the last count, when villagers walk now; the count it gives."
+  [c]
+  (let [self (.self (:primitives c))
+        age (.-worldAge self)
+        {:keys [job-at job-ticks]} (ctx/mem c)
+        n (+ (or job-ticks 0) (if (and age job-at (walk-hours? (.-timeOfDay self))) (max 0 (- age job-at)) 0))]
+    (ctx/update-mem! c assoc :job-at age :job-ticks n)
+    n))
+
+(defn job-sites
+  "The job-site blocks the body has seen within the villager search radius, other than the workstation at pos: free
+  ones a jobless villager may have claimed instead."
+  [c pos]
+  (->> (look/seen-blocks (:primitives c) {:names (set (vals workstations)) :radius (villager/search-radius) :live? true})
+       (remove #(= (select-keys (:pos %) [:x :y :z]) (select-keys pos [:x :y :z])))
+       (mapv #(select-keys % [:name :pos]))))
+
 (defn ^:async wait-take-job!
-  "The villager has no job with the workstation placed: wait (daytime polls count, night ones do not, villagers claim
-  workstations only by day) up to ::take-job-s, then break and place the workstation once more, then end :no-job."
+  "The villager has no job with the workstation placed: wait while game ticks of the villagers' walking hours (count-ticks!)
+  stay under ::take-job-ticks, then break and place the workstation once more (a villager that took our site's ticket is
+  bumped), then end :no-job naming the other job sites seen (:sites)."
   [c]
   (let [m (ctx/mem c)]
     (cond
-      (< (:job-polls m 0) (/ (settings/get settings ::take-job-s) (poll-s)))
-      (do (when-not (sh-sense/night? (:primitives c)) (ctx/update-mem! c update :job-polls (fnil inc 0)))
-          (await (wait-job! c :villager-takes-no-job)))
+      (< (count-ticks! c) (settings/get settings ::take-job-ticks)) (await (wait-job! c :villager-takes-no-job))
       (not (:rebroke m)) (do (ctx/update-mem! c assoc :rebroke true) (await (dig! c)))
-      :else (stop! c :no-job))))
+      :else (ctx/end c :nothing-possible :no-job (data-of c {:sites (job-sites c (:pos (:args c)))})))))
 
 (defn on-cell?
   "Whether the body's feet or head fill the cell pos."
@@ -563,14 +619,32 @@
                                                      (some? ways) (assoc :ways ways))))]
     (if (ending-or-wait? r)
       r
-      (let [expect (:expect-carried (ctx/mem c))
+      (let [{:keys [spare drop-ids] expect :expect-carried} (ctx/mem c)
             have (u/carried-count (:primitives c) item)]
-        (ctx/update-mem! c #(dissoc % :broken :expect-carried))
-        (if (and expect (< have (dec expect)))
+        (ctx/update-mem! c #(cond-> (dissoc % :broken :expect-carried :spare :drop-ids)
+                              (and spare expect) (assoc :owed {:ids drop-ids :expect (dec expect)})))
+        (if (and expect (not spare) (< have (dec expect)))
           (ctx/end c :nothing-possible :workstation-lost
                    (data-of c {:carried have :expected (dec expect)
                                :text (str "the bag holds " have " " item " after the place, " (dec expect) " expected: one is missing")}))
           :again)))))
+
+(defn ^:async collect-owed!
+  "A spare was placed before the broken workstation's drop was picked up: pick it up now (jobs.items.collect-drops child,
+  slot :owed); the bag must then hold the count before the break, else :workstation-lost. :again, :continue or the stop."
+  [c]
+  (let [{:keys [pos]} (:args c)
+        item (item-of (:args c))
+        {:keys [ids expect]} (:owed (ctx/mem c))
+        r (await (child/run!* c :owed 'jobs.items.collect-drops (cond-> {:items [item] :near pos :holes [pos] :expect 1} (seq ids) (assoc :ids ids))))
+        have (u/carried-count (:primitives c) item)]
+    (cond
+      (= :continue r) :continue
+      (>= have expect) (do (ctx/update-mem! c dissoc :owed) :again)
+      :else (do (ctx/update-mem! c dissoc :owed)
+                (ctx/end c :nothing-possible :workstation-lost
+                         (data-of c {:carried have :expected expect
+                                     :text (str "the bag holds " have " " item " after the spare was placed, " expect " expected: the drop was not picked up")}))))))
 
 (defn ^:async place-or-return!
   "place!, after a walk back to the dig's stand when the body is elsewhere (to-stand!)."
@@ -587,7 +661,7 @@
     (cond
       (not (or (:seen m) (:approached m) (:memory-walked m) (u/within? (u/self-pos c) pos (reach)))) (await (approach! c pos))
       (await (back-to-view! c pos)) :again
-      (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again
+      (await (villager/find-in-view! c (rollable c) look/hazards-only)) :again
       (and (not (:seen m)) (not (:flanked m))) (await (flank! c pos))
       :else
       (or (await (villager/approach-remembered! c villager (reach) (:last-seen m)))
@@ -616,13 +690,14 @@
         profession (when e (.-profession e))
         out-of-tries? (>= (rolls c) (max-rolls))]
     (cond
+      (:owed (ctx/mem c)) (await (collect-owed! c))
       (nil? block) (await (approach! c pos))
       (bs/air block)
       (cond
         (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true :expect-carried (expect-after-unseen-break c pos item)) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
         (and e (not= "unemployed" profession)) (await (wait-lose-job! c))
-        (< (u/carried-count p item) (:expect-carried (ctx/mem c))) (await (recover! c))
+        (< (u/carried-count p item) (cond-> (:expect-carried (ctx/mem c)) (:spare (ctx/mem c)) dec)) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)
@@ -631,6 +706,7 @@
       (and e (not (and (:seen (ctx/mem c)) (nil? (:away-since (ctx/mem c)))))) (do (ctx/update-mem! c #(-> % (assoc :seen true) (dissoc :away-since))) :again)
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
+      (other-job? c e) (rule-out! c :other-job)
       (= "unemployed" profession) (await (wait-take-job! c))
       (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c e))
       :else

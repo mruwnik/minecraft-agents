@@ -144,7 +144,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [baby (vt/villager [(offer "paper")] {:id 2 :uuid "v-0" :baby true :profession "unemployed" :pos {:x 1 :y 64 :z 1}})
-              [result p seen] (await (roll {:entities [baby (librarian [(offer "paper")])]
+              farmer (vt/villager [(offer "paper")] {:id 3 :uuid "v-2" :level 1 :pos {:x 0 :y 64 :z 0.5}})
+              [result p seen] (await (roll {:entities [baby farmer (librarian [(offer "paper")])]
                                             :scripts [[(offer "enchanted_book")]]}
                                            {:villager nil :profession "librarian" :want "enchanted_book"}))]
           (is (= {:found true :rolls 1 :item "lectern"} (select-keys result [:found :rolls :item])))
@@ -353,14 +354,58 @@
           (is (= {:found false :reason :wall-time} (select-keys result [:found :reason])))
           (is (= "lectern" (workstation p))))))))
 
-(deftest a-villager-that-takes-no-job-gets-one-more-break-then-the-call-ends-no-job
+(defn ticking!
+  "env whose world age runs with the clock (a game tick each 50 ms) at time of day t: the game ticks villagers count by."
+  [t]
+  (fn [{:keys [p clock] :as env}]
+    (swap! (fake/state p) assoc :time t)
+    (add-watch clock :age (fn [_ _ _ ms] (swap! (fake/state p) assoc-in [:self :worldAge] (js/Math.floor (/ ms 50)))))
+    env))
+
+(deftest a-villager-that-takes-no-job-gets-one-more-break-then-the-call-ends-no-job-naming-the-other-job-sites
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})] :keeps-job? true}
-                                      {:settings {:jobs.village.roll/take-job-s 10}}))]
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})] :keeps-job? true
+                                       :blocks {"6,64,0" "composter"} :wrap (comp (ticking! 1000) #(do (tu/seeing-all (:p %)) %))}
+                                      {:settings {:jobs.village.roll/take-job-ticks 200}}))]
           (is (= {:found false :reason :no-job :status :stopped} (select-keys result [:found :reason :status])))
+          (is (= [{:name "composter" :pos {:x 6 :y 64 :z 0}}] (:sites result)))
           (is (= 1 (digs p)) "one break after the wait, none after the second")
+          (is (= "lectern" (workstation p))))))))
+
+(deftest a-jobless-villager-is-waited-for-in-game-ticks-of-its-walking-hours-not-in-daytime-seconds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env ((ticking! 9500) (bd/setup {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
+                                              :blocks {ws-key "lectern" "2,63,0" "stone"}}))
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book"
+                                                :spend {:wall-time 400}} 700))
+              p (:p env)]
+          (is (= {:found false :reason :wall-time} (select-keys result [:found :reason]))
+              "at the villagers' meeting hour (day, no walking) nothing counts toward the wait")
+          (is (zero? (digs p)) "no break and place again: 300 daytime seconds used to send one"))))))
+
+(deftest a-named-villager-with-another-job-ends-other-job-without-a-break
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(vt/villager [(offer "paper")] {:level 1})] :keeps-job? true} {}))]
+          (is (= {:found false :status :stopped :reason :other-job} (select-keys result [:found :status :reason])))
+          (is (zero? (digs p))))))))
+
+(deftest a-spare-carried-is-placed-the-moment-the-job-is-gone-and-the-drop-picked-up-after
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")])] :inventory [{:name "lectern" :count 1}]
+                                            :scripts [[(offer "enchanted_book")]]} {}))
+              acts (keep #(when (and (= :action (:source %)) (= :started (:kind %)) (#{"dig" "place" "collect"} (:name %))) (:name %)) @seen)]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= ["dig" "place" "collect"] acts) "the lectern is out no longer than the job takes to go")
+          (is (= 1 (count (filter #(= "lectern" (:name %)) (:inventory @(fake/state p)))))
+              "the drop is in the bag again")
           (is (= "lectern" (workstation p))))))))
 
 (deftest a-restart-with-the-workstation-missing-places-it-first
