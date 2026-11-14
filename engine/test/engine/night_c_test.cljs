@@ -697,6 +697,16 @@
              1e-9)
           "the walk is priced to the bed: the part searched and the 69 blocks past its end"))))
 
+(deftest a-partial-quote-prices-the-unseen-ground-as-swum-as-far-as-the-seen-part-is
+  (let [c {:primitives (tu/fake {})}
+        q (fn [swim] {:uses {:job-time [30 120 ##Inf]} :route {:found false :reason :partial :unseen-floors true :near 96
+                                                                :partial {:seconds 20 :steps 10 :swim swim}}})
+        secs #(:seconds (night/budget-priced c (q %)))
+        pace (/ 1 (* cost-planner/walk-floor (cost-planner/swim-speed (.-equipment (.self (:primitives c))))))]
+    (is (= 120 (secs 0)) "no water in the part seen: the rest is walked")
+    (is (< (js/Math.abs (- (secs 10) (+ 20 (* 100 pace)))) 1e-9) "all of it swum: the rest at swim pace")
+    (is (< (js/Math.abs (- (secs 5) (+ 20 (* 100 (/ (+ 1 pace) 2))))) 1e-9) "half of it swum: half the rest")))
+
 (deftest a-walks-worth-is-what-the-next-way-costs-more-than-the-answer-and-is-finite
   (let [prices {:bed 30 :shelter 100 :log-out 70 :exposed 400}]
     (is (= 40 (night/walk-worth prices :bed nil)) "the next way (log-out 70) less the bed 30")

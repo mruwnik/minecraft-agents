@@ -6,7 +6,7 @@
   - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
     opened or dug, and :risk its walk risk (jobs.lib.walk-risk/estimate of the plan, the one danger figure a caller weighs). :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
     changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
-    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen and guessed dark; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:budget true on a partial whose search spent its node budget ending farther than the budget-near setting from the goal, as the walk plans it: nearer, the goal is walled in, go-to's :budget; :reason
+    :summary :steps :moves :swim :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen and guessed dark; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:budget true on a partial whose search spent its node budget ending farther than the budget-near setting from the goal, as the walk plans it: nearer, the goal is walled in, go-to's :budget; :reason
     as :why, :bad-pos and other refusals, :searching while the quote's budgeted search has not ended); with :unknown :unseen-floors and :dark-best."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -49,6 +49,7 @@
    :summary (.-summary path)
    :steps (count steps)
    :moves (dissoc (frequencies (map :move (rest steps))) :walk)
+   :swim (count (filter :swim (rest steps)))
    :doors (vec (distinct (for [s steps o (:opens s)] [(:x o) (:y o) (:z o)])))
    :waypoints (waypoints steps)}
     (number? (.-priced (.-cost path))) (assoc :priced (/ (js/Math.round (* 10 (.-priced (.-cost path)))) 10))

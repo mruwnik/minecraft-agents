@@ -11,6 +11,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.price :as price]
             [jobs.lib.pace :as pace]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -560,18 +561,29 @@
      :walk-hp hp
      :stay (bed-down/exposed-price c here (if (pos? shelter-s) shelter-s secs) (u/self-pos c))}))
 
+(defn unseen-swim-s
+  "The mean time secs of a partial walk with the ground past the part searched (partial: its :seconds, :steps, :swim) swum as
+  far as that part is, at the surface pace of what the body wears: ground never seen is water as often as the ground seen."
+  [c partial secs]
+  (let [steps (:steps partial)
+        share (if (pos? (or steps 0)) (/ (or (:swim partial) 0) steps) 0)
+        pace (/ 1 (* cost-planner/walk-floor (cost-planner/swim-speed (.-equipment (.self (:primitives c))))))
+        walked (or (:seconds partial) 0)]
+    (+ walked (* (max 0 (- secs walked)) (+ (- 1 share) (* share (max 1 pace)))))))
+
 (defn budget-priced
   "The quoted route of q. A partial walk no whole way is known for yet, not none (its search spent go-to's node budget,
   :budget, or went over floors the body never saw, :unseen-floors, to the loaded edge), its reason :partial or the dig
-  search's :budget, counts as a found walk priced by the quote's mean time, all of it dark (at least what the planner said
+  search's :budget, counts as a found walk priced by the quote's mean time, the ground past what was searched swum as far as
+  the searched part is (unseen-swim-s), all of it dark (at least what the planner said
   of the part it priced). A dig search's :budget alone is no walk: its mean leaves out what bridging the rest costs."
   [c q]
   (let [r (:route q)
-        reason (some-> (:reason r) keyword)
-        secs (second (get-in q [:uses :job-time]))]
+        reason (some-> (:reason r) keyword)]
     (if (and (#{:partial :budget} reason) (or (:unseen-floors r) (:budget r)))
-      (assoc r :found true :seconds secs
-             :dark-seconds (max (or (get-in r [:partial :dark-seconds]) 0) (* secs (cost/dark-factor (wworld/kit-of c)))))
+      (let [secs (unseen-swim-s c (:partial r) (second (get-in q [:uses :job-time])))]
+        (assoc r :found true :seconds secs
+               :dark-seconds (max (or (get-in r [:partial :dark-seconds]) 0) (* secs (cost/dark-factor (wworld/kit-of c))))))
       r)))
 
 (defn ^:async bed-walk-safe?
