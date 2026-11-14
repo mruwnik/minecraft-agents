@@ -1984,7 +1984,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (flight-round respond {:inventory sword :entities [{:id 100 :name "enderman" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]}))]
+        (let [{:keys [seen]} (await (flight-round respond {:inventory sword :entities [{:id 100 :name "enderman" :kind "hostile" :angry true :pos {:x 5 :y 64 :z 0}}]}))]
           (is (= [:flee] (mapv :decision (decided seen)))))))))
 
 (deftest no-fight-wins-against-an-enderman-however-much-health

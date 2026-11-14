@@ -1574,17 +1574,17 @@
     (is (= [east west support roof] (wall-placer/nearest-first feet [{:x 0.5 :y 66 :z 0.5}] cells)) "a zombie over the roof does not pull the roof ahead of its support")
     (is (= cells (wall-placer/nearest-first feet [] cells)) "no chaser: as given")))
 
-(deftest a-calm-enderman-is-walked-away-from-not-sealed-against
+(deftest a-calm-enderman-beside-the-body-is-neither-fled-nor-sealed-against
+  ;; 3508ad2b: one the client does not flag angry (or a remembered one, no flag) is no danger, however near
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(dissoc (enderman 6 64 0.5) :angry)]})]
-          (.override (.-world p) "steer"
-                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng (order eng retreat) {})
-          (await (core/tick! eng))
-          (is (neg? (:x (first-move eng))) "away from it")
-          (is (zero? (count (calls p "place")))))))))
+        (doseq [ender [(assoc (enderman 2.5 64 0.5) :angry false) (dissoc (enderman 2.5 64 0.5) :angry)]]
+          (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [ender]})]
+            (core/submit! eng (order eng retreat) {})
+            (await (core/tick! eng))
+            (is (empty? (tu/walked-to eng)) (str "no flight from it " (pr-str ender)))
+            (is (zero? (count (calls p "place"))) "no walls against it")))))))
 
 (deftest an-enderman-is-angry-only-when-flagged-so-or-it-hurt-the-body
   ;; e340bc3e: a zombie's blow, or a calm enderman 2 blocks off, made the enderman angry: the body sealed itself in beside the zombie and died
