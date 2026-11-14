@@ -672,17 +672,17 @@
           (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "no strike ahead of the jump: the zombie would press back first")
           (is (= [7] (first-strike p)) "the jump strikes the pressed zombie as it starts"))))))
 
-(deftest a-pillar-through-anothers-zone-is-built-when-the-trespass-is-priced-under-the-fight
+(deftest a-pillar-through-anothers-zone-is-built-when-the-fight-is-dearer-than-the-trespass
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]}
-              (await (hidden-round '(test.real-flight {:settings {:jobs.survival.plug-way/trespass-s 0}})
-                                   {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
-                                            :entities [(zombie 0 64 1)]
+              (await (hidden-round retreat
+                                   {:blocks doorway :self {:health 3} :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(zombie 0 64 1) (assoc (zombie 1 64 0) :id 8) (assoc (zombie -1 64 0) :id 9)]
                                             :zones [{:name "vault" :min [0 64 0] :max [0 67 0] :owner "Miles"}]}
                                    1000 (constantly nil)))]
-          (is (= 3 (count (calls p "jumpPlace"))) "the pillar in its own space failed, the one through the zone is still priced under the fist fight")
+          (is (= 3 (count (calls p "jumpPlace"))) "at the default trespass price a fist fight at 3 health is dearer, so the pillar through the zone went up")
           (is (= 1 (count (filterv #(= :retreat.trespass-last-resort (:kind %)) @seen))) "and said it trespassed"))))))
 
 (deftest walls-that-need-anothers-zone-wait-for-a-pillar-that-keeps-off-it
@@ -1006,6 +1006,21 @@
   "Make every walk of the engine walker get no nearer: :blocked."
   [p]
   (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}}))))
+
+(deftest a-body-with-a-sword-that-cannot-walk-away-from-a-creeper-in-its-swell-range-hits-it-rather-than-walling
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "iron_sword" :count 1} {:name "dirt" :count 16}]
+                                           :entities [(creeper 2.5 64 0.5)]})]
+          (stuck-walks! p)
+          (core/submit! eng (order eng retreat) {})
+          (await (core/tick! eng))
+          (let [{:keys [prices order]} (first (filter #(= :retreat.cornered (:kind %)) @seen))]
+            (is (< (:fight prices) (:plug prices)) "walls need ticks the 1.5 s fuse does not give; an iron sword's hit-and-back is cheaper")
+            (is (= :fight (first order))))
+          (is (pos? (count (calls p "attack"))))
+          (is (zero? (count (calls p "place")))))))))
 
 (deftest a-body-without-a-sword-that-cannot-walk-away-from-a-creeper-walls-it-off-before-it-comes
   (async done
@@ -1842,7 +1857,7 @@
               placed (await (cornered {:x -1 :z 0}))
               lost (await (cornered nil))]
           (is (< (:fight (:prices lost)) (:fight (:prices placed))) "a shot whose way shows a line of fire: the shooter shoots on through the fight")
-          (is (= (key (apply min-key val (:prices placed))) (first (:order placed))) "the cheapest option comes first"))))))
+          (is (= [:fight :plug] (take 2 (:order placed))) "the fight is cheaper than the walls under the arrows, both priced with them"))))))
 
 ;; Brindle S9: the cornered fight walked 14 blocks down into an unseen cave to a skeleton, priced as the straight way to it
 (deftest a-cornered-fight-is-priced-with-go-tos-quote-of-the-walk-to-the-shooter-it-goes-for
