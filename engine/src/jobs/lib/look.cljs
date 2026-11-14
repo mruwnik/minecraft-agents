@@ -389,13 +389,14 @@
 (declare seen-block)
 
 (defn seen-water-sources
-  "The seen live water source blocks within radius, nearest first (the nearest 256 water blocks are read: a spill on flat ground is mostly flowing cells round its source). A source with a lily pad (or other block) seen on top follows the open ones: the bucket's ray is caught by the pad."
+  "The seen live water source blocks within radius, nearest first (the nearest 256 water blocks are read: a spill on flat ground is mostly flowing cells round its source). A source with a block seen on top (a lily pad) has :covered? true: the bucket's ray is caught by it; jobs.lib.water-source prices the choice."
   [p radius]
-  (let [sources (filterv water-source? (seen-blocks p {:names ["water"] :radius radius :max 256 :live? true :properties? true}))
-        covered? (fn [{:keys [pos]}]
+  (let [covered? (fn [{:keys [pos]}]
                    (let [above (seen-block p (update pos :y inc))]
                      (not (or (:unknown above) (nil? above) (contains? #{"air" "cave_air" "void_air" "water"} (:name above))))))]
-    (vec (concat (remove covered? sources) (filter covered? sources)))))
+    (->> (seen-blocks p {:names ["water"] :radius radius :max 256 :live? true :properties? true})
+         (filterv water-source?)
+         (mapv #(assoc % :covered? (covered? %))))))
 
 (defn seen-block
   "The block at cell pos as last seen: {:name :pos :age-ms (:properties)}, or {:unknown true :pos} for a cell never

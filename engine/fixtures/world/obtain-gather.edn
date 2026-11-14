@@ -51,6 +51,12 @@
    :act [[:job (jobs.items.obtain {:worth 1200 :item "water_bucket" :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "water_bucket" 1] [:item "bucket" 0]]}
+  {:name "an-empty-bucket-is-filled-at-a-pond-seen-through-tall-grass"
+   :body {:inventory [["bucket" 1]]}
+   :blocks [[:set [18 -1 20] "water"] [:fill [16 0 17] [18 0 19] "short_grass"]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "water_bucket" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "water_bucket" 1] [:item "bucket" 0]]}
   {:name "sand-seen-on-the-ground-is-dug-by-hand"
    :blocks [[:fill [18 0 20] [19 0 21] "sand"]]
    :act [[:job (jobs.items.obtain {:worth 1200 :item "sand" :count 3 :explore false})]]

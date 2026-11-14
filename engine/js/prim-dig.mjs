@@ -134,8 +134,9 @@ export function createDig (env) {
 
   // The server's bucket ray hits OUTLINE shapes, so a crop or lily pad with no collision still catches it; blockAtCursor
   // sees collision shapes only. The march from the eye to the aim is caught by such a block in a cell other than p, below
-  // its outline height (a lily pad is 1.5/16 high; the others count as full cells, the safe side).
-  const OUTLINE_HEIGHT = { lily_pad: 1.5 / 16 }
+  // its outline height (a lily pad is 1.5/16 high, wheat (2 age + 2)/16; the others, grass and flowers included, count as full cells, the safe side).
+  const outlineHeight = b => b.name === 'lily_pad' ? 1.5 / 16
+    : b.name === 'wheat' && b.getProperties?.().age !== undefined ? (2 * Number(b.getProperties().age) + 2) / 16 : 1
   const outlineCatches = (aim, p) => {
     const from = eye()
     const [dx, dy, dz] = [aim.x - from.x, aim.y - from.y, aim.z - from.z]
@@ -146,8 +147,8 @@ export function createDig (env) {
       const cell = { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) }
       if (cell.x === p.x && cell.y === p.y && cell.z === p.z) continue
       const b = env.bot.blockAt(vec(cell))
-      if (!b || isAir(b.name) || isLiquid(b.name) || isReplaceable(b.name) || b.boundingBox !== 'empty') continue
-      if (y - cell.y < (OUTLINE_HEIGHT[b.name] ?? 1)) return true
+      if (!b || isAir(b.name) || isLiquid(b.name) || b.name === 'light' || b.boundingBox !== 'empty') continue
+      if (y - cell.y < outlineHeight(b)) return true
     }
     return false
   }

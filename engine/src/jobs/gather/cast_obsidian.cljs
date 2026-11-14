@@ -18,7 +18,8 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.shore :as shore]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.water-source :as water]))
 
 (def doc
   "Get :count obsidian by pouring water on a seen lava source (the cell :at, else any seen) and mining the result with a diamond pickaxe.
@@ -56,7 +57,7 @@
 (defn seen-of [c names]
   (look/seen-blocks (:primitives c) {:names names :radius (:radius (:args c)) :max 32 :live? true}))
 
-(defn seen-water-sources [c] (look/seen-water-sources (:primitives c) (:radius (:args c))))
+(defn seen-water-sources [c] (water/seen-sources c (:radius (:args c))))
 
 (defn lava-near?
   "Whether a cell beside the stand cell (its four sides, at its level) is lava, which could flow onto it."

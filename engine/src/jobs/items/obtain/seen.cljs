@@ -17,6 +17,7 @@
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
+            [jobs.lib.water-source :as water]
             [clojure.string]))
 
 (defn hunt-worth
@@ -86,7 +87,7 @@
     (let [in (if (:crop need) (access/rules-input c {:own-plans-ok? true}) (access/rules-input c))
           water? (= "water_bucket" (:key need))
           read (fn [n] (if water?
-                         (look/seen-water-sources (:primitives c) (seen-radius))
+                         (water/seen-sources c (seen-radius))
                          (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max n})))
           takeable (fn [blocks] (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks))]
       (if all?
