@@ -42,12 +42,36 @@
       (fn ^:async t []
         (let [p (tu/seeing-all (tu/fake {:blocks (soil-over-stone 63 59) :self {:pos [0.5 64 0.5]}}))
               old-stair [{:data {:dim "overworld" :floors (vec (for [i (range 1 11)] [i (- 63 i) 0]))}}]
-              bottom (fn ^:async bottom [args] (with-redefs [ctx/entries (constantly old-stair) ctx/quote (quoting 25)]
+              bottom (fn ^:async bottom [args] (with-redefs [ctx/entries (constantly old-stair) ctx/quote (quoting 25) ctx/mem (constantly {})
+                                                             ctx/update-mem! (fn [& _])]
                                           (await (descent/own-stair-bottom {:primitives p :args args}))))]
           (is (nil? (await (bottom {:block "stone" :descend-limit 12})))
               "5 steps to the seen stone cost 18 s, less than the 25 s walk to the foot 10 below")
           (is (= [10 54 0] (:cell (await (bottom {:block "iron_ore" :level 40}))))
               "to an ore's level the walk saves cutting all 10 steps (36 s)"))))))
+
+;; Brindle S2: stone 15 off, mine quoted a walk to each of 8 old stairs 400-800 blocks away every round, and each round began
+;; again at the first: 315 rounds of the same partial search, no dig.
+(deftest a-stair-way-too-far-for-its-least-walk-is-passed-unquoted-and-one-answered-is-not-asked-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake {:blocks (soil-over-stone 63 59) :self {:pos [0.5 64 0.5]}}))
+              stair (fn [x d] {:data {:dim "overworld" :floors (vec (for [i (range 1 (inc d))] [(+ x i) (- 63 i) 0]))}})
+              m (atom {})
+              asked (atom [])
+              bottom (fn ^:async bottom [ways answer]
+                       (with-redefs [ctx/entries (constantly ways) ctx/mem (fn [_] @m) ctx/update-mem! (fn [_ f & args] (apply swap! m f args))
+                                     ctx/quote (let [q (fn [_ _ args] (swap! asked conj (:x (:pos args))) (js/Promise.resolve (answer (:x (:pos args)))))]
+                                                 (fn ([c s a] (q c s a)) ([c s a _] (q c s a))))]
+                         (await (descent/own-stair-bottom {:primitives p :args {:block "iron_ore" :level 40}}))))]
+          (is (nil? (await (bottom [(stair 400 10)] (constantly nil)))))
+          (is (empty? @asked) "36 s of steps is less than the least walk of 400 blocks: no quote")
+          (let [ans (fn [x] (if (= x 12) {:uses {:job-time [0 99 ##Inf]} :route {:found true}} {:route {:found false :reason :searching}}))
+                ways [(stair 0 12) (stair 1 10)]]
+            (is (= :searching (await (bottom ways ans))))
+            (is (= :searching (await (bottom ways ans))))
+            (is (= [12 11 11] @asked) "the deeper way, too dear, is quoted once; the other's search goes on")))))))
 
 (def open-ground (merge (box -1 64 -2 12 80 2 "air") (box -1 63 -2 12 63 2 "stone")))
 

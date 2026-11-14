@@ -14,4 +14,13 @@
    :blocks [[:set [8 -10 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :direction :west :level #at [16 -10 16] :tunnel-length 14 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 280 :of-job true}]
+   :after [[:item "raw_iron" 1] [:block [35 -1 16] "stone"] [:block [34 -1 16] "stone"] [:block [36 -1 16] "stone"]]}
+  ;; Card 112060c7 (Brindle S2): two deeper old stairs 400 blocks off were quoted every round, each round starting again at the
+  ;; first, and the near one was never reached (job-time ran out). Should-succeed as above: the far ones pass on their least walk.
+  {:name "far-old-stairs-pass-unquoted-and-the-near-one-is-walked"
+   :blocks [[:set [8 -10 16] "iron_ore"]]
+   :memory [{:kind :stair-way :data {:dim "overworld" :floors [#at [436 -2 16] #at [435 -3 16] #at [434 -4 16] #at [433 -5 16] #at [432 -6 16] #at [431 -7 16] #at [430 -8 16] #at [429 -9 16]]}}
+            {:kind :stair-way :data {:dim "overworld" :floors [#at [436 -2 -384] #at [435 -3 -384] #at [434 -4 -384] #at [433 -5 -384] #at [432 -6 -384] #at [431 -7 -384] #at [430 -8 -384] #at [429 -9 -384]]}}]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :direction :west :level #at [16 -10 16] :tunnel-length 14 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 280 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [35 -1 16] "stone"] [:block [34 -1 16] "stone"] [:block [36 -1 16] "stone"]]}]}

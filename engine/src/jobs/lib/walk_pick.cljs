@@ -60,14 +60,16 @@
   where the body stands: go-to's quote of a route there (quoted-s: its mean job-time, a dig priced in, and its risk) is no
   dearer, by the ways of the walk's own args (jobs.lib.child/walk-back-args); a route not found counts only when those ways
   change the world (a dig finds it). true / false, or :searching while go-to's quote search goes on (ask again next round).
-  Quoted at worth redo-s, what it is weighed against."
+  Quoted at worth redo-s, what it is weighed against; false unquoted when even the least walk there (walk-s) is dearer."
   [c walk-args redo-s]
-  (let [q (await (ctx/quote c 'jobs.movement.go-to (-> (select-keys walk-args [:range :ways]) (assoc :worth redo-s)
-                                                      (assoc :pos (zipmap [:x :y :z] (:pos walk-args))))))
-        route (:route q)]
-    (if (= :searching (:reason route))
-      :searching
-      (boolean (and (<= (quoted-s c q) redo-s) (or (:found route) (:escalating route)))))))
+  (let [args (-> (select-keys walk-args [:range :ways]) (assoc :worth redo-s) (assoc :pos (zipmap [:x :y :z] (:pos walk-args))))]
+    (if (> (walk-s (u/self-pos c) args) redo-s)
+      false
+      (let [q (await (ctx/quote c 'jobs.movement.go-to args))
+            route (:route q)]
+        (if (= :searching (:reason route))
+          :searching
+          (boolean (and (<= (quoted-s c q) redo-s) (or (:found route) (:escalating route)))))))))
 
 (defn ^:async quote!
   "go-to's quote of the walk args (a go-to call's args), at the worth they name, else the calling job's: a walk with the same args then judges by the same worth."

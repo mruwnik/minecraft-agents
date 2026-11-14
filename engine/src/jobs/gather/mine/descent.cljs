@@ -177,9 +177,11 @@
 (defn ^:async own-stair-bottom
   "The lowest stand of a stair this body cut earlier (memory :stair-way) worth walking down: its top level with the body (4 up or
   down), its bottom 3 or more below the feet and not below the tunnel level, and go-to's whole way to the bottom no dearer than cutting
-  new-stair-steps (walk-pick/walk-back-worth?). {:cell [x y z] :heading name}, or nil."
+  new-stair-steps (walk-pick/walk-back-worth?). {:cell [x y z] :heading name}, or nil. A way answered not worth it from these feet
+  is kept in [:descent :own-stair] and not quoted again while a later one's quote goes on over rounds."
   [c]
   (let [feet (cell-of (u/self-pos c))
+        passed (let [o (:own-stair (:descent (ctx/mem c)))] (if (= feet (:from o)) (:passed o) #{}))
         dim (.-dimension (.self (:primitives c)))
         level (tunnel-level (:args c))
         stand (fn [[x y z]] [x (inc y) z])
@@ -188,7 +190,7 @@
                    :let [{bottom :cell :as b} (smem/bottom-of (:data e))
                          [_ by _] bottom
                          [_ ty _] (stand (last (sort-by second (:floors (:data e)))))]
-                   :when (and bottom
+                   :when (and bottom (not (passed bottom))
                               (<= (js/Math.abs (- ty (:y feet))) 4) (<= by (- (:y feet) 3)) (or (nil? level) (>= by level)))]
                {:cell bottom :heading (:heading b)})]
     (loop [[w & more] (sort-by (comp second :cell) ways)]
@@ -197,7 +199,8 @@
           (cond
             (= :searching worth) :searching
             worth w
-            :else (recur more)))))))
+            :else (do (ctx/update-mem! c update-in [:descent :own-stair] #(if (= feet (:from %)) (update % :passed conj (:cell w)) {:from feet :passed #{(:cell w)}}))
+                      (recur more))))))))
 
 (defn ^:async reuse-stair!
   "Before the first cut of the stair down: on the foot of a stair this body cut (stair-memory/foot-heading, as after a shed
