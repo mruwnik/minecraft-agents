@@ -507,7 +507,8 @@
             head (merge-with + r (merge-with - r stand))]
         (ctx/update-mem! c assoc :seal {:bed r :cells (seal-cells p {:stand stand :foot r :head head})})
         (await (seal-and-sleep! c)))
-      r (await (sleep! c r true))
+      r (do (ctx/update-mem! c assoc :placed r)
+            (await (sleep! c r true)))
       :else
       (do (ctx/remember! c :bed-place-failed {:pos (sh-sense/feet p)} sh-beds/bed-place-failed-policy)
           (ctx/end c :nothing-possible :bed-place-failed {:slept false
@@ -523,6 +524,7 @@
   (let [p (:primitives c)
         chosen? (some? (:answer (:args c)))
         bed (or (some-> (:bed (:args c)) places/parse-pos :pos)
+                (when-let [b (:placed (ctx/mem c))] (when-not (bed-gone? p b) b))
                 (when-not chosen?
                   (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-permit c) (ctx/worth c)) {:price (sense/fails-to c)}))))
         answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c chosen?)) (await (carried-answer c)))]

@@ -30,6 +30,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.survival.bed-down :as bed-down]
+            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.food-animals :as animals]
             [jobs.survival.night :as night]
             [jobs.survival.night.flee :as flee]
@@ -597,3 +598,18 @@
                          @n))]
           (is (= 1 (await (priced {:digging [0 64 0]} 3))) "three passes of one dig-in: priced on the first")
           (is (= 0 (await (priced {:digging [0 64 0] :roof-walk-failed true} 2))) "no look for a place tonight: nothing to price"))))))
+
+(deftest a-bed-put-down-in-one-round-is-slept-in-the-next-though-none-is-carried-then
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c (assoc (sense-t/stub-ctx (tu/seeing-all (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :time night :blocks {"2,64,0" "red_bed"}}))) :args {:answer :bed})
+              foot {:x 2 :y 64 :z 0}
+              slept (atom [])]
+          (with-redefs [bed-down/put-down-bed! (fn ^:async pd [_] foot)
+                        bed-down/open-sleep-ok? (fn ^:async o [_ _] true)
+                        bed-down/sleep! (fn ^:async s [_ bed _] (swap! slept conj bed) :continue)
+                        sh-beds/place-wanted? (fn pw ([_] (empty? @slept)) ([_ _] (empty? @slept)))]
+            (await (bed-down/round c))
+            (await (bed-down/round c)))
+          (is (= [foot foot] @slept) "the second round sleeps in the bed the first put down"))))))
