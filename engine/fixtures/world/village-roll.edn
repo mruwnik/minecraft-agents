@@ -6,7 +6,7 @@
 ;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
 ;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
 ;; roll-villager-heard-behind-a-wall-by-day-is-walked-toward-not-gone: by day a named villager heard behind a wall is walked toward round it (roll.offers), not :gone.
-;; roll-rebreak-from-afar-walks-to-the-cell-before-the-break: a jobless NoAI villager, the body 10 blocks off: the re-break walks into reach (:to-cell) before the urgent section, then ends :no-job.
+;; roll-pens-a-jobless-villager-before-it-waits-for-the-job: a jobless NoAI villager 6 blocks off: a jobs.village.pen child (slot :pen) builds the pen and waits; the villager never walks in, so the roll ends with the pen's :not-walked-in.
 ;; roll-with-a-spare-places-it-before-the-pickup-with-a-free-composter-near: with a spare lectern carried, the spare goes in the moment the job is gone and the drop is picked up after (:owed child), so the villager has no time to claim the composter 10 blocks off.
 ;; Should-fail: a named farmer ends :other-job with no dig; nitwit, absent villager (by day), a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
 ;; roll-sealed-in-dirt-never-digs-its-way-out-for-the-drop: the body sealed in a pocket under dirt that is another's (a plan footprint stands for the zone), the lectern drop out of reach: the roll ends without breaking the dirt (the pillar escape's roof dig obeys zones).
@@ -182,13 +182,13 @@
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :cell-unseen}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:block [16 0 16] "lectern"]]}
-  {:name "roll-rebreak-from-afar-walks-to-the-cell-before-the-break"
-   :body {:at [26.5 0 16.5] :yaw 90}
-   :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,34],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
-         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000022" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/take-job-ticks 200}})]]
-   :expect [{:event {:source :job :kind :child_started :data {:slot :to-cell}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :no-job}} :within-s 200 :of-job true}]
-   :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-pens-a-jobless-villager-before-it-waits-for-the-job"
+   :body {:at [14.5 0 16.5] :yaw 270 :inventory [["cobblestone" 16] ["oak_slab" 2] ["torch" 4]]}
+   :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,34],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000022" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.lib.villager/take-job-ticks 200}})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :pen}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :not-walked-in}} :within-s 220 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}
   {:name "roll-with-a-spare-places-it-before-the-pickup-with-a-free-composter-near"
    :blocks [[:set [26 0 16] "composter"]]
    :body {:at [14.5 0 16.5] :yaw 270 :inventory [["lectern" 1]]}

@@ -13,6 +13,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.villager :as villager]
+            [jobs.lib.villager-pen :as vp]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -33,8 +34,11 @@
   is waited for ::away-s by day; then :gone. Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
   the place again are one urgent section (a night or food reflex waits for it); with a spare workstation carried, the
   spare goes in the moment the villager reads jobless and the drop is picked up after, so the villager has no time to
-  claim another free job site. A villager that reads another job is never rolled: a named one ends :other-job, else the
-  nearest other in sight is picked. Waits (:continue) for the villager to take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
+  claim another free job site. Before a break, and while a jobless villager is waited for, the villager must stand shut in
+  its pen (jobs.lib.villager-pen/penned: alone in a lit one-wide cell, the workstation under a top slab plugging its far
+  end); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
+  round looks for) is this call's. A villager that reads another job is never rolled: a named one ends :other-job, else the
+  nearest other in sight is picked. Waits (:continue) for the penned villager to take its job; villagers take jobs only by day, so at night the wait's reason is
   :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children; :ways (default all) goes to the place child, so #{:carried} places only a workstation already carried (else it waits :need, nothing is fetched or crafted). Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
@@ -43,10 +47,10 @@
     traded, and the game keeps a traded villager's job; a picked one is ruled out for the next nearest), :other-job, :occupied (another block at :pos),
     :cell-unseen.
   - impossible: :nitwit.
-  - nothing-possible :no-job: the villager took no job in ::scan-ticks plus its walk of game ticks of its walking hours, nor in ::take-job-ticks after one more
-    break and place; :sites names the other job-site blocks seen (a free one it may hold a claim on).
+  - nothing-possible :no-job: the penned villager took no job in jobs.lib.villager/take-job-ticks game ticks of its walking
+    hours; :sites names the other job-site blocks seen (a free one it may hold a claim on).
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
+    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig, place or pen child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -59,19 +63,12 @@
 
 (def ways need/fetch-ways)
 
-(def workstations
-  {"librarian" "lectern" "farmer" "composter" "cleric" "brewing_stand" "armorer" "blast_furnace" "butcher" "smoker"
-   "cartographer" "cartography_table" "fisherman" "barrel" "fletcher" "fletching_table" "leatherworker" "cauldron"
-   "mason" "stonecutter" "shepherd" "loom" "toolsmith" "smithing_table" "weaponsmith" "grindstone"})
-
 (a/defargs settings
   {::max-rolls {:default 20 :doc "Rolls (breaks of the workstation) without a match before the call gives up (:no-match)." :spec (a/int-in 1 200)}
    ::away-s {:default 30 :doc "Seconds a villager seen before may stay out of view (after the workstation is placed) before the call ends :gone." :spec (a/int-in 1 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
-   ::take-job-ticks {:default 1240 :doc "Game ticks of the villagers' walking hours (10-9000, 11000-12000) a villager may stay jobless after the workstation was broken and placed once more, then the call ends :no-job. The game's rule: a jobless villager looks for a free job site every 20-40 ticks and drops a claim on another site after 1200 ticks of walking to it, so past 1240 it holds a site it reaches (or ours is out of its way)." :spec (a/int-in 1 nil)}
-   ::scan-ticks {:default 40 :doc "Game ticks of the villagers' walking hours a jobless villager's search for a free job site may take to start: the game rescans every 20-40 ticks. The workstation is broken and placed again once a villager in view stays jobless for this plus its walk to the workstation." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (villager/poll-s))
@@ -82,7 +79,7 @@
 (defn item-of
   "The workstation item of :profession."
   [args]
-  (workstations (:profession args)))
+  (villager/workstations (:profession args)))
 
 (defn want-of [args] (or (:want args) (when (:enchant args) "enchanted_book")))
 
@@ -192,7 +189,7 @@
     (fn [e] (and (not-nitwit? e) (not (other-job? c e)) (not (contains? out (villager/ident e)))))))
 
 (def villager-keys "Memory about the villager picked, dropped when another is picked."
-  [:chosen :seen :away-since :view :view-tries :last-seen :flanked :memory-walked :night-waited :vantage :job-at :job-ticks :rebroke])
+  [:chosen :seen :away-since :view :view-tries :last-seen :flanked :memory-walked :night-waited :vantage :job-at :job-ticks])
 
 (defn pick!
   "The villager rolled: :villager, else the nearest adult that is no nitwit (saying which one it picked, once)."
@@ -429,54 +426,31 @@
                                  (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0)) (assoc :drop-ids (:ids r))))
                                      (await (back-steps! c)))))))))))
 
-(defn walk-ticks-before
-  "Ticks of villagers' walking hours (10-9000, 11000-12000) in the span from time 0 to time t, t any whole number of ticks."
-  [t]
-  (let [day (js/Math.floor (/ t 24000))
-        m (- t (* day 24000))
-        span (fn [from to] (max 0 (- (min m to) from)))]
-    (+ (* day 9990) (span 10 9000) (span 11000 12000))))
-
-(defn count-ticks!
-  "Add to :job-ticks the game ticks (world age) of villagers' walking hours since the last count (the part of that span
-  inside those hours, whatever the gap); the count it gives."
-  [c]
-  (let [self (.self (:primitives c))
-        age (.-worldAge self)
-        t (.-timeOfDay self)
-        {:keys [job-at job-ticks]} (ctx/mem c)
-        gap (if (and age job-at t) (max 0 (- age job-at)) 0)
-        n (+ (or job-ticks 0) (- (walk-ticks-before t) (walk-ticks-before (- t gap))))]
-    (ctx/update-mem! c assoc :job-at age :job-ticks n)
-    n))
-
-(defn job-sites
-  "The job-site blocks the body has seen within the villager search radius, other than the workstation at pos: free
-  ones a jobless villager may have claimed instead."
-  [c pos]
-  (->> (look/seen-blocks (:primitives c) {:names (set (vals workstations)) :radius (villager/search-radius) :live? true})
-       (remove #(= (select-keys (:pos %) [:x :y :z]) (select-keys pos [:x :y :z])))
-       (mapv #(select-keys % [:name :pos]))))
-
-(defn rebreak-ticks
-  "Game ticks a villager may stay jobless with the workstation placed before the first re-break: the game's rescan
-  (::scan-ticks) plus its walk to the workstation (one tick is 1/20 s); a villager not in view is given the search radius."
-  [c]
-  (let [e (villager/find-by-uuid (:primitives c) (villager/chosen c))
-        dist (if e (u/dist (u/pos-of (.-pos e)) (:pos (:args c))) (villager/search-radius))]
-    (+ (settings/get settings ::scan-ticks) (js/Math.ceil (* 20 (/ dist (cost/walk-blocks-per-s)))))))
-
 (defn ^:async wait-take-job!
-  "The villager has no job with the workstation placed: wait while game ticks of the villagers' walking hours (count-ticks!)
-  stay under rebreak-ticks, then break and place the workstation once more (a villager that took our site's ticket is
-  bumped), wait ::take-job-ticks (the game's worst case for a claim on another site), then end :no-job naming the other
-  job sites seen (:sites)."
+  "The penned villager has no job with the workstation placed: wait while game ticks of the villagers' walking hours
+  (villager/count-ticks!; none pass at night, when villagers take no job) stay under villager/take-job-ticks, then end
+  :no-job naming the other job sites seen (:sites)."
   [c]
-  (let [m (ctx/mem c)]
+  (if (< (villager/count-ticks! c) (villager/take-job-ticks))
+    (await (wait-job! c :villager-takes-no-job))
+    (ctx/end c :nothing-possible :no-job (data-of c {:sites (villager/job-sites c (:pos (:args c)))}))))
+
+(defn penned? [c e] (some? (vp/penned (:primitives c) (b/cell (:pos (b/parse (:args c)))) e)))
+
+(defn ^:async pen!
+  "The villager is not shut in its pen: a jobs.village.pen child (slot :pen) shuts it in. :again once it is, or once the
+  child lost the villager from view (the round looks for it); :continue while the child goes on; else the call ends with
+  the child's ending."
+  [c]
+  (let [{:keys [pos profession ignore-zones? ways]} (:args c)
+        r (await (ctx/call c :pen 'jobs.village.pen (cond-> {:villager (villager/chosen c) :pos pos :profession profession}
+                                                       ignore-zones? (assoc :ignore-zones? true)
+                                                       (some? ways) (assoc :ways ways))))]
     (cond
-      (< (count-ticks! c) (if (:rebroke m) (settings/get settings ::take-job-ticks) (rebreak-ticks c))) (await (wait-job! c :villager-takes-no-job))
-      (not (:rebroke m)) (do (ctx/update-mem! c assoc :rebroke true) (await (dig! c)))
-      :else (ctx/end c :nothing-possible :no-job (data-of c {:sites (job-sites c (:pos (:args c)))})))))
+      (= :continue r) :continue
+      (= :done (:kind r)) :again
+      (= :villager-out-of-view (contract/cause-key r)) :again
+      :else (ctx/end c (:kind r) (:cause r) (data-of c nil)))))
 
 (defn on-cell?
   "Whether the body's feet or head fill the cell pos."
@@ -723,17 +697,17 @@
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
       (other-job? c e) (rule-out! c :other-job)
-      (= "unemployed" profession) (await (wait-take-job! c))
+      (= "unemployed" profession) (if (penned? c e) (await (wait-take-job! c)) (await (pen! c)))
       (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c e))
       :else
-      (let [_ (ctx/update-mem! c dissoc :rebroke)
-            r (await (read-offers! c))]
+      (let [r (await (read-offers! c))]
         (cond
           (:found r) (found! c (:found r))
           (= :locked r) (rule-out! c :locked)
-          (= :miss r) (if out-of-tries?
-                        (stop! c :no-match)
-                        (await (dig! c)))
+          (= :miss r) (cond
+                        out-of-tries? (stop! c :no-match)
+                        (penned? c e) (await (dig! c))
+                        :else (await (pen! c)))
           :else r)))))
 
 (defn ^:async cleanup

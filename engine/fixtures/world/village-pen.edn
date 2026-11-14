@@ -1,0 +1,25 @@
+;; jobs.village.pen (card fa6de3f8): a villager shut in alone in a one-wide cell beside its lectern (16 0 16), a top slab over
+;; the lectern, the near end plugged once it stands in. NoAI villagers: they stand where summoned (no gravity, no walk).
+;; Should-succeed: pen-shuts-in-a-villager-beside-the-lectern (cell 16 0 17 along +z: walls, roof, top slab, plug at 16 0 18).
+;; Should-fail: pen-villager-that-never-walks-in-ends-not-walked-in (a jobless NoAI villager 6 blocks off: the pen is built,
+;; its near end stays open, the call ends :not-walked-in after the walking-hour ticks).
+{:defaults
+ {:tags [:village :jobs]
+  :time :day :time-why :villager-schedule
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [16 0 16] [16 0 16] "lectern"]]
+  :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 16] ["oak_slab" 2] ["torch" 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "pen-shuts-in-a-villager-beside-the-lectern"
+   :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,40],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000028" :pos #at [16 0 16] :profession "librarian"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"] [:block [16 2 16] "cobblestone"]
+           [:block [16 2 17] "cobblestone"] [:block [15 0 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
+           [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]]}
+  {:name "pen-villager-that-never-walks-in-ends-not-walked-in"
+   :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,41],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000029" :pos #at [16 0 16] :profession "librarian" :settings {:jobs.lib.villager/take-job-ticks 200}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-walked-in}} :within-s 220 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}]}

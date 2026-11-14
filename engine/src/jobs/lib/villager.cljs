@@ -12,9 +12,18 @@
 
 (a/defargs settings
   {::search-radius {:default 48 :doc "Blocks within which villagers are looked for." :spec (a/int-in 1 96)}
-   ::poll-s {:default 2 :doc "Seconds between looks while waiting for a villager's job or for day to look for a villager asleep out of view." :spec (a/int-in 1 60)}})
+   ::poll-s {:default 2 :doc "Seconds between looks while waiting for a villager's job or for day to look for a villager asleep out of view." :spec (a/int-in 1 60)}
+   ::take-job-ticks {:default 1240 :doc "Game ticks of the villagers' walking hours (10-9000, 11000-12000) a jobless villager is waited for to take a free workstation (or to walk to it). The game's rule: a jobless villager looks for a free job site every 20-40 ticks and drops a claim on another site after 1200 ticks of walking to it, so past 1240 it holds a site it reaches (or ours is out of its way)." :spec (a/int-in 1 nil)}})
 
 (defn poll-s [] (settings/get settings ::poll-s))
+
+(defn take-job-ticks [] (settings/get settings ::take-job-ticks))
+
+(def workstations
+  "Profession -> its workstation block."
+  {"librarian" "lectern" "farmer" "composter" "cleric" "brewing_stand" "armorer" "blast_furnace" "butcher" "smoker"
+   "cartographer" "cartography_table" "fisherman" "barrel" "fletcher" "fletching_table" "leatherworker" "cauldron"
+   "mason" "stonecutter" "shepherd" "loom" "toolsmith" "smithing_table" "weaponsmith" "grindstone"})
 
 (defn search-radius [] (settings/get settings ::search-radius))
 
@@ -113,3 +122,32 @@
                                                 :continue)
           (:night-waited m) (do (ctx/update-mem! c dissoc :night-waited :memory-walked :vantage) :again)
           :else (await (hear-step! c id))))))
+
+(defn walk-ticks-before
+  "Ticks of villagers' walking hours (10-9000, 11000-12000) in the span from time 0 to time t, t any whole number of ticks."
+  [t]
+  (let [day (js/Math.floor (/ t 24000))
+        m (- t (* day 24000))
+        span (fn [from to] (max 0 (- (min m to) from)))]
+    (+ (* day 9990) (span 10 9000) (span 11000 12000))))
+
+(defn count-ticks!
+  "Add to memory :job-ticks the game ticks (world age) of villagers' walking hours since the last count (the part of that
+  span inside those hours, whatever the gap); the count it gives. Dissoc :job-at and :job-ticks to count afresh."
+  [c]
+  (let [self (.self (:primitives c))
+        age (.-worldAge self)
+        t (.-timeOfDay self)
+        {:keys [job-at job-ticks]} (ctx/mem c)
+        gap (if (and age job-at t) (max 0 (- age job-at)) 0)
+        n (+ (or job-ticks 0) (- (walk-ticks-before t) (walk-ticks-before (- t gap))))]
+    (ctx/update-mem! c assoc :job-at age :job-ticks n)
+    n))
+
+(defn job-sites
+  "The job-site blocks the body has seen within the villager search radius, other than the workstation at pos: free
+  ones a jobless villager may have claimed instead."
+  [c pos]
+  (->> (look/seen-blocks (:primitives c) {:names (set (vals workstations)) :radius (search-radius) :live? true})
+       (remove #(= (select-keys (:pos %) [:x :y :z]) (select-keys pos [:x :y :z])))
+       (mapv #(select-keys % [:name :pos]))))

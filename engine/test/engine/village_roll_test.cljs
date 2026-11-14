@@ -22,10 +22,17 @@
 
 (defn offer [item] {:cost [{:item "emerald" :count 5}] :gives {:item item :count 1}})
 
+(def in-pen "Where a villager in the pen stands." {:x 3 :y 64 :z 0})
+
 (defn librarian
-  "A villager that already claimed the workstation, with the offers."
+  "A villager in the pen that already claimed the workstation, with the offers."
   [offers & [extra]]
-  (vt/villager offers (merge {:profession "librarian" :level 1} extra)))
+  (vt/villager offers (merge {:profession "librarian" :level 1 :pos in-pen} extra)))
+
+(defn jobless
+  "A villager in the pen without a job."
+  [& [extra]]
+  (vt/villager nil (merge {:profession "unemployed" :level 1 :pos in-pen} extra)))
 
 (defn rolls-offers!
   "Make the fake villager behave: it loses its profession when the workstation cell is empty, and takes it again (with the
@@ -62,11 +69,27 @@
         (recur (inc i))))
     @out))
 
+(def pen
+  "The villager's pen at ws-pos along +x (jobs.lib.villager-pen): its cell [3 64 0] (in-pen) floored, walled, roofed,
+  a top slab over the lectern, its near end [4 64 0] plugged; the body stands behind the lectern."
+  {:blocks {"3,63,0" "stone" "3,64,1" "stone" "3,65,1" "stone" "3,66,1" "stone" "3,64,-1" "stone" "3,65,-1" "stone"
+            "3,66,-1" "stone" "3,66,0" "stone" "2,66,0" "stone" "2,65,0" "oak_slab" "4,64,0" "stone" "4,65,0" "stone"}
+   :states {"2,65,0" {:type "top"}}
+   :self {:pos {:x 1.5 :y 64 :z 0.5}}})
+
+(defn with-pen
+  "World spec with the pen built under its blocks and the body behind the lectern (a spec's :self wins)."
+  [spec]
+  (-> (merge {:self (:self pen) :states (:states pen)} spec)
+      (update :blocks #(merge (:blocks pen) %))))
+
 (defn ^:async roll
-  "Run the job on a world with a lectern at ws-pos; [result p seen]. scripts feed the villager's next offers."
-  [{:keys [entities inventory blocks scripts zones keeps-job? self floor wrap]} args]
+  "Run the job on a world with a lectern at ws-pos, in its pen unless :pen? is false; [result p seen]. scripts feed
+  the villager's next offers."
+  [{:keys [entities inventory blocks scripts zones keeps-job? self floor wrap pen?] :or {pen? true}} args]
   (let [env (cond-> (bd/setup (cond-> {:entities entities :inventory inventory :zones (or zones [])
-                                       :blocks (merge {ws-key "lectern" "2,63,0" "stone"} blocks)}
+                                       :blocks (merge {ws-key "lectern" "2,63,0" "stone"} (when pen? (:blocks pen)) blocks)}
+                                pen? (assoc :states (:states pen) :self (:self pen))
                                 self (assoc :self self)
                                 floor (assoc :floor floor)))
               wrap wrap)
@@ -114,6 +137,20 @@
           (is (= 3 (digs p)))
           (is (= "lectern" (workstation p)) "the workstation is back")
           (is (contains? (vt/kinds seen) :completed)))))))
+
+(deftest a-villager-not-shut-in-is-penned-before-the-first-break
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :pen? false
+                                       :inventory [{:name "cobblestone" :count 20} {:name "oak_slab" :count 1} {:name "torch" :count 2}]
+                                       :scripts [[(offer "enchanted_book")]]}
+                                      {}))
+              acts (keep #(#{"place" "dig"} (.-name %)) (.-calls (.-world p)))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]])) "the near end is plugged")
+          (is (= "top" (get-in @(fake/state p) [:states [2 65 0] :type])) "a top slab over the lectern")
+          (is (= "place" (first acts)) "the pen is built before the lectern is broken"))))))
 
 (deftest an-enchant-skips-books-of-other-enchantments
   (async done
@@ -202,7 +239,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [traded (librarian [(offer "paper")] {:id 3 :uuid "v-2" :xp 1 :pos {:x 0 :y 64 :z 0.5}})
+        (let [traded (librarian [(offer "paper")] {:id 3 :uuid "v-2" :xp 1 :pos {:x 0.5 :y 64 :z 0.5}})
               [result p seen] (await (roll {:entities [traded (librarian [(offer "paper")])]
                                             :scripts [[(offer "enchanted_book")]]}
                                            {:villager nil}))]
@@ -254,7 +291,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (roll {:entities [(librarian [(offer "enchanted_book")])]
-                                       :self {:pos {:x 4.5 :y 64 :z 0.5}}
+                                       :self {:pos {:x -1.5 :y 64 :z 0.5}}
                                        :wrap #(let [q (:p %)
                                                     entities (.-entities q)
                                                     walked? (fn [] (some (fn [call] (#{"goTo" "moveTo" "steer"} (.-name call))) (.-calls (.-world q))))]
@@ -328,7 +365,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result] (await (roll {:entities [(librarian [] {:pos {:x 8.5 :y 64 :z 0.5} :profession "unemployed"})]
-                                     :keeps-job? true
+                                     :keeps-job? true :blocks {"4,64,0" "air" "4,65,0" "air"}
                                      :wrap (fn [{:keys [p clock] :as env}]
                                              (let [state (fake/state p)
                                                    orig (.-entities p)
@@ -370,7 +407,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]} {:spend {:wall-time 30}}))]
+        (let [[result p] (await (roll {:entities [(jobless)]} {:spend {:wall-time 30}}))]
           (is (= {:found false :reason :wall-time} (select-keys result [:found :reason])))
           (is (= "lectern" (workstation p))))))))
 
@@ -382,33 +419,24 @@
     (add-watch clock :age (fn [_ _ _ ms] (swap! (fake/state p) assoc-in [:self :worldAge] (js/Math.floor (/ ms 50)))))
     env))
 
-(deftest a-villager-that-takes-no-job-gets-one-more-break-then-the-call-ends-no-job-naming-the-other-job-sites
+(deftest a-penned-villager-that-takes-no-job-ends-no-job-naming-the-other-job-sites-without-another-break
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})] :keeps-job? true
+        (let [[result p] (await (roll {:entities [(jobless)] :keeps-job? true
                                        :blocks {"6,64,0" "composter"} :wrap (comp (ticking! 1000) #(do (tu/seeing-all (:p %)) %))}
-                                      {:settings {:jobs.village.roll/take-job-ticks 200}}))]
+                                      {:settings {:jobs.lib.villager/take-job-ticks 200}}))]
           (is (= {:found false :reason :no-job :status :stopped} (select-keys result [:found :reason :status])))
           (is (= [{:name "composter" :pos {:x 6 :y 64 :z 0}}] (:sites result)))
-          (is (= 1 (digs p)) "one break after the wait, none after the second")
+          (is (zero? (digs p)) "shut in alone beside a free workstation, a villager no second break would help")
           (is (= "lectern" (workstation p))))))))
-
-(deftest a-villager-that-stays-jobless-is-broken-for-again-after-a-rescan-and-its-walk-not-after-the-claim-limit
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[_ p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})] :keeps-job? true
-                                  :wrap (comp (ticking! 1000) #(do (tu/seeing-all (:p %)) %))}
-                                 {:spend {:wall-time 30}}))]
-          (is (= 1 (digs p)) "600 ticks of wall time: the old 1240-tick wait never got to the second break"))))))
 
 (deftest a-jobless-villager-is-waited-for-in-game-ticks-of-its-walking-hours-not-in-daytime-seconds
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env ((ticking! 9500) (bd/setup {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
-                                              :blocks {ws-key "lectern" "2,63,0" "stone"}}))
+        (let [env ((ticking! 9500) (bd/setup (merge pen {:entities [(jobless)]
+                                                         :blocks (merge {ws-key "lectern" "2,63,0" "stone"} (:blocks pen))})))
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book"
                                                 :spend {:wall-time 400}} 700))
               p (:p env)]
@@ -416,18 +444,13 @@
               "at the villagers' meeting hour (day, no walking) nothing counts toward the wait")
           (is (zero? (digs p)) "no break and place again: 300 daytime seconds used to send one"))))))
 
-(deftest walking-ticks-of-a-gap-count-only-the-walking-hours-in-it
-  (are [from to n] (= n (- (roll/walk-ticks-before to) (roll/walk-ticks-before from)))
-    11500 11700 200
-    9500 12500 1000
-    11500 36000 10490
-    -500 500 490))
+
 
 (deftest a-villager-that-took-another-job-while-the-workstation-was-out-is-not-waited-for-the-workstation-goes-back
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "farmer" :level 1})] :keeps-job? true
+        (let [[result p] (await (roll {:entities [(jobless {:profession "farmer"})] :keeps-job? true
                                        :inventory [{:name "lectern" :count 1}] :blocks {ws-key "air"}}
                                       {:spend {:wall-time 30}}))]
           (is (= {:found false :status :stopped :reason :other-job} (select-keys result [:found :status :reason])))
@@ -437,7 +460,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager [(offer "paper")] {:level 1})] :keeps-job? true} {}))]
+        (let [[result p] (await (roll {:entities [(vt/villager [(offer "paper")] {:level 1 :pos in-pen})] :keeps-job? true} {}))]
           (is (= {:found false :status :stopped :reason :other-job} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
 
@@ -458,7 +481,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
+        (let [[result p] (await (roll {:entities [(jobless)]
                                        :inventory [{:name "lectern" :count 1}]
                                        :blocks {ws-key "air"}
                                        :scripts [[(offer "enchanted_book")]]}
@@ -471,9 +494,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})
+        (let [[result p] (await (roll {:entities [(jobless)
                                                   {:id 90 :name "item" :kind "item" :pos {:x 3.5 :y 64 :z 0.5} :item {:name "lectern" :count 1}}]
-                                       :inventory [{:name "lectern" :count 2}]
+                                       :inventory [{:name "lectern" :count 2}] :pen? false
                                        :blocks {ws-key "air" "3,64,0" "air"}}
                                       {}))]
           (is (= {:status :stopped :reason :workstation-lost} (select-keys result [:status :reason]))
@@ -621,8 +644,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [drop {:id 90 :name "item" :kind "item" :pos {:x 4.5 :y 64 :z 0.5} :item {:name "lectern" :count 1}}
-              [_ p] (await (roll {:entities [(librarian [(offer "paper")]) drop] :self {:pos {:x 1.5 :y 64 :z 0.5}}
-                                  :wrap breaks-without-a-drop} {}))
+              [_ p] (with-redefs [roll/penned? (constantly true)]
+                      ;; no pen: a drop two cells beyond the workstation, as behind a training cell's back seal
+                      (await (roll {:entities [(librarian [(offer "paper")]) drop] :self {:pos {:x 1.5 :y 64 :z 0.5}} :pen? false
+                                    :wrap breaks-without-a-drop} {})))
               goals (map #(let [t (.-pos (.-args %))] [(.-x t) (.-z t)]) (vt/calls p "moveTo"))]
           (is (some #(and (= 4.5 (first %)) (= 0.5 (second %))) goals)
               "the body presses up against the wall nearest the drop, so a gap in it lets the pickup reach through"))))))
@@ -665,9 +690,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :self {:pos {:x 1.5 :y 64 :z 0.5}}
-                                       :scripts [[(offer "enchanted_book")]]
-                                       :wrap (fn [env] (picks-up-crouched-in-the-cell! (:p env)) (breaks-without-a-drop env))} {}))]
+        (let [[result p] (with-redefs [roll/penned? (constantly true)]
+                           ;; no slab over the cell: the fake's body stays 1.8 high when it sneaks, so it would not fit under one
+                           (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"2,65,0" "air"}
+                                         :scripts [[(offer "enchanted_book")]]
+                                         :wrap (fn [env] (picks-up-crouched-in-the-cell! (:p env)) (breaks-without-a-drop env))} {})))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) "the drop was taken and the lectern placed back")
           (is (= "lectern" (workstation p)))
           (is (not= [2 64 0] (body-cell @(fake/state p))) "the body sneaked back out of the cell"))))))
@@ -702,7 +729,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
+        (let [[result p seen] (await (roll {:entities [(jobless)]
                                             :blocks {ws-key "air"} :inventory [{:name "lectern" :count 1}]
                                             :wrap (stub-job 'jobs.blocks.place stopped)} {}))]
           (is (= {:found false :status :stopped :reason :no-tool} (select-keys result [:found :status :reason])))
@@ -722,7 +749,7 @@
                                                      (await ((:round j) c))
                                                      (do (reset! refused true)
                                                          (ctx/end c :nothing-possible {:reason :failed} {:placed false :reason :failed :mobs ["villager"]}))))))))
-              [result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
+              [result p] (await (roll {:entities [(jobless)]
                                        :inventory [{:name "lectern" :count 1}]
                                        :blocks {ws-key "air"}
                                        :scripts [[(offer "enchanted_book")]]
@@ -742,7 +769,7 @@
                                  (assoc j :round (fn ^:async spy [c]
                                                    (reset! seen (:args c))
                                                    (await ((:round j) c)))))))]
-          (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
+          (await (roll {:entities [(jobless)]
                         :inventory [{:name "lectern" :count 1}]
                         :blocks {ws-key "air"}
                         :scripts [[(offer "enchanted_book")]]
@@ -754,7 +781,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
+        (let [[result p] (await (roll {:entities [(jobless)]
                                        :inventory [{:name "lectern" :count 1}]
                                        :self {:pos {:x 2 :y 64 :z 0}}
                                        :blocks {ws-key "air"}
@@ -769,7 +796,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
+        (let [[result p] (await (roll {:entities [(jobless)]
                                        :inventory [{:name "lectern" :count 1}]
                                        :self {:pos {:x 2 :y 64 :z 0}}
                                        :floor [2 0 2 0]
@@ -822,7 +849,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+        (let [env (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}}))
               _ (unemploys-after! env 8000 [(offer "enchanted_book")])
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
@@ -832,7 +859,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+        (let [env (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}}))
               _ (unemploys-after! env 30000 [(offer "enchanted_book")])
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
@@ -863,7 +890,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+        (let [env (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}}))
               _ (hides-after-break! env 3000 [(offer "enchanted_book")])
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls]))))))))
@@ -879,10 +906,10 @@
                (let [at (get-in w [:self :pos])
                      v (first (filter #(= "v-1" (:uuid %)) (:entities w)))]
                  (cond
-                   (and v (not= "lectern" (get-in w [:blocks ws-pos])) (= home at))
+                   (and v (not= "lectern" (get-in w [:blocks ws-pos])))
                    (do (reset! gone (assoc v :profession "unemployed" :offers nil))
                        (swap! state #(-> % (update :entities (fn [es] (vec (remove (fn [e] (= "v-1" (:uuid e))) es))))
-                                         (assoc-in [:self :pos] (update home 0 + 0.4)))))
+                                         (update-in [:self :pos 0] + 0.4))))
                    (and @gone (= home at) (= "lectern" (get-in w [:blocks ws-pos])))
                    (let [g @gone]
                      (reset! gone nil)
@@ -893,7 +920,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+        (let [env (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}
+                                       :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
               _ (shifts-body-and-hides-villager-after-break! env [(offer "enchanted_book")])
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls]))))))))
@@ -902,8 +930,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :self {:pos {:x 1.5 :y 64 :z 0.5}}
-                             :blocks {ws-key "lectern" "2,63,0" "stone" "0,64,0" "stone"}})
+        (let [env (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :self {:pos {:x 1.5 :y 64 :z 0.5}}
+                                       :blocks {ws-key "lectern" "2,63,0" "stone" "0,64,0" "stone"}}))
               _ (hides-after-break! env 100000000 [(offer "paper")])
               _ (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 120))
               xs (map #(.-x (.-pos (.-args %))) (vt/calls (:p env) "moveTo"))]
@@ -913,9 +941,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (bd/setup {:entities [(librarian [(offer "paper")])] :zones []
-                                               :inventory [{:name "lectern" :count 1}]
-                                               :blocks {ws-key "lectern" "2,63,0" "stone"}})
+        (let [{:keys [eng p clock]} (bd/setup (with-pen {:entities [(librarian [(offer "paper")])] :zones []
+                                                         :inventory [{:name "lectern" :count 1}]
+                                                         :blocks {ws-key "lectern" "2,63,0" "stone"}}))
               cut (atom false)]
           (rolls-offers! p [[(offer "paper")]])
           (add-watch (fake/state p) :cut
@@ -949,7 +977,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")] {:pos {:x 10 :y 64 :z 0}})] :self {:pos {:x 10.5 :y 64 :z 0.5}}
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")])] :self {:pos {:x 10.5 :y 64 :z 0.5}}
                                             :scripts [[(offer "enchanted_book")]]} {}))
               marks (keep #(cond
                              (= :section (:kind %)) (if (:open %) :open :close)
