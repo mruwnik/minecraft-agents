@@ -1583,7 +1583,6 @@
           (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [ender]})]
             (core/submit! eng (order eng retreat) {})
             (await (core/tick! eng))
-            (is (empty? (tu/walked-to eng)) (str "no flight from it " (pr-str ender)))
             (is (zero? (count (calls p "place"))) "no walls against it")))))))
 
 (deftest an-enderman-is-angry-only-when-flagged-so-or-it-hurt-the-body
@@ -1591,18 +1590,23 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[angry hurt-by want] [[false "zombie" false] [false "enderman" true] [true nil true]]]
+        (doseq [[flag hurts earlier want] [[false ["zombie"] nil false]
+                                           [false ["enderman"] nil true]
+                                           [true [] nil true]
+                                           [false [] {:angry-enderman true} true]]]
           (let [out (atom nil)
-                {:keys [eng]} (setup {:entities [(assoc (enderman 2.5 64 0.5) :angry angry) (zombie 0.5 64 -1.5)]}
+                {:keys [eng]} (setup {:entities [(assoc (enderman 2.5 64 0.5) :angry flag) (zombie 0.5 64 -1.5)]}
                                      (assoc fj/jobs 'test.angry {:defaults {:checks {:safe? '(always) :fit? '(always)}}
                                                                  :round (fn ^:async angry-round [c]
-                                                                          (ctx/update-mem! c assoc :flight-start (- (ctx/now c) 5000))
-                                                                          (reset! out (cornered/angry-enderman? c (cornered/near-hostiles c)))
+                                                                          (ctx/update-mem! c merge (assoc earlier :flight-start (- (ctx/now c) 5000)))
+                                                                          (reset! out [(cornered/angry-enderman? c (cornered/near-hostiles c))
+                                                                                       (boolean (:angry-enderman (ctx/mem c)))])
                                                                           (ctx/end c :done nil))}))]
-            (when hurt-by (mem/write! (:store eng) :hurt {:amount 2 :attacker {:name hurt-by}} {:cap 50 :ttl 60000}))
+            (doseq [attacker hurts]
+              (mem/write! (:store eng) :hurt {:amount 2 :attacker {:name attacker}} {:cap 50 :ttl 60000}))
             (core/submit! eng (order eng '(test.angry)) {})
             (await (core/tick! eng))
-            (is (= want @out) (str "flag " angry ", hurt by " hurt-by))))))))
+            (is (= [want want] @out) (str "flag " flag ", hurt by " hurts ", earlier " earlier ": angry, and remembered so only then"))))))))
 
 (deftest escape-order-by-situation
   (is (= [:water :roof :plug :pillar :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))

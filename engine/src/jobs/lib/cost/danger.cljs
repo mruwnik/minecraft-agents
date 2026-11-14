@@ -5,7 +5,7 @@
 
   route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
   after armour, at most the body's health, plus the death it can cause: the chance its fight kills the body (fight-death-chance, not
-  for a provoked-only mob, which is never fought; a mob with :angry false adds none) times the :death-s the caller prices a death at,
+  for a provoked-only mob, which is never fought; a calm enderman (unflagged angry) adds none) times the :death-s the caller prices a death at,
   the hurt then only by the chance the body lives (:hurt);
   weighted by the most its reach (its way and line of fire, jobs.lib.threat-field) weighs a cell of the route, none
   outside it. Overrides {mob-name number-or-{:times n}}: threat before armour.
@@ -96,7 +96,7 @@
         rows (when (seq route)
                (for [m (map mob-of mobs)
                      :when (and (string? (:name m)) (:pos m)
-                                (not (false? (:angry m)))
+                                (not (threat/calm-enderman-named? (:name m) (:angry m)))
                                 (or (contains? overrides (:name m)) (threat/hostile? version m)))
                      :let [reach (reach-of m)
                            weight (reduce max 0 (keep (fn [{:keys [x y z]}] (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))) route))

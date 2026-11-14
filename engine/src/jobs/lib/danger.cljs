@@ -177,7 +177,7 @@
   remembered one carries no flag): it does nothing unless provoked, so it is no danger. One that hits the body is one
   by its blow (danger-in? :hit-ids, respond.options/angry-enderman?)."
   [e]
-  (and (combat/enderman? e) (not (true? (.-angry e)))))
+  (threat/calm-enderman-named? (.-name e) (.-angry e)))
 
 (defn heard-close?
   "Whether hostile e is heard only and within close-hearing of the body: loud enough that a player knows it is beside them."

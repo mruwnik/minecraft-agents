@@ -281,6 +281,12 @@
   []
   (/ (+ (settings/get settings ::creeper-exchange-hp) 0.5) (settings/get settings ::creeper-exchange-swings)))
 (def provoked-only #{"enderman" "zombified_piglin"})
+
+(defn calm-enderman-named?
+  "Whether a mob called name with the client's anger flag angry (true, false or nil for a remembered one) is an enderman the
+  client does not flag angry: it does nothing unless provoked (jobs.lib.danger/calm-enderman? is this for an entity)."
+  [name angry]
+  (and (= "enderman" name) (not (true? angry))))
 (defn provoked-share [] (settings/get settings ::provoked-share))
 
 (defn hostile?

@@ -166,5 +166,6 @@
 (deftest an-enderman-is-not-priced-as-a-fight-the-body-cannot-win
   (let [p (world)
         ender (mob 1 "enderman" 15 2)]
-    (is (< 0 (danger p [ender] :health 20) 20) "provoked-only share, no death")
-    (is (= 0 (danger p [(assoc ender :angry false)])) "a calm enderman adds nothing")))
+    (is (< 0 (danger p [(assoc ender :angry true)] :health 20) 20) "a flagged one: provoked-only share, no death")
+    (is (= 0 (danger p [(assoc ender :angry false)])) "a calm enderman adds nothing")
+    (is (= 0 (danger p [ender])) "nor does a remembered one, which carries no flag")))
