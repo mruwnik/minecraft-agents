@@ -1,0 +1,39 @@
+;; Card 3ded098d: a leg goal buried in a dirt hill (the cell [15 22 10], 3 under the hilltop) beside a ravine 17 deep under the sky. The
+;; hill's inside is unseen, so the mask reads it as air and the search seeks a way in from the ravine; each plan's descent cap
+;; counted from its own start let the body down the ravine's stair a few blocks a plan (Tamsin, 69 -> 62 -> 55 -> 44).
+;; Should-fail (buried): go-to stops not arrived and the body stays by the hill, never deeper than the cap below the goal's level.
+;; Should-succeed (stair): a goal cell 4 down the stair's top is arrived at.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 30 :length 48 :light :sky}
+  :blocks [[:fill [0 0 0] [40 19 24] "stone"]
+           [:fill [10 20 5] [20 24 15] "dirt"]
+           [:fill [0 3 16] [40 19 20] "air"]
+           [:fill [22 3 16] [22 18 16] "stone"]
+           [:fill [23 3 16] [23 17 16] "stone"]
+           [:fill [24 3 16] [24 16 16] "stone"]
+           [:fill [25 3 16] [25 15 16] "stone"]
+           [:fill [26 3 16] [26 14 16] "stone"]
+           [:fill [27 3 16] [27 13 16] "stone"]
+           [:fill [28 3 16] [28 12 16] "stone"]
+           [:fill [29 3 16] [29 11 16] "stone"]
+           [:fill [30 3 16] [30 10 16] "stone"]
+           [:fill [31 3 16] [31 9 16] "stone"]
+           [:fill [32 3 16] [32 8 16] "stone"]
+           [:fill [33 3 16] [33 7 16] "stone"]
+           [:fill [34 3 16] [34 6 16] "stone"]
+           [:fill [35 3 16] [35 5 16] "stone"]
+           [:fill [36 3 16] [36 4 16] "stone"]
+           [:fill [37 3 16] [37 3 16] "stone"]]
+  :body {:at [12.5 25 10.5] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "buried-goal-beside-a-ravine-stays-up"
+   :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [15 22 10] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 110 :of-job true}]
+   :after [[:body-near [15.5 22 10.5] 9]]}
+  {:name "stair-top-goal-arrives"
+   :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [26 15 16] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 110 :of-job true}]
+   :after [[:body-near [26.5 15 16.5] 2]]}]}

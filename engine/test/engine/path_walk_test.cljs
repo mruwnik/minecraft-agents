@@ -672,6 +672,25 @@
           (is (= "partial" (:status far)))
           (is (nil? (:stopped-short far))))))))
 
+(deftest an-unfinished-search-walks-no-deeper-over-unseen-floors-from-below-the-goals-level
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [table (blocks/default-state-table)
+              void (first (blocks/state-ids table "void_air"))
+              stair (for [x (range 4 12)] [x (- 63 (- x 3)) 0])
+              snapshot (fx/fixture-snapshot {:fill (into [[0 63 0 3 63 0 "stone" {}]] (map (fn [[x y z]] [x y z x y z "stone" {}])) stair)})
+              p (tu/fake {:blocks {} :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              walled #js {:snapshot snapshot :table table :space space/space}
+              found (await (wplan/plan-within! {:primitives p} walled [11 56 0] 0 (walk/default-weight) (wworld/body-policy {:primitives p})))
+              _ (doseq [[x y z] stair] (.setState snapshot x y z void))
+              _ (set! (.-unknown snapshot) #js {:id void})
+              search {:walled walled :limited #js {:progress (fn [] #js {:path (.-path (:r found)) :startDistance 100 :distance 80})}}
+              plan (fn [goal-y] (wsearch/unfinished-plan search 1 nil true (constantly false) (constantly true) (constantly true) (when goal-y #(wplan/cut-descent % goal-y true))))]
+          (is (= 56 (:y (peek (:steps (plan nil))))) "without the goal's level the walk goes down the whole stair")
+          (is (= "partial" (:status (plan 70))))
+          (is (= 64 (:y (peek (:steps (plan 70))))) "5 below a goal at 70 already, it walks no lower over unseen floors"))))))
+
 (def flooded-corridor
   (merge (box 8 62 0 40 67 2 "stone") (box 9 64 1 36 65 1 "water")))
 

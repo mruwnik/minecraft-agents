@@ -267,6 +267,7 @@
   search that ended) walks the path to that node instead when it is progress-blocks nearer, with :one-way-taken (live: a
   gap jump down as go-to's first move kept every round of a 300-block search from walking, and it gave up :searching), and
   priced? (a fn of the rim [x y z], the landing [x y z] and whether the drop is one block) agrees to the step (wplan/one-way-priced?).
+  descent (a fn of the steps, as wplan/cut-descent) cuts a walk over unseen floors as a finished partial plan is cut.
   A masked search's swimming steps count as out of water as in a finished partial plan (wet-ok?, masked-wet-ok): a submerged
   body keeps swimming while the search goes on. The search without the limits has no progress to walk, nor has one with
   progress false (go-to after a walk to a frontier: the nearest node of a search that has not ended may be the dead end an ended one walked away from)."
@@ -275,7 +276,8 @@
   ([search ms one-way progress] (unfinished-plan search ms one-way progress (constantly false)))
   ([search ms one-way progress wet-ok?] (unfinished-plan search ms one-way progress wet-ok? (constantly true)))
   ([search ms one-way progress wet-ok? priced?] (unfinished-plan search ms one-way progress wet-ok? priced? (constantly true)))
-  ([search ms one-way progress wet-ok? priced? end-ok?]
+  ([search ms one-way progress wet-ok? priced? end-ok?] (unfinished-plan search ms one-way progress wet-ok? priced? end-ok? nil))
+  ([search ms one-way progress wet-ok? priced? end-ok? descent]
    (let [walled (:walled search)
          ^js pr (when (and progress (not (:unlimited search))) (.progress ^js (:limited search)))
          nearer? (fn [distance] (>= (- (.-startDistance pr) distance) progress-blocks))
@@ -283,7 +285,8 @@
          past (when (and (= :open one-way) ow (true? (.-open ow)) (nearer? (.-distance ow))) (.-path ow))
          path (or past (when (and pr (.-path pr) (nearer? (.-distance pr))) (.-path pr)))
          whole (when path (wplan/dry-end (wplan/path-steps walled path) (wplan/head-wet-fn walled) wet-ok?))
-         {dry :steps refused :refused} (if (and whole (= :open one-way)) (wplan/cut-refused whole priced?) {:steps whole})
+         {dry :steps refused :refused} (cond-> (if (and whole (= :open one-way)) (wplan/cut-refused whole priced?) {:steps whole})
+                                         (and whole descent) (as-> cut (if (:refused cut) cut (descent (:steps cut)))))
          steps (when path (wplan/stop-short dry (.-dangers ^js walled)))
          walk? (and (>= (count steps) 2) (end-ok? (peek steps)))
          r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? path) :ms ms}]
@@ -365,7 +368,7 @@
                               (assoc (finished search within) :quote-only (not= "found" (.-status ^js (:r within))))))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms :walls walls))
-      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to)) :fresh fresh? :walls walls)
+      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to) #(wplan/cut-descent % (second to) (not (:aimed-goal c)))) :fresh fresh? :walls walls)
             partial? (= "partial" (:status plan))]
         (keep-search! c k (when-not partial? search))
         (cond-> plan partial? (assoc :search-on #(keep-search! c k search)))))))
