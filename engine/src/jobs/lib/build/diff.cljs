@@ -24,9 +24,10 @@
              :cells (filterv wanted (:cells (plan/surfaced c answer)))})))
 
 (defn others-own?
-  "Whether another job keeps a cell with this want: crops (the farm jobs), trees (forestry), and :any (any block will do)."
+  "Whether another job keeps a cell with this want: crops and farmland (the farm jobs: tend tills trampled farmland, nothing places it), trees (forestry), and :any (any block will do)."
   [want]
-  (or (= :any want) (and (map? want) (or (contains? want :crop) (contains? want :tree)))))
+  (or (= :any want) (= "farmland" want)
+      (and (map? want) (or (contains? want :crop) (contains? want :tree) (= "farmland" (:block want))))))
 
 (defn diff
   "The cells of `cells` (plan cells) the body has seen differ from their want, judged as from-plan judges them

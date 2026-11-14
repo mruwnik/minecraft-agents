@@ -10,16 +10,17 @@
             [jobs.lib.crops :as crops]))
 
 (def yard
-  "A wall with one cell broken in sight and one broken far off, a crop cell, an :any cell holding dirt, and a gate the plan wants shut."
+  "A wall with one cell broken in sight and one broken far off, a crop cell over a farmland cell trampled to dirt, an :any cell holding dirt, and a gate the plan wants shut."
   {:id "yard"
    :parts [{:id "wall" :cells [[3 64 2] [4 64 2] [5 64 2]] :want "cobblestone"}
            {:id "far" :cells [[30 64 2]] :want "cobblestone"}
            {:id "field" :cells [[4 64 4]] :want {:crop "wheat"}}
+           {:id "soil" :cells [[4 63 4]] :want "farmland"}
            {:id "free" :cells [[6 64 2]] :want :any}
            {:id "gate" :cells [[3 64 6]] :want {:block "oak_fence_gate" :facing "north" :open "false"}}]})
 
 (def yard-world
-  {:blocks {"3,64,2" "cobblestone" "5,64,2" "cobblestone" "6,64,2" "dirt" "3,64,6" "oak_fence_gate"}
+  {:blocks {"3,64,2" "cobblestone" "5,64,2" "cobblestone" "6,64,2" "dirt" "4,63,4" "dirt" "3,64,6" "oak_fence_gate"}
    :states {"3,64,6" {:open true :facing "north"}}
    :sight 10
    :self {:pos {:x 4.5 :y 64 :z 8.5}}
@@ -31,7 +32,7 @@
 
 (deftest only-cells-seen-differ-and-no-one-else-keeps-are-listed
   (let [{:keys [eng]} (b/start yard-world {"yard" yard} [])]
-    (is (= [[4 64 2]] (diff-of eng)) "not the wall cell far out of sight, the crop, the :any cell, the open gate")))
+    (is (= [[4 64 2]] (diff-of eng)) "not the wall cell far out of sight, the crop, the trampled farmland (tend tills it), the :any cell, the open gate")))
 
 (deftest a-broken-barrier-beside-a-herd-is-worth-its-gap-loss-more-than-a-plain-wall
   (let [plan {:parts [{:id "pen" :box [[3 64 3] [5 64 5]] :herd {:mob "cow" :target 4}}] :cells []}
