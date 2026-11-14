@@ -473,6 +473,20 @@
           (is (= :done (:status result)) (pr-str result))
           (is (= "oak_fence" (some-> (.blockAt p #js {:x 5 :y 64 :z 2}) .-name)) "the gap is fenced"))))))
 
+;; card 964be2d5: a box pen's gate seen open was shut only when herd happened to pass it
+(deftest a-box-pen-gate-seen-open-is-shut-by-the-mend
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring (into {} (for [x (range -1 6) z (range -1 6) :when (or (#{-1 5} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
+              {:keys [eng p]} (b/start (assoc (pb/spec pb/kit (assoc ring "5,64,2" "oak_fence_gate"))
+                                              :states {"5,64,2" {:open true :facing "east"}}
+                                              :entities [(cow 1 1.5 1.5) (cow 2 3.5 3.5)])
+                                       {} [])
+              result (await (tu/child-outcome eng 'jobs.animals.maintain {:box {:min [0 64 0] :max [4 64 4]} :mob "cow" :target 2} 600))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= "false" (str (some-> (.blockAt p #js {:x 5 :y 64 :z 2}) .-properties .-open))) "the open gate is shut"))))))
+
 ;; run4 F42: every fence stood, so mend said sound while herd's read of the box found climbs over the fence from a mound
 (deftest a-block-in-the-pen-an-animal-climbs-the-fence-from-is-mended-as-herd-reads-it
   (async done

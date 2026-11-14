@@ -34,7 +34,7 @@
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
   - :mend: a fence, gate or wall cell of the plan beside the box was seen as something else (blown away), or the box
-    read herd judges by names a leak a patch mends (:gap, :climb, :perch-in): with :plan the plan's fence is built again
+    read herd judges by names a leak a patch mends (:gap, :climb, :perch-in), or an open gate no job holds open (no :plan: shut by pen-check): with :plan the plan's fence is built again
     (jobs.build.pen over the whole :plan, at the pass's worth with a :mob), without one the box is patched from the read
     (jobs.animals.pen-check over :box). Only cells the body has seen count; a gap that stays rests the pen.
   - :herd (jobs.animals.herd, :target less the babies at most; never with adults plus babies at :target): fewer than 2 adults (or :target if less) are in the box, so breeding cannot start, or
@@ -138,6 +138,24 @@
        distinct
        vec))
 
+(defn held-gates
+  "The gates ([x y z]) a job holds open on purpose, gave up on or a walk opened (jobs.lib.pen-gate): not a leak."
+  [c]
+  (let [view (ctx/view c)]
+    (into (pg/opened-cells view)
+          (concat (pg/held-cells view (* 1000 (:held-s pg/defaults)))
+                  (pg/quiet-cells view (* 1000 (:quiet-s pg/defaults)))))))
+
+(defn open-gate-gaps
+  "The gates of a box pen's read ({:pos :why :open-gate} leaks) that no job holds open, as [x y z]: with no plan there is no
+  gate cell to watch, so the read's leak is the gap, shut by the mend."
+  [c leaks]
+  (let [held (held-gates c)]
+    (vec (for [{:keys [pos why]} leaks
+               :let [cell [(:x pos) (:y pos) (:z pos)]]
+               :when (and (= :open-gate why) (not (held cell)))]
+           cell))))
+
 (defn missing-barrier
   "The plan's fence, gate and wall cells beside the box (one column out) that the body has seen as something its plan
   does not want there, or as a gate standing open that no job holds open or gave up on (jobs.lib.pen-gate), as [x y z]; a cell never
@@ -148,10 +166,7 @@
         {:keys [min max]} (pen-read/arg-box c)
         beside? (fn [[x _ z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
         p (:primitives c)
-        view (ctx/view c)
-        held (into (pg/opened-cells view)
-                   (concat (pg/held-cells view (* 1000 (:held-s pg/defaults)))
-                           (pg/quiet-cells view (* 1000 (:quiet-s pg/defaults)))))]
+        held (held-gates c)]
     (vec (for [{:keys [pos want]} cells
                :when (and (pen-read/barrier? want) (beside? pos))
                :let [seen (u/sensed p (u/cell-pos pos))]
@@ -209,7 +224,9 @@
         inventory (u/inventory (:primitives c))
         keep (merge-with max (reserve/held c :deposit) (:carry (:args c)))
         stored (to-store inventory (produce (:mob (:args c))) keep)]
-    {:gaps (vec (distinct (into (missing-barrier c) (pen-patch/patch-cells (:leaks read)))))
+    {:gaps (vec (distinct (-> (missing-barrier c)
+                           (into (pen-patch/patch-cells (:leaks read)))
+                           (into (when-not (:plan (:args c)) (open-gate-gaps c (:leaks read)))))))
      :adults (:adults counted)
      :strays (if (and (:mob (:args c)) (< (+ (:adults counted) (:babies counted)) (:target (:args c)))) (strays c) 0)
      :ready (max 0 (- (:adults counted) (count (filter (comp (animals/cooling c) animals/key-of) adults))))

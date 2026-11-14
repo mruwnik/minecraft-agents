@@ -17,4 +17,12 @@
          [:job (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :adults 2}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]
-           [:block [18 0 16] "oak_fence_gate[open=false]"]]}]}
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  ;; Card 964be2d5: a box pen (no :plan) whose gate stands open with both cows inside and the body outside is shut by the mend.
+  {:name "box-pen-open-gate-is-shut"
+   :blocks [[:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]]
+   :act [[:summon "cow" [21.5 0 16.5]]
+         [:summon "cow" [21.5 0 15.5]]
+         [:job (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 240 :of-job true}]
+   :after [[:block [18 0 16] "oak_fence_gate[open=false]"]]}]}
