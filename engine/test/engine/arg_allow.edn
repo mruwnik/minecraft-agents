@@ -110,6 +110,8 @@
  [jobs.gather.mine :torches]
  [jobs.gather.mine :tunnel-length]
  [jobs.gather.mine :wet]
+ [jobs.items.anvil-combine :enchant]
+ [jobs.items.anvil-combine :item]
  [jobs.items.craft :blocks]
  [jobs.items.craft :inventory]
  [jobs.items.craft :radius]
