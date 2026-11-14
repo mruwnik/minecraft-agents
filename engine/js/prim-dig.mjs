@@ -132,6 +132,26 @@ export function createDig (env) {
     return hit.position.x + dx === p.x && hit.position.y + dy === p.y && hit.position.z + dz === p.z
   }
 
+  // The server's bucket ray hits OUTLINE shapes, so a crop or lily pad with no collision still catches it; blockAtCursor
+  // sees collision shapes only. The march from the eye to the aim is caught by such a block in a cell other than p, below
+  // its outline height (a lily pad is 1.5/16 high; the others count as full cells, the safe side).
+  const OUTLINE_HEIGHT = { lily_pad: 1.5 / 16 }
+  const outlineCatches = (aim, p) => {
+    const from = eye()
+    const [dx, dy, dz] = [aim.x - from.x, aim.y - from.y, aim.z - from.z]
+    const len = Math.hypot(dx, dy, dz)
+    const steps = Math.ceil(len / 0.05)
+    for (let i = 1; i < steps; i++) {
+      const [x, y, z] = [from.x + dx * i / steps, from.y + dy * i / steps, from.z + dz * i / steps]
+      const cell = { x: Math.floor(x), y: Math.floor(y), z: Math.floor(z) }
+      if (cell.x === p.x && cell.y === p.y && cell.z === p.z) continue
+      const b = env.bot.blockAt(vec(cell))
+      if (!b || isAir(b.name) || isLiquid(b.name) || isReplaceable(b.name) || b.boundingBox !== 'empty') continue
+      if (y - cell.y < (OUTLINE_HEIGHT[b.name] ?? 1)) return true
+    }
+    return false
+  }
+
   // The held item is checked, never assumed: a place or use with another item in hand would act on the wrong thing.
   const holdFailure = async item => {
     const r = await hold(env.bot, item.name, 'hand', timeScale)
@@ -187,11 +207,11 @@ export function createDig (env) {
     ctx.alive()
     // A neighbour between the body and the aimed face catches the ray and the liquid lands beside it: the first aim whose ray ends in p.
     // With none, the pour is refused so the caller can move; it never fires at a wrong cell.
-    let aimed = scoop
+    let aimed = false
     for (const aim of aims) {
       await lookNow(() => env.bot.lookAt(aim, true))
       ctx.alive()
-      if (scoop || rayEndsIn(p)) { aimed = true; break }
+      if (!outlineCatches(aim, p) && (scoop || rayEndsIn(p))) { aimed = true; break }
     }
     if (!aimed) return { status: 'unreachable', reason: 'line-blocked' }
     const around = () => {

@@ -15,4 +15,10 @@
   {:name "bucket-clicked-on-the-floor-face-fills-the-cell-above"
    :act [[:job (jobs.items.use {:worth 1200 :on #at [20 -1 16] :face "up" :item "water_bucket"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
-   :after [[:block [20 0 16] "water"] [:item "bucket" 1]]}]}
+   :after [[:block [20 0 16] "water"] [:item "bucket" 1]]}
+  {:name "pour-beside-wheat-keeps-the-crops-dry"
+   :blocks [[:set [19 -1 16] "farmland"] [:set [21 -1 16] "farmland"] [:set [20 -1 15] "farmland"] [:set [20 -1 17] "farmland"]
+            [:set [19 0 16] "wheat"] [:set [21 0 16] "wheat"] [:set [20 0 15] "wheat"] [:set [20 0 17] "wheat"]]
+   :act [[:job (jobs.items.use {:worth 1200 :on #at [20 -1 16] :face "up" :item "water_bucket"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:block [20 0 16] "water"] [:block [19 1 16] "air"] [:block [21 1 16] "air"] [:block [20 1 15] "air"] [:block [20 1 17] "air"] [:item "bucket" 1]]}]}

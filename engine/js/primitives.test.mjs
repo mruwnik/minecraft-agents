@@ -1958,6 +1958,28 @@ test('a pour whose every aim is caught by a wall is refused unreachable without 
   assert.equal(names(bot).includes('activateItem'), false)
 })
 
+const outlineOnly = (bot, ...cells) => {
+  const read = bot.blockAt
+  bot.blockAt = v => cells.find(c => c[0] === v.x && c[1] === v.y && c[2] === v.z)
+    ? { name: 'wheat', position: new Vec3(v.x, v.y, v.z), boundingBox: 'empty', shapes: [], getProperties: () => ({}) }
+    : read(v)
+}
+
+test('a pour whose line to the face crosses a crop (outline only, no collision) is refused line-blocked', async () => {
+  const { bot, p } = bucketRig({ blocks: {}, item: 'water_bucket', onActivate: blocks => { blocks['1,64,0'] = 'water' } })
+  outlineOnly(bot, [0, 65, 0], [1, 65, 0], [0, 64, 0])
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'unreachable', reason: 'line-blocked' })
+  assert.equal(names(bot).includes('activateItem'), false)
+})
+
+test('a scoop whose line to the water crosses a crop is refused line-blocked, and one with a clear line scoops', async () => {
+  const blocked = bucketRig({ blocks: { '1,64,0': 'water' }, item: 'bucket', onActivate: blocks => { delete blocks['1,64,0'] } })
+  outlineOnly(blocked.bot, [0, 65, 0], [1, 65, 0], [0, 64, 0])
+  assert.deepEqual(await blocked.p.place('t1', { pos: at(1, 64, 0), item: 'bucket' }), { status: 'unreachable', reason: 'line-blocked' })
+  const clear = bucketRig({ blocks: { '1,64,0': 'water' }, item: 'bucket', onActivate: blocks => { delete blocks['1,64,0'] } })
+  assert.equal((await clear.p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'placed')
+})
+
 test('a pour that spends the bucket but leaves the target without the liquid fails and names the cell that changed', async () => {
   const items = [{ name: 'lava_bucket', count: 1, slot: 36 }]
   const { p } = rig({ blocks: { '0,63,0': 'stone', '1,63,0': 'stone' }, items, onActivate: () => { items.splice(0, 1, { name: 'bucket', count: 1, slot: 36 }) } })

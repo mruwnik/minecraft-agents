@@ -572,3 +572,7 @@
         keys (for [y [-3 0 1 64] adj (range 3) qb (range qn) lit? [true false] di (range dn) dyb (range dyn)]
                (base-rates/unseen-key qn dn dyn y adj qb lit? di dyb))]
     (is (= (count keys) (count (set keys))) "a table with a 5th q bucket, 20 distances and 12 dy buckets keeps every bucket its own key")))
+
+(deftest a-water-source-under-a-lily-pad-is-listed-after-an-open-one
+  (let [p (seeing {:blocks {"0,64,2" "water" "0,65,2" "lily_pad" "0,64,6" "water"}})]
+    (is (= [{:x 0 :y 64 :z 6} {:x 0 :y 64 :z 2}] (mapv :pos (look/seen-water-sources p 16))))))
