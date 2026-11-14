@@ -11,7 +11,8 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
-            [jobs.lib.ready :as ready]))
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]))
 
 (def meta {:tags [:goal]})
 
@@ -43,10 +44,6 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? ready/ok)
-
-(def fit? ready/ok)
-
 (defn broken-now
   "{:broken diff-cells} of the call's plan and parts, or {:trouble :later?}: a check (no token) reads it once per
   check-cache window, a round afresh."
@@ -64,6 +61,14 @@
   [c broken]
   (let [{:keys [cells trouble]} (when (seq broken) (plan/planned (assoc c :args (child-args c (map :pos broken)))))]
     (if (or trouble (empty? cells)) 0 (fp-walk/owed-s cells))))
+
+(defn work-s "Seconds the cells seen broken take to mend (price)." [c] (price c (:broken (broken-now c))))
+
+(def safe? (ready/safe-at-build work-place/spot work-s))
+
+(declare quote-of)
+
+(def fit? (ready/trip-fed (ready/fed-fit-for :long work-s) work-place/spot #(quote-of %)))
 
 (defn plan-problem [c]
   (let [{:keys [trouble later?]} (broken-now c)]
