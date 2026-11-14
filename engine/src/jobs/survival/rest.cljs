@@ -25,9 +25,10 @@
 
 (def doc
   "Rest a hurt body until it has healed, as a player would before going on. Food first: under foods/full-food it eats what it
-  carries (jobs.survival.eat); under 18 with nothing carried it waits for a calm moment (no hostile known near, no dark sky above ground, and
-  no night outside, from a cave too; jobs.survival.get-food.risk) shut in, saying why, then gets food the safe way (jobs.survival.eat, which fetches through
-  get-food under get-food's own risk rules; at food 0, or when the shut-in failed, it does not wait). Then it shuts in where it stands (jobs.survival.shut-in, ways :room, :walls, :pit, :pocket; its
+  carries (jobs.survival.eat); under 18 with nothing carried it gets food with a jobs.survival.get-food child (:eat false) under
+  get-food's own risk rules, bound by the rest's budget. A fragile body (foods/fragile?) first waits shut in for a calm moment (no hostile known
+  near, no dark sky above ground, and no night outside, from a cave too; jobs.survival.get-food.risk), saying why; at food 0, or when the
+  shut-in failed, it does not wait. Then it shuts in where it stands (jobs.survival.shut-in, ways :room, :walls, :pit, :pocket; its
   blocks go to the scaffold ledger and jobs.access.cleanup takes them back; walls that ran out of blocks get more with
   jobs.items.obtain, :explore false, once a stay when calm, and are tried again) and holds still (:healing) while natural regeneration works, a bite of carried food
   whenever food is under foods/full-food so it goes on. A shut-in that fails warns rest.unsheltered and the body rests where it
@@ -120,24 +121,33 @@
       (some-> (contract/cause-key e) name)))
 
 (defn ^:async eat!
-  "Eat up to full, fetching through get-food when fetch? (the walk ends the stay's shelter): :again once food is 18+ or
-  the carried food is eaten up, else the :no-food ending."
-  [c fetch?]
-  (let [e (await (child/run!* c :eat 'jobs.survival.eat {:until foods/full-food :get-food? fetch?}))]
-    (when fetch? (ctx/update-mem! c dissoc :sheltered :last-health :still))
+  "Eat carried food up to full: :again once food is 18+ or the carried food is eaten up, else the :no-food ending."
+  [c]
+  (let [e (await (child/run!* c :eat 'jobs.survival.eat {:until foods/full-food :get-food? false}))]
     (cond
       (= :continue e) :continue
-      (>= (food c) foods/top-up-food) :again
-      (and (not fetch?) (not (eat/carried-best c))) :again
+      (or (>= (food c) foods/top-up-food) (not (eat/carried-best c))) :again
+      :else (give-up! c :no-food {:health (health c) :text (str "no food to heal on: " (why e))}))))
+
+(defn ^:async fetch!
+  "Get the food points missing to full with a get-food child (:eat false), bound by the rest's own budget, not a meal's;
+  the walk ends the stay's shelter. :again once food is carried, else the :no-food ending."
+  [c]
+  (let [e (await (child/run!* c :fetch 'jobs.survival.get-food {:eat false :carry (max 1 (- foods/full-food (food c)))}))]
+    (ctx/update-mem! c dissoc :sheltered :last-health :still)
+    (cond
+      (= :continue e) :continue
+      (eat/carried-best c) :again
       :else (give-up! c :no-food {:health (health c) :text (str "no food to heal on: " (why e))}))))
 
 (defn ^:async feed!
-  "Food under 18 and nothing carried: wait shut in for a calm moment (not at food 0), then eat what get-food brings.
-  Unsheltered, waiting neither heals nor guards the body, so it goes for food at once under get-food's own risk rules."
+  "Food under 18 and nothing carried: a fragile body (foods/fragile?, the health under which get-food will not search
+  unknown ground) waits shut in for a calm moment (not at food 0), then fetches; any other body fetches at once, under
+  get-food's own risk rules. Unsheltered, waiting neither heals nor guards the body, so it fetches at once."
   [c]
   (let [sheltered (:sheltered (ctx/mem c))]
     (cond
-      (or (zero? (food c)) (not (uncalm c)) (false? sheltered)) (await (eat! c true))
+      (or (zero? (food c)) (not (foods/fragile? (.self (:primitives c)))) (not (uncalm c)) (false? sheltered)) (await (fetch! c))
       sheltered (let [r (await (child/pause! c (settings/get settings ::pause-s)
                                              (str "food " (food c) " of " foods/top-up-food " heals nothing and none is carried; shut in until calm (" (uncalm c) ")")))]
                   (if (= :continue r) :continue :again))
@@ -169,7 +179,7 @@
       (or (body/burning? p) (body/poisoned? p))
       (give-up! c :harmed {:health (health c) :text "burning or poisoned: rest does not heal that"})
 
-      (and (< (food c) foods/top-up-food) (eat/carried-best c)) (await (eat! c false))
+      (and (< (food c) foods/top-up-food) (eat/carried-best c)) (await (eat! c))
 
       (< (food c) foods/top-up-food) (await (feed! c))
       (contains? (ctx/mem c) :sheltered) (await (heal-step! c))

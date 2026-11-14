@@ -10,6 +10,7 @@
             [engine.ready-test :as ready-test]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -122,6 +123,20 @@
           (is (= :job-time (:reason r)) "no walk out for food by night, from a cave too: shut in to the end of its time")
           (is (some #(re-find #"food 12 of 18 .*night outside" (str (:reason %))) (filter #(= :holding (:kind %)) @seen))
               "the hold says it cannot heal on this food and waits for the night to pass"))))))
+
+(deftest a-hurt-body-that-is-not-fragile-fetches-food-at-once-on-the-rest-s-budget-not-a-meal-s
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await
+         (settings/with-settings {:jobs.lib.cost.death/extra-s 15000 :jobs.lib.foods/fragile-health 2 :jobs.survival.eat/job-time-s 1}
+           (fn ^:async t2 []
+             (let [clock (atom 1000000)
+                   p (tu/seeing-all (tu/fake {:self {:health 3 :food 12} :blocks pocket :time 18000}))
+                   eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)})
+                   r (await (tu/child-outcome eng 'jobs.survival.rest {} 40))]
+               (is (= :no-food (:reason r)) "above fragile health, night outside is get-food's to price: the rest fetches at once, no wait till its time is up")
+               (is (not (re-find #"job-time" (str (:text r)))) "the fetch ends on get-food's own reason, not cut by a meal's job time")))))))))
 
 (deftest a-hurt-body-in-a-closed-room-it-has-not-looked-at-looks-round-and-waits-out-the-night-without-shutting-in
   (async done
