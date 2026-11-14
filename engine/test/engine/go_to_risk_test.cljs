@@ -662,6 +662,17 @@
                                          [day-world "drown" {:age-ms 1000} [[80 "drown"]] "a drowning is not cleared by sight"]]]
       (is (= want (spots world cause seen)) why))))
 
+;; Brindle S9: a torch beside the death spot (light-area) cleared a zombie death in a dark cave, and the obtain mined on there
+(deftest a-mob-death-is-not-seen-clear-while-its-killers-near-ground-is-unseen
+  (let [spot {:x 80 :y 64 :z 5}
+        threats-with (fn [seen]
+                       (with-redefs [look/seen-block seen]
+                         (let [c (with-death (ready-test/ctx-of day-world) spot "zombie" 60000)]
+                           (mapv (juxt (comp :x :pos) :mob) (threats/known-threats c)))))]
+    (is (= [] (threats-with (constantly {:age-ms 1000}))) "the spot and the ground about it seen lit since")
+    (is (= [[80 "zombie"]] (threats-with (fn [_ {:keys [x z]}] (if (and (= 80 (js/Math.floor x)) (= 5 (js/Math.floor z))) {:age-ms 1000} {:unknown true}))))
+        "only the spot seen lit: the killer may walk the rest")))
+
 (deftest a-recent-hide-near-the-goal-adds-the-fight-with-its-mobs-to-the-risk
   (let [c (ready-test/ctx-of day-world)
         now 36000000

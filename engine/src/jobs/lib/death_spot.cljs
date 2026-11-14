@@ -86,14 +86,21 @@
     (await (ctx/act c :look (clj->js {:pos (zipmap [:x :y :z] (map #(+ % 0.5) cell))})))
     (look/see! c (look/search-effort))))
 
+(defn close-cells
+  "The cells [x y z] the field of mob from pos weighs 1: the ground it walks near the spot."
+  [c mob pos]
+  (map #(vec (take 3 %)) (take-while #(= 1 (aget % 3)) (:cells (field/field-of c {:mob mob :pos pos})))))
+
 (defn seen-clear?
-  "Whether a mob death's spot is clear: looked at since the death (fresh sight beats the record: the block memory's seen
-  time) and lit, as a dark spot spawns the killer again. A death by terrain never clears
-  by sight: the place itself killed."
-  [c {:keys [pos age-ms mob?]}]
+  "Whether a mob's spot is clear: looked at since (fresh sight beats the record: the block memory's seen time) and lit,
+  as a dark spot spawns the killer again. A death's or near-death's (its :cause) needs every cell of its killer's
+  close-cells seen so and lit too: one lit cell of a dark cave shows nothing of the killer walking the rest. A death by
+  terrain never clears by sight: the place itself killed."
+  [c {:keys [pos age-ms mob? cause]}]
   (let [p (:primitives c)
-        b (look/seen-block p pos)]
-    (boolean (and mob? b (not (:unknown b)) (< (:age-ms b) age-ms) (lit? p pos)))))
+        clear? (fn [at] (let [b (look/seen-block p at)] (and b (not (:unknown b)) (< (:age-ms b) age-ms) (lit? p at))))]
+    (boolean (and mob? (clear? pos)
+                  (or (nil? cause) (every? #(clear? (zipmap [:x :y :z] %)) (close-cells c cause pos)))))))
 
 (defn whereabouts
   "[t pos] of where c's body is known to have been since t: now, and its deaths, respawns, hurts and walks (go-to's and
@@ -173,7 +180,7 @@
     (* weight
        (if (contains? field/water-mobs mob)
          old
-         (let [close (map #(vec (take 3 %)) (take-while #(= 1 (aget % 3)) (:cells (field/field-of c {:mob mob :pos pos}))))
+         (let [close (close-cells c mob pos)
                share (cost/spawn-share close {:light (fn [[x y z]] (when (lit? p {:x x :y y :z z}) {:block 15}))})
                new (if (pos? share) (threat/spawned-there (/ (- (ctx/now c) last-far) 1000)) 0)]
            (- 1 (* (- 1 old) (- 1 new))))))))

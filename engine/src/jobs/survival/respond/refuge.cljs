@@ -38,10 +38,11 @@
 (declare hide-now! hide-hold! hostiles-known)
 
 (defn ^:async abandon-refuge!
-  "The refuge failed: forget it, its option tried this flight, its cover failed at its anchor (flight/cover-failed!)."
+  "The refuge failed: forget it, its option tried this flight, its cover failed at its anchor (flight/cover-failed!, and
+  :failed-at of the flight: sealed in there still, a plug finds nothing to change)."
   [c]
   (let [{:keys [kind way anchor]} (:refuge (ctx/mem c))]
-    (ctx/update-mem! c dissoc :refuge)
+    (ctx/update-mem! c #(cond-> (dissoc % :refuge) anchor (update :failed-at (fnil conj #{}) (u/cell-vec anchor))))
     (when anchor (flight/cover-failed! c (or way kind) anchor))
     (flight/tried! c kind)
     :again))
@@ -138,11 +139,14 @@
 
 (defn ^:async plug-option!
   "A plug option of a cornered body (:plug: the walls, :plug-dig: pit or pocket), once a flight: plug!'s result, nil when
-  it failed or was tried or a creeper comes first (creeper-coming?: not begun, not tried either); a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off)."
+  it failed or was tried or a creeper comes first (creeper-coming?: not begun, not tried either); a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off),
+  nor is a body still shut in where a refuge of this flight failed (:failed-at) shut in again: nothing would change."
   [c option ways]
   (when-not (or (flight/tried? c option)
                 (and (not (:plugging (ctx/mem c))) (creeper-coming? c ways))
-                (and (#{:plug-dig :plug-dig-zone} option) (dig-cells/sealed-in? (:primitives c) :walls (sh-sense/roof-height))))
+                (and (or (#{:plug-dig :plug-dig-zone} option)
+                         (contains? (:failed-at (ctx/mem c)) (u/cell-vec (sh-sense/feet (:primitives c)))))
+                     (dig-cells/sealed-in? (:primitives c) :walls (sh-sense/roof-height))))
     (or (await (plug! c option ways)) (do (flight/tried! c option) nil))))
 
 (defn plugging-here?

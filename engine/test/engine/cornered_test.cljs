@@ -34,6 +34,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.refuge :as refuge]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.respond.cover :as cover]
             [jobs.lib.flee-walk :as flee-walk]
             [jobs.lib.seal :as seal]
@@ -2179,6 +2180,31 @@
                 ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))
                 ctx/latest (constantly nil)]
     (f)))
+
+;; Brindle S9 death 2: a skeleton kept shooting a sealed body; each hurt dropped the refuge, the next sweep (blocked!
+;; forgets what was tried) took :plug again, which found the body "already shut in" and hid it in the same refuge until it died.
+(deftest a-body-still-shut-in-where-its-refuge-failed-is-not-shut-in-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "cobblestone" :count 20}]})
+              m (atom {:refuge {:kind :plug :anchor {:x 0 :y 64 :z 0} :hidden true}})
+              c (stub-ctx p m)
+              plugs (atom 0)
+              [plug sealed mem upd] [refuge/plug! dig-cells/sealed-in? ctx/mem ctx/update-mem!]]
+          (set! refuge/plug! (fn ^:async f [& _] (swap! plugs inc) :again))
+          (set! dig-cells/sealed-in? (constantly true))
+          (set! ctx/mem (fn [c] @(:mem c)))
+          (set! ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args)))
+          (try
+            (await (refuge/abandon-refuge! c))
+            (swap! m dissoc :tried)
+            (is (nil? (await (refuge/plug-option! c :plug #{:walls}))) "no plug where the refuge just failed")
+            (is (zero? @plugs))
+            (swap! m dissoc :failed-at)
+            (is (= :again (await (refuge/plug-option! c :plug #{:walls}))) "elsewhere the plug is an option")
+            (is (= 1 @plugs))
+            (finally (set! refuge/plug! plug) (set! dig-cells/sealed-in? sealed) (set! ctx/mem mem) (set! ctx/update-mem! upd))))))))
 
 (deftest a-raise-cut-short-for-a-mob-is-a-seen-failure-of-the-class-the-refuge-began-in
   (async done
