@@ -128,13 +128,16 @@
   (deposit-pick/spare-items (assoc c :args {:items :farm-goods :carry keep})))
 
 (defn broken
-  "{:plan-cells :broken}: the plan's cells (diff/plan-cells, every part) and those the body has seen broken (diff/diff);
+  "{:plan-cells :broken}: the plan's cells (diff/plan-cells, every part) and those the body has seen broken (diff/diff), read once per memory epoch;
   none without a plan or when it cannot be read (tend says so)."
   [c]
-  (let [pc (when-let [id (fa/plan c)] (diff/plan-cells c id nil))]
-    (if (or (nil? pc) (:trouble pc))
-      {:broken []}
-      {:plan-cells pc :broken (diff/diff c (:cells pc))})))
+  (let [read (fn []
+               (let [pc (when-let [id (fa/plan c)] (diff/plan-cells c id nil))]
+                 (if (or (nil? pc) (:trouble pc))
+                   {:broken []}
+                   {:plan-cells pc :broken (diff/diff c (:cells pc))})))
+        epoch (sense/known-memory (:primitives c))]
+    (if epoch (check-cache/keyed c ::broken [(fa/plan c) epoch] read) (read))))
 
 (defn facts
   "{:keep :waste :stored :blocked :cut :plan-cells :broken}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig, the stalk blocks to cut, the plan cells seen broken."
@@ -217,41 +220,44 @@
 (defn stock-worth
   "Seconds the stock steps are worth, each only while it would run: the goal-value of the farm goods a deposit stores and
   of the bone meal the waste seed composted makes."
-  [c]
-  (let [{:keys [keep waste] :as f} (facts c)
-        meal (/ (transduce (map :count) + 0 (carried-over c waste keep)) (/ compost-levels seed-compost-chance))]
+  ([c] (stock-worth c (facts c)))
+  ([c {:keys [keep waste] :as f}]
+  (let [meal (/ (transduce (map :count) + 0 (carried-over c waste keep)) (/ compost-levels seed-compost-chance))]
     (+ (if (:call (decide :deposit (:args c) f)) (:value (cost/goal-value (mapv (fn [[n k]] {:name n :count k}) (spare c keep)))) 0)
-       (if (:call (decide :compost (:args c) f)) (:value (cost/goal-value [{:name "bone_meal" :count meal}])) 0))))
+       (if (:call (decide :compost (:args c) f)) (:value (cost/goal-value [{:name "bone_meal" :count meal}])) 0)))))
 
 (defn tidy-worth
   "Seconds clearing the blocked crop cells is worth: each cell sown after it (cost/sown-worth of the crop at the dry rate)."
-  [c]
-  (if (tidy-work? c)
-    (* (:blocked (facts c)) (cost/sown-worth (or (tend/sow-crop c) "wheat") (crops/stages-per-s false nil)))
-    0))
+  ([c] (tidy-worth c (facts c)))
+  ([c f]
+   (if (:call (decide :tidy (:args c) f))
+     (* (:blocked f) (cost/sown-worth (or (tend/sow-crop c) "wheat") (crops/stages-per-s false nil)))
+     0)))
 
 (defn cut-worth
   "Seconds the stalks the cut step digs are worth: the goal-value of the blocks above the bases."
-  [c]
-  (let [cuts (:cut (facts c))]
-    (if (empty? cuts)
-      0
-      (:value (cost/goal-value (mapv (fn [[name n]] {:name name :count n})
-                                     (frequencies (map #(u/seen-name (:primitives c) (u/cell-pos %)) cuts))))))))
+  ([c] (cut-worth c (facts c)))
+  ([c f]
+   (let [cuts (:cut f)]
+     (if (empty? cuts)
+       0
+       (:value (cost/goal-value (mapv (fn [[name n]] {:name name :count n})
+                                      (frequencies (map #(u/seen-name (:primitives c) (u/cell-pos %)) cuts)))))))))
 
 (defn repair-worth
   "Seconds mending the plan cells seen broken is worth (diff/worth)."
-  [c]
-  (let [{:keys [plan-cells broken]} (broken c)]
-    (if (seq broken) (diff/worth plan-cells broken) 0)))
+  ([c] (repair-worth c (broken c)))
+  ([_c {:keys [plan-cells broken]}]
+   (if (seq broken) (diff/worth plan-cells broken) 0)))
 
 (defn root-worth
   "worth-of without the cache."
   [c]
-  (if (= :ok (first (tend/can-run? c)))
-    (let [f (tend/check-facts c)]
-      (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (repair-worth c) (tidy-worth c) (stock-worth c) (cut-worth c)))
-    (+ (repair-worth c) (stock-worth c) (cut-worth c))))
+  (let [m (facts c)]
+    (if (= :ok (first (tend/can-run? c)))
+      (let [f (tend/check-facts c)]
+        (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (repair-worth c m) (tidy-worth c m) (stock-worth c m) (cut-worth c m)))
+      (+ (repair-worth c m) (stock-worth c m) (cut-worth c m)))))
 
 (defn worth-of
   "Seconds a root pass is worth: tend's pass-price :worth, what its fertilize step adds (field-steps-worth),

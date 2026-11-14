@@ -208,6 +208,15 @@
           (is (= ["wheat" "wheat"] [(fp/block-at s 2 64 2) (fp/block-at s 3 64 2)]) "the field is still sown")
           (is (empty? (fp/calls s "useOn")) "the dirt in the water cell is never tilled"))))))
 
+(deftest a-root-worth-reads-the-plan-diff-once
+  (let [s (fp/setup (fp/world-of (fp/ground "farmland" fp/wheat-cells) (fp/ground "dirt" [[4 2]]) {}) {"mix" walled} [])
+        c (core/make-ctx (:eng s) {:root "maintain" :slots [] :chain [] :token nil :args {:area {:plan "mix" :part "wheat"}}})
+        reads (atom 0)
+        real diff/diff]
+    (with-redefs [diff/diff (fn [& args] (swap! reads inc) (apply real args))]
+      (maintain/root-worth c))
+    (is (= 1 @reads))))
+
 (deftest tidy-gets-the-plan-and-its-part
   (is (= {:plan "p" :part "wheat"} (:args (:call (maintain/decide :tidy {:area {:plan "p" :part "wheat"}} {:blocked 2}))))))
 
