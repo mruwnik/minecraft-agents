@@ -887,6 +887,21 @@
           (is (= {:found false :rolls 0 :status :stopped :reason :unreachable} (select-keys result [:found :rolls :status :reason])))
           (is (zero? (digs p))))))))
 
+(deftest a-chase-leg-that-got-no-nearer-but-left-the-villager-in-reach-reads-its-offers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [nearer-no-arrival (fn [env]
+                                  (let [j (get (:jobs (:eng env)) 'jobs.movement.go-to)]
+                                    (assoc-in env [:eng :jobs 'jobs.movement.go-to]
+                                              (assoc j :round (fn ^:async stubbed [c]
+                                                                (fake/swap-self! (:p env) assoc :pos {:x 19 :y 64 :z 0})
+                                                                (ctx/end c :done nil {:arrived false :why :no-path}))))))
+              [result] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 20 :y 64 :z 0}})]
+                                     :wrap nearer-no-arrival}
+                                    {}))]
+          (is (not= :unreachable (:reason result)) (pr-str result)))))))
+
 (deftest offers-that-cannot-be-read-three-times-end-window
   (async done
     (tu/run-async done

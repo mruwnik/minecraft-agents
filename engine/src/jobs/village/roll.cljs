@@ -261,13 +261,15 @@
 
 (defn ^:async walk!
   "One go-to leg toward the villager e. A leg that got no nearer is one try: the next round aims at where the villager
-  is then. :again, :continue or the stop."
+  is then; one that left the villager within reach, read again, is no failure. :again, :continue or the stop."
   [c e]
   (let [r (await (child/call-chase* c :walk
                                    {:pos (u/pos-of (.-pos e)) :entity (.-id e) :range (reach) :leg-s (leg-s) :walk {:ways #{:walk :clear-seal}}}))]
     (cond
       (= :continue r) :continue
       (let [res (:data r)] (or (:arrived res) (:nearer res) (:leg res))) :again
+      (let [now (villager/find-by-uuid (:primitives c) (villager/chosen c))]
+        (and now (u/within? (u/self-pos c) (u/pos-of (.-pos now)) (reach)))) :again
       :else (stop! c :unreachable))))
 
 (defn ^:async approach!
