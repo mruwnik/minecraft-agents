@@ -19,7 +19,7 @@
   "Mend the cells of a plan (:plan, its :parts, nil: every part) the body has seen differ from their want
   (jobs.lib.build.diff/diff): missing, a wrong block, or a block where the plan wants clear. A cell never seen, or
   remembered so long it is likelier changed than not, is not listed: it is mended once seen. Crop, tree and :any cells,
-  the upper half of a two-block item and a gate a job holds open are not this job's. A cell that was never built is
+  the upper half of a two-block item and a door or gate swung wrong are not this job's. A cell that was never built is
   mended like a broken one: the plan wants it there either way.
   Each round calls jobs.build.from-plan with :cells the cells listed (it builds them and the plan cells they stand on,
   fetching what it lacks), at the call's worth. Ends done when no cell is seen broken; the from-plan child's ending

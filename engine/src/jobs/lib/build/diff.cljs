@@ -1,13 +1,11 @@
 (ns jobs.lib.build.diff
   "The cells of a plan the body has seen differ from their want, and what mending them is worth."
   (:require [clojure.string :as str]
-            [engine.ctx :as ctx]
             [jobs.lib.build.plan :as plan]
             [jobs.lib.build.wood :as wood]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.farm :as farm]
-            [jobs.lib.pen-gate :as pg]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.world :as known]
             [plan.shape :as shape]))
@@ -35,15 +33,14 @@
   "The cells of `cells` (plan cells) the body has seen differ from their want, judged as from-plan judges them
   (plan/judged, plan/loosened): :missing, :wrong or :extra. A cell never seen, or remembered so long it is likelier
   changed than not, is :unknown and never listed. Never a cell others-own?, the upper half of a two-block item (its
-  lower half places it), nor a gate a job holds open, opened or gave up on (pen-gate/held-gates)."
+  lower half places it), nor a door, gate or trapdoor standing where it should not or swung wrong: from-plan never digs
+  one, and shutting a gate is jobs.maintenance.shut's and the pen-gate trigger's."
   [c cells]
-  (let [held (pg/held-gates (ctx/view c))
-        gate-held? (fn [{:keys [pos found]}] (and (held pos) (some-> found (str/ends-with? "_fence_gate"))))]
-    (->> (plan/judged (:primitives c) {:cells (remove (comp others-own? :want) cells)} nil {} (first wood/species))
-         plan/loosened
-         (filterv #(and (#{:missing :wrong :extra} (:answer %))
-                        (not (plan/companion? (:want %)))
-                        (not (gate-held? %)))))))
+  (->> (plan/judged (:primitives c) {:cells (remove (comp others-own? :want) cells)} nil {} (first wood/species))
+       plan/loosened
+       (filterv #(and (#{:missing :wrong :extra} (:answer %))
+                      (not (plan/companion? (:want %)))
+                      (not (and (#{:wrong :extra} (:answer %)) (some->> (:found %) (re-find plan/opening-pattern))))))))
 
 (defn herd-gaps
   "{:mob :target :gaps n} of each part's :herd with broken barrier cells (pen-read/barrier?) one column round its :box."

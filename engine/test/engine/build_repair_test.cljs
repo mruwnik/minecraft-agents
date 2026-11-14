@@ -4,7 +4,6 @@
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
             [engine.harvest-test :as h]
-            [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.lib.build.diff :as diff]
             [jobs.lib.cost :as cost]
@@ -32,9 +31,7 @@
 
 (deftest only-cells-seen-differ-and-no-one-else-keeps-are-listed
   (let [{:keys [eng]} (b/start yard-world {"yard" yard} [])]
-    (is (= [[4 64 2] [3 64 6]] (diff-of eng)) "not the wall cell far out of sight, the crop, the :any cell")
-    (mem/write! (:store eng) :gate-gave-up {:cell [3 64 6] :reason :unreachable})
-    (is (= [[4 64 2]] (diff-of eng)) "a gate a job gave up shutting is not mended")))
+    (is (= [[4 64 2]] (diff-of eng)) "not the wall cell far out of sight, the crop, the :any cell, the open gate")))
 
 (deftest a-broken-barrier-beside-a-herd-is-worth-its-gap-loss-more-than-a-plain-wall
   (let [plan {:parts [{:id "pen" :box [[3 64 3] [5 64 5]] :herd {:mob "cow" :target 4}}] :cells []}
@@ -56,8 +53,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (b/start yard-world {"yard" yard} [])
-              result (await (tu/child-outcome eng 'jobs.build.repair {:plan "yard" :parts ["wall" "far" "field" "free"]} 300))]
-          (is (= [[[4 64 2] "cobblestone"]] (b/places p)) "the far gap, unseen, the crop and the :any cell are left")
+              result (await (tu/child-outcome eng 'jobs.build.repair {:plan "yard"} 300))]
+          (is (= [[[4 64 2] "cobblestone"]] (b/places p)) "the far gap, unseen, the crop, the :any cell and the open gate are left")
           (is (= "dirt" (b/block p [6 64 2])))
+          (is (= "oak_fence_gate" (b/block p [3 64 6])) "the open gate is not dug: shutting it is the gate jobs'")
           (is (< (.-x (.-pos (.self p))) 20) "no walk to look at the far cell")
           (is (= :done (:status result)) (pr-str result)))))))
