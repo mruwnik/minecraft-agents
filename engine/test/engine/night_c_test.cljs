@@ -26,6 +26,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.walk-pick :as pick]
+            [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.preview :as pv]
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
@@ -34,7 +35,7 @@
 
 (deftest a-roof-over-a-breached-room-does-not-end-the-night
   (run-night-in {:blocks breached-room :inventory st/wall-stack}
-                (fn [{:keys [p seen]}]
+                (fn [{:keys [p]}]
                   (is (seq (st/calls p "place")) "the body walled itself in under the roof instead of calling a hole in the wall roofed"))))
 
 (deftest the-wall-in-of-a-breached-room-carries-its-own-worth
@@ -252,7 +253,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (night-at-home (-> dark-world (update :blocks merge {"60,66,0" "stone"}))
+        (let [{:keys [eng p]} (await (night-at-home (-> dark-world (update :blocks merge {"60,66,0" "stone"}))
                                                          {:x 60 :y 64 :z 0}))]
           (await (core/tick! eng))
           (is (seq (st/calls p "place")) "go-to's planned cost of the dark route is dearer than digging in, its dark seconds priced too: dug in")
@@ -706,6 +707,39 @@
     (is (= 120 (secs 0)) "no water in the part seen: the rest is walked")
     (is (< (js/Math.abs (- (secs 10) (+ 20 (* 100 pace)))) 1e-9) "all of it swum: the rest at swim pace")
     (is (< (js/Math.abs (- (secs 5) (+ 20 (* 100 (/ (+ 1 pace) 2))))) 1e-9) "half of it swum: half the rest")))
+
+(deftest a-partial-quote-prices-the-unseen-ground-from-the-water-remembered-along-the-straight-way
+  (let [c {:primitives (tu/fake {})}
+        p (:primitives c)
+        pace (/ 1 (* cost-planner/walk-floor (cost-planner/swim-speed (.-equipment (.self p)))))
+        q {:uses {:job-time [30 120 ##Inf]} :moves-to [1000 64 0]
+           :route {:found false :reason :partial :unseen-floors true :near 96 :partial {:seconds 20 :steps 10 :swim 0 :waypoints [[16 64 0]]}}}
+        remember! (fn [kind-at]
+                    (aset p "seenBlockAt" (fn [pos] (if-let [name (kind-at (.-x pos) (.-y pos))]
+                                                      #js {:name name :pos pos :age-ms 0}
+                                                      #js {:unknown true :pos pos}))))
+        priced #(night/budget-priced c q)
+        share-priced (fn [share] (+ 20 (* 100 (+ (- 1 share) (* share pace)))))]
+    (remember! (fn [x y] (cond (> y 63) "air" (< x 100) "stone" :else "water")))
+    (is (< (js/Math.abs (- (:seconds (priced)) (share-priced (/ 56 61)))) 1e-9)
+        "56 of the 61 columns read along the way are sea past x 100: that share swum, though the part searched was all land")
+    (remember! (constantly nil))
+    (is (= 120 (:seconds (priced))) "nothing remembered along the way: the searched part's share (0) is the guess")
+    (is (< (js/Math.abs (- (:seconds (night/budget-priced c (assoc-in q [:route :partial :swim] 10))) (share-priced 1))) 1e-9)
+        "nothing remembered along the way: the searched part's share, here all swum")
+    (remember! (fn [x y] (if (> y 63) "air" "stone")))
+    (is (= 120 (:seconds (priced))) "all of it remembered as land: walked")))
+
+(deftest the-seconds-swum-in-a-partial-quote-pay-the-dark-water-factor-not-the-dark-land-one
+  (let [c {:primitives (tu/fake {})}
+        kit (wworld/kit-of c)
+        q {:uses {:job-time [30 120 ##Inf]}
+           :route {:found false :reason :partial :unseen-floors true :near 96 :partial {:seconds 20 :steps 10 :swim 10}}}
+        {:keys [seconds dark-seconds]} (night/budget-priced c q)
+        swim-s (- seconds 20)]
+    (is (< (cost/dark-factor kit) (cost/swim-dark-factor kit)) "a drowned's meet rate in the dark water is on top of the dark cell's")
+    (is (< (js/Math.abs (- dark-seconds (+ (* 20 (cost/dark-factor kit)) (* swim-s (cost/swim-dark-factor kit))))) 1e-9)
+        "the ground walked pays the dark land rate, the ground swum the dark water one")))
 
 (deftest a-walks-worth-is-what-the-next-way-costs-more-than-the-answer-and-is-finite
   (let [prices {:bed 30 :shelter 100 :log-out 70 :exposed 400}]

@@ -172,7 +172,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 6))
@@ -185,7 +185,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
               id (core/submit! eng (tu/order '(jobs.survival.night {})) {})]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (swap! (fake/state p) assoc-in [:self :isSleeping] true)
@@ -377,7 +377,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "occupied"})))
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
