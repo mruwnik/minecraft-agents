@@ -40,8 +40,8 @@
                       (string? v) (if (> (count v) max-string-chars)
                                     (do (vreset! clipped true) (str (subs v 0 max-string-chars) "…")) v)
                       (map? v) (do (when (> (count v) 32) (vreset! clipped true))
-                                   (into {} (map (fn [[k x]] [(if (> (count (str k)) 80) (do (vreset! clipped true) (subs (str k) 0 80)) k) (if (= :offers k) ; own budget: a roll's offers are the point of the read
- (trim-in (volatile! 512) x (inc depth)) (trim-in budget x (inc depth)))])) (take 32 v)))
+                                   (into {} (map (fn [[k x]] [(if (> (count (str k)) 80) (do (vreset! clipped true) (subs (str k) 0 80)) k) (if (= :offers k) ; own budget and depth: a roll's offers are the point of the read, even nested in an event's :data
+ (trim-in (volatile! 512) x 0) (trim-in budget x (inc depth)))])) (take 32 v)))
                       (coll? v) (do (when (> (count v) 32) (vreset! clipped true))
                                     (mapv #(trim-in budget % (inc depth)) (take 32 v)))
                       :else v))))]

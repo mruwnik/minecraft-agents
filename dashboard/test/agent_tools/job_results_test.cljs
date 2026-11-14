@@ -215,3 +215,8 @@
     (is (not truncated?))
     (is (= 12 (count (:offers value))))
     (is (= offer (last (:offers value))))))
+
+(deftest offers-nested-in-an-event-keep-their-cost-whole
+  (let [offer {:index 0 :cost [{:item "paper" :count 24}] :gives {:item "emerald" :count 1}}
+        {:keys [value]} (results/bounded [{:event :trade.offers :data {:offers [offer]}}])]
+    (is (= offer (get-in value [0 :data :offers 0])))))
