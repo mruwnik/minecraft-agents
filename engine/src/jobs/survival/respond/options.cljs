@@ -275,6 +275,21 @@
                    pillar (assoc :pillar pillar))
                  #(merge (exits-of c) %)))))
 
+(defn break-out-s
+  "Seconds the body takes to break out of the seal of a refuge that failed where it stands (the cheapest block of the flight's plug cells to dig: cost/dig-cost); 0 when it is not so shut in or no plug cell is known."
+  [c]
+  (if-not (refuge/failed-refuge-here? c)
+    0
+    (or (some->> (refuge/plug-cells c) (keep #(some-> (u/seen-name (:primitives c) (zipmap [:x :y :z] %)) cost/dig-cost)) seq (apply min)) 0)))
+
+(defn leaving
+  "answers with the fight and the back-off begun after break-s seconds of breaking out of the seal (cost/leave-answer: the
+  blows of mobs over them): a body in a failed refuge pays to leave it, as it would to stay."
+  [equipment mobs break-s answers]
+  (if (pos? break-s)
+    (reduce (fn [as k] (cond-> as (contains? as k) (update k #(cost/leave-answer {:equipment equipment :mobs mobs :seconds break-s} %)))) answers [:fight :back-off])
+    answers))
+
 (defn cornered-answers
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers),
   with a back-off step to take (back-off-of's :target; nil: none or tried), :back-off the walk away
@@ -292,11 +307,12 @@
                                             :walk-s (get walks o 0) :then (vec (remove nil? (vals (dissoc a :stand))))
                                             :seconds (hide-out/hide-s) :stayed (quot (:held-s (ctx/mem c) 0) (hide-out/hide-s))}))
         mobs (mapv #(hostile/mob-near p %) hostiles)]
-    (cond-> (dissoc a :flee)
+    (->> (cond-> (dissoc a :flee)
       (contains? a :stand) (assoc :stand (hold :stand (filterv #(= "creeper" (:name %)) mobs)))
       (contains? a :flee) (assoc :back-off (:flee a))
       swim? (assoc :swim-out (hostile/flee-answer c hostiles (:fight a) nil nil))
-      enderman? (into (for [o [:water :roof] :when (not (flight/tried? c o))] [o (hold o mobs)]))))))
+      enderman? (into (for [o [:water :roof] :when (not (flight/tried? c o))] [o (hold o mobs)])))
+         (leaving (cost/equipment-of (.-equipment (.self p))) mobs (break-out-s c))))))
 
 (defn glance-reach [] (settings/get settings ::glance-reach))
 

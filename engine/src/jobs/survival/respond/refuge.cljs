@@ -137,6 +137,12 @@
     (boolean (when-let [s (and (seq creepers) (open))]
                (seq (:blasts (cost/stand-answer {:mobs creepers :seconds s})))))))
 
+(defn failed-refuge-here?
+  "Whether the body is still shut in where a refuge of this flight failed (:failed-at): a plug there changes nothing."
+  [c]
+  (boolean (and (contains? (:failed-at (ctx/mem c)) (u/cell-vec (sh-sense/feet (:primitives c))))
+                (dig-cells/sealed-in? (:primitives c) :walls (sh-sense/roof-height)))))
+
 (defn ^:async plug-option!
   "A plug option of a cornered body (:plug: the walls, :plug-dig: pit or pocket), once a flight: plug!'s result, nil when
   it failed or was tried or a creeper comes first (creeper-coming?: not begun, not tried either); a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off),
@@ -144,9 +150,8 @@
   [c option ways]
   (when-not (or (flight/tried? c option)
                 (and (not (:plugging (ctx/mem c))) (creeper-coming? c ways))
-                (and (or (#{:plug-dig :plug-dig-zone} option)
-                         (contains? (:failed-at (ctx/mem c)) (u/cell-vec (sh-sense/feet (:primitives c)))))
-                     (dig-cells/sealed-in? (:primitives c) :walls (sh-sense/roof-height))))
+                (and (#{:plug-dig :plug-dig-zone} option) (dig-cells/sealed-in? (:primitives c) :walls (sh-sense/roof-height)))
+                (failed-refuge-here? c))
     (or (await (plug! c option ways)) (do (flight/tried! c option) nil))))
 
 (defn plugging-here?

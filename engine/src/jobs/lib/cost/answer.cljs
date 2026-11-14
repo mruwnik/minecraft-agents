@@ -741,6 +741,14 @@
       (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
                                                      [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s)}]]))))
 
+(defn leave-answer
+  "answer a begun after seconds spent breaking out of a seal among mobs [flee-mob's] wearing equipment: the blows they land over
+  those seconds (stand-answer) first, the seconds added to a's; nil for none."
+  [{:keys [equipment mobs seconds]} a]
+  (when a
+    (-> (add-blows a (stand-answer {:equipment equipment :mobs mobs :seconds seconds}))
+        (update :seconds + seconds))))
+
 (defn hold-answer
   "The answer of walking walk-s seconds (default 0) to a spot no enderman reaches (water, under a 2-high roof) and holding there for
   seconds among mobs [flee-mob's] wearing equipment: an angry enderman's blows over the walk (it teleports to the body on the way),

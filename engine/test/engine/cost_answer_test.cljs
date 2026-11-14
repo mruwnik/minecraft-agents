@@ -806,3 +806,10 @@
     (is (zero? (:damage walls)) "walls keep a 3-tall enderman out")
     (is (pos? (:damage (pillar [ender]))) "on a pillar's top it is reached the whole hide")
     (is (> (:damage (pillar [ender])) (:damage (cost/cover-answer {:mobs [ender] :then [{:damage 0 :hit 0 :seconds 0}]} {:open-s 2 :seconds 32 :reached false}))))))
+
+(deftest an-answer-begun-after-breaking-out-of-a-seal-takes-the-blows-and-seconds-of-the-break
+  (let [f (cost/fight-answer (assoc (fight sword (mob "zombie" 0)) :health 20))
+        left (cost/leave-answer {:mobs [(mob "zombie" 0)] :seconds 3} f)]
+    (is (= (+ 3 (:seconds f)) (:seconds left)) "the break's seconds are added")
+    (is (< (:damage f) (:damage left)) "a zombie at the wall lands blows over them")
+    (is (nil? (cost/leave-answer {:mobs [(mob "zombie" 0)] :seconds 3} nil)) "no answer, none left")))

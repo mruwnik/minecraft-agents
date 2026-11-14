@@ -2228,6 +2228,17 @@
             (is (= 1 @plugs))
             (finally (set! refuge/plug! plug) (set! dig-cells/sealed-in? sealed) (set! ctx/mem mem) (set! ctx/update-mem! upd))))))))
 
+;; The way out of a failed refuge is priced: the seal's break and the blows over it come before the fight or the back-off.
+(deftest a-failed-refuge-is-left-at-the-price-of-breaking-its-seal
+  (let [fight {:damage 2 :hit 2 :seconds 4}
+        back {:damage 0 :hit 0 :seconds 6}
+        zombie {:name "zombie" :distance 0 :follow 16}
+        sealed (cornered/leaving nil [zombie] 3 {:fight fight :back-off back :plug {:damage 0 :hit 0 :seconds 1}})
+        open (cornered/leaving nil [zombie] 0 {:fight fight :back-off back})]
+    (is (= {:fight fight :back-off back} open) "no seal, nothing added")
+    (is (= [7 9 1] ((juxt (comp :seconds :fight) (comp :seconds :back-off) (comp :seconds :plug)) sealed)) "the break's seconds go before fight and back-off only")
+    (is (< (:damage fight) (:damage (:fight sealed))) "the blows over the break are added")))
+
 (deftest a-raise-cut-short-for-a-mob-is-a-seen-failure-of-the-class-the-refuge-began-in
   (async done
     (tu/run-async done
