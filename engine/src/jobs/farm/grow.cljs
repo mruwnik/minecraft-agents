@@ -21,7 +21,7 @@
   reads the world first, so a cut or restarted run takes up the field it finds (a field already standing is never started
   again):
   1. A crop of :crop seen and ripe (a zone or claim of another owner leaves it): cut it with jobs.farm.harvest, which replants.
-  2. A crop seen, none ripe: look again at each one whose memory is older than a wait (within the harvest radius), then wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
+  2. A crop seen, none ripe: look once at the field when a crop's memory is old enough that it could have ripened since (within the harvest radius), then wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
   3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; a failed seed fetch with :count seeds carried sows what is carried; wheat seeds are
      broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body, the field worth a 3-day food reserve: cost/food-search-worth) and work it with jobs.farm.tend (till,
      irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance.
@@ -39,14 +39,16 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 3600 :doc "Seconds of work a grow may take besides the wait for the crop to ripen (cost/ripen-s)." :spec (a/num-in 0 nil)}
-   ::wait-s {:default 30 :doc "Seconds the body holds still before it looks at the growing crop again." :spec (a/num-in 1 nil)}})
+  {::wait-s {:default 30 :doc "Seconds the body holds still before it looks at the growing crop again." :spec (a/num-in 1 nil)}})
 
 (def target [:crop])
 (defn job-time-of
-  "The :job-time a grow of args may spend: the measured wait for its count to ripen from a fresh field (cost/ripen-s) plus ::job-time-s of work."
+  "The :job-time a grow of args may spend: the measured wait for its count to ripen from a fresh field (cost/ripen-s) plus the measured work (cost/field-step-s): the field's cells tilled, sown and watered, then each crop cut and sown again."
   [{:keys [crop count w h]}]
-  (+ (settings/get settings ::job-time-s) (cost/ripen-s crop count (* w h) 0)))
+  (let [cells (* w h)]
+    (+ (cost/ripen-s crop count cells 0)
+       (cost/field-step-s :till cells) (cost/field-step-s :plant cells) (cost/field-step-s :irrigate 1)
+       (cost/field-step-s :harvest count) (cost/field-step-s :plant count))))
 
 (def defaults {:spend {:job-time job-time-of}})
 (def safe?
@@ -110,18 +112,21 @@
 (defn ripe? [crop b] (some-> (:age b) (>= (crops/ripe-age crop))))
 
 (defn stale
-  "The crops of seen within the harvest radius whose memory is older than one wait: judged from what the body saw before, not from what it sees."
+  "The crops of seen within the harvest radius whose memory is old enough that the crop could have ripened since (the mean ripening time from the age it was seen at, cost/ripen-s): judged from what the body saw before, not from what it sees."
   [c seen]
-  (let [me (u/self-pos c)]
-    (filterv #(and (some-> (:age-ms %) (> (* 1000 (settings/get settings ::wait-s))))
+  (let [me (u/self-pos c)
+        crop (:crop (:args c))]
+    (filterv #(and (some-> (:age-ms %) (> (* 1000 (cost/ripen-s crop 1 1 (or (:age %) 0)))))
                    (<= (u/dist (:pos %) me) crops/cut-radius))
              seen)))
 
 (defn ^:async relook!
-  "Look at each of the stale crops (a wait's glance at the field, as a player does), so ripeness is judged from sight."
+  "Turn to the middle of the stale crops and take one sight pass (its cone covers the field, as a player's glance does), so ripeness is judged from sight."
   [c seen]
-  (doseq [{:keys [x y z]} (map :pos (stale c seen))]
-    (await (look/look-at! c [x y z]))))
+  (when-let [cells (seq (map :pos (stale c seen)))]
+    (let [mean (fn [k] (/ (reduce + (map k cells)) (count cells)))]
+      (await (ctx/act c :look (clj->js {:pos {:x (+ 0.5 (mean :x)) :y (+ 0.5 (mean :y)) :z (+ 0.5 (mean :z))}})))
+      (look/see! c (look/search-effort) :look-at))))
 
 (defn hoe? [c] (boolean (some #(.endsWith (:name %) "_hoe") (u/inventory (:primitives c)))))
 

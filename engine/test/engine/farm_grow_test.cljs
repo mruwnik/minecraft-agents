@@ -8,6 +8,7 @@
             [engine.farm-tend-test :as ft]
             [engine.test-util :as tu]
             [jobs.farm.grow :as grow]
+            [jobs.lib.cost :as cost]
             [jobs.lib.world-files :as ew]))
 
 (defn setup
@@ -51,7 +52,7 @@
 (deftest the-default-job-time-covers-the-crops-measured-ripening
   (let [one (grow/job-time-of {:crop "wheat" :count 6 :w 3 :h 2})
         two (grow/job-time-of {:crop "wheat" :count 12 :w 3 :h 2})]
-    (is (< 3600 one) "a flat hour could not outlast a wheat growth")
+    (is (< (cost/ripen-s "wheat" 6 6 0) one (+ (cost/ripen-s "wheat" 6 6 0) 3600)) "the wait for the crop to ripen and the measured work, not a flat hour of it")
     (is (< one two) "a second harvest of the field is a second growth to wait for")))
 
 (deftest a-growing-field-is-waited-for-and-no-field-is-started
@@ -83,6 +84,32 @@
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (some #(= [2.5 2.5] [(.-x (.-pos (.-args %))) (.-z (.-pos (.-args %)))]) (ft/calls s "look"))
               "it turned to the crop it only remembered"))))))
+
+(defn ^:async relook-calls
+  "The look calls a growing wait makes over a two-crop field whose memory is age-ms old."
+  [age-ms]
+  (let [s (setup (ft/world (ft/farm "wheat" 2 [[2 2] [3 2]] [[2 2] [3 2]]) ft/wheat-drops {:inventory kit}))
+        p (:p s)
+        seen-blocks (aget p "seenBlocks")]
+    (aset p "seenBlocks" (fn [q] (let [bs (seen-blocks q)] (doseq [b bs] (aset b "age-ms" age-ms)) bs)))
+    (core/submit! (:eng s) (tu/order (list 'jobs.farm.grow {:count 2 :spend {:job-time 120}})) {})
+    (await (tu/run-ticks (:eng s) (:clock s) 8 700))
+    (mapv #(let [pos (.-pos (.-args %))] [(.-x pos) (.-z pos)]) (ft/calls s "look"))))
+
+(deftest memory-too-young-for-the-crop-to-have-ripened-is-not-looked-at-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [looks (await (relook-calls 60000))]
+          (is (not-any? #(#{[2.5 2.5] [3.5 2.5] [3.0 2.5]} %) looks) "a minute-old memory of a wheat stage 2 is still good"))))))
+
+(deftest stale-crops-are-looked-at-in-one-glance-at-the-field
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [looks (await (relook-calls 2400000))]
+          (is (some #{[3.0 2.5]} looks) "one look at the middle of the two crops")
+          (is (not-any? #{[2.5 2.5] [3.5 2.5]} looks) "not one look a crop"))))))
 
 (deftest a-growing-field-in-a-plan-of-the-bodys-own-is-waited-for
   (async done
