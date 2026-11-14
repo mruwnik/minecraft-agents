@@ -3,7 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.items.craft :as craft]
-            [jobs.items.obtain.base :refer [carried-of child-ways seen-radius tried!]]
+            [jobs.items.obtain.base :refer [carried-of child-ways job-time-left seen-radius tried!]]
             [jobs.items.obtain.chain :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
@@ -81,7 +81,7 @@
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
           (let [before (carried-of (u/inventory (:primitives c)) [(:item step)])
-                e (waits/waiting-out c (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
+                e (waits/waiting-out c (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :spend {:job-time (job-time-left c)} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
                                                                     :keep-table (nil? (:for-plan (:args c)))})))]
             (if (= :continue e)
               :continue

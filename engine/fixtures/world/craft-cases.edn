@@ -24,6 +24,14 @@
    :act [[:job (jobs.items.craft {:worth 1200 :item "stick"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "stick" 4]]}
+  ;; card 8015eba4: a craft step longer than the craft job's own default time (20 s here) runs on under the obtain's budget
+  {:name "obtain-sticks-past-the-craft-jobs-own-time-limit"
+   :settings {:jobs.items.craft/job-time-s 20}
+   :body {:inventory [["oak_planks" 100]]}
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "stick" :count 200 :ways #{:carried :craft}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 250 :of-job true}]
+   :after [[:item "stick" 200]]
+   :limit-s 260}
   ;; card 0ef3fbfc: an item already carried ends done with text that says so, not "crafted 0"
   {:name "craft-of-an-item-already-carried-says-already-carried"
    :body {:inventory [["stone_pickaxe" 1]]}

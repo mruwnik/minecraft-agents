@@ -116,6 +116,24 @@
             (is (= :done (:kind e)))
             (is (= 2 @runs))))))))
 
+(deftest the-craft-child-is-not-capped-by-its-own-default-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              s (f/start (f/bare [{:name "oak_log" :count 2}]) [])
+              seen (atom nil)]
+          (set! ctx/call (fn [c slot j args]
+                           (if (= 'jobs.items.craft j)
+                             (do (reset! seen args)
+                                 (fake/add-item! (:p s) "oak_planks" 8)
+                                 (contract/ending :done nil {:made 8}))
+                             (orig c slot j args))))
+          (try (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 8 :explore false} 30))
+               (finally (set! ctx/call orig)))
+          (is (< 120 (get-in @seen [:spend :job-time]))
+              "the craft slot's job time adds up over the obtain's rounds, so its own 120 s default ended a 320-stick craft; the obtain's budget bounds it"))))))
+
 (deftest a-death-mid-craft-starts-again-from-what-is-carried
   (async done
     (tu/run-async done
