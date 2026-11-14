@@ -140,7 +140,7 @@ test('the loader warns on stderr, not stdout, when a source is newer than the bu
       env: { ...process.env, AGENT_TOOLS_BUNDLE: bundle },
       encoding: 'utf8',
     })
-    assert.match(r.stderr, /older than/)
+    assert.match(r.stderr, /built before the latest change to their own code.*npm run build-agent-tools/)
     assert.equal(r.stdout, '')
   } finally {
     fs.rmSync(dir, { recursive: true })

@@ -52,8 +52,9 @@ export const staleSource = (bundle, roots) => {
   return stamp === sourceHash(roots) ? null : newer
 }
 
+// Compared with the tools' own sources in this checkout, never with the body's engine, which may run another build.
 export const staleBundleMessage = () =>
-  'Warning: these tools are older than the engine and may behave oddly. Tell the operator.'
+  'Warning: these tools were built before the latest change to their own code, so they may not act as the code now says (the body\'s engine is not compared). Tell the operator to rebuild them: npm run build-agent-tools in dashboard.'
 
 // The sources the agent-tools bundle is built from (dashboard/shadow-cljs.edn :agent-tools and the namespaces its exports require).
 export const bundleSources = repoRoot => [
