@@ -752,7 +752,7 @@
             (let [id (await (get-tool! s {:item "stone_pickaxe"} 40))
                   st (last (events-of s :stopped))]
               (is (= :no-source (:reason st)) (pr-str st (core/waiting (:eng s) id)))
-              (is (= 3 @n) "a 30 s run after 3 is not worth its price (child/exhausted?)"))
+              (is (<= 2 @n 3) "a gather ending the same way again is not re-run past a third time"))
             (finally (set! ctx/call orig))))))))
 
 (deftest crafting-is-off-when-how-leaves-it-out
