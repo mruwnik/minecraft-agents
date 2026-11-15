@@ -201,3 +201,10 @@
 
 (deftest equip-rounds-that-cut-nothing-are-priced-as-crafts-and-stop-after-a-bounded-count
   (is (<= 1 (rounds-until-refused 100) 20) "tool and torch rounds are crafts and fetches, which win far more often than digs: a few go on, not none and not for ever"))
+
+(deftest equip-rounds-that-stop-for-the-same-reason-again-are-priced-as-refused
+  (with-redefs [ctx/worth (constantly 100)]
+    (let [worth-after (fn [mem] (with-redefs [ctx/mem (constantly mem)] (mine/round-worth? {})))]
+      (is (worth-after {::u/failures 2 ::u/refusal {:key :no-tool :n 1}}) "one such ending is still a chance")
+      (is (not (worth-after {::u/failures 8 ::u/refusal {:key :no-tool :n 8}}))
+          "the same ending 8 times in a row repeats until the world changes: no craft's chance prices it"))))

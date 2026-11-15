@@ -278,9 +278,9 @@
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
 
 (defn round-worth?
-  "Whether another equip round is worth its price: none has failed in a row (u/failed!, a round after which the dig cut cells is u/progress!), else cost/try-again? :craft (tool and torch rounds are crafts and fetches, which win more often than digs)."
+  "Whether another equip round is worth its price: none has failed in a row (u/failed!, a round after which the dig cut cells is u/progress!), else cost/try-again? :craft (tool and torch rounds are crafts and fetches, which win more often than digs), at the refused kind once a dig stopped for the same reason twice in a row."
   [c]
-  (or (zero? (u/failures c)) (cost/try-again? c :craft)))
+  (or (zero? (u/failures c)) (cost/try-again? c (cost/refusal-kind c :craft))))
 
 (defn gettable?
   "Whether the trip may get again what a dig that stopped for reason lacked."
@@ -314,7 +314,7 @@
       (let [reason (or (:reason (:data e)) (contract/cause-key e))
             cut-before (u/cut-cells (:cut (ctx/mem c)))]
         (ctx/update-mem! c booked e)
-        (if (< cut-before (u/cut-cells (:cut (ctx/mem c)))) (u/progress! c) (u/failed! c))
+        (if (< cut-before (u/cut-cells (:cut (ctx/mem c)))) (u/progress! c) (u/failed! c reason))
         (ctx/update-mem! c assoc :dig-ending (dissoc e :report))
         (cond
           (shed-again? c reason)
