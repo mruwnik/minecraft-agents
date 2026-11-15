@@ -50,7 +50,8 @@
   does not chase into unlit space, more may be there unseen); the wait (treading water, head out, when the body swims) declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
   without a swing; a ranged one that, with another in range, is better left than walked to (hostile-fight/too-far-to-chase?: the
   priced answer says flee) ends :too-far; a creeper is a target only alone in range (hostile-fight/targets) and ends :creeper-unsafe when
-  it cannot be fought hit-and-back (hostile-fight/hit-and-back-ok?) or only creepers are left: the parent, not each step, weighs fight against flight. No
+  it cannot be fought hit-and-back (hostile-fight/hit-and-back-ok?) or only creepers are left: the parent, not each step, weighs fight against flight.
+  A creeper in range whose fuse is lit, target or not, is first backed away from (back-off!). No
   hostile in range: :done :cleared. When the body lost health since the call began (hurt while it waited out a swing gap: once the swing then due at a target in reach is made), or a creeper not there before is in range, the job yields (:continue). Every ending
   but :done also carries :struck {id {:name :hits :health ...}}; a caller passes that ending's data back as :prior.")
 
@@ -407,9 +408,7 @@
   "Equip, walk to the nearest target and swing once; a creeper is waited for, hit once and backed away from."
   [c target]
   (await (combat/equip-best! c (weapon-for (:primitives c) (ctx/use c :tools))))
-  (if (and (hostile/hostiles? c) (true? (.-fusing target)) (await (back-off! c target)))
-    :again
-    (await (strike! c target)))
+  (await (strike! c target))
   :again)
 
 (defn ^:async strike!
@@ -453,6 +452,11 @@
     (ctx/update-mem! c assoc :creepers ids)
     (boolean (and known (seq (remove known ids))))))
 
+(defn fusing-creeper
+  "The nearest creeper in range whose fuse is lit (it hisses: heard even unseen), target or not, or nil."
+  [c]
+  (first (filter #(and (combat/creeper? %) (true? (.-fusing %))) (hostile/in-range c))))
+
 (defn ^:async swing-once!
   "Swing at target (engage!), then: :done :cleared with no hostile in range, :given-up with no target left, else then."
   [c target then]
@@ -464,14 +468,16 @@
     :else then))
 
 (defn ^:async hostile-step
-  "One step of a :hostiles fight: decline (hold ran out, ranged mob too far, only heard, all given up), yield when the body was hurt
+  "One step of a :hostiles fight: decline (hold ran out, ranged mob too far, only heard, all given up), back off from a lit fuse, yield when the body was hurt
   (hurt while it waited out the swing gap: after the swing then due at a target in reach), look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
   [c]
   (let [p (:primitives c)
         target (first (hostile/targets c))
-        last-attack (:last-attack (ctx/mem c))]
+        last-attack (:last-attack (ctx/mem c))
+        fusing (fusing-creeper c)]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c) :started-at (ctx/now c)))
     (cond
+      (and fusing (await (back-off! c fusing))) :again
       (new-creeper? c) :continue
       (and target (hostile/held-idle? c (hostile/held? c target))) (declined c :hold-timeout)
       (and target (hostile/too-far-to-chase? c target)) (declined c :too-far)

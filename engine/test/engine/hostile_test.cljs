@@ -1277,6 +1277,19 @@
           (is (= :hold-timeout (:reason r))
               "after a back-off the creeper 6 blocks off is waited for, not declined though a walk away would now be cheaper: the parent weighs, not each step"))))))
 
+;; Card 6c727565: live, a creeper beside a zombie fight lit its fuse and blew while the body waited out a swing gap at
+;; the zombie (11.5 hp).
+(deftest a-lit-fuse-beside-a-zombie-fight-is-backed-away-from-before-the-next-swing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round-ms fight {:inventory sword
+                                                         :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 2 :y 64 :z 0} :fusing true}
+                                                                    (zombie 7 0 2)]} 20))
+              steps (filterv #(#{"moveTo" "attack"} (.-name %)) (.-calls (.-world p)))]
+          (is (= "moveTo" (.-name (first steps))) "the step back comes before any swing at the zombie")
+          (is (neg? (.. (first steps) -args -pos -x)) "away from the creeper at +x"))))))
+
 ;; Card ad8c1e8b: live, the walls/pit/pocket quotes held the decision 2.4 s while a creeper closed in and lit its fuse
 (deftest no-cover-is-quoted-with-a-creeper-near
   (with-redefs [shut-in/covers (fn [& _] (throw (js/Error. "quoted")))]
