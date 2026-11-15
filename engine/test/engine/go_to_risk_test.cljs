@@ -96,6 +96,19 @@
     (is (pos? walk))
     (is (< (js/Math.abs (- walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)) nil))) (* 1e-12 walk)))))
 
+(deftest a-night-walk-over-wide-view-ground-meets-spawns-at-the-wide-rate-and-a-walled-one-at-the-pooled
+  (let [goal {:x 30 :y 64 :z 0}
+        spawns (fn [solid-z?]
+                 (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))]
+                   (with-redefs [sh-sense/block-light-at (constantly 0) sh-sense/sky-light-at (constantly 15)
+                               sh-sense/solid-at? (fn [_ {:keys [y z]}] (and (= 65 y) (solid-z? z)))]
+                     (:spawns (risk/estimate-inputs c goal {:plan (straight-plan c goal)})))))
+        open (spawns (constantly false))
+        walled (spawns #(>= (js/Math.abs %) 2))]
+    (is (pos? walled))
+    (is (< (js/Math.abs (- (/ open walled) (/ (cost/spawn-chance [0 64 0] {:wide? true}) (cost/spawn-chance [0 64 0])))) 1e-9)
+        "the wide rate over the pooled one, not clamped to it")))
+
 (deftest a-way-made-in-the-dark-prices-the-spawns-over-the-seconds-of-its-making
   (let [cells [[0 64 0] [0 65 0] [0 66 0]]
         goal {:x 4 :y 67 :z 0}

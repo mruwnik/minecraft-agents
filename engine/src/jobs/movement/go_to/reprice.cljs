@@ -35,13 +35,13 @@
 (defn safe-prefix
   "The plan to walk of a plan that stops short of pos and whose walk to pos is within what the worth buys (risk/bought?) but for the unseen
   cells guessed dark (risk/estimate's caves-free?): its steps before the first more likely dark than not
-  (spawn-light/dark-share), when that step is such a guess (spawn-light/dark-guess?: a look may show it lit), and they leave
+  (spawn-light/dark-chance), when that step is such a guess (spawn-light/dark-guess?: a look may show it lit), and they leave
   the body's cell and pass status, with :cut-rest the look-ahead steps from that step on (drive/follow! walks to the cut,
   looks there and plans again, priced by what it then sees: a dark cave stays dark to a look, so it is never walked on a
   cut); the plan itself when no step is one and it passes status to its end. Else nil."
   [c pos plan]
   (let [p (:primitives c)
-        [prefix more] (split-with #(< (spawn-light/dark-share p % false) 0.5) (:steps plan))
+        [prefix more] (split-with #(< (spawn-light/dark-chance p % false) 0.5) (:steps plan))
         steps (vec prefix)
         end (peek steps)
         feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]

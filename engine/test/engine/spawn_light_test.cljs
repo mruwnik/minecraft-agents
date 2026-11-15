@@ -201,6 +201,13 @@
       (spawn-light/night-chance p {:x 30 :y 64 :z 16})
       (is (= 1 @reads)))))
 
+(deftest a-dark-cell-with-a-wide-view-is-over-one-as-a-share-of-the-pooled-rate-and-at-most-one-as-a-chance
+  (with-redefs [sh-sense/block-light-at (constantly 0) sh-sense/sky-light-at (constantly 15)]
+    (let [p (sky/with-sky (tu/fake {:floor [-30 -30 30 30] :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
+          cell {:x 0 :y 64 :z 0}]
+      (is (< 1 (spawn-light/dark-share p cell false)))
+      (is (< (js/Math.abs (- 1 (spawn-light/dark-chance p cell false))) 1e-9)))))
+
 (deftest a-night-spawn-price-over-open-ground-seen-at-full-sky-relights-no-section
   ;; the memory's light of open ground seen at full sky is sky 15 and, with no light source, block 0, and of the ground
   ;; under it its own: no section is flooded for the dark-hall flood, its unseen floors' frontier nor a full day's guess

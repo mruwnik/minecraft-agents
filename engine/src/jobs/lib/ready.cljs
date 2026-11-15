@@ -218,9 +218,9 @@
                                        :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
                  (pos? lifted) (contract/never :exposed (str "dark at " where ": the sky does not light it within a day")
                                                :lowered-by #{:torch} :chance chance)
-                 :else (contract/never :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (spawn-light/dark-share p to false 0))) "% dark even by full day, so dawn does not light it")
+                 :else (contract/never :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (spawn-light/dark-chance p to false 0))) "% dark even by full day, so dawn does not light it")
                                        :lowered-by #{:torch} :chance chance))
-               (look-first c to (spawn-light/dark-share p to false))))))))
+               (look-first c to (spawn-light/dark-chance p to false))))))))
 
 (defn dark-status
   "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would

@@ -67,6 +67,30 @@
           (.get ^js (.-cells e) k)
           (let [v (view)] (.set ^js (.-cells e) k v) v))))))
 
+(defn- chance-in
+  "chance-at, a seen dark cell with a wide view at the wide rate only when wide?, else at the pooled one."
+  [p cell caves-free? subtract stay? solid-at lit wide?]
+  (let [darkening (or subtract (sh-sense/sky-subtract-now p))
+        cell (standing p cell)
+        block (when-let [seen (seen-light p cell)] (or lit seen))
+        reaches (sh-sense/sky-reaches-from-above? p cell)
+        sky-light (sh-sense/sky-light-at p cell)
+        ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
+        known (and block (or (not reaches) sky-light))]
+    (cond
+      known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2}) :wide? (and wide? (zero? %1) (zero? %2) (wide-cell? p cell))})
+                  lit? (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))]
+              (cond
+                stay? (let [hall (cost/hall-edge-chance (sh-inside/stay-hall p (hall-cell p cell) darkening))]
+                        (+ (* hall (at-sky 0 0)) (* (- 1 hall) (at-sky block 15))))
+                lit? (at-sky block 15)
+                :else (let [hall (hall-chance p cell darkening)]
+                        (+ (* hall (at-sky block 0)) (* (- 1 hall) (at-sky block 15))))))
+      :else (let [day (look/unseen-lit-chance p cell 0)
+                  sky-dark (max 0 (- day (look/unseen-lit-chance p cell darkening)))
+                  dark (if caves-free? sky-dark (+ sky-dark (* (- 1 day) (unseen-hall-share cell (or solid-at (look/unseen-solid-at-fn p))))))]
+              (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:dark dark})})))))
+
 (defn chance-at
   "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; one that leaves dark is dark by
   the chance it is in a dark hall, hall-chance), an unseen one at the chance it is dark (look/unseen-lit-chance): what full
@@ -81,27 +105,7 @@
   ([p cell caves-free? subtract] (chance-at p cell caves-free? subtract false))
   ([p cell caves-free? subtract stay?] (chance-at p cell caves-free? subtract stay? nil))
   ([p cell caves-free? subtract stay? solid-at] (chance-at p cell caves-free? subtract stay? solid-at nil))
-  ([p cell caves-free? subtract stay? solid-at lit]
-   (let [darkening (or subtract (sh-sense/sky-subtract-now p))
-         cell (standing p cell)
-         block (when-let [seen (seen-light p cell)] (or lit seen))
-         reaches (sh-sense/sky-reaches-from-above? p cell)
-         sky-light (sh-sense/sky-light-at p cell)
-         ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
-         known (and block (or (not reaches) sky-light))]
-     (cond
-       known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2}) :wide? (and (zero? %1) (zero? %2) (wide-cell? p cell))})
-                   lit? (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))]
-               (cond
-                 stay? (let [hall (cost/hall-edge-chance (sh-inside/stay-hall p (hall-cell p cell) darkening))]
-                         (+ (* hall (at-sky 0 0)) (* (- 1 hall) (at-sky block 15))))
-                 lit? (at-sky block 15)
-                 :else (let [hall (hall-chance p cell darkening)]
-                         (+ (* hall (at-sky block 0)) (* (- 1 hall) (at-sky block 15))))))
-       :else (let [day (look/unseen-lit-chance p cell 0)
-                   sky-dark (max 0 (- day (look/unseen-lit-chance p cell darkening)))
-                   dark (if caves-free? sky-dark (+ sky-dark (* (- 1 day) (unseen-hall-share cell (or solid-at (look/unseen-solid-at-fn p))))))]
-               (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:dark dark})}))))))
+  ([p cell caves-free? subtract stay? solid-at lit] (chance-in p cell caves-free? subtract stay? solid-at lit true)))
 
 (defn night-chance
   "chance-at of a stay at cell through the night: the sky darkened as at a clear midnight, or more; a lit cell a dark
@@ -127,11 +131,18 @@
          (not (look/dark-in-sight? p cell)))))
 
 (defn dark-share
-  "chance-at of cell (under the sky's darkening subtract, default now; solid-at as chance-at's) as a share of that of a
-  cell certainly dark at its height (at most 1, though a wide view's rate is over it): 1 dark, 0 lit, the chance of dark between."
+  "chance-at of cell (under the sky's darkening subtract, default now; solid-at as chance-at's) as a share of the pooled
+  rate of a cell certainly dark at its height: 0 lit, 1 dark, more than 1 where a wide view's rate is over the pooled one
+  (walks multiply it by the pooled rate, spawn-rate)."
   [p cell caves-free? & [subtract solid-at]]
   (let [dark (cost/spawn-rate (:y cell))]
-    (if (pos? dark) (min 1 (/ (chance-at p cell caves-free? subtract false solid-at) dark)) 0)))
+    (if (pos? dark) (/ (chance-at p cell caves-free? subtract false solid-at) dark) 0)))
+
+(defn dark-chance
+  "The chance cell is dark (at the pooled rate whatever its view, as dark-share but for a wide view): 1 dark, 0 lit."
+  [p cell caves-free? & [subtract solid-at]]
+  (let [dark (cost/spawn-rate (:y cell))]
+    (if (pos? dark) (/ (chance-in p cell caves-free? subtract false solid-at nil false) dark) 0)))
 
 (defn share-of
   "dark-share of cells {:x :y :z} (caves-free?, subtract as there), each cell read once and their spawn-regions
