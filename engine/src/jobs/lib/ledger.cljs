@@ -337,13 +337,32 @@
 
 (def tunnel-way-policy {:cap 30 :ttl :forever})
 
+(defn- tunnel-span
+  "A tunnel entry's line as [along lo hi]: the line's key [dim y delta cross] and its first and last along-coordinates."
+  [{:keys [dim origin delta steps]}]
+  (let [[x y z] origin [dx dz] delta
+        along (+ (* x dx) (* z dz))]
+    [[dim y delta (+ (* x dz) (* z dx))] along (+ along steps)]))
+
 (defn record-tunnel!
   "Remember a level tunnel this body cut (memory :tunnel-way: dim, origin feet cell [x y z], delta [dx dz], steps), so a
-  later stay-level run does not take its air for a cave and go-to's own way up links it."
+  later stay-level run does not take its air for a cave and go-to's own way up links it. One entry per tunnel: an earlier entry
+  on the same line that this stretch overlaps or touches is replaced by the one covering both."
   [c origin delta steps]
   (when (pos? steps)
-    (ctx/remember! c :tunnel-way {:dim (.-dimension (.self (:primitives c))) :origin (vec origin) :delta (vec delta) :steps steps}
-                   tunnel-way-policy)))
+    (let [new {:dim (.-dimension (.self (:primitives c))) :origin (vec origin) :delta (vec delta) :steps steps}
+          [line lo hi] (tunnel-span new)
+          joins? (fn [d] (let [[l a b] (tunnel-span d)] (and (= l line) (<= a (inc hi)) (<= lo (inc b)))))
+          near (filterv joins? (map :data (ctx/entries c :tunnel-way)))
+          spans (map tunnel-span (conj near new))
+          lo' (apply min (map second spans))
+          hi' (apply max (map #(nth % 2) spans))
+          [ox oy oz] (:origin new)
+          [dx dz] (:delta new)
+          k (- lo' (+ (* ox dx) (* oz dz)))]
+      (ctx/forget-where! c :tunnel-way joins?)
+      (ctx/remember! c :tunnel-way (assoc new :origin [(+ ox (* k dx)) oy (+ oz (* k dz))] :steps (- hi' lo'))
+                     tunnel-way-policy))))
 
 (defn tunnel-stands
   "The set of feet cells [x y z] of the level tunnels this body cut in its current dimension (memory :tunnel-way)."

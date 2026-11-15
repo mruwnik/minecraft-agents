@@ -68,3 +68,27 @@
     (place! child [0 64 0])
     (reset! (:clock r) (+ 1000000 (* 0.75 ttl-ms)))
     (is (= 1 (count (ledger/entries check))))))
+
+(defn tunnel-ctx [{:keys [store]}]
+  {:primitives #js {:self (fn [] #js {:dimension "overworld"})}
+   :view #(mem/view store)
+   :remember (fn [k d p] (mem/write! store k d p))
+   :forget (fn [k pred] (mem/forget-where! store k pred))})
+
+(defn tunnels [{:keys [store]}]
+  (mapv #(select-keys (:data %) [:origin :delta :steps]) (mem/entries (mem/view store) :tunnel-way)))
+
+(deftest one-line-of-one-step-calls-is-remembered-as-one-tunnel
+  (let [r (rig) c (tunnel-ctx r)]
+    (doseq [z (range -5 -45 -1)]
+      (ledger/record-tunnel! c [-15686 40 z] [0 -1] 1))
+    (is (= [{:origin [-15686 40 -5] :delta [0 -1] :steps 40}] (tunnels r)))
+    (is (every? (ledger/own-cells c) [[-15686 40 -20] [-15686 41 -44] [-15686 40 -45]]))))
+
+(deftest a-later-stretch-with-the-same-origin-extends-the-tunnel-and-other-lines-stay-apart
+  (let [r (rig) c (tunnel-ctx r)]
+    (ledger/record-tunnel! c [0 64 0] [1 0] 3)
+    (ledger/record-tunnel! c [0 64 1] [1 0] 3)
+    (ledger/record-tunnel! c [0 64 0] [1 0] 8)
+    (ledger/record-tunnel! c [20 64 0] [1 0] 2)
+    (is (= [{:origin [0 64 1] :delta [1 0] :steps 3} {:origin [0 64 0] :delta [1 0] :steps 8} {:origin [20 64 0] :delta [1 0] :steps 2}] (tunnels r)))))
