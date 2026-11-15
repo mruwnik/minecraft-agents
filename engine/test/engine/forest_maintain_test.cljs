@@ -407,7 +407,7 @@
        (finally (reset! test-zones []))))
 
 (def other-plan
-  "Another active plan claiming the cell over the second log of the tree at x 3."
+  "Another active plan claiming the third log cell of the tree at x 3; the second log under it is that cell's support, a footprint too."
   {:id "other" :parts [{:id "o" :cells [[3 66 0]] :want "stone"}]})
 
 (deftest a-log-over-another-plans-footprint-or-a-zone-leaves-the-whole-tree-standing
@@ -477,7 +477,7 @@
                        (await (impl token args))))
           (core/submit! (:eng s) (tu/order (list job {:plan "forest"})) {})
           (await (ticks (:eng s) 30))
-          (is (= [[3 64 0] [3 65 0]] (digs (:p s))) "the logs below the refused third are dug, then the felling stops")
+          (is (= [[3 64 0]] (digs (:p s))) "the log under the refused third's support is not dug: the felling stops at the support")
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :footprint}] (warns (:seen s) :forest.left)) "the tree is left standing"))))))
 
 (deftest a-tree-begun-and-dropped-from-the-plan-before-its-first-dig-is-left-and-its-cell-not-planted
