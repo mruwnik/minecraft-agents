@@ -1,0 +1,17 @@
+;; Card 97cff604 / 16cc6c54: with other awake players in the tab list a night skip is hopeless, so the body shut in a
+;; closed room stays instead of walking 50 blocks to its bed. :others puts 3 awake players (Probe-prefixed, spectators far above) in the tab list.
+;; Should-succeed: no sleep, the body stays in its room. Should-fail: it walks out to the bed.
+{:name "a-closed-room-with-others-awake-is-not-left-for-a-bed-50-blocks-off"
+ :tags [:night :survival :bed]
+ :time :night :time-why :sleep
+ :alone true :alone-why "the :others players are in every body's tab list"
+ :others 3
+ :plot {:light :sky :length 64 :width 16 :height 6}
+ :blocks [[:fill [4 -1 4] [8 3 8] "cobblestone" :hollow]
+          [:set [56 0 6] "red_bed[facing=east,part=foot]"] [:set [57 0 6] "red_bed[facing=east,part=head]"]]
+ :body {:at [6.5 0 6.5] :settle-s 3 :inventory [["cobblestone" 8]]}
+ :memory [{:kind :bed :data {:pos #xyz [56 0 6]} :policy {:cap 1 :ttl :forever}}]
+ :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]]
+ :expect [{:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 60}]
+ :after [[:body-near [6.5 0 6.5] 4]]
+ :limit-s 90}

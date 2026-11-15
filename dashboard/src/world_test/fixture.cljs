@@ -552,6 +552,8 @@
       (not (or (nil? length) (and (int? length) (<= min-length length max-length)))) (conj (str ":plot :length must be an integer " min-length ".." max-length))
       (not (or (nil? width) (and (int? width) (<= 16 width max-width)))) (conj (str ":plot :width must be an integer 16.." max-width))
       (not (contains? #{nil :keep} (:mobs c))) (conj ":mobs must be :keep (or absent)")
+      (not (or (nil? (:others c)) (and (int? (:others c)) (<= 1 (:others c) 9)))) (conj ":others must be an integer 1..9")
+      (and (:others c) (not (:alone c))) (conj ":others needs :alone: its players show in every body's tab list")
       (not (contains? #{:lit :dark :sky} (light-of c))) (conj ":plot :light must be :lit, :dark or :sky")
       (and (not= :sky (light-of c)) (needs-sky? c)) (conj ":time (other than :any), :weather and :time-set need :plot :light :sky: underground cells have no sky")
       (not (string? (:name c))) (conj ":name must be a string")
@@ -1052,6 +1054,19 @@
   "How far above a plot's origin the body waits between cases: beyond its sight (48) over the tallest sky plot (31); an idle underground cell is solid rock, so a
   restarted body, which logs in where it stood, never sees a plot before its blocks are built (memory would keep air)."
   100)
+
+(defn others-names
+  "The names of the c's :others awake players: Probe-prefixed (so no runner counts them as strangers) and unique to the
+  body, within the 16-character name limit; none are agent bodies of the world, so the body sees them as strangers."
+  [body c]
+  (let [tail (str/replace body #"^Probe" "")]
+    (mapv #(let [n (str "ProbeA" % tail)] (subs n 0 (min 16 (count n)))) (range 1 (inc (or (:others c) 0))))))
+
+(defn others-commands
+  "Once the :others players joined, parks them as spectators park-height above the plot."
+  [origin names]
+  (into [] (mapcat (fn [n] [(str "gamemode spectator " n)
+                            (str "tp " n " " (xyz-str (abs-pos origin [1.5 park-height 1.5])) " 0 0")])) names))
 
 (defn cleanup-commands
   "Leave the plot: its entities killed, the plot cleared to its floor, the body's inventory and effects cleared, the

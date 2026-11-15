@@ -320,6 +320,15 @@
     (is (re-find #"no longer offends" (get (lint #{"f/a" "f/gone"}) "f/gone")) "a listed case that no longer exists")
     (is (some #(re-find #":time-why" %) (:problems d)))))
 
+(deftest others-are-awake-players-named-for-the-body-and-need-the-case-alone
+  (is (= ["ProbeA1Fixture" "ProbeA2Fixture"] (f/others-names "ProbeFixture" {:others 2})))
+  (is (= [] (f/others-names "ProbeFixture" {})))
+  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 16} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))
+        alone {:alone true :alone-why "w"}]
+    (is (empty? (filter #(re-find #":others" %) (ps (assoc alone :others 3)))))
+    (is (some #(re-find #":others needs :alone" %) (ps {:others 3})))
+    (is (some #(re-find #":others must be" %) (ps (assoc alone :others 0))))))
+
 (deftest an-alone-case-says-why-it-runs-alone
   (let [ps (fn [m] (:problems (first (f/file-cases (pr-str (merge {:name "a"} m)) "f"))))]
     (is (empty? (filter #(re-find #":alone" %) (ps {:alone true :alone-why "a neighbour keeps the killer"}))))

@@ -2051,6 +2051,32 @@
         (.then (js/Promise.all #js [built starting]) park))
       (.then (park) build))))
 
+(defn start-others!
+  "Joins the case's :others awake players (tools/world-test-others.mjs) and parks them as spectators above the plot.
+  Resolves to the child process, or nil without :others."
+  [opts origin c]
+  (let [names (f/others-names (:body opts) c)]
+    (if (empty? names)
+      (js/Promise.resolve nil)
+      (-> (rcon! (mapv #(str "whitelist add " %) names))
+          (.then (fn [_]
+                   (js/Promise.
+                    (fn [resolve reject]
+                      (let [child (cp/spawn "node" (clj->js (into [(repo-path "tools" "world-test-others.mjs") (world-file opts "world.json")] names))
+                                            #js {:stdio #js ["pipe" "pipe" "inherit"]})
+                            timer (js/setTimeout (fn [] (.kill child) (reject (js/Error. "the :others players did not join in 60 s"))) 60000)]
+                        (.on (.-stdout child) "data" (fn [d] (when (str/includes? (str d) "ready")
+                                                                (js/clearTimeout timer) (resolve child))))
+                        (.on child "exit" (fn [] (js/clearTimeout timer) (reject (js/Error. "the :others players could not join")))))))))
+          (.then (fn [child] (.then (rcon! (f/others-commands origin names)) (fn [_] child))))))))
+
+(defn stop-others!
+  "Lets the :others players leave and drops their whitelist entries."
+  [opts c child]
+  (when child
+    (.end (.-stdin child))
+    (rcon! (mapv #(str "whitelist remove " %) (f/others-names (:body opts) c)))))
+
 (defn run-case!
   "One run of case c on plot i (leased by the caller); stop! (a thunk to a promise) stops the previous body before the
   time lock is waited for, start! starts or keeps the body once the lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
@@ -2073,6 +2099,7 @@
         starting (atom nil)
         start-cursor (log-cursor (events-file opts))
         weather (atom nil)
+        others (atom nil)
         cpu-start (body-cpu (:body opts))
         result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)
                                        :body-cpu-s (cpu-delta cpu-start (body-cpu (:body opts)))
@@ -2135,6 +2162,8 @@
                        (.then #(do (clear-plans-on-plot! opts grid origin) (write-plans-settled! opts rc)))
                        (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
+                       (.then #(start-others! opts origin c))
+                       (.then #(reset! others %))
                        (.then #(reset! setup-cursor (log-cursor (events-file opts))))
                        (.then (fn [] (let [cmds (f/body-commands origin (:body opts) rc)]
                                        (.then (rcon! cmds)
@@ -2179,7 +2208,8 @@
                    r)))
         (.then (fn [r] (write-trace! opts (cond-> r @t-start (assoc :start-ticks (:ticks @t-start))) (or @setup-cursor start-cursor))))
         (.then (fn [r]
-                 (-> (run-cleanup! [#(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
+                 (-> (run-cleanup! [#(stop-others! opts c @others)
+                                    #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                                     #(when (:stop-after-case? opts) (leave-and-stop! opts))
                                     #(rcon! (f/cleanup-commands grid origin (:body opts) rc))
                                     #(when (lease/weather-x? rc) (set-weather! opts :clear (str (:id c) " ended")))
