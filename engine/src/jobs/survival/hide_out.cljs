@@ -22,7 +22,8 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
-            [jobs.survival.respond.state :as flight]))
+            [jobs.survival.respond.state :as flight]
+            [plan.shape :as shape]))
 
 (def doc
   "Wait in a refuge the body is in (sealed in a plug or pit, or up a pillar: the call's :kind, with its :anchor feet cell and :cells filled)
@@ -142,20 +143,23 @@
   "Seconds the stair dig-out! digs first (::dig-out-steps steps up on the heading away from a mob at `from`, escape/stair-cuts)
   takes from the body's feet: each step cost/stair-leg-pricer's, its cuts at the quickest carried tool (tools/avg-clear-ms; a
   seen open cell none, an unsensed one access/hidden-guess) with what they destroy (cost/destroyed-fn). nil when the body
-  is not buried or a cut needs a tool it does not carry (tools/needs-tool-to-clear?): no dig away."
-  [p from]
-  (when (sh-sense/buried? p)
+  is not buried or a cut needs a tool it does not carry (tools/needs-tool-to-clear?): no dig away; with by-hand? neither refuses: the stair is priced
+  as the stair then takes it, a cut at the bare hand when no tool cuts it."
+  [p from & [by-hand?]]
+  (when (or by-hand? (sh-sense/buried? p))
     (let [feet (sh-sense/feet p)
           steps (settings/get settings ::dig-out-steps)
           heading (first (dig-leave/heading-order feet (when from {:x (- (* 2 (:x feet)) (:x from)) :z (- (* 2 (:z feet)) (:z from))})))
           cells (escape/stair-cuts [(:x feet) (:y feet) (:z feet)] (escape/heading-dirs heading) steps)
           pos #(zipmap [:x :y :z] %)
           seen? #(sh-sense/seen-cell? p (pos %))
-          names (map #(when-not (and (seen? %) (not (sh-sense/solid-at? p (pos %)))) (or (u/seen-name p (pos %)) access/hidden-guess)) cells)
+          names (map #(let [n (u/seen-name p (pos %))]
+                          (when-not (or (shape/air? n) (and (seen? %) (not (sh-sense/solid-at? p (pos %))))) (or n access/hidden-guess)))
+                       cells)
           destroyed (cost/destroyed-fn (fn [c] (u/sensed p (pos c))))
           cut-s (fn [n cell] (when n (+ (/ (tools/avg-clear-ms p n (count cells)) 1000) (destroyed n cell false))))
           leg-s (cost/stair-leg-pricer (wworld/unseen-share p))]
-      (when-not (some #(and % (tools/needs-tool-to-clear? p %)) names)
+      (when (or by-hand? (not-any? #(and % (tools/needs-tool-to-clear? p %)) names))
         (transduce (map (fn [step] (leg-s (map (fn [[n cell]] (cut-s n cell)) step) nil (not-every? (comp seen? second) step))))
                    + 0 (partition 3 (map vector names cells)))))))
 
@@ -175,8 +179,9 @@
 
 (defn stays-for-waiting?
   "Whether hiding another ::hide-s costs less than digging out now. Leaving is in the open among the hostiles about (sensed
-  or heard; shooters within their fire range): ::leave-s while the body carries the blocks to seal again (as many as the
-  refuge's cells), else a whole respond call (hostile-loss/loss). Staying is the wait, then that same leaving by the
+  or heard; shooters within their fire range): the dig-out's own seconds (dig-out-s, by hand when no tool cuts the walls: the
+  cap is open beside the waiting mob throughout) and then ::leave-s while the body carries the blocks to seal again (as many as
+  the refuge's cells), else a whole respond call (hostile-loss/loss). Staying is the wait, then that same leaving by the
   chance they are still about when it ends (cost/stays-chance: the hides of held-ms they outlasted counted, a mob the
   sun does not burn stays for certain)."
   [c held-ms]
@@ -184,7 +189,10 @@
         view (ctx/view c)
         near (flight/near-known p (dead c) (danger-q/hostile-radius) :fire-range)
         reseal? (>= (reduce + 0 (map :count (blocks/carried c (flight/blocks c)))) (count (:cells (:args c))))
-        leave (if reseal? (hostile-loss/loss-over c view near (settings/get settings ::leave-s)) (hostile-loss/loss c view near))
+        dig-s (or (dig-out-s p (some->> (waiting-melee c) first (danger-q/mob-pos p)) true) 0)
+        leave (if reseal?
+                (hostile-loss/loss-over c view near (+ dig-s (settings/get settings ::leave-s)))
+                (hostile-loss/loss-over c view near (mapv #(+ dig-s %) (hostile-loss/call-s))))
         stays (cost/stays-chance (hostile-loss/mobs-of p view near) (js/Math.floor (/ held-ms (* 1000 (hide-s)))))]
     (< (+ (hide-s) (* stays leave)) leave)))
 

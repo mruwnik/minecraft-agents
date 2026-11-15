@@ -427,6 +427,18 @@
           (is (every? #(<= (.. % -args -pos -x) 0) (calls p "dig")) "away from the zombie at x 3, none towards it")
           (is (= [:spent] (hidden-holds seen))))))))
 
+(deftest a-sealed-body-with-no-tool-for-the-rock-keeps-hiding-instead-of-digging-out-by-hand-beside-the-zombie
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]}
+              (await (hide-steps '(test.flight) {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
+                                                 :entities [(zombie-at 4)]}
+                                 [[[(zombie-at 3)] 61000] [[(zombie-at 3)] 1000]]))]
+          (is (not-any? #(> (.. % -args -pos -y) 65) (calls p "dig"))
+              "Brindle S7r3: dug out bare-handed through cobblestone at 60 s, the cap open beside the zombie for the whole dig, and died")
+          (is (not-any? #(or (:dug-out %) (get-in % [:ending :data :dug-out])) @seen)))))))
+
 (deftest a-hurt-unarmed-sealed-body-with-a-pack-at-its-foot-past-hide-s-keeps-hiding-instead-of-digging-out
   (async done
     (tu/run-async done
