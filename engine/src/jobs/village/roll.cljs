@@ -679,10 +679,24 @@
                                                       (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
       (if (ending-or-wait? r) r :again))))
 
+(defn ^:async search!
+  "By day, nothing seen or heard: walk and look for a villager round the workstation (jobs.explore.search, once per call, within the villager search radius, priced at the call's worth less the trip back), as a player looks into the houses near. :continue while it runs, :again once one is in view, else nil."
+  [c pos]
+  (let [m (ctx/mem c)
+        worth (cost/worth-left c (cost/trip))]
+    (when (and (not (:searched m)) (not (:seen m)) (pos? worth))
+      (let [e (await (ctx/call c :search 'jobs.explore.search
+                               (child/search-args {:target "villager" :count 1 :center (select-keys pos [:x :y :z])
+                                                   :max-distance (villager/search-radius) :worth worth})))]
+        (cond
+          (= :continue e) :continue
+          (= :done (:kind e)) (do (ctx/update-mem! c assoc :searched true) :again)
+          :else (do (ctx/update-mem! c assoc :searched true) nil))))))
+
 (defn ^:async look-for!
   "The villager is out of view: walk to the cell when far from it and none was seen yet, look from where it was seen and
   round, from the cell beside the workstation, then at where the body last saw it (once a sighting), then by day toward
-  where it is heard (vantage steps). At night villagers sleep indoors: wait polls till day, then search once more. A
+  where it is heard (vantage steps), then a search round the workstation. At night villagers sleep indoors: wait polls till day, then search once more. A
   villager seen this call is waited for by day as long as the roll is worth (worth-of); then :gone. :again, :continue or the stop."
   [c pos villager]
   (let [m (ctx/mem c)]
@@ -703,7 +717,8 @@
                 (if (and (:seen m) (< (- (ctx/now c) (:away-since m (ctx/now c))) (* 1000 (worth-of c))))
                   (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
                       (await (wait-job! c :villager-out-of-view)))
-                  (stop! c (villager/gone-cause c)))))))))
+                  (or (await (search! c pos))
+                      (stop! c (villager/gone-cause c))))))))))
 
 (defn ^:async step!
   "One piece of the search, from what the world and the saved count say now. :again, :continue or :done."

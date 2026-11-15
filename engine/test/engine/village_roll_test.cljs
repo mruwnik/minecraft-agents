@@ -381,6 +381,20 @@
                                                env))} {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result)))))))
 
+(deftest a-villager-never-seen-or-heard-by-day-is-searched-for-round-the-workstation-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 8.5 :y 64 :z 0.5}})]
+                                       :keeps-job? true
+                                       :wrap (fn [{:keys [p] :as env}]
+                                               (let [orig (.-entities p)
+                                                     away? #(let [me (.-pos (.self p))] (< 5 (js/Math.hypot (.-x me) (.-z me))))]
+                                                 (aset p "entities" (fn [a] (if (away?) (.call orig p a) #js [])))
+                                                 env))} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
+          (is (pos? (count (vt/calls p "steer"))) "the body walked out to look"))))))
+
 (deftest a-villager-out-of-view-at-night-is-waited-for-till-day-not-gone
   (async done
     (tu/run-async done
