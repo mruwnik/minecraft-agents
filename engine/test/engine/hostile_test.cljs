@@ -2553,3 +2553,20 @@
                                                   :inventory sword :entities [(drowned-at -2.5 63 0.5)]} 20))]
           (is (breath/swimming? p) "afloat")
           (is (some #(true? (.-tread (.-args %))) (calls p "swim")) "the wait treads water, or the body sinks under the held fight"))))))
+
+(deftest a-shooter-that-no-walk-reaches-ends-the-fight-however-hurt-the-body-is
+  ;; every swing is out of reach and a walk to it finds no way, the shooter hurting the body between them: the count of
+  ;; blocked tries restarted at each hp loss and the fight never gave up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-flight {:inventory sword :self {:health 20} :entities [(skeleton 7 3 0)] :unreachable ["3,64,0"]})
+              n (atom 0)]
+          (.override (.-world p) "attack"
+                     (fn [_ _ _]
+                       (fake/swap-self! p assoc :health (- 20 (swap! n inc)))
+                       (js/Promise.resolve #js {:status "out-of-reach"})))
+          (core/submit! eng (tu/order fight) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (<= @n 6) "given up within a few tries, not retried while the hp goes down")
+          (is (= [] (:list (core/state eng))) "the job ended"))))))

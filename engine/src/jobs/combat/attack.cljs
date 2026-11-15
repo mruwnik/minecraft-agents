@@ -218,7 +218,8 @@
 
 (defn fail-count
   "mem's failure count for target id after one more failure with the body at health. With restart? it starts over when
-  the body lost health since the last failure (a :hostiles fight: a mob that keeps hurting it is not given up on)."
+  the body lost health since the last failure (a :hostiles fight against a melee mob: it comes to the body, so it is not given up on;
+  a shooter hurts from where no walk reaches, so its blocked walks always count)."
   [mem id health restart?]
   (if (and restart? (< health (get-in mem [:fail-health id] ##-Inf)))
     1
@@ -229,7 +230,7 @@
   [c target]
   (let [id (.-id target)
         health (.-health (.self (:primitives c)))
-        n (fail-count (ctx/mem c) id health (hostile/hostiles? c))]
+        n (fail-count (ctx/mem c) id health (and (hostile/hostiles? c) (not (combat/ranged? target))))]
     (ctx/update-mem! c #(-> % (assoc-in [:fails id] n) (assoc-in [:fail-health id] health)))
     (when (>= n (u/max-failures)) (give-up! c target :unreachable))))
 
