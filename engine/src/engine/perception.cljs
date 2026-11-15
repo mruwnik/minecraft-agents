@@ -63,7 +63,7 @@
 
   Wrapping leaves blocks, blockAt and entities raw. It adds seenBlockAt, seenBlocks, knownMobs, fadedMobs, and sensedAt, feel and
   glance (blockAt-like answers: name, pos, properties, age, fullCube, plus ageMs and felt / visible).
-  dig, place, jumpPlace and useOn let memory take the true state of their cell once they settle.
+  dig, place, jumpPlace and useOn let memory take the true state of their cell (and a door or tall plant's other half) once they settle.
 
   The parts: engine.perception.light (light curve), .store (block memory and reading it), .rays (view cone, sight pass,
   keeping memory current), .mobs (mob memory), .persist (file). This namespace creates, runs and wraps them."
@@ -84,7 +84,6 @@
 (def look-for! rays/look-for!)
 (def step! rays/step!)
 (def start-listening! rays/start-listening!)
-(def touch! rays/touch!)
 (def touching-primitives rays/touching-primitives)
 (def sense-thing mobs/sense-thing)
 (def save! persist/save!)
@@ -218,6 +217,17 @@
   [per pos]
   (when-let [id (rays/feel! per pos)]
     (assoc (block-of per id pos) :age-ms 0 :felt true)))
+
+(defn touch!
+  "The body touched the cell: memory takes its true state, and the other half of a door or tall plant there, which the
+  server changes with it."
+  [per [x y z :as pos]]
+  (rays/touch! per pos)
+  (when-let [^js raw (:raw per)]
+    (let [id (.stateAt raw x y z)]
+      (when (>= id 0)
+        (when-let [mate (case (:half (:properties (block-base per id))) "lower" [x (inc y) z] "upper" [x (dec y) z] nil)]
+          (rays/touch! per mate))))))
 
 (defn remembered-age
   "The age in ms of the remembered state of cell (x y z), nil when it was never seen."
@@ -384,7 +394,7 @@
     (set! (.-mobSource ^js (:st per)) p)
     (aset out "knownMobs" (fn [] (mobs/known-mobs per p)))
     (aset out "fadedMobs" (fn [] (mobs/sense-mobs! per p) (mobs/sightings per)))
-    (run! #(when-let [f (aget p %)] (aset out % (rays/touching per p f))) touching-primitives)
+    (run! #(when-let [f (aget p %)] (aset out % (rays/touching per p f touch!))) touching-primitives)
     (when-let [f (aget p "look")] (aset out "look" (looking per p f)))
     (aset out "seenBlockAt" (fn [^js a]
                               (let [b (store/seen-block per (cell a))]

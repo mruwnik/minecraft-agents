@@ -585,14 +585,14 @@
   #{"dig" "place" "jumpPlace" "useOn"})
 
 (defn touching
-  "The primitive f (called on p) that, once it settles, whatever its outcome, lets memory take the true state of the cell
-  in its pos argument."
-  [per ^js p ^js f]
+  "The primitive f (called on p) that, once it settles, whatever its outcome, lets (touch per cell) take the true state
+  of the cell in its pos argument."
+  [per ^js p ^js f touch-cell!]
   (fn [token ^js a]
     (let [touch (fn []
                   (when-let [^js pos (some-> a .-pos)]
                     (when (every? number? [(.-x pos) (.-y pos) (.-z pos)])
-                      (touch! per (mapv #(js/Math.floor %) [(.-x pos) (.-y pos) (.-z pos)])))))]
+                      (touch-cell! per (mapv #(js/Math.floor %) [(.-x pos) (.-y pos) (.-z pos)])))))]
       (-> (.call f p token a)
           (.then (fn [r] (touch) r)
                  (fn [e] (touch) (throw e)))))))

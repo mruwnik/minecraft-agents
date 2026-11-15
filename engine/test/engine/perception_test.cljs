@@ -434,6 +434,13 @@
               _ (await (.useOn wrapped "t" (at 2)))]
           (is (= ["stone" "dirt" "sand"] (mapv #(seen-name per [% 65 4]) [0 1 2]))))))))
 
+(deftest touching-a-door-lower-half-takes-the-upper-half-too
+  (let [{:keys [p per]} (rig {})]
+    (fake/set-block! p [0 65 4] "oak_door")
+    (fake/set-block! p [0 66 4] "oak_door")
+    (perception/touch! per [0 65 4])
+    (is (= ["oak_door" "oak_door"] (mapv #(seen-name per [0 % 4]) [65 66])))))
+
 (deftest sight-passes-pause-while-offline-and-restart-after-spawn
   (let [{:keys [p per]} (rig {"0,65,3" "gold_block"} {:pass-ms 1000 :step-ms 50})
         rays #(:rays (perception/stats per))
