@@ -173,9 +173,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng calls]} (await ((walk-script (vec (repeat 8 [0 64 0])) far-pile)))
+        (let [legs 8
+              {:keys [eng calls]} (await ((walk-script (vec (repeat legs [0 64 0])) far-pile)))
               res (->> @(:results eng) vals (filter #(re-find #"recover-drops" (str (:name %)))) last)]
-          (is (<= (count @calls) 4) "bounded by progress, not by the clock")
+          (is (< (count @calls) legs) "the same no-nearer ending stops by its price (:child-round-refused), before the scripted legs run out")
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])))
           (is (= :stopped (:status res)) (pr-str res))
           (is (re-find #"28 64 0" (str (:text res))) (pr-str res)))))))
