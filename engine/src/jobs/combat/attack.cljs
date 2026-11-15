@@ -453,9 +453,11 @@
     (boolean (and known (seq (remove known ids))))))
 
 (defn fusing-creeper
-  "The nearest creeper in range whose fuse is lit (it hisses: heard even unseen), target or not, or nil."
+  "The nearest creeper in range whose fuse is lit (it hisses: heard even unseen) and whose blast reaches the body (cost/blast-reach), target or not, or nil."
   [c]
-  (first (filter #(and (combat/creeper? %) (true? (.-fusing %))) (hostile/in-range c))))
+  (let [me (u/self-pos c)]
+    (first (filter #(and (combat/creeper? %) (true? (.-fusing %)) (<= (u/dist me (u/pos-of (.-pos %))) cost/blast-reach))
+                   (hostile/in-range c)))))
 
 (defn ^:async swing-once!
   "Swing at target (engage!), then: :done :cleared with no hostile in range, :given-up with no target left, else then."
@@ -495,7 +497,8 @@
         (await (wait-swing-gap! c target))
         ;; hurt while it waited out the gap: the swing now due comes before the yield, so the parent weighs the hurt
         ;; in the next gap, not after this one
-        (if (and (< (.-health (.self p)) health) (in-reach? c target))
+        ;; a fuse lit during the wait is backed away from first (the next step), not after a swing and a parent weigh
+        (if (and (< (.-health (.self p)) health) (in-reach? c target) (not (fusing-creeper c)))
           (await (swing-once! c target :continue))
           :again))
       :else (await (swing-once! c target :again)))))

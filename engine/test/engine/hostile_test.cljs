@@ -1290,6 +1290,33 @@
           (is (= "moveTo" (.-name (first steps))) "the step back comes before any swing at the zombie")
           (is (neg? (.. (first steps) -args -pos -x)) "away from the creeper at +x"))))))
 
+;; a fuse lit while the body waits out the swing gap hurt: the step back comes before the swing then due
+(deftest a-fuse-lit-in-the-hurt-swing-gap-is-backed-away-from-before-the-swing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:entities [(zombie 1.5 0) {:id 8 :name "creeper" :kind "hostile" :pos {:x -2 :y 64 :z 0}}]} 100)]
+          (.override (.-world p) "wait"
+                     (fn [token a impl]
+                       (swap! clock + (.-ms a))
+                       (fake/swap-self! p update :health dec)
+                       (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= 8 (:id %)) (assoc % :fusing true) %) es)))
+                       (impl token a)))
+          (core/submit! eng (tu/order fight) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "attack"))) "the swing due after the hurt gap is not made while a fuse is lit")
+          (is (some #(= "moveTo" (.-name %)) (.-calls (.-world p))) "the body steps back from the creeper"))))))
+
+(deftest a-lit-fuse-past-the-blast-reach-is-not-backed-away-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round-ms fight {:inventory sword
+                                                         :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x -12 :y 64 :z 0} :fusing true}
+                                                                    (zombie 7 0 2)]} 20))]
+          (is (= "attack" (.-name (first (filterv #(#{"moveTo" "attack"} (.-name %)) (.-calls (.-world p))))))
+              "a blast past its reach is no reason to leave the zombie"))))))
+
 ;; Card ad8c1e8b: live, the walls/pit/pocket quotes held the decision 2.4 s while a creeper closed in and lit its fuse
 (deftest no-cover-is-quoted-with-a-creeper-near
   (with-redefs [shut-in/covers (fn [& _] (throw (js/Error. "quoted")))]
