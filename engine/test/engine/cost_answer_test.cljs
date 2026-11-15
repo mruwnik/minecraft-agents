@@ -347,6 +347,13 @@
     (is (seq (:blasts (cost/cover-answer {:mobs [(mob "creeper" 4)]} {:open-s 4 :seconds 40}))) "a creeper that comes before the side shuts blows")
     (is (= [true nil] ((juxt some? :blasts) (cost/cover-answer {:mobs [(mob "creeper" 12)]} {:open-s 1 :seconds 40}))) "shut in first: out of its sight, no blast")))
 
+(deftest a-cover-beside-a-swelling-creeper-pays-only-the-blast-it-cannot-cut
+  (let [blasts #(:blasts (cost/cover-answer {:mobs [(mob "creeper" 2)]} %))
+        hit (fn [cover] (answer/blast-hp (first (blasts cover))))]
+    (is (nil? (blasts {:open-s 1 :seconds 31})) "walls up before its fuse ends: out of its sight, the fuse dies")
+    (is (seq (blasts {:open-s 2 :seconds 32})) "a side still open when the fuse ends: the blast lands")
+    (is (< (hit {:open-s 31 :seconds 31 :rise [1 3]}) (hit {:open-s 31 :seconds 31})) "a pillar has lifted the body out of the worst of it")))
+
 (deftest a-cover-that-may-fail-pays-the-fight-after-it-by-that-chance
   (let [zombie (mob "zombie" 1)
         fight (cost/fight-answer (fight nil zombie))

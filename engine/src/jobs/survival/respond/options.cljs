@@ -201,7 +201,7 @@
 (defn quiet-s "Seconds a hidden body keeps its refuge after the last danger (hide-out ::quiet-s), for the job that may not require hide-out itself." [] (hide-out/quiet-s))
 
 (defn pillar-cover
-  "The cover {:open-s :seconds :fails} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
+  "The cover {:open-s :seconds :fails :reached :rise} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire or a creeper's sight; it fails for a mob in its cell by
   ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, respond.pillar/mob-class), with the refusals this
   flight saw added (flight/with-seen-fails), for a mob climbing to its top (respond.pillar/pillar-climb) or for rock in an
@@ -211,13 +211,14 @@
   (when-let [climb (and (pillar/pillar-item c) (not-any? #(or (combat/climber? %) (combat/flyer? %)) hostiles)
                         (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
                         (pillar/climb-of c))]
-    (let [s (* (settings/get settings ::pillar-s) (/ (- (pillar/pillar-height) (pillar/lifted c)) (pillar/pillar-height)))
+    (let [h (- (pillar/pillar-height) (pillar/lifted c))
+          s (* (settings/get settings ::pillar-s) (/ h (pillar/pillar-height)))
           seconds (+ s (hide-out/quiet-s))
           refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
                                      (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
       {:open-s (if (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles) seconds s) :seconds seconds
        :fails (flight/fails-here c :pillar (- 1 (* (- 1 refused) (- 1 climb) (- 1 (pillar/rise-blocked (:primitives c) (pl/feet-cell c))))))
-       :reached (boolean (some combat/enderman? hostiles))})))
+       :reached (boolean (some combat/enderman? hostiles)) :rise [s h]})))
 
 (defn covers-in
   "What shut-in/covers reads past the ways: the body's feet cell, the cells the hostiles near fill and their kinds, its

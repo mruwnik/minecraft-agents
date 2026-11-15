@@ -721,18 +721,32 @@
   [a {:keys [damage hit]}]
   (-> a (update :damage + damage) (update :hit #(max (or % 0) hit))))
 
+(defn cover-blasts
+  "The blasts (chance-blast) on a body wearing equipment of the creepers of mobs [flee-mob's] while a cover's side stays
+  open for open-s: one that reaches its swell start and burns its fuse (fuse-s) before the side shuts (shut in, the body
+  is out of its sight and the fuse dies), at its distance then; rise [s h] (a pillar) lifts the body h blocks over s
+  seconds above it meanwhile."
+  ([equipment mobs open-s] (cover-blasts equipment mobs open-s nil))
+  ([equipment mobs open-s [rise-s rise-h]]
+   (vec (for [{:keys [name distance speed] :as m} mobs
+              :when (= "creeper" name)
+              :let [d (or distance 0)
+                    at (+ (/ (max 0 (- d swell-start)) (or speed (danger/chase-speed name))) fuse-s)]
+              :when (<= at open-s)]
+          (chance-blast (blast-hurt (armour/armour-stats equipment) (js/Math.hypot (min d swell-start) (* (or rise-h 0) (min 1 (/ at (or rise-s 0))))))
+                        (:weight m 1))))))
+
 (defn cover-answer
   "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails :dawn-s}
   (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
   it cannot be closed, default 0): the blows of build-answer over open-s (the exits besides :then: exits); then, by the chance the mobs are still about
   when the hide ends (stays-chance: all of them unless every mob is known to burn by day), the cheapest of then and the same cover again (:stays). A cover that fails is the
   blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). A creeper
-  blasts as stand-answer's over open-s (one that reaches its swell start before the side shuts); shut in, the body is out
-  of its sight and it does not swell. With :reached (a pillar: an enderman teleports to its top) an enderman's blows
+  blasts as cover-blasts (only one whose fuse ends before the side shuts). With :reached (a pillar: an enderman teleports to its top) an enderman's blows
   land at once over all of seconds."
-  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s reached]}]
+  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s reached rise]}]
   (let [then (concat then (exits mobs dawn-s))
-        blasts (:blasts (stand-answer {:equipment equipment :mobs (filter #(= "creeper" (:name %)) mobs) :seconds open-s}))
+        blasts (cover-blasts equipment mobs open-s rise)
         a (cond-> (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
             (seq blasts) (-> (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max (or % 0) (map blast-hp blasts))) (assoc :blasts blasts))
             reached (add-blows (blows-over (armour/armour-stats equipment) (map #(assoc % :distance 0 :start 0) (filter (fn [m] (= "enderman" (:name m))) mobs)) seconds)))

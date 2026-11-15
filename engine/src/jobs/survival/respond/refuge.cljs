@@ -130,9 +130,8 @@
     (await (plug-in! c option ways))))
 
 (defn creeper-coming?
-  "Whether a known creeper past swell-range and within its follow range reaches its swell start before the quickest of
-  ways shuts a side (cost/stand-answer's blasts over its shut-in/covers :open-s): the walls would come too late and the
-  body has time to do better. One already swelling beside the body is walled off."
+  "Whether a known creeper past swell-range and within its follow range blasts before the quickest of ways shuts a side
+  (cost/cover-blasts over its shut-in/covers :open-s): the walls would come too late and the body has time to do better. One already swelling beside the body is walled off."
   [c ways]
   (let [p (:primitives c)
         creepers (keep #(let [m (hostile-loss/mob-near p %)]
@@ -140,7 +139,7 @@
                        (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range threats/max-follow-range))
         open #(some->> (vals (shut-in/covers c (filter shut-in/covers-of ways))) (keep :open-s) seq (apply min))]
     (boolean (when-let [s (and (seq creepers) (open))]
-               (seq (:blasts (cost/stand-answer {:mobs creepers :seconds s})))))))
+               (seq (cost/cover-blasts nil creepers s))))))
 
 (defn failed-refuge-here?
   "Whether the body is still shut in where a refuge of this flight failed (:failed-at): a plug there changes nothing."

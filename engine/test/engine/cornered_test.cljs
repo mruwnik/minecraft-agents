@@ -1057,8 +1057,8 @@
       (fn ^:async t []
         (let [alone (await (first-cornered [(creeper 2.5 64 0.5)]))
               beset (await (first-cornered [(creeper 2.5 64 0.5) (assoc (zombie 0.5 64 -1.5) :id 8)]))]
-          (is (< (:stand (:prices alone)) (:plug (:prices alone))) "beside a creeper already in its swell range the walls do not stop the blast")
-          (is (< (.indexOf (:order alone) :stand) (.indexOf (:order alone) :plug)) "so standing comes before the walls")
+          (is (< (:plug (:prices alone)) (:stand (:prices alone))) "beside a creeper already in its swell range the walls shut before its fuse ends: no blast")
+          (is (< (.indexOf (:order alone) :plug) (.indexOf (:order alone) :stand)) "so the walls come before standing")
           (is (< (* 2 (:stand (:prices alone))) (:stand (:prices beset))) "a zombie in reach hits a body that stands too"))))))
 
 (deftest a-hurt-armed-body-walls-in-from-a-zombie-3-off-when-the-walls-are-priced-under-the-fight
