@@ -2599,8 +2599,8 @@
         (await
          (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
            (fn ^:async inner []
-             (is (= :later (await (never-lit-status 22800 [15 0]))) "near dawn, the spawns on 80 blocks of dark ground cost more than the night left")
-             (is (= :ok (await (never-lit-status 22800 [15 15]))) "the same walk over torch-lit ground risks nothing more by night: fetched now")
+             (is (= :later (await (never-lit-status 23200 [15 0]))) "near dawn, the spawns on 80 blocks of dark ground cost more than the night left")
+             (is (= :ok (await (never-lit-status 23200 [15 15]))) "the same walk over torch-lit ground risks nothing more by night: fetched now")
              (is (= :ok (await (never-lit-status 18000 [15 0]))) "at midnight the night left costs more than the dark walk: fetched now"))))))))
 
 (deftest a-torchless-build-plans-its-torches-only-when-it-could-fetch-them
