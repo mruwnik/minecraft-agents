@@ -579,7 +579,8 @@
                 (let [{:keys [generation outstanding events gap]} @world
                       cursor {:stream-id "s" :seq (count events)}
                       value (cond
-                              (= "/snapshot" endpoint) (cond-> {:body "Probe" :generation-id generation :outstanding outstanding :cursor cursor}
+                              (= "/snapshot" endpoint) (cond-> (merge {:body "Probe" :generation-id generation :outstanding outstanding :cursor cursor}
+                                                        (select-keys @world [:started-at]))
                                                          (or (contains? @world :instances) (contains? @world :recent-results))
                                                          (assoc :state (select-keys @world [:instances])))
                               (.startsWith endpoint "/results?ids=")
@@ -774,6 +775,21 @@
                      (is (= :engine-restarted (:reason restarted)))
                      ((:wait! f))))
             (.then (fn [quiet] (is (= :timeout (:wake quiet))))))))))
+
+(deftest an-engine-start-event-of-the-start-already-seen-does-not-wake
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :started-at 100)
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc (event :system :restored) :seq 1))
+                   ((:wait! f))))
+          (.then (fn [quiet]
+                   (is (= :timeout (:wake quiet)) "the engine start is the one the checkpoint holds")
+                   (swap! (:world f) assoc :started-at 200)
+                   (push! f (assoc (event :system :restored) :seq 2))
+                   ((:wait! f))))
+          (.then (fn [restarted] (is (= :engine-restarted (:reason restarted)))))))))
 
 (deftest resolved-attention-does-not-wake-again
   (with-fixture []

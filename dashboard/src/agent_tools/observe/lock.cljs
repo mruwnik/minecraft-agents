@@ -132,10 +132,11 @@
            (throw (if (= "ENOENT" (code-of error)) (busy) error))))
     #(.rmSync fs lock #js {:recursive true :force true})))
 
-(defn checkpoint! [file {:keys [cursor generation seen pending lookup cancelled noticed]}]
+(defn checkpoint! [file {:keys [cursor generation started-at seen pending lookup cancelled noticed]}]
   (let [temp (str file "." (.-pid js/process) ".tmp")
         state (cond-> (array-map :cursor cursor :generation generation
                                  :seen (into (array-map) (map (fn [[id sig]] [(keyword id) sig])) seen))
+                started-at (assoc :started-at started-at)
                 (some? pending) (assoc :pending pending)
                 (seq cancelled) (assoc :cancelled cancelled)
                 (seq noticed) (assoc :noticed noticed)

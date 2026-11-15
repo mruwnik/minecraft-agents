@@ -179,12 +179,15 @@
       (swap! st update-in [:snap :outstanding] #(drop-id (or % {})))))
   (if (and (= :system (:source event)) (#{:started :restored} (:kind event)))
     (js-await [snap (read! w "/snapshot")]
-      ;; The restart wake says nothing of the events skipped before it (old jobs); the
-      ;; watched jobs are looked up in the history on the next call.
-      (reset! summary {:counts {} :items [] :more false})
-      (swap! deaths dissoc :cancelled)
-      (swap! st assoc :snap snap :cursor (:cursor snap) :noticed [] :pending [] :lookup true)
-      (finish! w (array-map :wake :reset :reason :engine-restarted)))
+      (if (and (:started-at snap) (= (:started-at snap) (:started-at @st)))
+        (more)
+        (do
+          ;; The restart wake says nothing of the events skipped before it (old jobs); the
+          ;; watched jobs are looked up in the history on the next call.
+          (reset! summary {:counts {} :items [] :more false})
+          (swap! deaths dissoc :cancelled)
+          (swap! st assoc :snap snap :cursor (:cursor snap) :started-at (:started-at snap) :noticed [] :pending [] :lookup true)
+          (finish! w (array-map :wake :reset :reason :engine-restarted)))))
     (let [failed? (= :reconnect-failed (:kind event))
           _ (swap! deaths track-deaths event)
           dead-jobs (death-jobs @deaths event)
@@ -313,13 +316,14 @@
         (reset! st {:cursor (or (:cursor saved) (:cursor snap)) :generation generation
                     :seen (or (:seen saved) seen-now) :lookup (or (nil? saved) (true? (:lookup saved)))
                     :pending (vec (:pending saved)) :noticed (vec (:noticed saved)) :snap snap
+                    :started-at (if saved (:started-at saved) (:started-at snap))
                     :started-ms (js/Date.now)})
         (reset! deaths {:names (instance-names snap) :cancelled (vec (:cancelled saved))})
         (when-not saved
-          (save! (assoc w :st (atom (select-keys @st [:cursor :generation :seen :lookup :noticed])))))
+          (save! (assoc w :st (atom (select-keys @st [:cursor :generation :started-at :seen :lookup :noticed])))))
         (vreset! timeout-finish #(timeout! w))
         (if (and saved (not= (:generation saved) generation))
-          (do (swap! st assoc :cursor (:cursor snap) :noticed [] :pending [] :lookup true)
+          (do (swap! st assoc :cursor (:cursor snap) :started-at (:started-at snap) :noticed [] :pending [] :lookup true)
               (swap! deaths dissoc :cancelled)
               (reset-with-status! w :engine-restarted))
           (step w))))))

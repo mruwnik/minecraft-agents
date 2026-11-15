@@ -8,6 +8,7 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [cljs.reader :as reader]
+            [engine.build :as build]
             [engine.core :as core]
             [engine.core.quote :as quote]
             [engine.core.round :as round]
@@ -93,6 +94,7 @@
   (let [p (:primitives eng)]
     {:body (.-username (.self p))
      :generation-id (:generation-id (core/state eng))
+     :started-at (:started-at (build/info))
      :state (core/state eng)
      :outstanding (core/outstanding eng)
      :position (core/self-pos p)
