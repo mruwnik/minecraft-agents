@@ -1,0 +1,22 @@
+;; Card 2c61f875: blocks.fill-cells fills the floor hole round the body, nearest first, so the cells it filled hide the far ones (out-of-sight,
+;; walk nodes 1: the body cannot step out of a 2-deep hole). Stone mass y 0..1 (surface feet y 2), a 5x5 hole at y 1 (x 12..16 z 12..16) with the
+;; body in its middle column [14 0 14] (also air). Should-succeed: it jump-places under itself to climb out and fills every cell, 25 in all.
+;; Should-fail: none.
+{:defaults
+ {:tags [:blocks :fill-cells]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [8 0 8] [20 1 20] "stone"]
+           [:fill [12 1 12] [16 1 16] "air"] [:set [14 0 14] "air"]]
+  :body {:at [14.5 0 14.5] :settle-s 2 :inventory [["cobblestone" 40]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "walled-in-by-its-own-fill-climbs-out-and-finishes"
+   :act [[:job (jobs.blocks.fill-cells {:worth 2000 :ignore-zones? true :use {:blocks ["cobblestone"]}
+                                        :cells [#at [12 1 12] #at [12 1 13] #at [12 1 14] #at [12 1 15] #at [12 1 16]
+                                                #at [13 1 12] #at [13 1 13] #at [13 1 14] #at [13 1 15] #at [13 1 16]
+                                                #at [14 1 12] #at [14 1 13] #at [14 0 14] #at [14 1 14] #at [14 1 15] #at [14 1 16]
+                                                #at [15 1 12] #at [15 1 13] #at [15 1 14] #at [15 1 15] #at [15 1 16]
+                                                #at [16 1 12] #at [16 1 13] #at [16 1 14] #at [16 1 15] #at [16 1 16]]})]]
+   :expect [{:event {:source :job :kind :completed :data {:left []}} :within-s 80 :of-job true}]
+   :after [[:block [12 1 12] "cobblestone"] [:block [16 1 16] "cobblestone"] [:block [14 0 14] "cobblestone"] [:block [14 1 14] "cobblestone"]]}]}

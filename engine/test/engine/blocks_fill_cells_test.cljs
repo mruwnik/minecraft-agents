@@ -95,6 +95,16 @@
           (is (= :nothing-possible (:kind e)))
           (is (= 4 (count (bd/calls (:p env) "jumpPlace")))))))))
 
+(deftest an-unreachable-place-from-the-bodys-own-owed-cell-jump-places-under-it-to-climb-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[{:keys [p]} _] (await (outcome [{:name "dirt" :count 9}] {:cells [(:pos body) {:x 2 :y 64 :z 0}] :use {:blocks ["dirt"]}}
+                                              (fn ^:async f [token a impl]
+                                                (if (= 2 (.-x (.-pos a))) #js {:status "unreachable"} (await (impl token a))))))]
+          (is (= 1 (count (bd/calls p "jumpPlace"))))
+          (is (= "dirt" (bd/block-at p (:pos body)))))))))
+
 (deftest order-given-fills-in-the-callers-order-and-lowest-goes-nearest-first
   (async done
     (tu/run-async done

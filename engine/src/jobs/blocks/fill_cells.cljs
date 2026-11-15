@@ -30,7 +30,7 @@
   (:lowest, default: the lowest cell that is not the body's feet or head, then the nearest; :given: the order of :cells,
   still not the feet or head while another is left). It is placed by a jobs.blocks.place child (:ways #{:carried}; zones, claims
   and plans are its rules unless :ignore-zones? is set; it walks into reach itself). When only the feet or head cell is left,
-  the body jump-places (a bare act, not access.pillar: no scaffold ledger entry). Cells that no longer read air or water are done.
+  the body jump-places (a bare act, not access.pillar: no scaffold ledger entry), also when a place is unreachable and the body stands in a cell still owed (walled in by its own fill: it climbs out on the block it places under itself). Cells that no longer read air or water are done.
   With :clear-loose, loose things in the cells (rails, cobwebs, torches, fences, ladders ...) are dug first
   (jobs.blocks.dig, no fetch) and the drops picked up; a container in a cell is never dug (ends :blocked). With :shut-open, a door,
   gate or trapdoor standing open in a cell is shut with a click instead (one that stays open, an iron door, ends :blocked).
@@ -165,6 +165,7 @@
       :mob (do (ctx/update-mem! c assoc :mobs (get-in e [:data :mobs])) :mob)
       (:refused :need) o
       :occupied (do (ctx/update-mem! c update :occupied (fnil conj #{}) pos) :again)
+      :unreachable (do (ctx/update-mem! c assoc :refusal {:status "unreachable" :text (refusal-text pos "unreachable" "")}) :unreachable)
       (do (ctx/update-mem! c assoc :refusal {:status (name o) :text (refusal-text pos (name o) "")}) :failed))))
 
 (defn ^:async dig!
@@ -323,7 +324,8 @@
       (let [r (cond shut? (await (shut! c pos))
                     loose? (await (dig! c pos))
                     pos (await (place! c pos item))
-                    :else (await (raise! c item)))]
+                    :else (await (raise! c item)))
+            r (if (and (= :unreachable r) (some #{(cell-of (u/self-pos c))} cells)) (await (raise! c item)) r)]
         (case r
           :partial :continue
           :refused (finish! c :condition-failed {:reason :refused :cell pos})
