@@ -357,6 +357,12 @@
     (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "creeper" 24 24) (mob "zombie" 4 35)] :spent-later #(do (swap! asked conj %) nil)})
     (is (some #{[1 2]} @asked) "the creeper that never reaches the walk is still there after the one that does blew")))
 
+(deftest a-fight-after-a-second-blast-is-with-the-mob-left-not-a-subset-index
+  (let [asked (atom [])]
+    (cost/flee-answer {:food 20 :caught 1 :mobs [(mob "creeper" 1) (mob "creeper" 24 24) (mob "zombie" 4 35)] :spent-later #(do (swap! asked conj %) nil)})
+    (is (some #{[2]} @asked) "after the first creeper blew and the catch set off the second, the zombie is what is left")
+    (is (not-any? #{[1]} @asked) "the far creeper is not the mob left")))
+
 (deftest a-body-that-can-neither-outrun-nor-outfight-a-spider-digs-in
   (let [spider (mob "spider" 2)
         answers {:fight (cost/fight-answer (fight nil spider)) :flee (cost/flee-answer {:food 20 :mobs [spider]})}]

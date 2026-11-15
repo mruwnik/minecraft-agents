@@ -592,7 +592,8 @@
             after-blast (fn [idxs] (or (when spent-later (spent-later idxs)) later))
             walk-from (fn [idxs]
                         (let [after (after-blast idxs)
-                              again (flee-answer-on (assoc args :mobs (mapv (vec mobs) idxs) :returns times :later after))]
+                              again (flee-answer-on (cond-> (assoc args :mobs (mapv (vec mobs) idxs) :returns times :later after)
+                                      spent-later (assoc :spent-later #(spent-later (mapv (vec idxs) %)))))]
                           (not-empty (cond-> [] again (conj again) after (conj after)))))]
         (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
               spent (set (keep (fn [[m f]] (when (and (creeper? m) (blows? f)) m)) (map vector mobs per)))
