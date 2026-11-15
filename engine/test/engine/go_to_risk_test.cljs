@@ -168,12 +168,13 @@
     (is (zero? (exit-s east [15 0])) "lit east, dark round the rest")
     (is (pos? (exit-s (update-vals east (constantly [15 0])) [15 14])) "dark east, lit round the rest")))
 
-(def diamond-kit [{:name "diamond_pickaxe" :count 1} {:name "diamond" :count 20}])
+;; a hoe, not a pickaxe: a carried pickaxe is a weapon and cheapens the walk's risk
+(def diamond-kit [{:name "diamond_hoe" :count 1} {:name "diamond" :count 20}])
 
 (deftest a-walk-over-dark-open-ground-at-night-is-held-when-its-death-costs-more-than-waiting-for-dawn
   ;; 800 blocks of dark open ground at tick 14000: about an 11% death chance; dawn in 473 s, the day walk after it near free.
   ;; With no bed a death wakes at world spawn: by the hut, the walk back keeps the drops; 5000 blocks off, they are lost,
-  ;; and the kit's walk risks over three times the hp the body may afford (67 against 19): held for dawn. A bare body
+  ;; and the kit's walk risks over three times the hp the body may afford: held for dawn. A bare body
   ;; far off is not pinned: its walk and the allowance are near equal (the load's price is cost-test's).
   (async done
     (tu/run-async done
