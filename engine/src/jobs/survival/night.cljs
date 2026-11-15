@@ -35,6 +35,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
+            [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.walk.world :as wworld]
             [jobs.survival.bed-down :as bed-down]
@@ -536,19 +537,24 @@
       (places/retract-if-missing! c :bed pos "missing"))))
 
 (defn walk-hp-s
-  "Seconds the hp a walk to pos along go-to's quoted route r is expected to cost: its dark seconds (the planner's :dark-seconds
-  over jobs.lib.cost/dark-factor of the kit) within the night left, exposed as a stay is (bed-down/exposed-price) at the
-  spawn-rate of a dark cell at the kit's height, with the hostiles known near pos."
+  "Seconds the hp a walk to pos along go-to's quoted route r is expected to cost, exposed as a stay is (bed-down/exposed-price):
+  the mobs expected to spawn along the route's legs (its waypoints, the rest straight on; spawn-light/spawns-over, a wide view
+  at the wide rate as the stay is judged) as a chance per second over the walk, within the night left, with the hostiles known near pos."
   [c pos r]
-  (let [secs (or (:seconds r) 0)
-        kit (wworld/kit-of c)
+  (let [p (:primitives c)
+        secs (or (:seconds r) 0)
         [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
-        dark-s (min secs left (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))]
-    (bed-down/exposed-price c (cost/spawn-rate (get-in kit [:at :y])) dark-s pos)))
+        from (u/self-pos c)
+        stops (mapv (fn [[x y z]] {:x x :y y :z z}) (or (:waypoints r) (get-in r [:partial :waypoints])))
+        legs (partition 2 1 (concat [from] stops [pos]))
+        cells (into [(walk-risk/floor-cell from)] (mapcat (fn [[a b]] (rest (walk-risk/way a b nil)))) legs)
+        timed (spawn-light/walked (first cells) (rest cells))
+        t (:t (peek timed) 0)
+        chance (if (pos? t) (/ (spawn-light/spawns-over p timed nil) t) 0)]
+    (bed-down/exposed-price c chance (min secs left) pos)))
 
 (defn bed-walk-price
-  "{:walk :walk-hp :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
-  :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
+  "{:walk :walk-hp :stay} in seconds: the hp the walk to bed is expected to cost (the mobs spawning along its cells, walk-hp-s; the fight with the hostiles known near its way) against
   staying put (spawns at the feet, spawn-light/night-chance, over shelter-s, the seconds the body stays open here: sheltering
   here closes them out, the night left when nothing can; over the walk's seconds when already enclosed: spawns at the feet go
   on); the hostiles known near

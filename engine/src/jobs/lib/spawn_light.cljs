@@ -53,9 +53,9 @@
 (defonce ^:private wide-kept (js/WeakMap.))
 
 (defn- wide-cell?
-  "Whether the cell looks along a wide view (cost/wide-view?: up to 256 reads), kept per body while its memory stays (memory-age/epoch)."
+  "Whether the cell looks along a wide view (cost/wide-view?: up to 256 reads; none under y 40, where the wide rate is not read), kept per body while its memory stays (memory-age/epoch)."
   [p {:keys [x y z]}]
-  (let [view #(cost/wide-view? (fn [x y z] (sh-sense/solid-at? p {:x x :y y :z z})) x y z)
+  (let [view #(and (>= y 40) (cost/wide-view? (fn [x y z] (sh-sense/solid-at? p {:x x :y y :z z})) x y z))
         ^js st (some-> (aget p "perception") :st)
         epoch (when st (memory-age/epoch st))]
     (if-not epoch

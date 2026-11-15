@@ -86,7 +86,7 @@
   (filterv #(< (u/dist goal (:pos %)) (u/dist feet (:pos %)))
            (concat (filter :remembered known) hides)))
 
-(defn- floor-cell [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
+(defn floor-cell [pos] {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})
 
 (defn way
   "The cells {:x :y :z} a walk from feet to goal is priced on: from the body's cell along the steps of plan (go-to's,

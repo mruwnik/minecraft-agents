@@ -12,9 +12,10 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.perception.rays :as rays]
-            [engine.planner-fixture :as pf]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
+            [engine.spawn-light-test :as hall]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.child :as child]
@@ -378,23 +379,17 @@
     ;; Tamsin S3: on open ground a ~1150-block walk to the old bed cost nothing past its hp and won by 8 s over digging in at the field
     (is (= (+ (:walk-hp (walk-price {} 30)) 30) (:walk (walk-price {} 30))) "on open ground the night stops the work either way, but the walk back by day is owed")))
 
-(defn dark-route
-  "The planner's route over an open floor from x 0 to x 38 with dark feet cells over the whole width at x 5 to 5+n-1 (crossed, not sidestepped): {:seconds :dark-seconds}, as go-to quotes it."
-  [n]
-  (let [r (pf/run (pf/world {}) (pf/near 38 64 20) {:dark {:at (fn [x _ _] (if (< 4 x (+ 5 n)) 1 0)) :factor 1 :night true}} {:x 0 :y 64 :z 20})
-        cost (get-in r [:path :cost])]
-    {:seconds (:seconds cost) :dark-seconds (:darkSeconds cost)}))
+(defn night-walk-hp
+  "walk-hp of bed-walk-price of a 40 s route (the same quote whatever the world) to a bed at x 15, for a body at x 5 at night in world with `blocks`."
+  [blocks]
+  (let [p (sky/with-sky (tu/seeing-all (tu/fake {:floor [-30 -30 60 30] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :blocks blocks})))
+        c {:id "j1" :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}]
+    (with-redefs [sh-sense/block-light-at (constantly 0) sh-sense/sky-light-at (constantly 15)]
+      (:walk-hp (night/bed-walk-price c {:x 15 :y 64 :z 0} {:found true :seconds 40 :dark-seconds 40} 12)))))
 
-(deftest a-route-with-one-dark-cell-is-priced-by-that-cell-not-as-a-dark-route
-  (let [p (tu/seeing-all (tu/fake {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time dusk :blocks hut/tunnel}))
-        c {:id "j1" :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}
-        price (fn [n] (night/bed-walk-price c far-bed (assoc (dark-route n) :found true) 12))
-        [none one ten] (map price [0 1 10])]
-    (is (zero? (:dark-seconds (dark-route 0))))
-    (is (pos? (:dark-seconds (dark-route 1))))
-    (is (< (:dark-seconds (dark-route 1)) (:dark-seconds (dark-route 10))))
-    (is (< (:walk-hp none) (:walk-hp one)) "the one dark cell adds a price")
-    (is (< (:walk-hp one) (:walk-hp ten)) "and less than ten of them")))
+(deftest an-open-night-walk-to-bed-costs-more-than-the-same-walk-in-a-short-shut-hall
+  ;; Brindle S7: the walk was priced by the planner's dark seconds at one rate whatever the ground, so open ground looked as cheap to cross as a shut hall
+  (is (< (night-walk-hp (hall/hall 20)) (night-walk-hp {})) "spawns along the walked cells: none reach the body in a short shut hall"))
 
 (deftest at-dusk-with-no-bed-the-trigger-waits-for-the-dark
   (let [{:keys [eng p]} (st/setup {:time dusk :blocks st/ground})
