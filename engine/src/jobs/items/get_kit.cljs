@@ -281,12 +281,6 @@
                                      {:id (str (:id c) "-food-" n) :item n :count k :strength 1 :by (:id c)
                                       :why "food for the kit's trip" :not #{:eat}}))))
 
-(defn food-args
-  "The get-food child's args: feed the body, then fill the pack to kit-carry, its reserve priced over kit-trip's mean."
-  [c]
-  (let [trip (kit-trip c)]
-    {:explore (:explore (:args c)) :carry (kit-carry c trip) :trip-s (second (:figure trip))}))
-
 (defn food-first?
   "Food 0, or hurt with only food able to heal it: more mining would not end well."
   [c]
@@ -313,7 +307,9 @@
 (defn ^:async run-food!
   "One get-food child round: :continue, nil when the body is fed or not hungry, or {:kind :reason :cause :why} when it could not be fed."
   [c]
-  (let [e (await (ctx/call c :food 'jobs.survival.get-food (food-args c)))
+  (let [trip (kit-trip c)
+        e (await (ctx/call c :food 'jobs.survival.get-food
+                           {:explore (:explore (:args c)) :carry (kit-carry c trip) :trip-s (second (:figure trip))}))
         cause (contract/cause-key e)]
     (cond
       (= :continue e) :continue
