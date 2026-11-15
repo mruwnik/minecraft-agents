@@ -8,7 +8,8 @@
             [engine.test-util :as tu]
             [jobs.lib.build.diff :as diff]
             [jobs.lib.cost :as cost]
-            [jobs.lib.crops :as crops]))
+            [jobs.lib.crops :as crops]
+            [jobs.lib.spawn-light :as spawn-light]))
 
 (def yard
   "A wall with one cell broken in sight and one broken far off, a crop cell over a farmland cell trampled to dirt, an :any cell holding dirt, and a gate the plan wants shut."
@@ -110,3 +111,16 @@
           (is (< (cost/put-back-s "torch") worth))
           (is (= :done (:status result)) (pr-str result))
           (is (= "torch" (b/block p [3 65 2]))))))))
+
+(deftest lights-close-together-share-the-spawn-chance-of-the-cells-they-reach
+  (let [plan {:id "lit" :parts [{:id "lights" :cells [[3 65 2] [7 65 2]] :want "torch"}]}
+        {:keys [eng]} (b/start (assoc lit-world :time st/night) {"lit" plan} [])
+        c (core/make-ctx eng {:root "repair" :slots [] :chain [] :token nil :args {}})
+        pc (diff/plan-cells c "lit" nil)
+        asked (atom [])
+        real spawn-light/chance-at]
+    (with-redefs [spawn-light/chance-at (fn ([p cell] (real p cell false))
+                                       ([p cell caves-free? subtract stay? solid-at] (swap! asked conj cell) (real p cell caves-free? subtract stay? solid-at)))]
+      (diff/diff c (:cells pc)))
+    (is (seq @asked))
+    (is (= (count (set @asked)) (count @asked)))))
