@@ -13,6 +13,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-fight :as hostile-fight]
+            [jobs.lib.clock :as clock]
             [jobs.lib.look :as look]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.breath :as breath]
@@ -400,6 +401,27 @@
           (is (= {:cap 50 :ttl 3600000} (mem/policy (mem/view (:store eng)) :hostile))))))))
 
 (defn decided [seen] (mapv #(select-keys % [:mob :decision :pos :direction :band]) (filter #(= :hostile.decided (:kind %)) @seen)))
+
+(defn ^:async slow-clock-round
+  "flight-round with the CPU clock moving 500 ms at every read: every search is slow."
+  [spec world]
+  (let [ticks (atom 0) orig clock/now]
+    (set! clock/now #(* 500 (swap! ticks inc)))
+    (try (await (flight-round spec world))
+         (finally (set! clock/now orig)))))
+
+(defn decision-cut [{:keys [seen]}] (some #(when (= :hostile.decision-cut (:kind %)) %) @seen))
+
+(deftest a-decision-past-its-cpu-budget-leaves-out-its-later-stages-and-still-answers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:health 20} :inventory sword :entities [(zombie 3 0)]}
+              slow (await (slow-clock-round respond world))
+              quick (await (flight-round respond world))]
+          (is (fought? slow) "the body acts on what was priced")
+          (is (= [:covers :flee-search :fight-walk :look-in] (:stages (decision-cut slow))) (pr-str (decision-cut slow)))
+          (is (nil? (decision-cut quick)) "a decision within its budget leaves nothing out"))))))
 
 (deftest respond-says-once-what-it-answers-and-how-it-knows-it
   (async done
