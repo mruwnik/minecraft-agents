@@ -284,12 +284,10 @@
   (some-> (:decision-deadline (ctx/mem c)) (- ms)))
 
 (defn step-meter
-  "The flight step's search-meter, from what its searches have run (step-spent-s). In a decision its deadline is the decision's, or
-  the flee search's held seconds from now when the stages before it have used that up: the flee search always gets its share."
+  "The flight step's search-meter, from what its searches have run (step-spent-s); in a decision it stops at the decision's deadline,
+  the flee search's held share (flee-hold-s) being what the surveys before it leave of that box."
   [c]
-  (let [m (search-meter (step-spent-s c))
-        hold-ms (* 1000 (flee-hold-s c))]
-    (cond-> m (:decision-deadline (ctx/mem c)) (assoc :deadline (max (:decision-deadline (ctx/mem c)) (+ (clock/now) hold-ms))))))
+  (cond-> (search-meter (step-spent-s c)) (:decision-deadline (ctx/mem c)) (assoc :deadline (:decision-deadline (ctx/mem c)))))
 
 (defn survey-meter
   "step-meter for the searches that run before the flee search: less what it is to keep (flee-hold-s), and its deadline the decision's less that."

@@ -14,6 +14,8 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-fight :as hostile-fight]
             [jobs.lib.clock :as clock]
+            [jobs.lib.flee-search :as flee-search]
+            [jobs.lib.reach :as reach]
             [jobs.lib.look :as look]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.breath :as breath]
@@ -458,6 +460,18 @@
           (is (zero? (count (calls (:p creeper-slow) "attack"))) "a creeper is stepped away from, never fought as the cheap answer")
           (is (pos? (count (calls (:p creeper-slow) "moveTo"))))
           (is (nil? (decision-cut quick)) "a decision within its tick acts on its answer alone"))))))
+
+(deftest a-flight-steps-flee-search-stops-at-the-steps-deadline
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [metered (atom nil) orig flee-search/search!]
+          (set! flee-search/search! (fn [c chs named opts] (reset! metered (:meter opts)) (orig c chs named opts)))
+          (try (await (flight-round respond {:self {:health 20} :inventory [{:name "iron_pickaxe" :count 1}] :entities [(zombie 3 0)]}))
+               (finally (set! flee-search/search! orig)))
+          (is (some? (:deadline @metered)) "the step's meter carries the step's deadline, not only a share")
+          (is (zero? (binding [reach/*search* @metered] (with-redefs [clock/now (constantly (+ 1 (:deadline @metered)))] (reach/metered-cap 50 :node-s))))
+              "a search that starts past the deadline plans nothing"))))))
 
 (deftest respond-says-once-what-it-answers-and-how-it-knows-it
   (async done

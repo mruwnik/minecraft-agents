@@ -233,7 +233,9 @@
   (let [r (loop []
             (ctx/update-mem! c assoc :last-step (ctx/now c))
             (flight/note-position! c)
-            (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (or (await (cover-step! c)) (flight-step! c))))
+            (let [_ (room-lib/start-decision! c)
+                  r (try (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (or (await (cover-step! c)) (flight-step! c))))
+                         (finally (room-lib/end-decision! c)))
                   _ (room-lib/step-searches! c)
                   clear? (and (= :again r) (ctx/alive? c) (clear? c))]
               (cond
