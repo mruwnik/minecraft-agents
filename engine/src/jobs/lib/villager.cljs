@@ -7,6 +7,7 @@
             [engine.primitive :as primitive]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
@@ -121,10 +122,23 @@
         r (when (seq rows) (await (vantage/step! c rows #(find-by-uuid (:primitives c) id))))]
     (case r :partial :continue nil nil :again)))
 
+(defn ^:async search!
+  "By day, nothing seen or heard: walk and look for a villager round center (jobs.explore.search, once per call, within the search radius, priced at the call's worth less the trip back), as a player looks into the houses near. :continue while it runs, :again once one is in view, else nil."
+  [c center]
+  (let [worth (cost/worth-left c (cost/trip))]
+    (when (and (not (:searched (ctx/mem c))) (pos? worth))
+      (let [e (await (ctx/call c :search 'jobs.explore.search
+                               (child/search-args {:target "villager" :count 1 :center (select-keys center [:x :y :z])
+                                                   :max-distance (search-radius) :worth worth})))]
+        (cond
+          (= :continue e) :continue
+          (= :done (:kind e)) (do (ctx/update-mem! c assoc :searched true) :again)
+          :else (do (ctx/update-mem! c assoc :searched true) nil))))))
+
 (defn ^:async search-out-of-view!
   "A villager named by id (or picked) that is out of view: walk to where the body last saw it (approach-remembered!),
   else at night, when villagers sleep out of sight, wait polls till day and look once more, else by day step toward
-  where it is heard. :again, :continue, or nil when nothing is left to try (the caller ends it :gone)."
+  where it is heard, else one search round the body (search!). :again, :continue, or nil when nothing is left to try (the caller ends it :gone)."
   [c id reach]
   (let [m (ctx/mem c)]
     (or (await (approach-remembered! c id reach))
@@ -133,7 +147,7 @@
                                                 (await (child/pause! c (poll-s) :night-villager-out-of-view))
                                                 :continue)
           (:night-waited m) (do (ctx/update-mem! c dissoc :night-waited :memory-walked :vantage) :again)
-          :else (await (hear-step! c id))))))
+          :else (or (await (hear-step! c id)) (await (search! c (u/self-pos c))))))))
 
 (defn walk-ticks-before
   "Ticks of villagers' walking hours (10-9000, 11000-12000) in the span from time 0 to time t, t any whole number of ticks."

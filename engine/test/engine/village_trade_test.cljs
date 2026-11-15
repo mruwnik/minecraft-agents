@@ -597,6 +597,20 @@
   (let [p (heard-until-near! (tu/fake-on-floor {:entities [(villager [(bread {})] {:pos {:x 0.5 :y 64 :z 8.5}})]}))]
     (is (= :ok (first (offers/can-start? {:args {:villager "v-1"} :primitives p}))))))
 
+(deftest a-villager-never-seen-or-heard-by-day-is-searched-for-round-the-body-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (trade {:entities [(villager [(bread {})] {:pos {:x 8.5 :y 64 :z 0.5}})]
+                                        :inventory [{:name "emerald" :count 10}]}
+                                       {:count 1}
+                                       (fn [p]
+                                         (let [entities (.-entities p)
+                                               away? #(let [me (.-pos (.self p))] (< 5 (js/Math.hypot (.-x me) (.-z me))))]
+                                           (aset p "entities" (fn [q] (if (away?) (.call entities p q) #js [])))))))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (= {"emerald" 9 "bread" 1} (inv p))))))))
+
 (deftest a-villager-out-of-view-at-night-is-waited-for-till-day-not-gone
   (async done
     (tu/run-async done
