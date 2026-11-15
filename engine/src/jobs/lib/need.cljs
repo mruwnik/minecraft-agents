@@ -224,11 +224,11 @@
 ;; The obtain's own default budget is resolved from its args alone, so a far source's search (priced only in its quote)
 ;; would outrun it: the caller quotes first.
 (defn ^:async obtain-spend
-  "The :spend {:job-time} for an obtain child of args with no budget given, booked in the caller's memory once per child
-  (slot fresh): the larger of its default (fetch-time/items-s) and its quote's mean plus the sd of the fetch; nil when
+  "The :spend {:job-time} for an obtain child of args with no budget given, booked in the caller's memory at its first
+  quote and kept until the fetch ends (a child waiting on a :later start has no :children slot, yet is not re-quoted): the larger of its default (fetch-time/items-s) and its quote's mean plus the sd of the fetch; nil when
   the quote is an ending or has no finite mean (the default stands)."
   [c slot args fresh?]
-  (if-not fresh?
+  (if (or (not fresh?) (contains? (:need/spend (ctx/mem c)) slot))
     (get-in (ctx/mem c) [:need/spend slot])
     (let [names (if (:item args) [(:item args)] (:any-of args))
           q (when (seq names) (await (ctx/quote c 'jobs.items.obtain args)))
@@ -247,7 +247,7 @@
         want [job args]
         identity-of [job (dissoc args :count :avoid :spend :worth)]
         _ (when (not= identity-of (get-in (ctx/mem c) [:need/slot-want slot]))
-            (ctx/update-mem! c #(-> (update % :children dissoc slot) (assoc-in [:need/slot-want slot] identity-of))))
+            (ctx/update-mem! c #(-> (update % :children dissoc slot) (update :need/spend dissoc slot) (assoc-in [:need/slot-want slot] identity-of))))
         fresh? (nil? (get-in (ctx/mem c) [:children slot]))]
     (if (and fresh? (repeat-done? c want))
       (contract/ending :condition-failed (assoc wanted :reason cause-reason :why :not-solved :text (ending-text cause-reason wanted :not-solved nil)) nil)
@@ -260,7 +260,7 @@
               r (await (call! c slot job (cond-> args spend (assoc :spend spend))))
               e (if (= :continue r) :continue (ending-for r cause-reason wanted))]
           (when-not (= :continue e)
-            (ctx/update-mem! c #(cond-> (cond-> % (= :done (:kind e)) (assoc :need/done {:want want :have (counts c (got-names wanted e))}))
+            (ctx/update-mem! c #(cond-> (cond-> (update % :need/spend dissoc slot) (= :done (:kind e)) (assoc :need/done {:want want :have (counts c (got-names wanted e))}))
                                   (:need/return %) (assoc-in [:need/return :back] true))))
           e)))))
 

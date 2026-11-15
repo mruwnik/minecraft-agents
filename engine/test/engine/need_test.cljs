@@ -20,12 +20,14 @@
   {:no-source [:condition-failed :no-source]
    :timeout [:limit-reached {:line :job-time :reason :timeout}]})
 
+(def quoted (atom 0))
+
 (defn stopper
   "A fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or with the
   reason's ending (ending-of); :continue yields instead."
   [seen step start quote-s]
   {:ways [:chest :craft :smelt :gather]
-   :quote-of (when quote-s (fn [_] {:uses {:job-time [0 quote-s ##Inf]}}))
+   :quote-of (when quote-s (fn [_] (swap! quoted inc) {:uses {:job-time [0 quote-s ##Inf]}}))
    :can-start? (fn [c] (or (if (fn? start) (start (:args c)) start) (contract/ok :ready "ready")))
    :round (fn ^:async r [c]
             (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
@@ -41,6 +43,7 @@
   ends on one other than :done."
   [call-fn {:keys [obtain-step obtain-start tool-step quote-s]}]
   (reset! got [])
+  (reset! quoted 0)
   (reset! clock 1000000)
   (let [obtain (atom [])
         tool (atom [])
@@ -96,6 +99,15 @@
         (let [r (await (run! #(need/item! % "cobblestone" 8) {:quote-s 5000}))
               sd (:sd (fetch-time/items-fig ["cobblestone"] 8))]
           (is (= (+ 5000 sd) (get-in (first @(:obtain r)) [:spend :job-time])) "a far source's search, priced only in the quote, is inside the budget"))))))
+
+(deftest a-wait-for-dawn-before-the-obtain-starts-quotes-it-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/item! % "cobblestone" 8)
+                             {:quote-s 5000 :obtain-start (contract/later :dark "night above ground, waits for dawn")} 3))]
+          (is (empty? @(:obtain r)) "the child never started")
+          (is (= 1 @quoted) "the budget is quoted at the first wait, not again each waiting round"))))))
 
 (deftest item!-with-minutes-keeps-the-callers-budget
   (async done
