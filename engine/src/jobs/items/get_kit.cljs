@@ -33,7 +33,8 @@
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   the kit's food (kit-carry: jobs.lib.home-food/carry-points of the kit's quote-trip: priced against the chance the kit's time outlasts it, at least 3 days less the home food) is carried (harmful food does not count), one jobs.survival.get-food child (with :explore and that :carry) runs before the bill, and the reserve register holds that food for the kit (hold-food!: its children's shorter trips do not put it away) (:food false: none). A child that stops warns kit.no-food; a hungry body (foods/hungry?, the hungry trigger's line) then stops {:reason :no-food}, a fed one goes on (the hungry trigger feeds it later) and tries again after the next bill round that ends in a retry. A body that cannot heal (food 0, or ready/hurt-cannot-heal? of a mine's :long work: too hurt for it with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
-  With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
+  With furnace material short and no sword or axe carried (read each step, so a lost one is made again), a jobs.items.obtain child first makes a sword (iron, stone or wooden); one that cannot warns kit.unarmed, and the step runs again while another try is worth its price (arm-again?: cost/try-again? at the kit's worth, a try priced at the sword obtain's quote).
+  The food child runs again when the pack it left holding food (job memory :fed, the points then) holds none.
   Items that need no furnace material, and those the carried material covers, are made first (:partial-first, the default) so the job stops naming only the shortfall; with :partial-first false the list order rules and the job stops at the first item that cannot be made.
   With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), while another is worth its price (cost/try-again? :kit-later). A bill that stops condition-failed for a child's :later (one the world may lift, not :no-source; one with a wait reason, such as :exposed, jobs.lib.need/call! waits out itself) rests with that cause (kit.later-wait; its :recheck-after-ms, else the measured seconds of value/::retry-counts :kit-later) and runs again while another round is worth its price (cost/try-again? :kit-later at the kit's worth); a :never stop ends the kit with its cause.
   Get a base first.
@@ -69,14 +70,29 @@
 
 (declare state with-raw had?)
 
+(def arms
+  "What the sword step makes, or an axe: a weapon carried for fighting, not a digging tool."
+  ["_sword" "_axe"])
+
+(def sword-args {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1})
+
+(defn arm-again?
+  "Whether another sword try is worth its price after the failed ones in a row (:arm-fails): cost/try-again? :child-round
+  at the kit's worth, the try priced at the sword obtain's quote when the last one failed (:arm-s)."
+  [c]
+  (let [{:keys [arm-fails arm-s]} (ctx/mem c)]
+    (or (nil? arm-fails) (cost/try-again? c :child-round {:fails arm-fails :try-s arm-s}))))
+
 (defn arm-due?
-  "Whether the sword step runs: no weapon carried, not made yet, and furnace material still short."
+  "Whether the sword step runs: no sword or axe carried now, furnace material still short, and another try worth its
+  price (arm-again?)."
   [c]
   (let [st (state c)
         version (game/version-of (:primitives c))
         todo (remove #(had? (:carried st) (:worn st) %) (:items (:args c)))]
-    (boolean (and (not (:armed (ctx/mem c))) (nil? (combat/best-weapon (:primitives c) combat/default-weapons))
-                  (seq (bill/furnace-short version todo (with-raw (:carried st))))))))
+    (boolean (and (nil? (combat/best-weapon (:primitives c) arms))
+                  (seq (bill/furnace-short version todo (with-raw (:carried st))))
+                  (arm-again? c)))))
 
 (defn arm-next?
   "Whether the sword step will run and can make a sword from what is carried: it ends the unarmed state, so the unarmed
@@ -92,7 +108,9 @@
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :priced :stop :bill-tries :bill-round :bill-material :later-fails :food-later-fails) (assoc :since now)))
+  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :priced :stop :bill-tries :bill-round :bill-material :later-fails :food-later-fails
+                :arm-fails :arm-s)
+      (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -300,13 +318,18 @@
       :else {:kind (:kind e) :reason cause :cause (:cause e) :why (why-of e)})))
 
 (defn ^:async run-arm!
-  "One obtain child round for a sword (the best it can make), its worth the kit's: :continue, nil when armed, or {:cause :why} when it could not."
+  "One obtain child round for a sword (the best it can make), its worth the kit's: :continue, nil when armed, else the
+  child's ending, booked as one more failed try (:arm-fails) with the next try's price, the sword obtain's quote from
+  what is carried now (:arm-s; ##Inf when it would be refused)."
   [c]
-  (let [e (await (ctx/call c :arm 'jobs.items.obtain {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore (:explore (:args c))}))]
+  (let [args (assoc sword-args :explore (:explore (:args c)))
+        e (await (ctx/call c :arm 'jobs.items.obtain args))]
     (cond
       (= :continue e) :continue
-      (= :done (:kind e)) nil
-      :else {:cause (contract/cause-key e) :why (why-of e)})))
+      (= :done (:kind e)) (do (ctx/update-mem! c dissoc :arm-fails :arm-s) nil)
+      :else (let [q (await (ctx/quote c 'jobs.items.obtain args))]
+              (ctx/update-mem! c #(-> % (update :arm-fails (fnil inc 0)) (assoc :arm-s (or (get-in q [:uses :job-time 1]) ##Inf))))
+              e))))
 
 (defn gathering-ended?
   "Whether the bill's stop r is a gathering try that ended (r's :gathered, obtain's data :tried :gather: a mine that stopped, no way up ..) while the kit was searching (:explore)."
@@ -468,16 +491,17 @@
                             :again)))
 
           (arm-due? c)
-          (let [r (await (run-arm! c))]
-            (if (= :continue r)
-              :continue
-              (do (ctx/update-mem! c assoc :armed true)
-                  (when r
-                    (ctx/emit! c :kit.unarmed :warn {:cause (:cause r) :why (:why r)
-                                                     :text (str "no sword could be made (" (name (:cause r)) "), going on unarmed")}))
-                  :again)))
+          (let [e (await (run-arm! c))]
+            (when (map? e)
+              (let [cause (contract/cause-key e)
+                    again? (arm-again? c)]
+                (ctx/emit! c :kit.unarmed :warn {:cause cause :why (why-of e) :again again?
+                                                 :text (str "no sword made (" (name cause) "), "
+                                                            (if again? "trying again" "going on without one"))})))
+            (if (= :continue e) :continue :again))
 
-          (and (:food a) (< fp (kit-carry c)) (not (:fed (ctx/mem c)))
+          (and (:food a) (< fp (kit-carry c))
+               (or (not (:fed (ctx/mem c))) (and (zero? fp) (pos? (:fed (ctx/mem c)))))
                (seq (bill/furnace-short version todo (with-raw (:carried st)))))
           (let [r (await (run-food! c))]
             (when-not (= :continue r) (food-over! c r))
@@ -485,7 +509,7 @@
               (= :continue r) :continue
               (and r (hungry? c) (food-later! c r)) :continue
               :else
-              (do (ctx/update-mem! c assoc :fed true)
+              (do (ctx/update-mem! c assoc :fed (foods/stock-points (u/inventory (:primitives c))))
                   (when r
                     (ctx/emit! c :kit.no-food :warn {:cause (:reason r) :why (:why r) :food fp
                                                      :text (if (= :no-carry (:reason r))

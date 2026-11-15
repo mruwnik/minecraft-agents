@@ -342,6 +342,71 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
+(defn sword-out-of-time
+  "An obtain whose first sword call (:any-of) ends limit-reached :job-time and whose later ones put a stone sword in the
+  pack, each quoted at arm-s; a bill call ends nothing-possible. swords counts the sword calls."
+  [swords arm-s]
+  (let [real (get registry/jobs 'jobs.items.obtain)]
+    (assoc real
+           :quote-of (fn [c] (if (:any-of (:args c)) {:uses {:job-time [0 arm-s arm-s]}} ((:quote-of real) c)))
+           :round (fn ^:async stub-round [c]
+                    (cond
+                      (not (:any-of (:args c))) (ctx/end c :nothing-possible {:reason :no-iron :why "no iron anywhere"})
+                      (= 1 (swap! swords inc)) (ctx/end c :limit-reached {:line :job-time} {:item "stone_sword"})
+                      :else (do (swap! (fake/state (:primitives c)) fake/give "stone_sword" 1)
+                                (ctx/end c :done nil {:have ["stone_sword"]})))))))
+
+(deftest a-sword-try-that-ran-out-of-time-is-tried-again-while-another-pays
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pays (cost/chance-times (cost/retry-chance :child-round 1) (cost/items-find-worth {"iron_pickaxe" 1}))]
+          (doseq [[arm-s tries] [[(/ pays 2) 2] [(* 2 pays) 1]]]
+            (let [swords (atom 0)
+                  s (start (world [] {}) {:items ["iron_pickaxe"] :explore false :food false} f/sight-opts
+                           {'jobs.items.obtain (sword-out-of-time swords arm-s)})]
+              (await (f/run-ticks s 120))
+              (is (= tries @swords) (str "a sword try quoted at " arm-s " s"))
+              (is (= (dec tries) (get (f/inv s) "stone_sword" 0)))
+              (is (= :no-iron (:reason @(:out s)))))))))))
+
+(defn cleared-mid-bill
+  "An obtain whose sword calls put a stone sword in the pack; its first bill call empties the pack (a /clear mid-job)
+  and yields, the next ends nothing-possible. swords counts the sword calls."
+  [swords]
+  (let [real (get registry/jobs 'jobs.items.obtain)
+        bills (atom 0)]
+    (assoc real :round
+           (fn ^:async stub-round [c]
+             (cond
+               (:any-of (:args c)) (do (swap! swords inc)
+                                       (swap! (fake/state (:primitives c)) fake/give "stone_sword" 1)
+                                       (ctx/end c :done nil {:have ["stone_sword"]}))
+               (= 1 (swap! bills inc)) (do (swap! (fake/state (:primitives c)) assoc :inventory []) :continue)
+               :else (ctx/end c :nothing-possible {:reason :no-iron :why "no iron anywhere"}))))))
+
+(defn bread-each-call
+  "A get-food that puts 12 bread in the pack each call; calls counts them."
+  [calls]
+  (assoc (get registry/jobs 'jobs.survival.get-food) :round
+         (fn ^:async stub-round [c]
+           (swap! calls inc)
+           (swap! (fake/state (:primitives c)) fake/give "bread" 12)
+           (ctx/end c :done nil {:food 20}))))
+
+(deftest a-pack-cleared-mid-bill-makes-the-sword-and-gets-the-food-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [swords (atom 0)
+              foods (atom 0)
+              s (start (hungry-world [] 20) {:items ["iron_pickaxe"] :explore false} f/sight-opts
+                       {'jobs.items.obtain (cleared-mid-bill swords) 'jobs.survival.get-food (bread-each-call foods)})]
+          (await (f/run-ticks s 120))
+          (is (= [2 2] [@swords @foods]) "the lost sword and food are got again before the bill goes on")
+          (is (= {"stone_sword" 1 "bread" 12} (f/inv s)))
+          (is (= :no-iron (:reason @(:out s)))))))))
+
 (deftest with-a-food-stock-it-goes-on
   (async done
     (tu/run-async done
