@@ -213,7 +213,7 @@
   "The block names the call lists for the pillar: its :use {:blocks}, before the call has started (the engine freezes
   it at the first round) the one it was given or the carried fillers."
   [c]
-  (or (ctx/use c :blocks) (get-in c [:args :use :blocks]) (mapv :item (:list (choose/fillers-for c :pillar 1)))))
+  (or (not-empty (ctx/use c :blocks)) (not-empty (get-in c [:args :use :blocks])) (mapv :item (:list (choose/fillers-for c :pillar 1)))))
 
 (defn step-now
   "next-step for the body as it stands, with ledger l, its feet and the base of its column."
@@ -509,10 +509,12 @@
     (cond
       back back
       (nil? short) nil
-      :else (let [e (await (need/blocks! c (or (seq (blocks-of c)) (choose/filler-names c :pillar)) short {:return? true :how (need/fetch-how c)}))]
+      :else (let [names (or (seq (blocks-of c)) (choose/filler-names c :pillar))
+                  e (await (need/blocks! c names short {:return? true :how (need/fetch-how c)}))]
               (cond
                 (= :continue e) :continue
                 (= :done (:kind e)) nil
+                (not (blocks-short (pl/carried (:primitives c)) names (height-of c))) nil
                 :else (finish! c (ledger/entries c) (give-up :too-few-blocks :short short)))))))
 
 (defn ^:async round

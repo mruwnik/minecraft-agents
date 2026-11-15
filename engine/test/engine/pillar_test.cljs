@@ -4,6 +4,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -324,6 +325,23 @@
           (await (ticks s eng 3))
           (is (empty? (calls p "jumpPlace")))
           (is (= {:any-of ["dirt" "cobblestone"] :count 6} (first @got))))))))
+
+(deftest a-failed-fetch-that-left-a-filler-carried-still-pillars-with-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [body (atom nil)
+              fails (assoc (get registry/jobs 'jobs.items.obtain)
+                           :can-start? (constantly (contract/ok :stub "a stub"))
+                           :round (fn ^:async obtain [c]
+                                    (fake/add-item! @body "cobblestone" 20)
+                                    (ctx/end c :condition-failed {:reason :no-way} {})))
+              {:keys [eng p seen] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain fails}})]
+          (reset! body p)
+          (core/submit! eng (tu/order (list job {:height 6})) {})
+          (await (ticks s eng 6))
+          (is (= [0 70 0] (feet p)))
+          (is (empty? (of-kind seen :stopped))))))))
 
 (deftest running-short-part-way-builds-what-it-has-and-gives-up-saying-so
   (async done
