@@ -42,7 +42,7 @@
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
   A room walked to by :at whose inside was not seen emits enter-room.arrived {:seen :unseen :open-sides :closed-sides :closed} once its sides are all seen.
-  By day, done in a room of a plan the body made, jobs.build.from-plan runs once first over the cells touching the room seen to differ from that plan (what a way in dug or set there is put back), at the worth the call has; a mend that does not end done emits enter-room.mend-failed and the result carries :mend-failed {:kind :reason :cells}. Takes :ignore-zones? for that mend.
+  By day, in a room of a plan the body made (once its doors are shut), jobs.build.from-plan runs once first over the cells touching the room seen to differ from that plan (what a way in dug or set there is put back; a room a wall was dug out of, open, every such cell of the plan), at the worth the call has; a mend that does not end done emits enter-room.mend-failed and the result carries :mend-failed {:kind :reason :cells}. Takes :ignore-zones? for that mend.
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :roof-not-held (a mend that did not stay), :roof-not-placed (the block was not placed; or the fill's own reason), :open (the room cannot be closed).
@@ -327,7 +327,8 @@
           (priced (or route ##Inf))))
       :else
       (let [{:keys [door gap plug stop]} (judge c)]
-        (priced (cond stop ##Inf
+        (priced (cond (and stop (not (mend-due? c))) ##Inf
+                     stop (await (mend-s c))
                      door (+ (settings/get settings ::door-s) (await (mend-s c)))
                      :else (+ (* (count (or gap [plug])) (settings/get settings ::fill-s)) (await (mend-s c)))))))))
 
@@ -424,20 +425,28 @@
                                             (ledger/confirm at)))
                     :again))))))
 
+(defn room-cells
+  "The cells of the closed room the body stands in as [x y z], nil when it stands in none."
+  [c]
+  (let [p (:primitives c)]
+    (:cells (reach-room/room p (sh-sense/feet p)))))
+
 (defn ring
   "The cells of the room the body stands in and those touching them (a wall, a way dug in), as a set of [x y z]."
   [c]
-  (let [p (:primitives c)]
-    (set (for [[x y z] (:cells (reach-room/room p (sh-sense/feet p))) [dx dy dz] [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
-           [(+ x dx) (+ y dy) (+ z dz)]))))
+  (set (for [[x y z] (room-cells c) [dx dy dz] [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
+           [(+ x dx) (+ y dy) (+ z dz)])))
 
 (defn own-plan-here
-  "The id of a plan this body made that covers a cell of the ring of the room the body stands in (ring), else nil; kept per room (the body's cell) while the plans stay."
+  "The id of a plan this body made that covers a cell of the ring of the room the body stands in (ring), else nil; in no closed
+  room (a wall dug out opens it), the own plan whose cells' box holds the body (own-builds/plan-around-fn); kept per room (the body's cell) while the plans stay."
   [c]
   (when (seq (access/own-plans c))
     (let [feet (mapv #(js/Math.floor (% (sh-sense/feet (:primitives c)))) [:x :y :z])]
       (check-cache/keyed c ::own-plan-here [feet (access/own-plans c)]
-                         #(some (own-builds/own-plan-fn c) (ring c))))))
+                         #(if (room-cells c)
+                            (some (own-builds/own-plan-fn c) (ring c))
+                            ((own-builds/plan-around-fn c) feet))))))
 
 (defn mend-due?
   "The plan id whose way-in mend is still to run: by day, not yet this call, in a room of a plan the body made (own-plan-here)."
@@ -446,10 +455,11 @@
     (own-plan-here c)))
 
 (defn way-in-cells
-  "The cells of plan id in the ring of the room (ring) seen differ from the plan (jobs.lib.build.diff/diff): what a way in dug or set there."
+  "The cells of plan id seen differ from the plan (jobs.lib.build.diff/diff), in the ring of the closed room (ring): what a
+  way in dug or set there. In an open room (a wall dug out) every cell of the plan: the plan is the blueprint of what shuts it."
   [c plan]
   (let [{:keys [cells trouble]} (diff/plan-cells c plan nil)
-        near (ring c)]
+        near (if (room-cells c) (ring c) (constantly true))]
     (when-not trouble
       (mapv (comp vec :pos) (diff/diff c (filterv #(near (vec (:pos %))) cells))))))
 
@@ -492,9 +502,9 @@
       (>= n (settings/get settings ::max-steps)) (ctx/end c :nothing-possible :stuck {:text "gave up: too many steps without closing the room"})
       (:walk j) (await (walk! c (:walk j)))
       (:door j) (await (shut-door! c (:door j)))
+      (and (not= :no-room (:stop j)) (mend-due? c)) (await (mend-plan! c (mend-due? c)))
       (:gap j) (await (fill-gap! c (:gap j)))
       (:plug j) (await (mend! c (:plug j)))
-      (and (:done j) (mend-due? c)) (await (mend-plan! c (mend-due? c)))
       (:done j) (ctx/end c :done nil (cond-> (merge {:pos (sh-sense/feet (:primitives c)) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
                                          (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))
                                          (:mend-failed (ctx/mem c)) (assoc :mend-failed (:mend-failed (ctx/mem c)))))

@@ -23,6 +23,17 @@
         own (access/own-plans c)]
     (fn [cell] (some own [(get footprints (vec cell))]))))
 
+(defn plan-around-fn
+  "(plan-around cell): the id of a plan this body made whose cells' bounding box holds cell, else nil."
+  [c]
+  (let [own (access/own-plans c)
+        boxes (reduce (fn [m [cell id]]
+                        (if-not (own id)
+                          m
+                          (update m id (fn [[lo hi]] (if lo [(mapv min lo cell) (mapv max hi cell)] [cell cell])))))
+                      {} (known/footprints c))]
+    (fn [cell] (some (fn [[id [lo hi]]] (when (every? true? (map <= lo cell hi)) id)) boxes))))
+
 (defn with-own-pen
   "c with the own pen holding livestock the body stands in (jobs.lib.own-pen/shut-in, read on first use) as :own-pen: the
   fns below built from it share one read."

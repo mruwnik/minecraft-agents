@@ -402,3 +402,20 @@
           (core/submit! eng (tu/order '(jobs.survival.enter-room {})) {})
           (await (tu/run-until-empty eng 60))
           (is (some #(= "enter-room.mend-failed" (name (or (:event %) (:kind %) :none))) @seen) (str "the failed mend is an event: " (pr-str (map #(select-keys % [:event :kind]) (take 8 @seen))))))))))
+
+(def side-wall-plan
+  "The body's own plan of the hut: the two end cells of the side wall want cobblestone."
+  {:id "hut" :metadata {:by "Fake"} :parts [{:id "wall" :cells [[3 64 0] [7 64 0]] :want "cobblestone"}]})
+
+(deftest by-day-a-wall-cell-dug-out-of-the-own-hut-is-put-back-though-the-room-is-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut-world {:x 5 :y 64 :z 0} {"3,64,0" "air"})
+                        (merge day)
+                        (assoc :inventory [{:name "cobblestone" :count 4}] :sight 10))
+              {:keys [eng p]} (st/setup world)]
+          (ew/set-data! (:world eng) {"hut" side-wall-plan} {})
+          (core/submit! eng (tu/order '(jobs.survival.enter-room {})) {})
+          (await (tu/run-until-empty eng 60))
+          (is (= "cobblestone" (block-at p [3 64 0])) "the dug-out wall cell is the plan's again"))))))
