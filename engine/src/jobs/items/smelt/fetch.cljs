@@ -6,6 +6,7 @@
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.smelt.plan :as sp]
             [jobs.lib.fuel :as fuel]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.furnace :as furnace]
             [jobs.lib.need :as need]
             [jobs.lib.storage :as storage]
@@ -112,18 +113,18 @@
 
 (defn home-furnace
   "The furnace the body remembers (the :furnace place), not one a walk found unreachable: with anywhere? at any distance
-  whose walk is within the call's worth (and, when it carries what makes a furnace, beats making one), else only when walk-beats-own?. nil otherwise."
+  whose walk is within the call's worth, else only when walk-beats-own?; either way cheaper-than-own. nil otherwise."
   [c anywhere?]
   (let [pos (mem/place (ctx/view c) :furnace)]
     (when (and pos (not (contains? (furnace/unreachable-furnaces c) pos))
                (if anywhere?
                  (and (cost/affords? (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) pos)})) (ctx/worth c))
-                      (or (not (own-possible? c)) (walk-beats-own? c pos)))
+                      (cheaper-than-own c pos))
                  (walk-beats-own? c pos)))
       pos)))
 
 (defn ^:async furnace-fetch!
-  "With no furnace seen: put a carried one down, else fetch one and put it down. Once per smelt, unless the fetch ended :job-time and another try is worth its price (cost/try-again?). :again / :continue,
+  "With no furnace seen: put a carried one down, else fetch one and put it down. Once per smelt, unless the fetch ended :job-time and another try is worth its price. :again / :continue,
   nil when there is nothing to do (memory :furnace-why then says why the fetch failed)."
   [c]
   (when-let [opts (and (not (:furnace-tried (ctx/mem c))) (fetch-opts c :furnace))]
@@ -131,7 +132,7 @@
               (await (need/item! c "furnace" 1 opts)))
           r (cond (= :continue e) :continue
                   (pos? (storage/carried (carried c) "furnace")) (await (furnace/place-furnace! c))
-                  (and (= :job-time (need/cause-why e)) (do (u/failed! c) (cost/try-again? c :child-round))) :continue)]
+                  (and (= :job-time (need/cause-why e)) (do (u/failed! c) (cost/try-again? c :child-round {:try-s (fetch-time/items-s ["furnace"])}))) :continue)]
       (when-not r
         (ctx/update-mem! c assoc :furnace-tried true :furnace-why (when (map? e) (get-in e [:data :why]))))
       r)))

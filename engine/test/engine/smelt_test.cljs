@@ -17,6 +17,9 @@
             [jobs.items.smelt :as smelt]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.fetch-time :as fetch-time]
+            [jobs.lib.need :as need]
             [jobs.lib.cost.value :as value]
             [jobs.lib.fuel :as fuel]
             [jobs.lib.world-files :as ew]))
@@ -1157,6 +1160,19 @@
                                         #(mem/write! (:store %) :furnace {:pos {:x 600 :y 64 :z 0}} mem/place-policy)))]
           (is (= :no-furnace-seen (:reason r)) (pr-str r))
           (is (< (get-in @(fake/state p) [:self :pos :x]) 100) "the body stayed near"))))))
+
+(deftest a-furnace-get-retry-is-priced-at-the-quote-of-the-get
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              try-again? cost/try-again?
+              [r] (with-redefs [need/item! (fn ([_ _ _ _] {:status :failed :cause {:why :job-time}}) ([_ _ _] nil))
+                                cost/try-again? (fn ([c kind] (swap! asked conj [kind nil]) (try-again? c kind))
+                                                  ([c kind opts] (swap! asked conj [kind opts]) (try-again? c kind opts)))]
+                    (await (fetched-run {:inventory iron-and-coal} {:item "raw_iron" :count 3 :worth 20000 :ways #{:carried :chest :craft}})))]
+          (is (= [[:child-round {:try-s (fetch-time/items-s ["furnace"])}]] (filter (comp #{:child-round} first) (distinct @asked)))
+              (pr-str r)))))))
 
 (deftest a-remembered-furnace-is-walked-to-when-that-costs-less-than-making-one
   (async done
