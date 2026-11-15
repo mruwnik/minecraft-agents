@@ -238,6 +238,16 @@
   (is (true? (:ignore-zones? (seen/lead-args {:args {:ignore-zones? true}} [1 64 1]))))
   (is (not (contains? (seen/lead-args {:args {}} [1 64 1]) :ignore-zones?))))
 
+(deftest a-wanted-item-is-never-smelted-from-another-item-of-the-same-any-of-set
+  (let [body (fn [args] {:primitives (tu/fake {:inventory [{:name "cobblestone" :count 1}]})
+                         :args args
+                         :view (constantly {:now 1000 :data mem/empty-data})})
+        names ["dirt" "cobblestone" "stone"]]
+    (is (nil? (chain/craft-plan (body {:any-of names :count 2 :ways #{:craft :smelt :gather}}) names 1))
+        "one cobblestone smelted into stone leaves the carried total of the set where it was")
+    (is (some? (chain/craft-plan (body {:item "stone" :count 1 :ways #{:craft :smelt :gather}}) ["stone"] 1))
+        "wanting stone alone, a carried cobblestone is its input")))
+
 (deftest the-chain-plans-only-with-the-units-the-register-leaves-free
   (let [body (fn [entries]
                {:primitives (tu/fake {:inventory [{:name "wheat" :count 15} {:name "crafting_table" :count 1}]})

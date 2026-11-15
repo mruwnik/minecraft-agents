@@ -25,10 +25,11 @@
 
 (defn craft-plan
   "{:item name :steps [..]} for the first of names a craft chain of allowed steps (a smelt step needs the :smelt way,
-  any other :craft) makes n more of from what is carried (spendable), else nil."
+  any other :craft) makes n more of from what is carried (spendable) less the units of names themselves (turning one
+  of the wanted items into another, cobblestone into stone, nets nothing), else nil."
   [c names n]
   (let [p (:primitives c)
-        have (spendable c)
+        have (apply dissoc (spendable c) names)
         mem (ctx/mem c)
         table? (and (not (get-in mem [:craft :table-unreachable]))
                     (crafting-table/at-hand? p mem))
