@@ -62,3 +62,18 @@
     (stock/note-stock! c [2 64 2] [])
     (dotimes [_ (inc (:cap stock/stock-policy))] (stock/note-moved! c [2 64 2] "wheat" 1))
     (is (= {[1 64 1] {"bread" 5} [2 64 2] {"wheat" 65}} (stock/stock-of (mem/view store))))))
+
+(deftest a-double-chest-is-booked-once-whichever-half-is-opened
+  (let [store (mem/open (tu/tmp-dir) {})
+        halves {[1 64 1] {:type "right" :facing "north"} [2 64 1] {:type "left" :facing "north"}}
+        p #js {:seenBlockAt (fn [pos] (let [cell [(.-x pos) (.-y pos) (.-z pos)]]
+                                        (clj->js {:name "chest" :pos {:x (first cell) :y (second cell) :z (last cell)} :properties (get halves cell)})))}
+        c {:primitives p :view #(mem/view store)
+           :remember (fn [kind data policy] (mem/write! store kind data policy))
+           :forget (fn [kind pred] (mem/forget-where! store kind pred))}]
+    (stock/note-stock! c [1 64 1] [{:name "wheat" :count 539}])
+    (stock/note-stock! c [2 64 1] [{:name "wheat" :count 546}])
+    (is (= {[2 64 1] {"wheat" 546}} (stock/stock-of (mem/view store))) "one entry, the latest count")
+    (is (= {"wheat" 546} (stock/stock-at (mem/view store) [1 64 1])) "either half reads it")
+    (stock/note-moved! c [1 64 1] "wheat" -46)
+    (is (= {"wheat" 500} (stock/stock-at (mem/view store) [2 64 1])))))

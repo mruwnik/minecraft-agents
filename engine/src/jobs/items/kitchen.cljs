@@ -77,7 +77,7 @@
 (defn chest-stock-of
   "{name n} the chest is booked to hold, or nil when unknown."
   [c]
-  (some->> (storage/chest-of (ctx/view c) (:args c)) storage/cell-of (get (stock/stock-of (ctx/view c)))))
+  (when-let [cell (some-> (storage/chest-of (ctx/view c) (:args c)) storage/cell-of)] (stock/stock-at (ctx/view c) cell)))
 
 (defn done?
   "The chest's booked stock holds every :stock entry and no pass is under way (a pass ends itself once it has stored

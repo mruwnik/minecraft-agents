@@ -41,7 +41,7 @@
     (->> (concat seen far)
          (keep (fn [pos]
                  (let [cell (stock/cell-of pos)
-                       items (get stock cell)]
+                       items (stock/stock-at (ctx/view c) cell)]
                    (when-not (or (done cell) (and items (not (holds items names))))
                      {:pos pos :stock items})))))))
 

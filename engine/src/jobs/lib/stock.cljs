@@ -21,15 +21,26 @@
 
 (defn cell-of [pos] (if (vector? pos) pos [(:x pos) (:y pos) (:z pos)]))
 
+(defn cells-of
+  "The cells one booked chest answers to: its :pos and, for a double chest, the other half."
+  [data]
+  (cond-> [(:pos data)] (:also data) (conj (:also data))))
+
 (defn stock-of
-  "{[x y z] {name n}}: the latest stock booked per chest, from memory view."
+  "{[x y z] {name n}}: the latest stock booked per container, from memory view. A double chest is one key (the cell last
+  booked); read a cell of either half with stock-at."
   [view]
   (reduce (fn [m e] (assoc m (:pos (:data e)) (:items (:data e)))) {} (mem/entries view stock-kind)))
+
+(defn stock-at
+  "What the chest at cell (either half of a double chest) held when last booked, nil when not booked."
+  [view cell]
+  (->> (mem/entries view stock-kind) (filter #(some #{cell} (cells-of (:data %)))) last :data :items))
 
 (defn age-ms
   "Ms since the chest at cell was last booked (looked into or moved from), nil when not booked."
   [view cell]
-  (some->> (mem/entries view stock-kind) (filter #(= cell (:pos (:data %)))) (map :t) seq (apply max) (- (:now view))))
+  (some->> (mem/entries view stock-kind) (filter #(some #{cell} (cells-of (:data %)))) (map :t) seq (apply max) (- (:now view))))
 
 (defn age-text
   "\"seen 3 h ago\" for an age in ms."
@@ -44,11 +55,29 @@
                       (update m n (fnil + 0) k)))
           {} (if (array? stacks) (array-seq stacks) stacks)))
 
+(def clockwise {"north" [1 0] "east" [0 1] "south" [-1 0] "west" [0 -1]})
+
+(defn partner-of
+  "The cell of the other half of the double chest at cell as the body last saw it (the block's type and facing), nil for a
+  single chest or when it was not seen."
+  [c cell]
+  (when-let [p (:primitives c)]
+    (let [{:keys [name properties]} (look/seen-block p (zipmap [:x :y :z] cell))
+          [dx dz] (get clockwise (:facing properties))
+          sign (case (:type properties) "right" 1 "left" -1 nil)]
+      (when (and dx sign (contains? (set container-names) name))
+        (let [[x y z] cell
+              other [(+ x (* sign dx)) y (+ z (* sign dz))]]
+          (when (= name (:name (look/seen-block p (zipmap [:x :y :z] other)))) other))))))
+
 (defn book!
-  "Replace the chest's entry at cell, so the cap counts chests, not transfers."
+  "Replace the container's entry at cell (and its other half), so the cap counts chests, not transfers and a double chest is
+  booked once."
   [c cell items]
-  (ctx/forget-where! c stock-kind #(= cell (:pos %)))
-  (ctx/remember! c stock-kind {:pos cell :items items} stock-policy))
+  (let [also (partner-of c cell)
+        mine (set (cons cell (when also [also])))]
+    (ctx/forget-where! c stock-kind #(some mine (cells-of %)))
+    (ctx/remember! c stock-kind (cond-> {:pos cell :items items} also (assoc :also also)) stock-policy)))
 
 (defn note-stock!
   "Book what the chest at pos holds now (stacks as inspected)."
@@ -59,7 +88,7 @@
   "Book delta of name moved into (+) or out of (-) the chest at pos, when its stock is known."
   [c pos name delta]
   (let [cell (cell-of pos)]
-    (when-let [items (get (stock-of (ctx/view c)) cell)]
+    (when-let [items (stock-at (ctx/view c) cell)]
       (let [n (+ (get items name 0) delta)]
         (book! c cell (if (pos? n) (assoc items name n) (dissoc items name)))))))
 

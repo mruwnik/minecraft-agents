@@ -77,7 +77,7 @@
         (= "ok" status) (do (ctx/update-mem! c assoc-in [:looked cell] (stock/stacks->items (:items seen)))
                             (u/progress! c)
                             :again)
-        (= "missing" status) (do (ctx/forget-where! c stock/stock-kind #(= cell (:pos %)))
+        (= "missing" status) (do (ctx/forget-where! c stock/stock-kind #(some #{cell} (stock/cells-of %)))
                                  (ctx/update-mem! c update :gone (fnil conj []) cell)
                                  :again)
         :else (stop! c :nothing-possible (keyword status))))

@@ -49,13 +49,12 @@
   "[[slot job args] ..] taking the raw ore the base chests are known to hold (body memory :fetch/stock) into the bag, up to
   what the free furnaces take (64 each), the kinds in one call per chest."
   [c]
-  (let [free (- (count (furnaces c (base c))) (count (cooking-of c)))
-        stock (stock/stock-of (ctx/view c))]
+  (let [free (- (count (furnaces c (base c))) (count (cooking-of c)))]
     (when (pos? free)
       (loop [[chest & more] (chests c (base c)) want (select-keys (bag c) ores) out []]
         (if-not chest
           out
-          (let [have (select-keys (get stock (stock/cell-of chest)) ores)
+          (let [have (select-keys (stock/stock-at (ctx/view c) (stock/cell-of chest)) ores)
                 want' (reduce (fn [m [k n]] (update m k #(min (* 64 free) (+ (or % 0) n)))) want have)]
             (recur more want' (cond-> out (seq have) (conj [(keyword (str "withdraw-" (count out))) 'jobs.storage.withdraw
                                                            (merge {:chest chest :items (select-keys want' (keys have))}
