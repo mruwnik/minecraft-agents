@@ -2203,6 +2203,7 @@
   (merge expr-registry
          {'looky (tu/job [(fn [_] (contract/look :exposed "light not seen" :look-at [[1 2 3]]))] count-round)
           'idle (tu/job (fn ^:async idle-round [_] :continue))
+          'pausing (tu/job (fn ^:async pausing-round [c] (await (ctx/act c :wait #js {:ms 1 :why :idle})) :continue))
           'nothing (tu/job (fn ^:async nothing-round [c] (ctx/end c :condition-failed {:reason :nothing-to-do} nil)))}))
 
 (deftest repeat-over-a-child-that-needs-a-look-calls-it-and-rests-with-a-reason
@@ -2227,6 +2228,15 @@
           (dotimes [_ 10] (swap! clock + 10000) (await (core/tick! eng)))
           (is (= 1 (count (silent))) "once per spell")
           (is (= 1 (count (:attention (core/state eng))))))))))
+
+(deftest a-job-that-waits-with-a-reason-each-round-never-raises-job-silent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (update (expr-setup) :eng assoc :jobs silent-registry)]
+          (core/submit! eng (tu/order '(pausing)) {})
+          (dotimes [_ 30] (swap! clock + 10000) (await (core/tick! eng)))
+          (is (empty? (filter #(= :silent (:kind %)) @seen)) "a :wait with a :why is a declared hold, though it ends with the act"))))))
 
 (def gated-silent
   (atom true))

@@ -145,12 +145,12 @@
 (def silent-rounds "Least such rounds in a row for job.silent." 5)
 
 (defn silent-round?
-  "Whether the round of listed job id that ended with status did no act, declared no hold and left no wait reason on the job."
+  "Whether the round of listed job id that ended with status did no act, declared no hold (a ctx/hold-still!, or a :wait act with a :why, whose hold ends with the act) and left no wait reason on the job."
   [eng id status round]
   (let [a @(:activity eng)]
     (and (#{:continue :declined} status)
          (zero? (:acts round 0))
-         (not (and (= id (:id a)) (:hold a)))
+         (not (and (= id (:id a)) (or (:hold a) (:last-why a))))
          (nil? (get @(:waiting eng) id)))))
 
 (defn end-silent-spell!
