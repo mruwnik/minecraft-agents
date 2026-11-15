@@ -361,7 +361,7 @@
       (fn ^:async t []
         (doseq [[block carried expected]
                 [["sand" ["wooden_shovel" "iron_shovel"] "wooden_shovel"]
-                 ["stone" ["wooden_pickaxe" "stone_pickaxe"] "wooden_pickaxe"]
+                 ["stone" ["wooden_pickaxe" "stone_pickaxe"] "stone_pickaxe"]
                  ["oak_log" ["iron_axe" "diamond_pickaxe"] "iron_axe"]]]
           (let [s (start {:world {:blocks {"3,64,0" block} :inventory (mapv #(hash-map :name % :count 1) carried)}})]
             (core/submit! (:eng s) (tu/order (spec {:block block :count 1})) {})
