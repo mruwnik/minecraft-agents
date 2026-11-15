@@ -13,7 +13,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.sight :as wsight]
-            [jobs.lib.walk.world :as wworld]))
+            [jobs.lib.walk.world :as wworld]
+            [jobs.movement.go-to.way-steps :as way-steps]))
 
 (def wide-box
   "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way
@@ -382,19 +383,29 @@
   [p cell]
   (pos? (escape/pit-depth (escape/block-at-of p) (escape/unseen-of p) cell)))
 
+(defn sealed?
+  "Whether the cell is solid on all four sides, every side seen: no walk leads out of it."
+  [p cell]
+  (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)]
+    (every? #(and (not (unseen? %)) (escape/solid? (block-at %))) (map #(escape/ahead cell % 1) escape/cardinals))))
+
 (defn one-way-priced?
   "Whether the one-way step from `rim` landing at `at` is worth taking (jobs.lib.walk.one-way/taken?): the EV of its landing against the goal's worth
   (the call's :worth; a drop of a plan that stops short of the goal, speculative?, also no deeper than one-way/::max-speculative-drop whatever the worth), and, for a drop of more than a block into a pit, a way out of the landing exists (escape-way/choose does not say :no-dig: a landing with nothing
-  it could dig round it is a certain trap, not a chance of one). True when there is no step (nil at)."
+  it could dig round it is a certain trap, not a chance of one). A plan that stops short of the goal lands in no sealed pit (sealed?) when the call's ways leave no way out
+  of one: the body would end there. True when there is no step (nil at)."
   ([c to rim at small?] (one-way-priced? c to rim at small? false))
   ([c to rim at small? speculative?]
   (or (nil? at)
       (let [p (:primitives c)
             pos (.-pos (.self p))
-            [gx gy gz] to]
+            [gx gy gz] to
+            no-way? (fn [opts] (= {:step :none :why :no-dig} (select-keys (escape-way/choose p (vec at) to (constantly true) opts) [:step :why])))]
         (and (not (and speculative? (one-way/too-deep? (second rim) (second at) gy)))
              (one-way/taken? p rim at small? (ctx/worth c))
-             (or small? (not (pit? p (vec at))) (not= {:step :none :why :no-dig} (select-keys (escape-way/choose p (vec at) to) [:step :why]))))))))
+             (or small? (not (pit? p (vec at))) (not (no-way? {})))
+             (not (and speculative? (not small?) (sealed? p (vec at)) (no-way? {:drop-steps (way-steps/barred-steps c)}))))))))
 
 (defn one-way-step?
   "Whether step b after step a lands after a drop of 2 or more, a gap jump down (a step the body cannot undo) or any drop
