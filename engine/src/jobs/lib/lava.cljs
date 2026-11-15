@@ -127,8 +127,8 @@
   "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :ways allow,
   zones as opts :ignore-zones?, the fluid named in the event text as opts :fluid). Memory :seals counts places per
   cell, :sealing the cell in hand. :again once placed (event kind, info), :continue while the child waits on the
-  world, else the stop {:reason :lava-unsealed :cell} with the place outcome (:place; :need when no block is
-  carried) or :tries once another is not worth it (reseal?)."
+  world, else the stop {:reason :lava-unsealed :cell :place} with the place outcome (:place; :need when no block is
+  carried, :fetch then the reason the fetch gave) or :tries once another is not worth it (reseal?)."
   [c kind block-at cell {:keys [ways ignore-zones? fluid]}]
   (let [tries (get-in (ctx/mem c) [:seals cell] 0)
         [x y z] cell]
@@ -138,16 +138,18 @@
         ;; a waiting child is resumed on the same cell: only its first round counts a try
         (ctx/update-mem! c #(cond-> (assoc % :sealing cell)
                               (not= cell (:sealing %)) (update-in [:seals cell] (fnil inc 0))))
-        (let [outcome (await (blocks/place-cell! c {:x x :y y :z z} nil
-                                                 {:use {:blocks (choose/filler-names c :build)} :ways ways
-                                                  :ignore-zones? (boolean ignore-zones?)}))]
+        (let [e (await (blocks/place-call! c {:x x :y y :z z} nil
+                                           {:use {:blocks (choose/filler-names c :build)} :ways ways
+                                            :ignore-zones? (boolean ignore-zones?)}))
+              outcome (blocks/place-outcome e)]
           (if (= :continue outcome)
             :continue
             (do (ctx/update-mem! c dissoc :sealing)
                 (if (#{:placed :already} outcome)
                   (do (ctx/emit! c kind :info {:cell cell :now (block-at cell) :text (str "sealed " fluid " at " (pr-str cell))})
                       :again)
-                  {:reason :lava-unsealed :cell cell :place outcome}))))))))
+                  (cond-> {:reason :lava-unsealed :cell cell :place outcome}
+                    (= :need outcome) (assoc :fetch (some-> (:because e) contract/cause-key)))))))))))
 
 (defn near-cells
   "The cells [x y z] a body should not stand on beside open lava: the columns of cells and their side neighbours,

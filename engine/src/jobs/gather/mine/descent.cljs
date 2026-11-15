@@ -101,12 +101,12 @@
   "The stair down to the tunnel level stopped above it: one mine.descent-stopped, then the tunnel runs where the body stands,
   or, more than ::level-slack above the level, the mend and the walk home with :reason :descent-stopped."
   [c]
-  (let [{:keys [steps stop]} (:descent (ctx/mem c))
+  (let [{:keys [steps stop place fetch]} (:descent (ctx/mem c))
         y (:y (cell-of (u/self-pos c)))
         level (tunnel-level (:args c))
         far? (> (- y level) (level-slack))]
     (ctx/emit! c :mine.descent-stopped (if far? :warn :info)
-               {:steps (or steps 0) :stop stop :y y :level level
+               {:steps (or steps 0) :stop stop :place place :fetch fetch :y y :level level
                 :text (str "mine's stair down stopped at y " y " (" (name stop) "), short of y " level
                            (if far? "; too high to tunnel there" "; it tunnels there"))})
     (if far? (stop! c :descent-stopped) :again)))
@@ -341,7 +341,7 @@
                   turnable? (not (and (#{:unbreakable :not-loaded} stop) (some-> (:cell res) (get 1) (<= (places/min-y (:primitives c))))))]
               (or (when (and turnable? (heading-stops stop) (turn-heading! c stop)) :again)
                   (when (and turnable? (blocked-start? c stop)) (await (move-stair! c stop)))
-                  (do (ctx/update-mem! c update :descent assoc :stop stop)
+                  (do (ctx/update-mem! c update :descent assoc :stop stop :place (:place res) :fetch (:fetch res))
                       (if level? (stair-stopped! c) (no-stone! c))))))))
 
 (defn level-retry

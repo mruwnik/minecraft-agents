@@ -444,6 +444,17 @@
               s (await (scenario {:block "iron_ore" :count 1 :level 60 :tunnel-length 3} world 400))]
           (is (= :lava-unsealed (:stop (first (events-of s :mine.turned)))) (pr-str (map :text (events-of s :mine.turned)))))))))
 
+(deftest a-stair-whose-lava-cannot-be-sealed-says-why-in-descent-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (deep-rock (assoc (cells "air" [1] (range 62 65) (range -2 3)) "1,65,0" "lava"))
+                        (assoc :drops {"stone" "flint"} :inventory pickaxe))
+              s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 60 :tunnel-length 3} world 400))
+              e (first (events-of s :mine.descent-stopped))]
+          (is (= :lava-unsealed (:stop e)) (pr-str e))
+          (is (= [:need :no-source] [(:place e) (:fetch e)]) (pr-str e)))))))
+
 (deftest the-stair-down-goes-on-beside-water-when-it-is-accepted-as-a-list-and-not-by-default
   (async done
     (tu/run-async done
