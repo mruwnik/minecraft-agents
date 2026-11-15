@@ -8,6 +8,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.stock :as stock]
@@ -43,7 +44,7 @@
         have (set (map :name (u/inventory p)))
         stock (remove have (stock-names c pile budget-s))
         worn (armour/worn-of (.-equipment (.self p)))
-        weapons (->> stock (filter #(combat/weapon? combat/default-weapons %)) (sort-by #(/ (cost/weapon-damage %) (cost/attack-gap-ms %)) >))
+        weapons (->> stock (filter #(combat/weapon? combat/default-weapons %)) (sort-by weapon/weapon-order))
         pieces (fn [slot] (->> stock
                                (filter #(and (= slot (:slot (armour/parse %))) (> (piece-points slot %) (piece-points slot (get worn slot)))))
                                (sort-by #(piece-points slot %) >)))

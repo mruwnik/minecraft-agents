@@ -74,7 +74,7 @@
   (->> (u/inventory p)
        (map :name)
        (filter #(weapon? weapons %))
-       (sort-by weapon/weapon-score >)
+       (sort-by weapon/weapon-order)
        first))
 
 (defn ^:async equip-best!

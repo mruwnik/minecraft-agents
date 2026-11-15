@@ -10,7 +10,7 @@
   (doseq [[item ms] [["wooden_sword" 625] ["diamond_sword" 625] ["netherite_sword" 625]
                      ["wooden_axe" 1250] ["stone_axe" 1250] ["iron_axe" 1112]
                      ["copper_sword" 625] ["copper_axe" 1250] ["golden_axe" 1000] ["diamond_axe" 1000] ["netherite_axe" 1000]
-                     ["trident" 910] ["mace" 1667] ["iron_pickaxe" 834] ["stone_shovel" 1000] ["stick" 500] [nil 500]]]
+                     ["iron_pickaxe" 834] ["stone_shovel" 1000] ["stick" 500] [nil 500]]]
     (is (= ms (weapon/attack-gap-ms item)) (str item))))
 
 (deftest every-skeleton-variant-is-ranged-and-priced
@@ -59,6 +59,11 @@
 (deftest weapons-rank-by-the-damage-their-hits-deal-a-second
   (is (= ["iron_sword" "iron_axe" "stone_sword" "stone_axe" "stone_pickaxe" "stone_shovel" nil]
          (sort-by weapon/weapon-score > [nil "stone_pickaxe" "stone_axe" "iron_axe" "stone_shovel" "stone_sword" "iron_sword"]))))
+
+(deftest a-sword-or-axe-outranks-a-digging-tool-though-it-hits-slower
+  (is (= ["golden_sword" "wooden_axe" "netherite_shovel" "diamond_pickaxe"]
+         (sort-by weapon/weapon-order ["netherite_shovel" "diamond_pickaxe" "wooden_axe" "golden_sword"])))
+  (is (= [1 1] (mapv weapon/weapon-damage ["trident" "mace"])) "a trident or mace is no melee weapon of ours"))
 
 (deftest a-copper-sword-is-costed-as-a-weapon-not-a-fist
   (let [mobs [{:name "zombie" :distance 3}]]

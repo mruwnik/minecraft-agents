@@ -385,7 +385,7 @@
   "The name of the first of uses (item names or parts of one) carried, the best of those an entry matches."
   [p uses]
   (let [carried (map :name (u/inventory p))]
-    (some (fn [use] (->> carried (filter #(str/includes? % use)) (sort-by weapon/weapon-score >) first)) uses)))
+    (some (fn [use] (->> carried (filter #(str/includes? % use)) (sort-by weapon/weapon-order) first)) uses)))
 
 (declare strike!)
 (def back-leg-s "Seconds one step back from a creeper may take." 2)
