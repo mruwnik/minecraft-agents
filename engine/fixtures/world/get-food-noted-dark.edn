@@ -1,5 +1,6 @@
 ;; survival.get-food walks to a sheep only an earlier search noted, 48 blocks off over a dark drop (the way goes down a 3-block ledge onto an
 ;; unlit corridor floor the body cannot see; the sheep stands under a sea lantern at its far end). The plot is dark so a torch is due.
+;; Three sheep stand together: a hunt never leaves fewer than two known adults of a kind (Q199), so a lone sheep is never killed.
 ;; The body is teleported to the sheep, a search notes it, and it is teleported back, so nothing is in sight when get-food starts.
 ;; Should-succeed (starving, so it searches although under rock): a chest next to the body holds torches; get-food (starving, nothing carried) fetches one, lights the drop, walks there, kills the sheep.
 ;; Should-fail: no torch in view: the walk ends unseen-floor-dark and the :no-food text names the unreached note and why (not "no food source is known").
@@ -20,7 +21,7 @@
             [:set [12 3 15] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 8]
          [:rcon "damage $BODY 14 minecraft:generic"]
-         [:summon "sheep" [60.5 0 16.5] "{NoAI:1b}"]
+         [:summon "sheep" [60.5 0 16.5] "{NoAI:1b}"] [:summon "sheep" [61.5 0 16.5] "{NoAI:1b}"] [:summon "sheep" [62.5 0 16.5] "{NoAI:1b}"]
          [:rcon "execute at $BODY run tp $BODY ~46 ~-3 ~"] [:wait-s 3]
          [:job (jobs.explore.search {:worth 1200 :target "sheep" :scan-radius 16 :use-notes false :within 1})] [:wait-s 5]
          [:rcon "execute at $BODY run tp $BODY ~-46 ~3 ~"] [:wait-s 3]
@@ -31,7 +32,7 @@
   {:name "noted-sheep-with-no-torch-is-named-in-the-no-food-text"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 8]
          [:rcon "damage $BODY 14 minecraft:generic"]
-         [:summon "sheep" [60.5 0 16.5] "{NoAI:1b}"]
+         [:summon "sheep" [60.5 0 16.5] "{NoAI:1b}"] [:summon "sheep" [61.5 0 16.5] "{NoAI:1b}"] [:summon "sheep" [62.5 0 16.5] "{NoAI:1b}"]
          [:rcon "execute at $BODY run tp $BODY ~46 ~-3 ~"] [:wait-s 3]
          [:job (jobs.explore.search {:worth 1200 :target "sheep" :scan-radius 16 :use-notes false :within 1})] [:wait-s 5]
          [:rcon "execute at $BODY run tp $BODY ~-46 ~3 ~"] [:wait-s 3]
