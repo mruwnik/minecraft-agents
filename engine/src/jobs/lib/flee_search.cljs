@@ -20,6 +20,7 @@
             [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]
             [engine.settings :as settings]
+            [jobs.lib.block-sets :as block-sets]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
@@ -294,7 +295,7 @@
 (defn estimate
   "The score ring end t likely gets (scored's arrival less price) before it is planned, read off the straight line from
   `from` to its column at the feet's height as a route: the chasers' arrival at its end less the line's walk at the
-  body's speed (food), its seen dark cells at cost/dark-factor of kit (the planner's dark price, look/dark-fn), the death
+  body's speed (food), its seen dark cells (a seen solid cell ends the seen run: rock is no route) at cost/dark-factor of kit (the planner's dark price, look/dark-fn), the death
   the known threats not chasing (others) risk on it (cost/route-death-cost) and, at its first unseen cell, a dead end
   with no way back (cost/dead-end-cost at counts of its trap-s, trapped a fn of no argument: the cornered answer without covers): the nearer the dead end,
   the sooner the chasers corner the body there."
@@ -309,7 +310,7 @@
         cells (mapv (fn [i] (let [f (/ i n)]
                               {:x (js/Math.floor (+ fx (* f (- (:x end) fx)))) :y y :z (js/Math.floor (+ fz (* f (- (:z end) fz)))) :t (* i step-s)}))
                     (range (inc n)))
-        seen? (fn [c] (every? #(u/seen-block p (assoc c :y %)) [y (inc y)]))
+        seen? (fn [c] (every? #(some-> (u/seen-block p (assoc c :y %)) .-name block-sets/passable-or-water?) [y (inc y)]))
         seen-n (inc (count (take-while seen? (rest cells))))
         seen (subvec cells 1 seen-n)
         dark-s (if dark (* cell-s (cost/dark-factor kit) (reduce + 0 (map (fn [{:keys [x z]}] ((:chance dark) x y z)) seen))) 0)]
@@ -774,11 +775,11 @@
 
 (defn boxed?
   "Whether the search planned routes and the planner found every one's region explored with no way on (price!'s meta:
-  all planned, all unrouted as exhausted, none left by a cut, cut?): what is round the body is seen and shut, no unseen
+  all planned, all unrouted as exhausted or start-enclosed (the region sealed), none left by a cut, cut?): what is round the body is seen and shut, no unseen
   way left to hope for."
   [ends]
   (let [{:keys [planned unrouted]} (meta ends)]
-    (boolean (and (pos? (or planned 0)) (= planned (get unrouted "exhausted" 0)) (not (cut? ends))))))
+    (boolean (and (pos? (or planned 0)) (= planned (+ (get unrouted "exhausted" 0) (get unrouted "start-enclosed" 0))) (not (cut? ends))))))
 
 (defn caught-chance
   "{:chance :seconds :blast-d} of a flight from where search ends (search!) ran: the chance it is caught

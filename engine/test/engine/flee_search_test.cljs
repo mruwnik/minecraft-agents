@@ -80,7 +80,7 @@
               e (search/choose enough {})]
           (is (= 12 (:planned (meta whole))) (pr-str (meta whole)))
           (is (:enough? (meta enough)) (pr-str (meta enough)))
-          (is (= 1 (:planned (meta enough))) "the first way planned ends the ring")
+          (is (< (:planned (meta enough)) (:planned (meta whole))) "a good-enough way planned ends the ring before every end is planned")
           (is (and (:open? e) (neg? (:z (:end e)))) (str "the way out turns north: " (pr-str (:end e))))
           (is (< (- (:arrive e) (:score e)) (:staying (meta enough))) "its price is below staying's"))))))
 
@@ -1022,3 +1022,17 @@
         step (search/step-of {:end (peek cells) :cells cells :seen-n 9})]
     (is (= {:x 4 :y 64 :z 0} step) "the cell a step-s in")
     (is (= (mapv #(select-keys % [:x :y :z]) (subvec cells 0 5)) (:route (meta step))) "the route from the start to it")))
+
+(deftest a-seen-wall-on-a-ring-ends-line-is-no-seen-route-the-dead-end-is-priced-at-the-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [open (carve rock [[-10 -3 12 3]])
+              walled (merge open (box 3 64 -3 3 65 3 "stone"))
+              score (fn [blocks]
+                      (let [raw (tu/fake {:blocks blocks :self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
+                            p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))]
+                        (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+                        (search/estimate p [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] {:x 0.5 :y 64 :z 0.5} {:x 8 :z 0}
+                                         {:food 20 :kit nil :body nil :others nil :counts (wworld/way-counts p) :trapped (constantly 100) :dark nil})))]
+          (is (< (score walled) (score open)) "a wall the body sees ends the seen run: a dead end priced at it, not rock walked as route"))))))
