@@ -8,6 +8,8 @@
             [engine.memory :as mem]
             [engine.mine-support :as m]
             [engine.test-util :as tu]
+            [engine.util-fail-test :as util-fail]
+            [engine.registry :as registry]
             [jobs.gather.mine :as mine]
             [jobs.lib.util :as u]))
 
@@ -202,9 +204,24 @@
 (deftest equip-rounds-that-cut-nothing-are-priced-as-crafts-and-stop-after-a-bounded-count
   (is (<= 1 (rounds-until-refused 100) 20) "tool and torch rounds are crafts and fetches, which win far more often than digs: a few go on, not none and not for ever"))
 
-(deftest equip-rounds-that-stop-for-the-same-reason-again-are-priced-as-refused
-  (with-redefs [ctx/worth (constantly 100)]
-    (let [worth-after (fn [mem] (with-redefs [ctx/mem (constantly mem)] (mine/round-worth? {})))]
-      (is (worth-after {::u/failures 2 ::u/refusal {:key :no-tool :n 1}}) "one such ending is still a chance")
-      (is (not (worth-after {::u/failures 8 ::u/refusal {:key :no-tool :n 8}}))
-          "the same ending 8 times in a row repeats until the world changes: no craft's chance prices it"))))
+(deftest a-boxed-body-whose-dig-keeps-ending-no-tool-ends-the-trip-no-tool-after-two-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dig (get registry/jobs 'jobs.gather.dig-for)
+              started (atom 0)
+              stub (assoc dig :round (fn ^:async f [c]
+                                       (swap! started inc)
+                                       (ctx/end c :condition-failed {:reason :no-tool} {:reason :no-tool})))
+              s (m/start-lit (m/torch-world [{:name "iron_pickaxe" :count 1}]) [0 0] {:call-ms 1000 :jobs (assoc registry/jobs 'jobs.gather.dig-for stub)})]
+          (core/submit! (:eng s) (tu/at-own-worth (:eng s) (m/spec (assoc torch-tunnel :trip true :spend {:job-time 120}))) {})
+          (await (m/run-ticks s 60))
+          (is (m/finished? s))
+          (is (= :no-tool (:reason (m/done-event s))) "the dig's own reason ends the trip, not :job-time")
+          (is (= 2 @started) "the second identical ending is priced as refused"))))))
+
+(deftest alternating-refusal-keys-count-as-identical-refusals
+  (let [[n] (util-fail/with-mem (fn [c] (doseq [k [:a :b :a :b]] (u/failed! c k)) (u/refusals c)))
+        [fresh] (util-fail/with-mem (fn [c] (doseq [k [:a :b :c]] (u/failed! c k)) (u/refusals c)))]
+    (is (= 3 n) "a loop over two reasons is a loop")
+    (is (= 1 fresh) "a new reason starts the count again")))

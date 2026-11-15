@@ -213,14 +213,16 @@
 
 (defn failed!
   "Count one more failure in a row in job memory, which cost/try-again? weighs another try by; nil. With a refusal key (the
-  cell and the cause the server gave) the failure counts as a refusal too: the same key again in a row is an identical
-  refusal (refusals), any other failure or key starts the count again."
+  cell and the cause the server gave) the failure counts as a refusal too: an ending whose last two keys are the same set as the
+  one before's is an identical refusal (refusals; so alternating keys count too), any other failure or key starts the count again."
   ([c] (failed! c nil))
   ([c refusal]
    (ctx/update-mem! c #(-> %
                            (update ::failures (fnil inc 0))
                            (cond-> (nil? refusal) (dissoc ::refusal)
-                                   refusal (assoc ::refusal {:key refusal :n (if (= refusal (:key (::refusal %))) (inc (:n (::refusal %))) 1)}))))
+                                   refusal (assoc ::refusal (let [{:keys [key keys n]} (::refusal %)
+                                                                  recent (cond-> #{refusal} key (conj key))]
+                                                              {:key refusal :keys recent :n (if (= recent (or keys (some-> key hash-set))) (inc n) 1)})))))
    nil))
 
 (defn refusals
