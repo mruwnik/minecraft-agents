@@ -2,6 +2,7 @@
   "Goal jobs price their own goal at the root (their registry worth-of): what the goal yields, never ##Inf."
   (:require [cljs.test :refer [deftest is]]
             [engine.apiary-maintain-test :as am]
+            [engine.night-support :refer [sleeper]]
             [engine.farm-tidy-test :as ft]
             [engine.harvest-test :as ht]
             [engine.herd-test :as herd]
@@ -255,10 +256,11 @@
     (is (= (price [(second cells)]) (price cells)))))
 
 (deftest the-night-is-worth-the-skip-the-other-players-online-wait-for-while-the-body-stays-awake
-  (let [night #(worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor {:time 14000 :players %})) {})
-        left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))]
-    (is (< (Math/abs (- (night []) (night ["Alex"]))) 1e-6) "alone its sleep skips the night; with one other awake, the other waits it out")
-    (is (< (Math/abs (- (* 2 left) (- (night ["Alex" "Bo" "Cy"]) (night ["Alex"])))) 1e-6) "each other player waits out the night left")))
+  (let [night #(worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor (merge {:time 14000} %))) {})
+        left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))
+        asleep (assoc sleeper :name "Alex")]
+    (is (< (Math/abs (- left (- (night {}) (night {:players ["Alex"]})))) 1e-6) "one other awake and not known to lie down: its own sleep skips nothing (the worth lost is the night left) and nobody waits for it")
+    (is (< (Math/abs (- left (- (night {:players ["Alex"] :entities [asleep]}) (night {})))) 1e-6) "the one other asleep: it waits out the night left for the body")))
 
 (deftest an-exposed-night-prices-its-hurt-and-death-by-cost-risk-s
   (let [p (tu/seeing-all (tu/fake-on-floor {:self {:health 5}}))

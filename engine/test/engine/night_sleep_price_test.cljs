@@ -7,7 +7,7 @@
             [engine.goal-worth-test :as gw]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [engine.night-support :refer [night noon sleep-count!]]
+            [engine.night-support :refer [night noon sleep-count! sleeper]]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -306,6 +306,21 @@
           (is (>= (:bed far) (+ left walk-s)) "the whole night is lost walking, as staying up loses it, and the walk's price comes on top")
           (is (> (:bed far) (:shelter far)) "digging in here beats a bed reached only after the night")
           (is (>= (:bed half) (+ (/ left 2) walk-s)) "the half of the night walked is not skipped"))))))
+
+(deftest awake-players-the-night-cannot-skip-for-are-not-held-up-by-staying-awake
+  ;; Brindle S7: 13 awake probe bots charged every awake answer 13 x night-left, so a 50-block walk to a bed won
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [exposed (fn [world]
+                        (let [c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor (merge {:time night} world))) {}
+                                              {::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})]
+                          (bed-down/answers c {})))
+              alone (:exposed (await (exposed {})))
+              awake (:exposed (await (exposed {:players ["Alex" "Bo" "Cy"]})))
+              asleep (:exposed (await (exposed {:players ["Alex"] :entities [sleeper]})))]
+          (is (= alone awake) "three players awake and none known asleep: the body's sleep skips nothing, nobody waits for it")
+          (is (> asleep alone) "the one other player asleep: the night skips if the body lies down, so staying awake holds it up"))))))
 
 (deftest a-flee-off-the-ground-owes-the-walk-back-by-day
   (async done

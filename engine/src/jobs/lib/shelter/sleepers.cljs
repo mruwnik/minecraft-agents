@@ -78,14 +78,16 @@
 
 (defn others-online "How many other players the tab list shows." [p] (count (.-players (.self p))))
 
+(declare sleepers-short)
+
 (defn skip-wait-s
   "Seconds of skipped night the other players online lose while the body stays awake, left seconds of night still to run:
-  each waits it out. None when tonight's latest count says the night skips anyway, or needs more players than there are
-  (the server's sleeping percentage over 100)."
+  each waits it out, but only when the body's own sleep would skip the night (sleepers-short 0: every other player is
+  known asleep). Awake players not known to lie down keep the night from skipping whatever the body does, so it holds
+  none of them up; none either when tonight's latest count says the night skips anyway."
   [p view left]
-  (let [{:keys [skipping needed]} (:data (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view)))
-        others (others-online p)]
-    (if (or skipping (and needed (> needed (inc others)))) 0 (* others left))))
+  (let [{:keys [skipping]} (:data (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view)))]
+    (if (or skipping (pos? (sleepers-short p view))) 0 (* (others-online p) left))))
 
 (defn sleepers-known
   "How many other players are known asleep tonight: the larger of those in sight and tonight's latest count less the
