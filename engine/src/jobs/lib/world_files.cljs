@@ -83,9 +83,9 @@
             (get entries id)))})
 
 (defn soil-cells
-  "The cells under each cell of expansion x wanting a crop: a field's farmland is no cell of the plan, yet the plan's own."
+  "The cells under each specified cell of expansion x (not :clear or :any): the ground a plan stands on is no cell of the plan, yet its support (a field's farmland, a floor under a door)."
   [x]
-  (into #{} (comp (filter (fn [{:keys [want]}] (and (map? want) (contains? want :crop))))
+  (into #{} (comp (remove (fn [{:keys [want]}] (contains? #{:clear :any} want)))
                   (map #(update (vec (:pos %)) 1 dec)))
         (:cells x)))
 
@@ -485,7 +485,7 @@
             (if footprints @footprints {}))))))
 
 (defn soil-footprints
-  "{[x y z] plan-id}: the soil under each crop cell of the plans but except's (see soil-cells); {} for a nil world."
+  "{[x y z] plan-id}: the cells under each specified cell of the plans but except's (see soil-cells); {} for a nil world."
   [w except]
   (if-not w
     {}
