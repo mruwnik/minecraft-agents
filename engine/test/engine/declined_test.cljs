@@ -130,13 +130,17 @@
                                       (do (child/progress! c :a) (n :a))
                                       (child/fruitless! c :a) (n :b)]))))))))))
 
-(defn round [s] {:kind :nothing-possible :cause :x :report {:uses {:wall-time s}}})
+(defn round
+  ([s] (round s :x))
+  ([s cause] {:kind :nothing-possible :cause cause :report {:uses {:wall-time s}}}))
 
 (deftest a-slot-is-exhausted-once-another-round-is-not-worth-its-price
   ;; at the order's 1200 s, :child-round's pooled .043/.136: after 1 fruitless round 379 s, after 2 45 s, after 3 24 s,
   ;; after 4 16.5 s; a round with no seconds, or whose child was declined, is priced at the kind's 17.1 s; a round
   ;; begun (child/begin!) is priced from there, the caller's own 300 s in it counted though its child took 5 ms;
-  ;; :craft-refused's .01/1 at 3.677 s allows 3
+  ;; :craft-refused's .01/1 at 3.677 s allows 3. Those rounds end in different ways; the same ending twice in a row
+  ;; is priced as :child-round-refused (.01/1) at 17.1 s at least: a 1.5 s round ending alike is not tried a third time,
+  ;; where 1.5 s rounds ending in different ways go on
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -144,18 +148,21 @@
               age (atom 0)
               declined {:kind :condition-failed :cause :x :report {:uses {:wall-time 0.005}}}]
           (is (= {:none false :30s [false false true] :300s [false true] :unpriced [false false false true] :progress false
-                  :declined [false false false true] :begun [false true] :refused [false false false true]}
+                  :declined [false false false true] :begun [false true] :refused [false false false true]
+                  :alike [false true true] :varied [false false false]}
                  (await (in-parent walker
                                    (fn ^:async f [c]
                                      (let [after (fn [slot e] (child/fruitless! c slot e) (child/exhausted? c slot))
-                                           begun (fn [] (child/begin! c :e) (swap! age + (settings/ms->ticks 300000)) (after :e (round 0.005)))]
-                                       {:none (child/exhausted? c :a)
-                                        :30s (mapv (fn [_] (after :a (round 30))) (range 3))
-                                        :300s (mapv (fn [_] (after :b (round 300))) (range 2))
+                                           begun (fn [i] (child/begin! c :e) (swap! age + (settings/ms->ticks 300000)) (after :e (round 0.005 i)))]
+                                       {:none (child/exhausted? c :n)
+                                        :30s (mapv #(after :a (round 30 %)) (range 3))
+                                        :300s (mapv #(after :b (round 300 %)) (range 2))
                                         :unpriced (mapv (fn [_] (after :d nil)) (range 4))
-                                        :declined (mapv (fn [_] (after :f declined)) (range 4))
-                                        :begun (mapv (fn [_] (begun)) (range 2))
+                                        :declined (mapv #(after :f (assoc declined :cause %)) (range 4))
+                                        :begun (mapv begun (range 2))
                                         :refused (mapv (fn [_] (child/fruitless! c :g) (child/exhausted? c :g :craft-refused)) (range 4))
+                                        :alike (mapv (fn [_] (after :h (round 1.5))) (range 3))
+                                        :varied (mapv #(after :i (round 1.5 %)) (range 3))
                                         :progress (do (child/progress! c :a) (child/exhausted? c :a))}))
                                    (atom []) clock age)))))))))
 

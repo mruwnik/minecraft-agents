@@ -72,28 +72,43 @@
       (/ (settings/ticks->ms (game/ticks-since t (ctx/view c))) 1000)
       (get-in e [:report :uses :wall-time]))))
 
+(defn failure
+  "Ending e without its reports, down its :because chain: two endings with the same are the same failure."
+  [e]
+  (when (map? e) (cond-> (dissoc e :report) (map? (:because e)) (update :because failure))))
+
 (defn fruitless!
   "Count one more round of slot's child that brought nothing, keeping its ending e (if given, and not :done) for give-up
-  and its seconds (round-s) as the price of the next (exhausted?); the count so far, this one included."
+  and its seconds (round-s) as the price of the next (exhausted?); an ending equal to the last kept one (failure) counts
+  in [:fruitless-alike slot] (2 and up: the same failure again). The count so far, this one included."
   ([c slot] (fruitless! c slot nil))
   ([c slot e]
-   (let [s (round-s c slot e)]
-     (ctx/update-mem! c #(cond-> (-> (update-in % [:fruitless slot] (fnil inc 0))
-                                     (assoc-in [:fruitless-s slot] s)
-                                     (update :round-t dissoc slot))
-                           (and (map? e) (not= :done (:kind e))) (assoc-in [:fruitless-ending slot] (dissoc e :report)))))
+   (let [s (round-s c slot e)
+         failure? (and (map? e) (not= :done (:kind e)))]
+     (ctx/update-mem! c #(let [last-e (get-in % [:fruitless-ending slot])
+                               alike? (and failure? (= (failure e) last-e))]
+                           (cond-> (-> (update-in % [:fruitless slot] (fnil inc 0))
+                                       (assoc-in [:fruitless-s slot] s)
+                                       (update :round-t dissoc slot)
+                                       (update :fruitless-alike (if alike? (fn [m] (update m slot (fnil inc 1))) (fn [m] (dissoc m slot)))))
+                             failure? (assoc-in [:fruitless-ending slot] (failure e))))))
    (fruitless c slot)))
 
 (defn exhausted?
   "Whether another round of slot's child after its fruitless ones in a row is not worth its price: never before one;
   else not cost/try-again? of kind (default :child-round) at the call's worth, the round priced at the seconds the
-  last fruitless one took, else (none, or one that ended at once) at the kind's. worth replaces the call's for a round
-  that serves something else than the call's goal."
+  last fruitless one took, else (none, or one that ended at once) at the kind's. After the same failure twice in a row
+  (fruitless!'s :fruitless-alike) the kind is its -refused one (cost/refused) and the round costs at least that kind's
+  seconds: the same failure waits on the world to change, which a quicker try does not hurry. worth replaces the call's
+  for a round that serves something else than the call's goal."
   ([c slot] (exhausted? c slot :child-round))
   ([c slot kind] (exhausted? c slot kind nil))
   ([c slot kind worth]
    (let [n (fruitless c slot)
-         s (get-in (ctx/mem c) [:fruitless-s slot])]
+         s (get-in (ctx/mem c) [:fruitless-s slot])
+         refused? (get-in (ctx/mem c) [:fruitless-alike slot])
+         kind (if refused? (cost/refused kind) kind)
+         s (cond-> s refused? (-> (or 0) (max (cost/retry-s kind))))]
      (and (pos? n)
           (not (cost/try-again? c kind (cond-> {:fails n}
                                          (and (number? s) (pos? s)) (assoc :try-s s)
@@ -108,7 +123,7 @@
 (defn progress!
   "slot's child brought something: its fruitless rounds start again from none."
   [c slot]
-  (ctx/update-mem! c (fn [m] (reduce #(update %1 %2 dissoc slot) m [:fruitless :fruitless-ending :fruitless-s :round-t]))))
+  (ctx/update-mem! c (fn [m] (reduce #(update %1 %2 dissoc slot) m [:fruitless :fruitless-ending :fruitless-alike :fruitless-s :round-t]))))
 
 (defn ^:async call-walk*
   "A go-to child in slot with args through ctx/call: :continue while the walk goes on (or waits: go-to's safe? says

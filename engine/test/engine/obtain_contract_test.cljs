@@ -324,10 +324,13 @@
       (fn ^:async t []
         (let [s (f/start (-> (oi/ore-world {"1,64,2" "furnace"} [{:name "iron_ingot" :count 2} {:name "raw_iron" :count 3} {:name "coal" :count 2} {:name "crafting_table" :count 1}])
                              (assoc :recipes {"bucket" {:count 1 :needs {"iron_ingot" 3} :table true}})) [f/own-zone])]
-          (await (oi/obtain! s {:item "bucket" :explore false} 20))
+          ;; the furnace burns as the world's time goes on, as on the server: a load that found it unlit at once would repeat that ending
+          (core/submit! (:eng s) (tu/at-own-worth (:eng s) (list 'jobs.items.obtain {:item "bucket" :explore false})) {})
+          (loop [i 0]
+            (await (f/run-ticks s 1))
+            (.advance (.-world (:p s)) 40)
+            (when (and (< i 300) (seq (f/listed s))) (recur (inc i))))
           (is (seq (f/events-of s :smelt.loaded)) "the carried raw iron went in the furnace")
-          (.advance (.-world (:p s)) 2000)
-          (await (f/run-ticks s 200))
           (is (= 1 (get (f/inv s) "bucket")) "the ingot came out and the bucket was crafted"))))))
 
 (deftest no-water-seen-with-the-ingots-carried-says-the-water-is-missing-not-the-chain

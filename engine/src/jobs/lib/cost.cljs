@@ -524,11 +524,16 @@
 
 (def retry-s value/retry-s)
 
+(defn refused
+  "kind's -refused kind (value/::retry-counts :place-refused, :craft-refused, :child-round-refused): a try after the same
+  failure twice in a row, which repeats until the world changes."
+  [kind]
+  (keyword (str (name kind) "-refused")))
+
 (defn refusal-kind
-  "kind, or its -refused kind (value/::retry-counts :place-refused, :craft-refused) once the server refused the call with the
-  same key twice in a row (u/failed! c key): an identical refusal repeats, so a try after it is priced at a hard refusal's chance."
+  "kind, or its refused kind once the server refused the call with the same key twice in a row (u/failed! c key)."
   [c kind]
-  (if (< 1 (u/refusals c)) (keyword (str (name kind) "-refused")) kind))
+  (if (< 1 (u/refusals c)) (refused kind) kind))
 
 (defn try-again?
   "Whether call c's next try of kind (a key of value/::retry-counts) is worth its price: its retry-chance after the call's
