@@ -50,7 +50,7 @@
   With the body boxed in its stand of a built pen whose near end is open (jobs.lib.villager-pen/luring) it sees out only
   through the pen, so a villager out of view is waited for to walk in like one in view.
   Ends done when the pen holds the villager (jobs.lib.villager-pen/penned; result {:side [dx dz] :cell [x y z]}), else condition-failed
-  :villager-out-of-view (not luring), :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
+  :villager-out-of-view (never in view this call and not luring), :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
   :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :unseen (:cells), :dark, :not-walked-in (the villager
   stayed out for the whole wait; :sites names the other job sites seen), or a child's ending. What it built stays: the
   next call finds the pen standing, but a call that ends other than done with the body boxed in its stand digs the box's
@@ -93,13 +93,16 @@
 (defn the-villager [c] (villager/find-by-uuid (:primitives c) (:villager (:args c))))
 
 (defn lay-of
-  "The pen's layout: the side chosen for the villager in view, else the built pen the body is boxed in and lures from."
+  "The pen's layout: the side chosen for the villager in view, else the built pen the body is boxed in and lures from,
+  else the side chosen on an earlier step (the villager leaving the view cone does not unchoose it)."
   [c]
   (let [p (:primitives c)
         ws (ws-cell c)
         e (the-villager c)]
     ;; boxed in, the body sees out only through the pen: the walk-in is what it waits for, not the villager in view
-    (if e (some->> (vp/choose p ws e) (vp/layout ws)) (vp/luring p ws))))
+    (if e
+      (some->> (vp/choose p ws e) (vp/layout ws))
+      (or (vp/luring p ws) (some->> (:side (ctx/mem c)) (vp/layout ws))))))
 
 (defn unseen [p cells] (filterv #(nil? (vp/name-at p %)) cells))
 
@@ -292,6 +295,7 @@
         lay (lay-of c)
         block (vp/name-at p ws)
         in? (boolean (and e lay (vp/inside? lay e)))]
+    (when (and e lay) (ctx/update-mem! c assoc :side (:side lay)))
     (cond
       (and (nil? e) (nil? lay)) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})

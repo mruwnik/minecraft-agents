@@ -168,6 +168,25 @@
           (is (= {:status :stopped :reason :not-walked-in} (select-keys result [:status :reason])) (pr-str result))
           (is (nil? (block p [0 64 0]))))))))
 
+(defn villager-leaves-view-at-the-stand
+  "The villager walks off out of view the moment the body stands in the stand."
+  [{:keys [p]}]
+  (add-watch (fake/state p) :leave
+             (fn [_ s _ w]
+               (->> [w] (filter #(>= (get-in % [:self :pos :x] 0) 3))
+                    (run! (fn [_] (remove-watch s :leave)
+                            (swap! s assoc-in [:entities 0 :pos] [60 64 3])))))))
+
+(deftest a-villager-seen-before-leaves-the-view-at-the-stand-is-still-penned-for-and-waited-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world shut) :entities [(jobless {:x 6 :y 64 :z 3})]
+                                                    :inventory [{:name "cobblestone" :count 10}])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 villager-leaves-view-at-the-stand))]
+          (is (= :not-walked-in (:reason result)) (pr-str result))
+          (is (every? #(vp/solid? (block p %)) (:shut (vp/layout ws [-1 0])))))))))
+
 (deftest a-second-villager-in-the-cell-keeps-the-near-end-open
   (async done
     (tu/run-async done
