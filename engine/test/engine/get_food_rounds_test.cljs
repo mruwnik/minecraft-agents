@@ -595,7 +595,7 @@
         ;; KitOak05: the hungry reflex's call at food 14, health 2.4, nothing carried
         (let [{:keys [eng seen]} (setup {:self {:food 14 :health 2.4}} :step-ms 5)]
           (await (one-round! eng {:food 6 :carry 0}))
-          (is (= 1 (count (searches seen))) "searched: under 18 food only food heals it")
+          (is (= 1 (count (filter #(= :explore (:slot %)) (events-of seen :child_ended)))) "searched: under 18 food only food heals it")
           (is (not (re-find #"worth no walk" (str (:text (first (none-endings seen))))))))))))
 
 (deftest an-animal-only-another-body-noted-is-walked-toward-not-given-up-on
@@ -1400,7 +1400,10 @@
     (is (zero? (benefit 20 0)) "fed and asked to carry nothing: no walk is worth it")
     (is (pos? (benefit 20 60)) "fed but short of the 3-day reserve")
     (is (< (benefit 8 0) (benefit 2 0)) "the hungrier, the more a walk to food is worth")
-    (is (= (cost/food-search-worth 60) (benefit 13 60)) "fed with an empty pack: the whole reserve it lacks, as find-spot prices it, not one rabbit kill")))
+    (is (= (- (cost/food-search-worth 60) (:cost (cost/walk-cost {:distance (cost/search-radius (cost/food-search-worth 60) (cost/leg-spacing))})))
+           (benefit 13 60))
+        "fed with an empty pack: the whole reserve it lacks, as find-spot prices it, less the walk back from the reach that worth buys")
+    (is (< (benefit 20 1) (cost/food-search-worth 1)) "a small shortfall is worth less for the walk back from its reach")))
 
 (deftest the-meat-of-a-kill-is-worth-more-hunted-than-from-a-working-pen
   (let [benefit (fn [world] (let [{:keys [p]} (setup (merge {:self {:food 20}} world))]

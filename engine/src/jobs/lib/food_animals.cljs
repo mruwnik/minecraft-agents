@@ -81,11 +81,14 @@
 
 (defn search-benefit
   "Seconds a search for food is worth the body: what reaching food is worth (cost/food-worth), or cost/food-search-worth of the
-  points the pack lacks of the :carry reserve."
+  points the pack lacks of the :carry reserve, less the walk back (cost/walk-cost) from the search's reach (cost/search-radius
+  of that worth) where the hunt ends."
   [c]
   (let [p (:primitives c)
-        short (max 0 (- (carry c) (foods/stock-points (u/inventory p))))]
-    (max (cost/food-worth (.-food (.self p)) (.-health (.self p)) (cost/death-fn p (ctx/view c))) (cost/food-search-worth short))))
+        short (max 0 (- (carry c) (foods/stock-points (u/inventory p))))
+        worth (max (cost/food-worth (.-food (.self p)) (.-health (.self p)) (cost/death-fn p (ctx/view c))) (cost/food-search-worth short))
+        back (:cost (cost/walk-cost {:distance (cost/search-radius worth (cost/leg-spacing))}))]
+    (max 0 (- worth back))))
 
 (defn noted-here?
   "Whether the note n is not proven gone: its cell in view within the scan its kind's reach covers (reach: kind -> blocks)."

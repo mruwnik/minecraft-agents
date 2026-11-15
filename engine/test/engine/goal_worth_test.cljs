@@ -61,7 +61,9 @@
 (deftest food-jobs-are-worth-the-hunger-or-the-reserve-not-inf
   (let [food (fn [job food args] (worth job (tu/fake {:self {:food food}}) args))]
     (is (= (cost/food-worth 4 20) (food 'jobs.survival.eat 4 {})) "eat: what reaching food is worth a hungry body")
-    (is (= (cost/food-worth 4 20) (food 'jobs.survival.get-food 4 {:carry 0})) "get-food: hunger, no reserve wanted")
+    (is (= (- (cost/food-worth 4 20) (:cost (cost/walk-cost {:distance (cost/search-radius (cost/food-worth 4 20) (cost/leg-spacing))})))
+           (food 'jobs.survival.get-food 4 {:carry 0}))
+        "get-food: hunger, no reserve wanted, less the walk back from the search's reach")
     (is (priced? (food 'jobs.survival.get-food 20 {:carry 40})) "a fed body's reserve walk is priced by the points the pack lacks")
     (is (zero? (food 'jobs.survival.eat 20 {})) "fed: eating is worth nothing")
     (is (= (cost/food-search-worth cost/food-reserve-points) (food 'jobs.farm.grow 20 {})))
