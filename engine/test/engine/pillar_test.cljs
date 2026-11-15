@@ -206,6 +206,16 @@
           (is (= "bookshelf" (block p [0 65 0])) "someone's bookshelf stays")
           (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
 
+(deftest a-bed-roof-is-not-dug-for-a-call-worth-less-than-the-respawn-it-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "black_bed"}})]
+          (core/submit! eng (list job {:height 4 :worth 30}) {})
+          (await (ticks s eng 12))
+          (is (= "black_bed" (block p [0 65 0])) "the bed stays: its respawn is worth more than one place-back")
+          (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
+
 (deftest a-zoned-roof-cell-is-not-dug-even-with-ignore-zones
   (async done
     (tu/run-async done

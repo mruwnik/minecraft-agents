@@ -422,11 +422,16 @@
                                      (and ignore? (:ignore-zones? (:args c))) (assoc :ignore-zones? true))))))
 
 (defn roof-dear?
-  "Whether what digging the roof cell `at` destroys (cost/destroyed-fn: a placed-looking block is someone's build) costs
-  more than the call's worth."
+  "Whether what digging the roof cell `at` destroys costs more than the call's worth: cost/destroyed-fn (a placed-looking
+  block is someone's build) and, for a bed, the respawn point lost (cost/spawn-worth against the world spawn, where the
+  body stands)."
   [c at block]
-  (let [p (:primitives c)]
-    (> ((cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))) block at false) (ctx/worth c))))
+  (let [p (:primitives c)
+        spawn (some-> (.self p) .-worldSpawn u/pos-of)
+        lost (if (and block (cost/bed? block) spawn)
+               (cost/spawn-worth (assoc (cost/death-body p (ctx/view c)) :respawn spawn) at (pl/feet-cell c))
+               0)]
+    (> (+ lost ((cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))) block at false)) (ctx/worth c))))
 
 (defn ^:async dig-ceiling!
   "A diggable roof over the head is dug out (a jobs.blocks.dig child, by hand when no tool harvests it), up to
