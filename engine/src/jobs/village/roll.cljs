@@ -38,7 +38,7 @@
   claim another free job site. Before a break, and while a jobless villager is waited for, the villager must stand shut in
   its pen (jobs.lib.villager-pen/penned: alone in a lit one-wide cell, the workstation under a top slab plugging its far
   end, its other sides shut, the body boxed in behind it) or in view with the workstation the nearest job site seen to
-  it (at-its-site?: it works there and a jobless one walks back to it, so no pen is built); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
+  it (at-its-site?: it works there and a jobless one walks back to it, so no pen is needed); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
   round looks for) is this call's. A villager that reads another job is never rolled: a named one ends :other-job, else the
   nearest other in sight is picked. Waits (:continue) for the penned villager to take its job, breaking and placing the workstation once (a roll) when
   that costs less than the wait for another villager's claim on it to lapse; villagers take jobs only by day, so at night the wait's reason is
@@ -478,11 +478,16 @@
     (every? #(<= ours (u/dist at (centre (:pos %)))) (villager/job-sites c pos))))
 
 (defn held?
-  "Whether the villager e is shut in its pen, or at its site (at-its-site?) with no pen built round the workstation (a built
-  pen is walled: its stand is the only way to the workstation, so the pen child owns the body)."
+  "Whether the villager e is shut in its pen, or at its site (at-its-site?) with no pen built round the workstation, or
+  working it (it has a job) with the workstation in reach of the body, a pen standing or not. A jobless one at a built pen is
+  the pen child's: it plugs the end behind it."
   [c e]
-  (or (penned? c e)
-      (and (not (vp/built? (:primitives c) (b/cell (:pos (b/parse (:args c)))))) (at-its-site? c e))))
+  (let [p (:primitives c)
+        pos (:pos (b/parse (:args c)))]
+    (or (penned? c e)
+        (and (at-its-site? c e)
+             (or (not (vp/built? p (b/cell pos)))
+                 (and (not= "unemployed" (.-profession e)) (b/in-reach? c pos true)))))))
 
 (defn ^:async pen!
   "The villager is not shut in its pen: a jobs.village.pen child (slot :pen) shuts it in. :again once it is, or once the

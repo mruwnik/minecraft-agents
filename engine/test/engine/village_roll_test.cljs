@@ -160,6 +160,17 @@
           (is (= 1 (count (vt/calls p "place"))) "only the lectern is placed: no pen")
           (is (nil? (get-in @(fake/state p) [:blocks [4 64 0]])) "the near end is not plugged"))))))
 
+(deftest a-villager-at-its-lectern-is-rolled-at-once-though-an-old-pen-stands-round-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"4,64,0" "air" "4,65,0" "air"}
+                                            :wrap #(do (tu/seeing-all (:p %)) %)
+                                            :scripts [[(offer "enchanted_book")]]}
+                                           {}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
+          (is (not-any? #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "no pen child: the pen stands but is open"))))))
+
 (deftest a-villager-nearer-another-job-site-than-its-lectern-is-penned-before-the-first-break
   (async done
     (tu/run-async done
