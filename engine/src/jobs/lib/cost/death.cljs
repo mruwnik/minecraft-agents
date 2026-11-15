@@ -327,10 +327,16 @@
 
 (defn spawn-horizon-s [] (settings/get settings ::spawn-horizon-s))
 
-(defn spawn-worth
-  "Seconds a respawn point at `at` is worth to body: the deaths expected over ::spawn-horizon-s (::deaths-per-hour) times
-  what each costs more from the body's own :respawn than from `at`, the death at `site`, where the body will work meanwhile."
+(defn spawn-gain
+  "Seconds a respawn point at `at` gains over the body's own :respawn: the deaths expected over ::spawn-horizon-s (::deaths-per-hour) times
+  what each costs less from `at` than from the :respawn, the death at `site`, where the body will work meanwhile. Negative when `at` is the worse
+  point (a bed that gives up a home respawn near the work)."
   [body at site]
   (* (settings/get settings ::deaths-per-hour) (/ (spawn-horizon-s) 3600)
-     (max 0 (- (death-cost body site) (death-cost (assoc body :respawn at) site)))))
+     (- (death-cost body site) (death-cost (assoc body :respawn at) site))))
+
+(defn spawn-worth
+  "spawn-gain, at least 0: what a respawn point is worth to body."
+  [body at site]
+  (max 0 (spawn-gain body at site)))
 

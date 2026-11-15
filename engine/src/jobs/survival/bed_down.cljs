@@ -260,7 +260,7 @@
                                                                                    ;; in the ground walk-s's commute-s has the walk's work lost
                                                                                    (if in-ground? 0 walked)
                                                                                    (sh-sleepers/skip-wait-s p view walked)
-                                                                                   (if asleep? 0 (- (cost/spawn-worth body at feet)))
+                                                                                   (if asleep? 0 (- (cost/spawn-gain body at feet)))
                                                                                    (reduce + (for [[q refused?] [[(- 1 refuse) false] [refuse true]] :when (pos? q)]
                                                                                                (* q (+ (bed-lost refused?) (if refused? (sh-sleepers/skip-wait-s p view after) 0)
                                                                                                        (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) (bed-open refused?) at (not refused?)))))))))

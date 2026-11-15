@@ -250,10 +250,9 @@
     :else (await (trip! c entry))))
 
 (defn warn-away-from-bed!
-  "Once per death: warn when the body respawned far from its respawn bed: the live :spawn-bed (set by a click or a
-  sleep), else the known :bed it slept in (the respawn point was not set there). Nothing for a bed it never slept in."
+  "Once per death: warn when the body respawned far from its respawn bed: the latest respawn point (sh-spawn/respawn-point: a sleep or a click), else the known :bed it slept in (the respawn point was not set there). Nothing for a bed it never slept in."
   [c entry]
-  (let [spawn-bed (:pos (:data (sh-spawn/spawn-bed-live (ctx/view c))))
+  (let [spawn-bed (:pos (:data (sh-spawn/respawn-point (ctx/view c))))
         bed (or spawn-bed
                 (let [b (mem/place (ctx/view c) :bed)]
                   (when (some #(= b (:pos (:data %))) (ctx/entries c :slept)) b)))

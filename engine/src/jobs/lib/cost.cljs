@@ -651,6 +651,7 @@
 (def route-death-cost answer/route-death-cost)
 (def kill-price answer/kill-price)
 (def spawn-worth death/spawn-worth)
+(def spawn-gain death/spawn-gain)
 (def death-weight death/death-weight)
 (def terrain-danger death/terrain-danger)
 (defn terrain-radius [] (death/terrain-radius))

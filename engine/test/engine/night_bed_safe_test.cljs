@@ -67,10 +67,11 @@
   (let [clock (atom 1000000)
         {:keys [raw p]} (lit-fake world)
         _ (st/dawn-after! raw st/default-dawn)
+        [seen sink] (tu/legacy-capture-sink)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
-                          :now #(deref clock) :events (events/make {:body "Fake" :sinks [] :now #(deref clock)})})]
+                          :now #(deref clock) :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (st/know-bed! eng far-bed)
-    {:eng eng :p p :raw raw :clock clock}))
+    {:eng eng :p p :raw raw :clock clock :seen seen}))
 
 (defn bed-to-use [world]
   (let [{:keys [eng p]} (setup world)]
@@ -229,6 +230,24 @@
   the open is used)."
   {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001 :sees-all true
    :blocks {"40,64,0" "red_bed"} :light {}})
+
+(defn ^:async bed-price-with-respawn-at-feet
+  "The :bed price of the first :night.answers of a night for a body that slept where it stands, the far bed its walk, under settings."
+  [settings]
+  (let [{:keys [eng clock seen]} (setup on-open-ground)]
+    (mem/write! (:store eng) :slept {:pos {:x 5 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh-clock/ms-per-day)})
+    (swap! clock + (* 4 sh-clock/ms-per-day))
+    (core/submit! eng (tu/order (list 'jobs.survival.night {:settings settings})) {})
+    (await (st/tick-n eng 12))
+    (:bed (:prices (first (st/emitted seen :night.answers))))))
+
+(deftest a-bed-that-moves-the-respawn-point-away-from-the-work-costs-the-respawn-it-gives-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [priced (await (bed-price-with-respawn-at-feet {}))
+              free (await (bed-price-with-respawn-at-feet {:jobs.lib.cost.death/spawn-horizon-s 0}))]
+          (is (> priced free) "the far bed's respawn is worse for the deaths at the work than the one the body has"))))))
 
 (deftest a-body-on-dark-open-ground-walks-to-its-bed
   (async done

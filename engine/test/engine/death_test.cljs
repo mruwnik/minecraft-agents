@@ -232,6 +232,19 @@
                (await (run-until-empty eng 10))
                (is (= [] (emitted seen :respawn_away_from_bed)))))))))
 
+(deftest recover-drops-does-not-warn-when-a-click-moved-the-respawn-point-to-where-it-respawned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
+          (mem/write! (:store eng) :bed {:pos {:x 40 :y 64 :z 0}} mem/place-policy)
+          (mem/write! (:store eng) :slept {:pos {:x 40 :y 64 :z 0}} {:cap 10 :ttl 1000000})
+          (mem/write! (:store eng) :spawn-set {:pos {:x 3 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng (tu/order job) {})
+          (await (run-until-empty eng 10))
+          (is (= [] (emitted seen :respawn_away_from_bed))))))))
+
 (deftest recover-drops-skips-a-junk-inventory
   (async done
     (tu/run-async done

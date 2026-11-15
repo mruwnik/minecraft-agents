@@ -37,6 +37,14 @@
     (when-not (and e ended (> ended (:t e)))
       e)))
 
+(defn respawn-point
+  "The latest respawn point the body knows, a :spawn-bed or a :spawn-set (the server's word on a click, which writes no :spawn-bed), unless a reset or loss came after it: its entry, or nil."
+  [view]
+  (let [e (->> [(spawn-bed-live view) (mem/latest view :spawn-set)] (filter some?) (sort-by :t) last)
+        ended (spawn-ended-at view)]
+    (when-not (and e ended (> ended (:t e)))
+      e)))
+
 (defn spawn-lost-pos
   "The position of the respawn bed the body knows is gone: the latest :spawn-bed when a reset or loss came after it,
   or the live one whose block is seen and no longer a bed."
