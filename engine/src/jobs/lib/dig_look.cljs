@@ -100,10 +100,11 @@
 
 (defn ^:async wait-settled!
   "settle! for a job that holds still while it runs: waits (act :wait) until the flow delay since the last dig has passed
-  and the cut was looked at again, at most (settle-waits) times. Truthy while settle! still asks for more."
-  [c cut]
-  (loop [i 0]
-    (when (< i (settle-waits))
-      (when (await (settle! c cut))
-        (await (ctx/act c :wait #js {:ms (settle-wait-ms) :why "letting what the dig opened settle"}))
-        (recur (inc i))))))
+  and the cut was looked at again, at most (settle-waits) times; no wait once (stop?) says the body is under attack. Truthy while settle! still asks for more."
+  ([c cut] (wait-settled! c cut (constantly false)))
+  ([c cut stop?]
+   (loop [i 0]
+     (when (and (< i (settle-waits)) (not (stop?)))
+       (when (await (settle! c cut))
+         (await (ctx/act c :wait #js {:ms (settle-wait-ms) :why "letting what the dig opened settle"}))
+         (recur (inc i)))))))

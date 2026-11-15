@@ -1228,6 +1228,19 @@
     (is (= (prior (- 20 (first blasts))) (:chance caught)) "the zombie is fought at the health the blast leaves")
     (is (< (prior 20) (:chance caught)))))
 
+;; a creeper beyond the trigger's radius that comes in time blows on the fight and on a cover alike
+(deftest a-far-creeper-weighs-on-the-covers-as-on-the-fight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [price (fn ^:async f [es]
+                      (let [{:keys [seen]} (await (flight-round respond {:self {:health 20 :food 20} :inventory [{:name "cobblestone" :count 20}] :entities es}))]
+                        (select-keys (first (filter #(= :hostile.decided (:kind %)) @seen)) [:prices :near])))
+              alone (await (price [(zombie 5 0)]))
+              with (await (price [(zombie 5 0) {:id 8 :name "creeper" :kind "hostile" :pos {:x 9 :y 64 :z 3}}]))]
+          (is (number? (:walls (:prices alone))) (pr-str alone))
+          (is (< (:walls (:prices alone)) (:walls (:prices with))) (str "the creeper's blast is on the walls' price as on the fight's: " (pr-str alone with))))))))
+
 ;; Card 6c727565 (Brindle S20): a caught flight paid the creeper's blast, then met the creeper again by the zombie
 (deftest a-caught-flight-from-a-creeper-by-a-zombie-meets-only-the-zombie-again
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :inventory sword

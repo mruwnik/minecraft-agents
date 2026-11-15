@@ -178,14 +178,15 @@
   (let [pl (plan c)] [(quote-of c pl) (exposed-s c pl) (fails c pl)]))
 
 (defn ^:async step!
-  "A pocket dug once (pit-cells/pocket!: it steps in), then walls on its way in: :done, :again, or nil with none that fits
+  "A pocket dug once (pit-cells/pocket!: it steps in; :hit when a mob's blow ended the dig), then walls on its way in: :done, :again, :hit, or nil with none that fits
   or one that cannot be walled."
   [c]
   (if (:dug (ctx/mem c))
     (await (way/walls-step! c))
-    (when (await (pit/pocket! c))
-      (ctx/update-mem! c assoc :dug true)
-      :again)))
+    (let [r (await (pit/pocket! c))]
+      (when r
+        (when-not (= :hit r) (ctx/update-mem! c assoc :dug true))
+        (if (= :hit r) :hit :again)))))
 
 (defn can-start?
   "A wall to pocket into that a carried tool harvests, or the ways let it get one."

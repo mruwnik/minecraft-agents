@@ -373,12 +373,14 @@
 (defn ^:async pocket!
   "Dig a side pocket (two cells deep, feet and head, closed on every other side), collecting the blocks, and step
   into its far end: :again, so the next step seals the way in with them. nil when no side fits or a dig fails or lays open fluid or a
-  cave (job memory :stop says which)."
+  cave (job memory :stop says which); :hit when a melee mob hurt the body during the dig."
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         wet-way-in? (boolean (some #(dig-cells/wet? p %) [feet (update feet :y inc)]))
-        stop! (fn [reason text] (ctx/update-mem! c assoc :stop {:reason reason :text text}) nil)]
+        stop! (fn [reason text] (ctx/update-mem! c assoc :stop {:reason reason :text text}) nil)
+        health0 (.-health (.self p))
+        hit? #(wall-placer/hit-since? c health0)]
     (when-let [cells (pocket-site c feet)]
       (when-not (lb/pick c (flight/blocks c)) (ctx/update-mem! c assoc :loose-plug true))
       (let [in (access/rules-input c)]
@@ -400,13 +402,17 @@
                     ;; every dug cell again: this dig opens the line of sight to the earlier cells' neighbours
                     (loop [[d & ds] (reverse dug)]
                       (when d (await (look/see-round! c [(:x d) (:y d) (:z d)])) (recur ds)))
-                    (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
-                    (await (pit-drops/collect-drops! c (flight/blocks c) (.-drops r)))
-                    (if-let [why (await (lays-open? c dug (into (set dug) [feet (update feet :y inc)])))]
-                      (stop! why (str "the pocket lays open " (if (= :fluid-adjacent why) "fluid" "a gap")))
-                      (do ;; the far pair is dug from inside: the drops lie there and the reach is short
-                        (when (= 2 (count dug)) (await (step-to! c (first cells))))
-                        (recur more)))))))))))))
+                    (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]] hit?))
+                    (cond
+                      ;; a melee mob's blow ends the dig: the flight weighs its answers anew (the pocket, its walls still open, is no cover)
+                      (hit?) :hit
+                      :else
+                      (do (await (pit-drops/collect-drops! c (flight/blocks c) (.-drops r)))
+                          (if-let [why (await (lays-open? c dug (into (set dug) [feet (update feet :y inc)])))]
+                            (stop! why (str "the pocket lays open " (if (= :fluid-adjacent why) "fluid" "a gap")))
+                            (do ;; the far pair is dug from inside: the drops lie there and the reach is short
+                              (when (= 2 (count dug)) (await (step-to! c (first cells))))
+                              (recur more)))))))))))))))
 
 (defn pit-index
   "Which drop of the pit the feet are at (0 at the anchor), nil when the body is not in its column."

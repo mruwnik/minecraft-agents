@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
@@ -364,3 +365,21 @@
                   (try (get-in (dig-pit/quote-of (c zones) {:plan nil}) [:uses :job-time 1])
                        (finally (set! site/site orig))))]
     (is (= (settings/get way/settings ::way/trespass-s) (- (seconds [zone]) (seconds []))) "the walk-to site is priced like the pit under the feet")))
+
+(deftest a-mob-hit-during-the-dig-ends-the-pocket-step-so-the-flight-weighs-its-answers-anew
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20}
+              {:keys [eng p seen]} (setup [] {:entities [zombie]})]
+          (.override (.-world p) "dig" (fn ^:async hurt-dig [token args impl]
+                                         (fake/swap-self! p assoc :health 15)
+                                         (await (impl token args))))
+          (core/submit! eng (tu/order (list 'jobs.survival.dig-pocket {})) {})
+          (loop [i 0]
+            (when (and (< i 10) (= "stone" (block-at p [4 64 0])))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (nil? (failed seen)))
+          (is (= 1 (count (:list (core/state eng)))) "the job yielded and is still there")
+          (is (= ["air" "stone"] (mapv #(block-at p %) [[4 64 0] [5 64 0]])) "the first cell was dug, the second left: the body is hit, not digging on"))))))
