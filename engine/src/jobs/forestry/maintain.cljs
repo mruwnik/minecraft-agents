@@ -55,7 +55,7 @@
   :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. {:reason :plan-trouble :why text}
   a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
   has no tree cells, also later in the call.
-  With a :chest, the logs carried are stored in it once the trees are done (jobs.storage.deposit, :items the carried log names above the reserve and :carry, priced by goal-value in the worth; the
+  With a :chest, the logs carried are stored in it once the trees are done (jobs.storage.deposit, :items the carried log names above the reserve and :carry, priced by goal-value (store-worth, apart from the felling worth); the
   call also starts for that alone, whatever the held logs make the trees worth); a store that gives up ends condition-failed :not-stored
   when nothing else was done.
   Ends :done with data {:felled :planted :left :bare} when it felled or planted a tree or stored logs. With none of
@@ -233,7 +233,7 @@
   (let [read #(classes-of c (:trees field))]
     (if (look/unseen? (:primitives c) (field-cells field)) (read) (check-cache/cached c :classes read))))
 
-(declare worth-of)
+(declare fell-worth store-worth)
 
 (defn keep-carried
   "{name n} the store step leaves carried: the reserve register's deposit holds and :carry."
@@ -271,7 +271,7 @@
         (if-let [target (or (first (ripe-cells c classes))
                             (:pos (first (plantable c (owed-cells c classes))))
                             (first (unplantable-cells classes)))]
-          (if-let [cause (pick/not-worth c {:pos target} #(worth-of c))]
+          (if-let [cause (pick/not-worth c {:pos target} #(fell-worth c))]
             (checks/cause-status :later cause)
             (contract/ok :work "a tree is ripe, a sapling can be planted or a cell wants readying"))
           (checks/cause-status (if (and unseen? (not (look/surveyed? c :near))) :look :later)
@@ -282,7 +282,7 @@
   [c]
   (if-not (storing? c)
     (not-ready c)
-    (if-let [cause (pick/not-worth c {:pos (:chest (:args c))} #(worth-of c))]
+    (if-let [cause (pick/not-worth c {:pos (:chest (:args c))} #(store-worth c))]
       (checks/cause-status :later cause)
       (contract/ok :storing "logs are carried to store"))))
 
@@ -511,8 +511,8 @@
     (+ (transduce (comp (filter (comp log? :name)) (map :count)) + 0 (u/inventory (:primitives c)))
        (transduce (comp (mapcat identity) (filter (comp log? key)) (map val)) + 0 (vals (stock/stock-of (ctx/view c)))))))
 
-(defn worth-of
-  "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell, plus with a :chest that of the carried logs it would store; a sapling it
+(defn fell-worth
+  "Seconds felling and planting are worth: the cost/goal-value of the logs standing on the grown trees it would fell; a sapling it
   would plant on a bare cell it can plant, or on one prepare readies, planting-worth; a planned cell never seen one tree at
   the ripe share (cost/field-share, as farm tend prices unseen cells) of the cells seen. Only the logs the held stock
   (carried and in known chests) leaves wanted count (cost/log-share)."
@@ -533,10 +533,17 @@
         guessed (map (fn [pos] [(* share (tree-worth ((:trees field) pos))) (* share per-tree)]) unseen)
         terms (concat ripe planted guessed)
         logs (reduce + 0 (map second terms))]
-    (+ (* (cost/log-share (held-logs c) logs) (reduce + 0 (map first terms)))
-       (if (and (:chest (:args c)) (storing? c))
-         (:value (cost/goal-value (mapv (fn [[n k]] {:name n :count k}) (spare-logs c))))
-         0))))
+    (* (cost/log-share (held-logs c) logs) (reduce + 0 (map first terms)))))
+
+(defn store-worth
+  "Seconds storing the spare carried logs in the :chest is worth: their cost/goal-value; 0 when nothing is to be stored."
+  [c]
+  (if (storing? c)
+    (:value (cost/goal-value (mapv (fn [[n k]] {:name n :count k}) (spare-logs c))))
+    0))
+
+(defn worth-of "Seconds a root call is worth: felling and planting plus storing." [c]
+  (+ (fell-worth c) (store-worth c)))
 
 (defn plan-place "A tree cell of the plan, nil when it cannot be worked." [c] (some-> (planned c) :trees keys first))
 

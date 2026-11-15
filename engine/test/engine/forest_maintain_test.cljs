@@ -647,15 +647,33 @@
           (is (= [:no-sapling] (map :reason left)))
           (is (some? (:because (first left))) "the child's cause rides on the note"))))))
 
-(deftest logs-carried-are-stored-in-the-chest-with-the-logs-felled
+(deftest logs-carried-are-stored-in-the-chest-though-the-trees-are-not-worth-felling
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world (-> oak-world (update :inventory conj (item "oak_log" 400)) (assoc :containers {"10,64,0" []})
                         (update :blocks assoc "10,64,0" "chest"))
               {:keys [p]} (await (run world {"forest" oak-cell} {:plan "forest" :chest {:x 10 :y 64 :z 0}} 60))]
+          (is (= [] (digs p)) "no tree is felled: storing does not pay for felling")
           (is (= 0 (get (h/inv p) "oak_log" 0)) "the logs went into the chest")
-          (is (= 404 (transduce (map :count) + 0 (get-in @(fake/state p) [:containers [10 64 0]])))))))))
+          (is (= 400 (transduce (map :count) + 0 (get-in @(fake/state p) [:containers [10 64 0]])))))))))
+
+(deftest a-chest-with-one-free-slot-takes-one-stack-and-the-store-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> oak-world (update :inventory conj (item "oak_log" 400)) (assoc :containers {"10,64,0" []})
+                        (update :blocks assoc "10,64,0" "chest"))
+              {:keys [eng p]} (start world {"forest" oak-cell})
+              n (atom 0)]
+          (.override (.-world p) "transfer"
+                     (fn ^:async f [token args impl]
+                       (if (= 1 (swap! n inc))
+                         (await (impl token (doto (js/Object.assign #js {} args) (aset "count" 64))))
+                         #js {:status "full" :moved 0})))
+          (let [result (await (tu/child-outcome eng job {:plan "forest" :chest {:x 10 :y 64 :z 0}} 200))]
+            (is (= :done (:status result)))
+            (is (= 336 (get (h/inv p) "oak_log" 0)) "one stack moved")))))))
 
 (deftest the-logs-the-carry-keeps-stay-carried
   (async done
@@ -665,13 +683,13 @@
                         (update :blocks assoc "10,64,0" "chest"))
               {:keys [p]} (await (run world {"forest" oak-cell} {:plan "forest" :chest {:x 10 :y 64 :z 0} :carry {"oak_log" 390}} 60))]
           (is (= 390 (get (h/inv p) "oak_log" 0)) "the kept logs are carried")
-          (is (= 14 (transduce (map :count) + 0 (get-in @(fake/state p) [:containers [10 64 0]])))))))))
+          (is (= 10 (transduce (map :count) + 0 (get-in @(fake/state p) [:containers [10 64 0]])))))))))
 
-(deftest a-store-that-gives-up-with-trees-left-keeps-the-deposits-reason
+(deftest a-store-that-gives-up-keeps-the-deposits-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world {:blocks {"3,63,0" "dirt"} :inventory [(item "oak_log" 400)]}
               {:keys [eng]} (start world {"forest" oak-cell})
               result (await (tu/child-outcome eng job {:plan "forest" :chest {:x 10 :y 64 :z 0}} 200))]
-          (is (= [:nothing-possible :missing] [(:kind (:ending result)) (:store-gave-up result)])))))))
+          (is (= [:condition-failed {:reason :missing}] [(:kind (:ending result)) (:cause (:ending result))])))))))
