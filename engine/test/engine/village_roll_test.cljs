@@ -144,19 +144,34 @@
           (is (= "lectern" (workstation p)) "the workstation is back")
           (is (contains? (vt/kinds seen) :completed)))))))
 
-(deftest a-villager-not-shut-in-is-penned-before-the-first-break
+(def wandered
+  "A villager 3 blocks off the lectern with another lectern 1 block from it: it is nearer that job site than ours."
+  {:pos {:x 3 :y 64 :z 3} :blocks {"3,64,4" "lectern"} :wrap #(do (tu/seeing-all (:p %)) %)})
+
+(deftest a-villager-at-its-lectern-is-rolled-without-a-pen
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :pen? false
-                                       :inventory [{:name "cobblestone" :count 20} {:name "oak_slab" :count 1} {:name "torch" :count 2}]
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :pen? false :wrap #(do (tu/seeing-all (:p %)) %)
                                        :scripts [[(offer "enchanted_book")]]}
-                                      {}))
-              acts (keep #(#{"place" "dig"} (.-name %)) (.-calls (.-world p)))]
-          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
-          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]])) "the near end is plugged")
-          (is (= "top" (get-in @(fake/state p) [:states [2 65 0] :type])) "a top slab over the lectern")
-          (is (= "place" (first acts)) "the pen is built before the lectern is broken"))))))
+                                      {}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
+          (is (= 1 (digs p)))
+          (is (= 1 (count (vt/calls p "place"))) "only the lectern is placed: no pen")
+          (is (nil? (get-in @(fake/state p) [:blocks [4 64 0]])) "the near end is not plugged"))))))
+
+(deftest a-villager-nearer-another-job-site-than-its-lectern-is-penned-before-the-first-break
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pen-waits (fn [env]
+                          (let [j (get (:jobs (:eng env)) 'jobs.village.pen)]
+                            (assoc-in env [:eng :jobs 'jobs.village.pen] (assoc j :round (fn ^:async waiting [c] :continue)))))
+              [_ p seen] (await (roll {:entities [(librarian [(offer "paper")] {:pos (:pos wandered)})] :pen? false
+                                       :blocks (:blocks wandered) :wrap (comp pen-waits (:wrap wandered))}
+                                      {:spend {:wall-time 30}}))]
+          (is (some #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "the pen child runs")
+          (is (zero? (digs p)) "the lectern is not broken while the villager is not shut in"))))))
 
 (deftest an-enchant-skips-books-of-other-enchantments
   (async done
@@ -480,7 +495,7 @@
         (let [picked (jobless {:id 2 :uuid "v-2" :pos {:x 6 :y 64 :z 3}})
               walker (jobless {:pos {:x 9 :y 64 :z 6}})
               [result p seen] (await (roll {:entities [picked walker] :keeps-job? true
-                                            :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone"}
+                                            :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone" "8,64,0" "lectern"}
                                             :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
                                             :wrap (comp (walks-in-and-takes-the-job [(offer "enchanted_book")]) (ticking! 1000)
                                                         #(do (tu/seeing-all (:p %)) %))}
@@ -494,7 +509,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (roll {:entities [(jobless {:pos {:x 60 :y 64 :z 3}})] :keeps-job? true
-                                       :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone"}
+                                       :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone" "8,64,0" "lectern"}
                                        :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
                                        :wrap (comp (walks-in-and-takes-the-job [(offer "enchanted_book")] 60000) (ticking! 1000)
                                                    #(do (tu/seeing-all (:p %)) %))}
@@ -674,7 +689,8 @@
                      (let [j (get (:jobs (:eng env)) 'jobs.village.pen)]
                        (assoc-in env [:eng :jobs 'jobs.village.pen]
                                  (assoc j :round (fn ^:async waiting [c] :continue)))))
-              [_ p] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true :pen? false :wrap wrap}
+              [_ p] (await (roll {:entities [(librarian [(offer "paper")] {:pos (:pos wandered)})] :keeps-job? true :pen? false
+                                  :blocks (:blocks wandered) :wrap (comp wrap (:wrap wandered))}
                                  {:spend {:wall-time 30}}))
               reads (filter #(= "offers" (.-op (.-args %))) (vt/calls p "trade"))]
           (is (= 1 (count reads))))))))
@@ -1127,7 +1143,7 @@
                              (= :child_started (:kind %)) (:slot %))
                           @seen)
               inside (->> marks (drop-while #(not= :open %)) rest (take-while #(not= :close %)))]
-          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
           (is (= "lectern" (workstation p)))
           (is (some #{:to-cell :stand} (take-while #(not= :open %) marks)) "the walk to the cell (into the pen's stand) comes before the section")
           (is (not-any? #{:walk :to-stand} inside) (str "no walk while the workstation is out: " (pr-str inside))))))))

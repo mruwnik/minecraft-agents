@@ -37,7 +37,8 @@
   spare goes in the moment the villager reads jobless and the drop is picked up after, so the villager has no time to
   claim another free job site. Before a break, and while a jobless villager is waited for, the villager must stand shut in
   its pen (jobs.lib.villager-pen/penned: alone in a lit one-wide cell, the workstation under a top slab plugging its far
-  end, its other sides shut, the body boxed in behind it); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
+  end, its other sides shut, the body boxed in behind it) or in view with the workstation the nearest job site seen to
+  it (at-its-site?: it works there and a jobless one walks back to it, so no pen is built); else a jobs.village.pen child shuts it in, and its ending other than done (but :villager-out-of-view, which the
   round looks for) is this call's. A villager that reads another job is never rolled: a named one ends :other-job, else the
   nearest other in sight is picked. Waits (:continue) for the penned villager to take its job, breaking and placing the workstation once (a roll) when
   that costs less than the wait for another villager's claim on it to lapse; villagers take jobs only by day, so at night the wait's reason is
@@ -466,6 +467,23 @@
 
 (defn penned? [c e] (some? (vp/penned (:primitives c) (b/cell (:pos (b/parse (:args c)))) e)))
 
+(defn at-its-site?
+  "Whether the villager e in view stands nearer the workstation at :pos than any other job site seen (villager/job-sites): a
+  jobless one then walks to ours, so it needs no pen. One nearer another site, or out of view, has wandered."
+  [c e]
+  (let [pos (:pos (b/parse (:args c)))
+        centre (fn [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
+        at (u/pos-of (.-pos e))
+        ours (u/dist at (centre pos))]
+    (every? #(<= ours (u/dist at (centre (:pos %)))) (villager/job-sites c pos))))
+
+(defn held?
+  "Whether the villager e is shut in its pen, or at its site (at-its-site?) with no pen built round the workstation (a built
+  pen is walled: its stand is the only way to the workstation, so the pen child owns the body)."
+  [c e]
+  (or (penned? c e)
+      (and (not (vp/built? (:primitives c) (b/cell (:pos (b/parse (:args c)))))) (at-its-site? c e))))
+
 (defn ^:async pen!
   "The villager is not shut in its pen: a jobs.village.pen child (slot :pen) shuts it in. :again once it is, or once the
   child lost the villager from view (the round looks for it); :continue while the child goes on; else the call ends with
@@ -756,9 +774,9 @@
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
       (other-job? c e) (rule-out! c :other-job)
-      (= "unemployed" profession) (if (penned? c e) (await (wait-take-job! c)) (await (pen! c)))
+      (= "unemployed" profession) (if (held? c e) (await (wait-take-job! c)) (await (pen! c)))
       ;; offers missed: the pen child owns the body (its stand walk is out of reach by design) until the villager is shut in
-      (and (:pen-after-miss (ctx/mem c)) (not (penned? c e))) (await (pen! c))
+      (and (:pen-after-miss (ctx/mem c)) (not (held? c e))) (await (pen! c))
       (not (villager/readable? c e)) (or (await (leave-box! c)) (await (walk! c e)))
       :else
       (let [r (await (read-offers! c))]
@@ -767,7 +785,7 @@
           (= :locked r) (rule-out! c :locked)
           (= :miss r) (cond
                         out-of-tries? (stop! c :no-match)
-                        (penned? c e) (do (ctx/update-mem! c dissoc :pen-after-miss) (await (dig! c)))
+                        (held? c e) (do (ctx/update-mem! c dissoc :pen-after-miss) (await (dig! c)))
                         :else (do (ctx/update-mem! c assoc :pen-after-miss true) (await (pen! c))))
           :else r)))))
 
