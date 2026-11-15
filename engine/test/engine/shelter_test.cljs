@@ -1272,7 +1272,7 @@
           (await (tick-nights eng clock 1))
           (let [places (count (calls p "place"))
                 walls (count (filter #(= 64 (:y (arg-pos %))) (calls p "place")))]
-            (is (and (pos? walls) (zero? (mod walls 4)) (<= walls (* 4 (sites/max-sites)))) "4 places per shut-in call (one per wall), at most max-sites calls; the dig-in's own places are below the walls")
+            (is (= 12 walls) "3 shut-in calls of 4 places (one per wall): pit-floor leaves ground for 3 sites, then no other site to walk to; the dig-in's own places are below the walls")
             (is (= 1 (count (emitted seen :shelter.exposed))) "one warn that the body is unsheltered")
             (await (tick-nights eng clock 2))
             (is (= places (count (calls p "place"))) "the failed sites are not dug in again")
