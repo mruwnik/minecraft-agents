@@ -211,10 +211,21 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "black_bed"}})]
-          (core/submit! eng (list job {:height 4 :worth 30}) {})
+          (core/submit! eng (list job {:height 4 :worth 400}) {})
           (await (ticks s eng 12))
-          (is (= "black_bed" (block p [0 65 0])) "the bed stays: its respawn is worth more than one place-back")
+          (is (= "black_bed" (block p [0 65 0])) "the bed stays: its put-back and the respawn it holds are worth more than the call")
           (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
+
+(deftest a-bed-roof-that-is-not-the-spawn-bed-is-priced-against-the-respawn-the-body-has
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "black_bed" "4,64,0" "red_bed"}})]
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 4 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (core/submit! eng (list job {:height 4 :worth 400}) {})
+          (await (ticks s eng 12))
+          (is (not= "black_bed" (block p [0 65 0])) "the respawn is already beside the body: this bed adds none, so it is dug")
+          (is (empty? (of-kind seen :stopped))))))))
 
 (deftest a-zoned-roof-cell-is-not-dug-even-with-ignore-zones
   (async done

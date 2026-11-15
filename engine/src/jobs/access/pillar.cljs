@@ -22,6 +22,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.spent :as spent]
             [jobs.lib.reach :as reach]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.walk :as walk]
             [jobs.lib.pillar :as pl]
             [jobs.lib.util :as u]))
@@ -423,13 +424,16 @@
 
 (defn roof-dear?
   "Whether what digging the roof cell `at` destroys costs more than the call's worth: cost/destroyed-fn (a placed-looking
-  block is someone's build) and, for a bed, the respawn point lost (cost/spawn-worth against the world spawn, where the
-  body stands)."
+  block is someone's build) and, for a bed, the respawn it holds or would hold (cost/spawn-worth against the world spawn
+  when it is the live spawn bed, else against the respawn the body has)."
   [c at block]
   (let [p (:primitives c)
-        spawn (some-> (.self p) .-worldSpawn u/pos-of)
+        view (ctx/view c)
+        spawn (if (sh-spawn/spawn-bed-at? view (zipmap [:x :y :z] at))
+                (some-> (.self p) .-worldSpawn u/pos-of)
+                (cost/respawn-of p view))
         lost (if (and block (cost/bed? block) spawn)
-               (cost/spawn-worth (assoc (cost/death-body p (ctx/view c)) :respawn spawn) at (pl/feet-cell c))
+               (cost/spawn-worth (assoc (cost/death-body p view) :respawn spawn) at (pl/feet-cell c))
                0)]
     (> (+ lost ((cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))) block at false)) (ctx/worth c))))
 
