@@ -2390,8 +2390,8 @@
     (is (some? (cover "zombie")))
     (is (nil? (cover "phantom")) "a phantom flies to the pillar's top")))
 
-;; Card a2f9dc44: the rise of a pillar read open where never sensed is a chance it meets rock.
-(deftest an-unsensed-rise-is-a-chance-the-pillar-fails
+;; pillar! looks at an unsensed rise before its first block: rock there is a look and the next option, no failed cover.
+(deftest an-unsensed-rise-is-no-chance-the-pillar-fails
   (let [fails (fn [unseen?]
                 (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "dirt" :count 20}]})
                       sensed (tu/sensed-by p)
@@ -2405,7 +2405,7 @@
                                     ctx/since (constantly [])
                                     ctx/now (constantly 1000)]
                         (:fails (cornered/pillar-cover c [#js {:name "zombie"}])))))))]
-    (is (< (fails false) (fails true) 1) "the cells over the head never sensed: rock there by the measured chance")))
+    (is (= (fails false) (fails true)) "the cells over the head never sensed: the look before the pillar reads them")))
 
 (deftest the-pillar-climb-priced-is-kept-for-the-plan-after-its-look
   (let [m (atom {})
