@@ -14,6 +14,7 @@
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.food :as food-cost]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.threat :as threat]
@@ -478,7 +479,7 @@
   (let [top-up foods/top-up-food]
     (is (< 0 (cost/food-worth (dec top-up) 2.4 1000)) "hurt at food 17 (KitOak05): only food lets it heal, so reaching food is worth the death it averts")
     (is (< (cost/food-worth (dec top-up) 10 1000) (cost/food-worth (dec top-up) 2.4 1000)) "the more hurt, the more")
-    (is (zero? (cost/food-worth (dec top-up) 2.4)) "no death priced: an hp healed by food or by waiting costs the same food")
+    (is (= (reduce + 0 (repeat 12 (health/hp-seconds))) (cost/food-worth 13 7.8 0)) "a free death (Tamsin S3r3, 7.8 hp, food 13): under 18 food no wait heals, so food is still worth each hp it lets regain")
     (is (zero? (cost/food-worth top-up 2.4 1000)) "at the top-up line it heals by waiting: food adds nothing")
     (is (zero? (cost/food-worth (dec top-up) 20 1000)) "unhurt: nothing to heal")))
 

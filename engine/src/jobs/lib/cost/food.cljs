@@ -81,15 +81,15 @@
 
 (defn food-worth
   "Seconds reaching food is worth to a body with `food` points and `health`: rising as the bar falls
-  (value/::food-worth-per-point under value/::food-worth-from); under foods/top-up-food, where only food lets it heal, also
-  the hp it lacks, each at what it is worth over healing it by waiting (cost.health/gain-worth without and with waiting,
-  the death each averts at `death` seconds: cost.risk/averted-fn; nil: none)."
+  (value/::food-worth-per-point under value/::food-worth-from); under foods/top-up-food, where no wait heals it, also
+  the hp it lacks, each at what regaining it is worth (cost.health/gain-worth: its hp-seconds and the death it averts at
+  `death` seconds, cost.risk/averted-fn; nil: none)."
   ([food health] (food-worth food health nil))
   ([food health death]
    (let [missing (if (< food foods/top-up-food) (js/Math.floor (- 20 health)) 0)
          averted (when death (risk/averted-fn health death))]
      (+ (* (settings/get value/settings ::value/food-worth-per-point) (max 0 (- (settings/get value/settings ::value/food-worth-from) food)))
-        (- (health/gain-worth health missing false averted) (health/gain-worth health missing true averted))))))
+        (health/gain-worth health missing false averted)))))
 
 (defn point-price
   "Seconds a point of home food source {:points :fetch-s :point-s} costs, taken whole: the order the trip's lots and

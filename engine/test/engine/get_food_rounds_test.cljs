@@ -598,6 +598,19 @@
           (is (= 1 (count (filter #(= :explore (:slot %)) (events-of seen :child_ended)))) "searched: under 18 food only food heals it")
           (is (not (re-find #"worth no walk" (str (:text (first (none-endings seen))))))))))))
 
+(deftest a-hurt-body-searches-for-the-food-that-lets-it-heal-though-its-death-is-free
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; Tamsin S3r3: the hungry reflex's call at food 13, health 7.8, nothing carried, a death near its respawn costing nothing
+        (let [real cost/death-fn
+              {:keys [eng seen]} (setup {:self {:food 13 :health 7.8}} :step-ms 5)]
+          (set! cost/death-fn (fn [_ _] (constantly 0)))
+          (try
+            (await (one-round! eng {:food 6 :carry 0}))
+            (is (= 1 (count (filter #(= :explore (:slot %)) (events-of seen :child_ended)))) "searched: the hp only food lets it regain are worth their price")
+            (finally (set! cost/death-fn real))))))))
+
 (deftest an-animal-only-another-body-noted-is-walked-toward-not-given-up-on
   (async done
     (tu/run-async done
