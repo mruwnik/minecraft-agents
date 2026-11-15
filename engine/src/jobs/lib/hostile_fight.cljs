@@ -412,6 +412,14 @@
                                       m))
                           mobs))))))
 
+(defn spent-later
+  "The fight with the mobs of near left once its creepers have blown (a flight's catch sets them off), nil with no creeper
+  or none left: its bare blows (cost/fight-answer), as the fight ashore."
+  [c near]
+  (let [rest (remove combat/creeper? near)]
+    (when (and (seq rest) (some combat/creeper? near))
+      (cost/fight-answer (fight-of c rest (constantly nil))))))
+
 (defn flee-answer
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
   such mobs lately its returns, later the answer after it, in water first the swim-out, caught {:chance :seconds} of
@@ -436,7 +444,7 @@
                                  :swim (:swim swim) :land (:land swim) :open (:chance swim)
                                  :ashore (when (and (:chance swim) (:stand? swim)) (cost/fight-answer (fight-of c near (constantly nil))))
                                  :returns (returns c (map #(.-name %) near))
-                                 :later later :caught (:chance caught) :caught-s (:seconds caught) :caught-blast (:blast-d caught)})))]
+                                 :later later :spent-later (spent-later c near) :caught (:chance caught) :caught-s (:seconds caught) :caught-blast (:blast-d caught)})))]
     (cond-> a
       (and a felt (not refuge)) (update :damage max (* felt (/ (:seconds a) 2)))))))
 

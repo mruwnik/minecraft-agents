@@ -338,6 +338,14 @@
     (is (= (cost/flee-answer {:food 20 :mobs [zombie] :returns 1}) (first (:then (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) zombie]}))))
         "after the blast only the zombie is walked from again")))
 
+(deftest a-caught-flight-sets-the-creeper-off-so-only-the-rest-are-met-again
+  (let [mobs [(mob "creeper" 3) (mob "zombie" 4 35)]
+        zombie-fight (cost/fight-answer (fight sword (mob "zombie" 0)))
+        beside-creeper (assoc zombie-fight :blasts [15.5] :damage (+ 15.5 (:damage zombie-fight)))
+        price #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs mobs :caught 1 :later % :spent-later zombie-fight}) here)]
+    (is (= (price zombie-fight) (price beside-creeper))
+        "caught for sure, the creeper blew in the catch: the fight beside it is never met again")))
+
 (deftest a-body-that-can-neither-outrun-nor-outfight-a-spider-digs-in
   (let [spider (mob "spider" 2)
         answers {:fight (cost/fight-answer (fight nil spider)) :flee (cost/flee-answer {:food 20 :mobs [spider]})}]

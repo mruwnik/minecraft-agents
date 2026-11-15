@@ -375,7 +375,8 @@
         (:shape clean) (assoc :shape (:shape clean))
         caught (assoc :caught caught)
         (:then b) (assoc :then (:then b))
-        (:stays b) (assoc :stays (:stays b))))
+        (:stays b) (assoc :stays (:stays b))
+        (:outcomes b) (assoc :outcomes (:outcomes b))))
     (assoc a :then [a])))
 
 (defn swim-leg
@@ -511,7 +512,9 @@
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again, one return more, from a mob's :again (the distance it is met at
   on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught, or got away and
-  met again by flee-meets) unless the way back passes one nearer than it stands. :caught: each flight is caught by its way (caught: the flee
+  met again by flee-meets) unless the way back passes one nearer than it stands. A catch sets off every creeper (its blast is
+  in :caught), so with creepers :stays is the got-away share alone and a catch is followed (:outcomes) by the cheapest of the
+  walk again from the rest and spent-later (the answer later with the creepers spent; default later). :caught: each flight is caught by its way (caught: the flee
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast, at caught-blast blocks when the flee search knows where its fuse ends, else at its swell start) over the flight, a melee mob over
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
@@ -519,11 +522,11 @@
   the swim's share of the flight's seconds (flee-mob's :swim-s) no more than caught-s at reach-rate (blows do not outlast
   the race's seconds in reach); never fewer than the walk's own. The two catches are one by their chances (caught by both, the prior's blows: the trials counted them on flights of every way): its damage their mean, its :shape the width of their
   mix (each its own: the way's the walk's, the prior's its blows' uncertainty). A creeper that blows on the
-  walk (at the median of its :spread) is spent: what follows is the walk from the rest or later (none left: nothing).
+  walk (at the median of its :spread) is spent: what follows is the walk from the rest or spent-later (none left: nothing).
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
   The flight gains on each mob at its danger/closing-rate.
   nil when a mob keeps up or none is given."
-  [{:keys [health food equipment mobs returns later caught caught-s caught-blast swim land] :as args}]
+  [{:keys [health food equipment mobs returns later spent-later caught caught-s caught-blast swim land] :as args}]
   (let [stats (armour/armour-stats equipment)
         priors (map #(caught-prior/prior (:name %) health) mobs)
         prior (when (seq priors) (apply max-key :chance priors))
@@ -579,15 +582,26 @@
                           shape (assoc :shape shape)
                           d-shape (assoc-in [:caught :shape] d-shape))))
             walk (walk-of per times)
-            again (let [per (per-of (map #(assoc % :distance (min (:distance %) (:again % ##Inf))) mobs))]
-                    (when (every? some? per) (walk-of per (inc times))))]
+            again-of (fn [mobs] (let [per (per-of (map #(assoc % :distance (min (:distance %) (:again % ##Inf))) mobs))]
+                                  (when (every? some? per) (walk-of per (inc times)))))
+            again (again-of mobs)
+            creeper? #(= "creeper" (:name %))
+            after-blast (or spent-later later)
+            ;; a catch sets off every creeper (walk-of's :caught :blasts): only the rest meet the body again
+            rest-then (when-let [rest (seq (remove creeper? mobs))]
+                        (not-empty (cond-> [] (again-of rest) (conj (again-of rest)) after-blast (conj after-blast))))]
         (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
-              spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (blows? f)) m)) (map vector mobs per)))
-              left (remove spent mobs)]
+              spent (set (keep (fn [[m f]] (when (and (creeper? m) (blows? f)) m)) (map vector mobs per)))
+              left (remove spent mobs)
+              c (get-in walk [:caught :chance] 0)]
           (cond
             (empty? spent) (cond-> walk (or again later) (assoc :then (cond-> [] again (conj again) later (conj later)))
-                             (and (or again later) (not-any? #(< (:again % ##Inf) (:distance % 0)) mobs)) (assoc :stays (- 1 (* (- 1 (get-in walk [:caught :chance] 0)) (- 1 (flee-meets))))))
-            (seq left) (assoc walk :then (cond-> [(flee-answer-on (assoc args :mobs left :returns times))] later (conj later)))
+                             (and (or again later) (not-any? #(< (:again % ##Inf) (:distance % 0)) mobs))
+                             (as-> w (if (some creeper? mobs)
+                                       (cond-> (assoc w :stays (* (- 1 c) (flee-meets)))
+                                         (and rest-then (pos? c)) (assoc :outcomes [[c {:damage 0 :hit 0 :seconds 0 :then rest-then}]]))
+                                       (assoc w :stays (- 1 (* (- 1 c) (- 1 (flee-meets))))))))
+            (seq left) (assoc walk :then (cond-> [(flee-answer-on (assoc args :mobs left :returns times :later after-blast))] after-blast (conj after-blast)))
             :else walk))))))
 
 (defn blows-over
@@ -825,9 +839,12 @@
   [{:keys [health food equipment weapon covers swim distance]} mob-name caught]
   (let [ms (mapv (fn [n] (let [m (if (map? n) n {:name n})] (assoc m :distance (or distance 0) :follow (threat/follow-range (:name m)))))
                  (if (or (string? mob-name) (map? mob-name)) [mob-name] mob-name))
-        fight (fight-answer {:weapon weapon :equipment equipment :health health :mobs ms :wet? (some? swim)})]
+        fight-of #(fight-answer {:weapon weapon :equipment equipment :health health :mobs % :wet? (some? swim)})
+        fight (fight-of ms)
+        rest (seq (remove #(= "creeper" (:name %)) ms))]
     (assoc (cornered-answers {:equipment equipment :mobs ms :fight fight :covers covers})
-           :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim}))))
+           :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight
+                               :spent-later (when rest (fight-of (vec rest))) :swim swim}))))
 
 (defn kill-price
   "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it (threat-answers' :fight),

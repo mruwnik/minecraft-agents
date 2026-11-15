@@ -1228,6 +1228,19 @@
     (is (= (prior (- 20 (first blasts))) (:chance caught)) "the zombie is fought at the health the blast leaves")
     (is (< (prior 20) (:chance caught)))))
 
+;; Card 6c727565 (Brindle S20): a caught flight paid the creeper's blast, then met the creeper again by the zombie
+(deftest a-caught-flight-from-a-creeper-by-a-zombie-meets-only-the-zombie-again
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :inventory sword
+                                            :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 1}} (zombie 9 4 0)]}))
+        c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
+        near (danger-q/dangers p 16 {:ranged-radius 16} {})
+        fight (hostile-fight/fight-answer c near (constantly nil))
+        walk (hostile-fight/flee-answer c near fight nil nil)
+        [[chance {:keys [then]}]] (:outcomes walk)]
+    (is (seq (:blasts fight)) "the fight by the zombie takes the creeper's blast")
+    (is (= (:chance (:caught walk)) chance) "a catch is followed by its own answers")
+    (is (= [false false] (mapv #(contains? % :blasts) then)) "the walk from the zombie again or the fight with it alone: the creeper blew in the catch")))
+
 ;; Card b50b2ca0 (Brindle S20): an unarmed body priced "fight: creeper" (194 s against the flee's 212) with a skeleton that had
 ;; no line of fire (seen a moment ago, now walled off); jobs.combat.attack counts no such skeleton, so the creeper was its lone target and it declined :creeper-unsafe
 (deftest an-unarmed-fight-beside-a-creeper-whose-only-company-has-no-line-of-fire-is-no-answer
