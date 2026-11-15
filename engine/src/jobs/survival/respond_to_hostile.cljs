@@ -125,14 +125,19 @@
          (str " heard " (name band) ", " (name direction)))
        (changed-text prev entry)))
 
+(defn new-encounter?
+  "Pure: whether a weigh of the mobs near with decision is new to the run: its decision or its set of mobs (ids) differs from what mem says was last logged."
+  [mem decision near]
+  (not= [decision (set (map #(.-id %) near))] [(:logged mem) (:logged-ids mem)]))
+
 (defn log-encounter!
-  "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
+  "One :hostile entry and event for each change of decision or of the mobs weighed in a run (a fight turned flight is said, with the health;
   the event has the answers' prices, seconds, the cover way a flight begins with, the :near mobs' names (what a flight's
   catch is counted by) and their :mobs (name and id; what a meet after a flight is counted by); :way the flee search's
   judged catch chance with :food and the mob's :distance (the fit of a flight's catch beyond its prior); way-log/log-priced!
   the way counts scan the flight was priced with, when it was). The entry's :run is the run's first decision time (hostile-fight/returns)."
   [c near threat decision prices cover scan refuge-s way]
-  (when-not (= decision (:logged (ctx/mem c)))
+  (when (new-encounter? (ctx/mem c) decision near)
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
           run (or (:run-at (ctx/mem c)) (ctx/now c))
           entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :id (.-id threat) :decision decision
@@ -147,7 +152,7 @@
                                             way (assoc :way way)
                                             (danger-q/seen-only? threat) (assoc :distance (danger-q/mob-distance (:primitives c) threat))))
       (way-log/log-priced! c scan)
-      (ctx/update-mem! c assoc :logged decision :run-at run))))
+      (ctx/update-mem! c assoc :logged decision :logged-ids (set (map #(.-id %) near)) :run-at run))))
 
 (defn fight-struck
   "What the fight counted per mob: the running child's (hostile/struck), else the last declined ending's."

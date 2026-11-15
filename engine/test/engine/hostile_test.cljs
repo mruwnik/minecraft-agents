@@ -437,6 +437,15 @@
 
 ;; ------------------------------------------------------------- hostile attack
 
+(deftest a-reweigh-logs-again-only-when-its-decision-or-its-mobs-change
+  (let [mob (fn [id] #js {:id id :name "zombie"})
+        logged {:logged :fight :logged-ids #{1}}]
+    (is (respond-to-hostile/new-encounter? {} :fight [(mob 1)]) "the first weigh")
+    (is (not (respond-to-hostile/new-encounter? logged :fight [(mob 1)])) "same decision, same mobs")
+    (is (respond-to-hostile/new-encounter? logged :fight [(mob 1) (mob 2)]) "same decision, a mob joined")
+    (is (respond-to-hostile/new-encounter? logged :fight [(mob 2)]) "same decision, another mob")
+    (is (respond-to-hostile/new-encounter? logged :flee [(mob 1)]) "the decision changed")))
+
 (deftest a-flee-after-a-fight-for-the-same-mob-says-what-changed
   (let [prev {:mob "zombie" :decision :fight :health 20}
         now {:mob "zombie" :decision :flee :health 6}]
