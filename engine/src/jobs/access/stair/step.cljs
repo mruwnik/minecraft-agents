@@ -109,20 +109,40 @@
 
 (def seal-settle-ms "How long after a seal the stair waits, looking, before it goes on: lava put back beside the cell shows within a tick or two and reaches the body's cell after about 1.5 s." 500)
 
+(defn lava-gap
+  "The open cut cell beside lava cell: the stair's own opening onto it."
+  [block-at cut lava]
+  (let [beside (set (map #(shape/add lava %) rules/neighbour-deltas))]
+    (first (filter #(and (beside %) (bs/air (block-at %))) cut))))
+
+(defn ^:async seal-gap!
+  "Fill gap, the cut cell open onto lava (memory :lava-gap while the place child waits): :again once filled (the next
+  judge stops the step on the lava beside it), :continue, else the stop :lava-unsealed for the lava."
+  [c kind block-at gap lava]
+  (ctx/update-mem! c assoc :lava-gap {:gap gap :lava lava})
+  (let [r (await (lava/seal! c kind block-at gap {:fluid (str "lava from " (pr-str lava)) :ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
+    (when-not (= :continue r) (ctx/update-mem! c dissoc :lava-gap))
+    (if (keyword? r) r (assoc r :cell lava :gap gap))))
+
 (defn ^:async lava-step!
   "Exposed lava by the job's :on-lava: nil when there is none; :stop gives the stop :lava-exposed, else the first is
-  sealed (jobs.lib.lava/seal!, event kind). After a seal :continue until seal-settle-ms have passed, so lava that
-  comes back is seen before the stair digs or walks on beside it."
+  sealed (jobs.lib.lava/seal!, event kind). Lava with nothing solid beside it to place against (:no-support) is shut off
+  by filling the cut cell open onto it instead (seal-gap!). After a seal :continue until seal-settle-ms have passed, so
+  lava that comes back is seen before the stair digs or walks on beside it."
   [c kind block-at feet cut]
-  (let [sealed-at (:sealed-at (ctx/mem c))]
-    (if (and sealed-at (< (- (ctx/now c) sealed-at) seal-settle-ms))
-      :continue
+  (let [sealed-at (:sealed-at (ctx/mem c))
+        {:keys [gap lava]} (:lava-gap (ctx/mem c))
+        sealed! (fn [r] (when (= :again r) (ctx/update-mem! c assoc :sealed-at (ctx/now c))) r)]
+    (cond
+      (and sealed-at (< (- (ctx/now c) sealed-at) seal-settle-ms)) :continue
+      gap (sealed! (await (seal-gap! c kind block-at gap lava)))
+      :else
       (when-let [cell (first (cells/exposed-lava block-at feet cut))]
         (if (= :stop (:on-lava (:args c)))
           {:reason :lava-exposed :cell cell :fluid "lava"}
-          (let [r (await (lava/seal! c kind block-at cell {:fluid "lava" :ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
-            (when (= :again r) (ctx/update-mem! c assoc :sealed-at (ctx/now c)))
-            r))))))
+          (let [r (await (lava/seal! c kind block-at cell {:fluid "lava" :ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))
+                gap (when (= :no-support (:place r)) (lava-gap block-at cut cell))]
+            (sealed! (if gap (await (seal-gap! c kind block-at gap cell)) r))))))))
 
 (defn ^:async look-at-lava!
   "Once per lava cell and state of the cut (memory :lava-looked), look at the first exposed lava: cells between the eye

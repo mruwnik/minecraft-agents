@@ -13,4 +13,16 @@
    :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :stair.sealed} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 6}} :within-s 140 :of-job true}]
-   :after [[:not-block [13 7 17] "lava"]]}]}
+   :after [[:not-block [13 7 17] "lava"]]}
+  ;; card ee61101f: the first cut cell (11 9 16) is open already and lava (12 9 16) beside it has no face to place
+  ;; against (air on three sides, its falling column under it, the underside of the stone over it not aimable from
+  ;; above); the stair fills the open cut cell instead and stops :hazard on the lava beside it. The old code placed into
+  ;; the lava, failed no-support and stopped :lava-unsealed every call.
+  {:name "lava-with-no-face-is-shut-off-by-filling-the-open-cut-cell"
+   :blocks [[:set [13 7 17] "stone"] [:fill [11 9 16] [11 9 16] "air"] [:set [12 10 16] "stone"]
+            [:fill [12 0 16] [12 8 16] "air"] [:set [13 9 16] "air"] [:set [12 9 15] "air"] [:set [12 9 17] "air"]
+            [:set [12 9 16] "lava"]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 1})]]
+   :expect [{:event {:source :job :kind :stair.sealed} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 140 :of-job true}]
+   :after [[:block [11 9 16] "cobblestone"]]}]}

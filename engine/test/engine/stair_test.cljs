@@ -1070,6 +1070,20 @@
           (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world p)))))
           (is (= :lava-exposed (:reason @stopped))))))))
 
+;; Brindle S20r3: lava with no face to place against beside a cut cell dug earlier; each call placed into the lava, failed no-support and stopped the same way
+(deftest lava-with-no-face-to-place-against-is-shut-off-by-filling-the-cut-cell-open-onto-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              world (-> (apply dissoc ground ["1,64,0" "2,63,0" "3,64,0" "2,64,1" "2,64,-1"])
+                        (assoc "2,64,0" "lava" "2,65,0" "stone"))
+              {:keys [out p] :as s} (await (stair! {:blocks world :inventory inv} (assoc east :steps 1) (fn [_])))]
+          (is (= :hazard (:reason @out)) "the filled cell beside the lava stops this heading as any lava-adjacent cell does")
+          (is (= "cobblestone" (block-at p [1 64 0])))
+          (is (= "lava" (block-at p [2 64 0])))
+          (is (= ["sealed lava from [2 64 0] at [1 64 0]"] (map :text (events-of s :stair.sealed)))))))))
+
 (deftest a-zone-ahead-stops-at-its-edge
   (async done
     (tu/run-async done
