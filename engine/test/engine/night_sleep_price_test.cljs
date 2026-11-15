@@ -10,6 +10,7 @@
             [engine.night-support :refer [night noon sleep-count! sleeper]]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
+            [jobs.lib.need :as need]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
@@ -354,3 +355,22 @@
               near (:flee (await (bed-down/answers c (target 10))))
               far (:flee (await (bed-down/answers c (target 110))))]
           (is (= 100 (- far near)) "100 s more walk: the night is lost either way, the 100 s back by day come on top"))))))
+
+(defn ^:async sealed-price-carrying
+  "The :sealed price of the bed placed in the open at x 6..7, the body at its stand with n cobblestone, a fetch priced at 10 s a block."
+  [n]
+  (let [c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night :self {:pos {:x 5 :y 64 :z 0}}
+                                                       :blocks {"6,64,0" "red_bed" "7,64,0" "red_bed"}
+                                                       :inventory [{:name "cobblestone" :count n}]})) {}
+                     {::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})]
+    (with-redefs [need/item-price (fn [_ _ n _ _] (* 10 n))]
+      (:sealed (await (bed-down/answers c {:bed {:x 6 :y 64 :z 0}}))))))
+
+(deftest a-sealed-answer-short-of-blocks-is-priced-with-the-fetch-of-the-missing-ones
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [full (await (sealed-price-carrying 32))
+              short (await (sealed-price-carrying 2))]
+          (is (number? short) "old code gave nil when too few blocks were carried, so :sealed was no answer")
+          (is (> short full) "the missing blocks' fetch is in the price"))))))
