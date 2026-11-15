@@ -177,6 +177,15 @@
           (is (= {:status :stopped :reason :not-walked-in} (select-keys result [:status :reason])) (pr-str result))
           (is (nil? (block p [0 64 0]))))))))
 
+(deftest a-call-that-ends-not-walked-in-with-the-body-boxed-in-digs-the-boxs-entry-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box)) :entities [(jobless {:x 6 :y 64 :z 3})] :self at-stand)
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600))]
+          (is (= :not-walked-in (:reason result)) (pr-str result))
+          (is (= [nil nil] (mapv #(block p %) [[4 64 0] [4 65 0]])) "the entry the body walks out by is open"))))))
+
 (defn walk-in-after
   "The fake villager walks into the pen's cell 10 s of clock after the run starts."
   [{:keys [p clock]}]

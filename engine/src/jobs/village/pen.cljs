@@ -53,7 +53,8 @@
   :villager-out-of-view (not luring), :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
   :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :unseen (:cells), :dark, :not-walked-in (the villager
   stayed out for the whole wait; :sites names the other job sites seen), or a child's ending. What it built stays: the
-  next call finds the pen standing.")
+  next call finds the pen standing, but a call that ends other than done with the body boxed in its stand digs the box's
+  entry open first (cleanup).")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -311,6 +312,21 @@
       (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c (:stand lay)))
       (vp/dark? p lay) (await (dark! c lay))
       :else :again)))
+
+(defn ^:async cleanup
+  "A call that ends other than done with the body boxed in its stand opens the box's entry (its two cells, each dug once,
+  by hand when no tool harvests it), so the body's next walk is not shut in by blocks no ledger holds. Done, or a
+  dig child's ending."
+  [c ending]
+  (let [p (:primitives c)
+        dug (:exit-dug (ctx/mem c) #{})
+        cell (when-not (= :done (:kind ending))
+               (some->> (ws-cell c) (vp/boxed p) :entry (filter #(and (vp/solid? (vp/name-at p %)) (not (dug %)))) first))]
+    (if-not cell
+      (ctx/end c :done nil)
+      (do (ctx/update-mem! c update :exit-dug (fnil conj #{}) cell)
+          (let [r (await (child! c :exit 'jobs.blocks.dig {:pos (u/cell-pos cell) :collect true :need-drop false}))]
+            (if (= :again r) (await (cleanup c ending)) r))))))
 
 (defn ^:async round
   "Steps until the villager is penned or the call stops."
