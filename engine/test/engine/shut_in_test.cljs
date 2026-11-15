@@ -97,10 +97,15 @@
         p (tu/seeing-all (tu/fake-on-floor {:blocks (merge (tu/box -1 64 -1 2 80 1 "stone") shaft) :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
         cells [[0 64 0] [1 64 0]]
         sensed u/sensed
-        rim-open (fn [unseen] (with-redefs [u/sensed (fn [p pos] (if (= unseen [(:x pos) (:y pos) (:z pos)]) #js {:unknown true} (sensed p pos)))]
+        rim-open (fn [unseen] (with-redefs [u/sensed (fn [p pos] (if (contains? unseen [(:x pos) (:y pos) (:z pos)]) #js {:unknown true} (sensed p pos)))]
                                 (sh-inside/rim-open? p cells)))]
-    (is (false? (rim-open nil)) "walled to the roof, every rim cell seen")
-    (is (true? (rim-open [2 66 0])) "a rim cell not seen yet may be open: a mob there drops in")))
+    (is (false? (rim-open #{})) "walled to the roof, every rim cell seen")
+    (is (true? (rim-open #{[2 66 0] [2 67 0]})) "a rim cell not seen yet, with the cell over it, may be open: a mob there drops in")))
+
+(deftest a-ledge-under-the-roof-of-a-room-is-no-rim-a-mob-stands-on
+  (let [room (merge (tu/box -1 63 -1 3 68 3 "stone") (tu/box 0 64 0 2 66 2 "air") {"1,65,0" "stone"})
+        p (tu/seeing-all (tu/fake-on-floor {:blocks room :self {:pos {:x 0.5 :y 64 :z 0.5}}}))]
+    (is (false? (sh-inside/rim-open? p [[0 64 0]])) "the cell over the ledge has no head room under the roof")))
 
 (deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between
   (async done

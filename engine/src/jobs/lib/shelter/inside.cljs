@@ -410,7 +410,8 @@
 
 (defn rim-open?
   "Whether, over some cell of the room (cells [x y z]), below the first solid or unseen block of its column, a cell beside the column is
-  open over a floor a mob stands on or one not yet seen: a mob on that rim drops in. Unseen counts as open."
+  open, with the cell over it open too (a mob needs both), over a floor a mob stands on or one not yet seen: a mob on that rim
+  drops in. Unseen counts as open."
   [p cells]
   (let [open? (fn [cell] (not (sh-sense/solid-at? p cell)))
         floor? (fn [cell] (or (nil? (u/seen-block p cell)) (fill/stand-on? p cell)))]
@@ -419,7 +420,7 @@
              (->> (range (+ y 2) (+ y 2 (sh-sense/room-roof-height)))
                   (take-while #(let [cell {:x x :y % :z z}] (and (some? (u/seen-block p cell)) (open? cell))))
                   (some (fn [h] (some (fn [[dx dz]] (let [n {:x (+ x dx) :y h :z (+ z dz)}]
-                                                      (and (open? n) (floor? (update n :y dec)))))
+                                                      (and (open? n) (open? (update n :y inc)) (floor? (update n :y dec)))))
                                       [[1 0] [-1 0] [0 1] [0 -1]])))))
            cells))))
 
