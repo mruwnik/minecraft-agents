@@ -128,6 +128,11 @@
 
 (defn open-count [c] (count (open-cells c)))
 
+(defn carried-count
+  "How many blocks of the walls' fillers the body carries."
+  [c]
+  (reduce + (map :count (lb/carried c (flight/blocks c)))))
+
 (defn half-built-s
   "Seconds a wall left half built (fewer carried blocks than open cells, so a gap stays open for the whole stay,
   ::job-time-s) costs: the nearest melee hostile known that arrives (arrive-s) within the stay gets in by a cell left open,
@@ -135,7 +140,7 @@
   at the feet by their light (spawn-light/chance-at); both priced by price/stay-risk-s; 0 with the blocks for every cell."
   ([c open] (half-built-s c open (arrivals c)))
   ([c open arrivals]
-  (let [have (reduce + (map :count (lb/carried c (flight/blocks c))))
+  (let [have (carried-count c)
         p (:primitives c)
         self (.self p)
         stats (cost/armour-stats (cost/equipment-of (.-equipment self)))
@@ -166,7 +171,7 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         arrow-at (reach/arrow-lookup p)
-        ordered (placer/facing-first feet shooters cells)
+        ordered (take (carried-count c) (placer/facing-first feet shooters cells))
         out? (fn [placed]
                (let [at (fn [x y z] (if (contains? placed [x y z]) :solid (arrow-at x y z)))]
                  (reach/out-of-fire? at shooters feet)))

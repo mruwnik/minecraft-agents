@@ -337,6 +337,15 @@
     (is (< 1.44 (:open-s (cover [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 69 :z 0} :health 20}] :danger)))
         "a shooter above the walls keeps its line over the side cells: the roof and corners must go up before the fire stops")))
 
+(deftest walls-too-few-blocks-to-stop-a-shooters-fire-stay-open-for-the-whole-stay
+  (let [cover (fn [n] (:walls (shut-in/covers (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name "cobblestone" :count n}]
+                                                                                       :entities [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 64 :z 0} :health 20}]})))
+                                                     :args {:for :danger})
+                                              [:walls])))
+        stay (settings/get wall-in/settings ::wall-in/job-time-s)]
+    (is (< (:open-s (cover 20)) stay) "blocks for the side facing the shooter: its fire stops after two placements")
+    (is (<= stay (:open-s (cover 1))) "one block cannot close that side: the body stays in the fire while it works")))
+
 (deftest a-night-wall-of-dear-blocks-quotes-its-placing-and-leaves-the-dawn-dig-to-morning-s
   (let [c (fn [item] (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name item :count 20}]})))
                             :args {:for :night}))
