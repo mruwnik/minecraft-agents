@@ -3,10 +3,12 @@
 ;; and place, so the repair ended :not-worth and the torch stayed out (S19).
 ;; Should-succeed: torch carried; torch crafted from coal and a stick. Control: farm-maintain-repair/a-sound-plan-skips-the-repair.
 ;; The body faces west (yaw 90) so the torch cell is in its view: a cell never seen is :unknown and never mended.
+;; A dark plot (no clock): in the default lit cell the floor stands at block light 13 without the torch, so it averts no
+;; spawns and is rightly worth its placing only. :length 48: a dark floor beyond 24 blocks walks to it, as on open ground.
 {:defaults
  {:tags [:farm :jobs]
   :time :any
-  :plot {:height 8}
+  :plot {:height 8 :light :dark :length 48}
   :blocks [[:fill [10 -1 16] [11 -1 16] "farmland"] [:set [12 -1 16] "water"]]
   :plans [{:id "farm" :metadata {:by "$body"}
            :parts [{:id "wheat" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}
