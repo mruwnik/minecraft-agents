@@ -55,6 +55,7 @@
                       (update m n (fnil + 0) k)))
           {} (if (array? stacks) (array-seq stacks) stacks)))
 
+;; Vanilla ChestBlock.getConnectedDirection: a LEFT half's partner is at its facing's clockwise side, a RIGHT half's at the counter-clockwise side.
 (def clockwise {"north" [1 0] "east" [0 1] "south" [-1 0] "west" [0 -1]})
 
 (defn partner-of
@@ -64,7 +65,7 @@
   (when-let [p (:primitives c)]
     (let [{:keys [name properties]} (look/seen-block p (zipmap [:x :y :z] cell))
           [dx dz] (get clockwise (:facing properties))
-          sign (case (:type properties) "right" 1 "left" -1 nil)]
+          sign (case (:type properties) "left" 1 "right" -1 nil)]
       (when (and dx sign (contains? (set container-names) name))
         (let [[x y z] cell
               other [(+ x (* sign dx)) y (+ z (* sign dz))]]

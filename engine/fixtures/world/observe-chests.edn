@@ -40,8 +40,8 @@
    :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
    :after [[:block [20 0 16] "chest"]]}
   {:name "double-chest-is-listed-once-whichever-half-is-opened"
-   :blocks [[:set [20 0 16] "chest[facing=west,type=right]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]
-            [:set [20 0 15] "chest[facing=west,type=left]{Items:[{Slot:0b,id:\"minecraft:bread\",count:3}]}"]]
+   :blocks [[:set [20 0 15] "chest[facing=west,type=right]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]
+            [:set [20 0 16] "chest[facing=west,type=left]{Items:[{Slot:0b,id:\"minecraft:bread\",count:3}]}"]]
    :act [[:job (jobs.primitive.inspect-container {:worth 1200 :pos #xyz [20 0 16]})]
          [:await {:source :job :kind :completed} 40]
          [:job (jobs.primitive.inspect-container {:worth 1200 :pos #xyz [20 0 15]})]
