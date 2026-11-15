@@ -1,7 +1,6 @@
 (ns engine.mine-c-test
   "jobs.gather.mine against the fake world."
   (:require [engine.child-ends :as ce]
-            [jobs.gather.mine.tunnel :as tunnel]
             [jobs.gather.mine.drops :as drops]
             [cljs.test :refer [deftest is async]]
             [clojure.string]
@@ -437,7 +436,13 @@
           (is (some #(< (second %) 64) (dug-cells s)) "the stair cut below the start"))))))
 
 (deftest a-stair-that-cannot-seal-its-lava-turns-the-heading-like-any-heading-stop
-  (is (contains? tunnel/heading-stops :lava-unsealed)))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (deep-rock (assoc (cells "air" [1] (range 62 65) (range -2 3)) "1,65,0" "lava"))
+                        (assoc :drops {"stone" "flint"} :inventory pickaxe))
+              s (await (scenario {:block "iron_ore" :count 1 :level 60 :tunnel-length 3} world 400))]
+          (is (= :lava-unsealed (:stop (first (events-of s :mine.turned)))) (pr-str (map :text (events-of s :mine.turned)))))))))
 
 (deftest the-stair-down-goes-on-beside-water-when-it-is-accepted-as-a-list-and-not-by-default
   (async done
