@@ -249,6 +249,25 @@
               free (await (bed-price-with-respawn-at-feet {:jobs.lib.cost.death/spawn-horizon-s 0}))]
           (is (> priced free) "the far bed's respawn is worse for the deaths at the work than the one the body has"))))))
 
+(defn ^:async sealed-price-with-respawn-at-feet
+  "The :sealed price of the first :night.answers of a night for a body carrying a bed that slept where it stands, under settings."
+  [settings]
+  (let [{:keys [eng clock seen]} (setup (assoc on-open-ground :blocks {} :inventory [{:name "red_bed" :count 1} {:name "cobblestone" :count 32}]))]
+    (mem/write! (:store eng) :slept {:pos {:x 5 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh-clock/ms-per-day)})
+    (swap! clock + (* 4 sh-clock/ms-per-day))
+    (core/submit! eng (tu/order (list 'jobs.survival.night {:settings settings})) {})
+    (await (st/tick-n eng 12))
+    (:sealed (:prices (first (st/emitted seen :night.answers))))))
+
+(deftest a-sealed-bed-that-lies-off-the-respawn-point-costs-the-respawn-it-gives-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [priced (await (sealed-price-with-respawn-at-feet {}))
+              free (await (sealed-price-with-respawn-at-feet {:jobs.lib.cost.death/spawn-horizon-s 0}))]
+          (is (some? priced))
+          (is (> priced free)))))))
+
 (deftest a-body-on-dark-open-ground-walks-to-its-bed
   (async done
     (tu/run-async done

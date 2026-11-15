@@ -199,7 +199,7 @@
 (defn ^:async answers
   "{answer seconds}: the ways through the night from here, each priced by cost/night-way-s (the night's work it loses, its tolls
   and hurt, its seconds exposed (exposed-price), what it costs by day) or, a bed, as the night's seconds it loses and the hp it risks
-  and, where it sets the respawn point, less cost/spawn-worth there for deaths here, where the work goes on (a body asleep has
+  and, where it sets the respawn point, less cost/spawn-gain there for deaths here, where the work goes on (a body asleep has
   set it already).
   :bed lying in `bed` (nil: the carried bed put down here, or in a closed home (sh-beds/closed-home) put-down-bed! walks
   into first, then left to :home when home is given; or the bed the body is asleep in): the night left lost unless
@@ -214,7 +214,7 @@
   natural ground, the shelter's time on arrival (flee-after; here's toll is here's), the walk's cost beyond its seconds, that shelter exposed at the target
   (exposed-price: the hostiles known there once),
   and by day that shelter's morning and the walk back to where the night found the body; :home with a carried bed (it goes down there) loses the night as :bed
-  does, plus the work its walk loses, less spawn-worth there. :exposed the night left in the open where the body stands (or the worst cell
+  does, plus the work its walk loses, less spawn-gain there. :exposed the night left in the open where the body stands (or the worst cell
   it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers.
   Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
   the other players online wait for (sh-sleepers/skip-wait-s)."
@@ -264,12 +264,12 @@
                                                                                    (reduce + (for [[q refused?] [[(- 1 refuse) false] [refuse true]] :when (pos? q)]
                                                                                                (* q (+ (bed-lost refused?) (if refused? (sh-sleepers/skip-wait-s p view after) 0)
                                                                                                        (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) (bed-open refused?) at (not refused?)))))))))
-      sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-worth body (:foot (:layout sealed)) feet))))
+      sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-gain body (:foot (:layout sealed)) feet))))
       (and niche (js/isFinite (:seconds niche))) (assoc :niche (dig niche))
       flee (assoc :flee (way-s (walk flee (flee-after flee here))))
       home (assoc :home (let [w (walk home (flee-after home here))]
                           (if carried?
-                            (+ lost (- (way-s w) (way-s {})) (- (cost/spawn-worth body (:pos home) feet)))
+                            (+ lost (- (way-s w) (way-s {})) (- (cost/spawn-gain body (:pos home) feet)))
                             (way-s w))))
       (number? out-s) (assoc :log-out out-s))
      (cond-> prices
