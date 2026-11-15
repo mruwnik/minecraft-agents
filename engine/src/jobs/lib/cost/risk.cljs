@@ -115,3 +115,10 @@
   [health death]
   (let [s (stay-of :heal health)]
     (fn [h] (* (answer/death-at death h) (- (work-death-chance :heal h s) (work-death-chance :heal (inc h) s))))))
+
+(defn dark-stay-s
+  "Seconds a job's work (work-s of `category`, default :work) costs where mobs spawn at the mean of `chances` per second:
+  `stay-risk-s` (a fn [chance seconds], price/stay-risk-s of the ctx) of that mean, its hurt and death."
+  ([stay-risk-s chances] (dark-stay-s stay-risk-s chances :work))
+  ([stay-risk-s chances category]
+   (stay-risk-s (/ (reduce + chances) (count chances)) (work-s category))))

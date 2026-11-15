@@ -120,7 +120,27 @@
         asked (atom [])
         real spawn-light/chance-at]
     (with-redefs [spawn-light/chance-at (fn ([p cell] (real p cell false))
-                                       ([p cell caves-free? subtract stay? solid-at] (swap! asked conj cell) (real p cell caves-free? subtract stay? solid-at)))]
+                                       ([p cell caves-free? subtract stay? solid-at lit] (swap! asked conj cell) (real p cell caves-free? subtract stay? solid-at lit)))]
       (diff/diff c (:cells pc)))
     (is (seq @asked))
     (is (= (count (set @asked)) (count @asked)))))
+
+(defn- light-loss-lits
+  "{cell lit} light-loss asks chance-at for a torch at [3 65 2], the body remembering every cell lit by the torch at [3 65 2] and by `others`."
+  [others]
+  (let [{:keys [eng]} (b/start (assoc lit-world :time st/night) {"lit" lit-yard} [])
+        c (core/make-ctx eng {:root "repair" :slots [] :chain [] :token nil :args {}})
+        asked (atom {})
+        dist (fn [[x y z] {cx :x cy :y cz :z}] (+ (abs (- x cx)) (abs (- y cy)) (abs (- z cz))))
+        remembered (fn [cell] (reduce max 0 (map #(- 14 (dist % cell)) (cons [3 65 2] (map first others)))))]
+    (with-redefs [spawn-light/seen-light (fn [_ cell] (remembered cell))]
+      (diff/light-loss c [3 65 2] "torch" (fn [cell lit] (swap! asked assoc [(:x cell) (:z cell)] lit) 0.001) others))
+    @asked))
+
+(deftest a-cell-remembered-lit-only-by-the-missing-torch-is-judged-dark
+  (is (= #{0} (set (vals (light-loss-lits []))))))
+
+(deftest a-cell-another-light-also-lights-keeps-that-lights-share
+  (let [lits (light-loss-lits [[[7 65 2] "torch"]])]
+    (is (= 10 (lits [3 2])) "the torch at 7 gives 10 at 3; the missing torch's 14 is not kept")
+    (is (= 14 (lits [7 2])) "remembered more than the missing torch gives")))

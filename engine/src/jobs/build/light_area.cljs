@@ -227,7 +227,7 @@
     {:uses {:job-time [0 (work-s c) (* 20 (max 1 n))] :items {(torch/torch-item (:primitives c)) [0 n n]}}}))
 
 (defn worth-of
-  "The loss lighting averts: a job's work (cost.risk/work-s :work) where the body stands, at the spawn chance of its feet's
-  light (spawn-light/chance-at), its hurt and death (price/stay-risk-s)."
+  "The loss lighting averts: risk/dark-stay-s at the spawn chance of the light (spawn-light/chance-at) where the body stands."
   [c]
-  (price/stay-risk-s c (spawn-light/chance-at (:primitives c) (update-vals (u/self-pos c) js/Math.floor) false) (risk/work-s :work)))
+  (risk/dark-stay-s #(price/stay-risk-s c %1 %2)
+                    [(spawn-light/chance-at (:primitives c) (update-vals (u/self-pos c) js/Math.floor) false)]))

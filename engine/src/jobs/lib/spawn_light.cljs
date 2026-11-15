@@ -44,6 +44,11 @@
   [cell solid-at]
   (* (- 1 (solid-at [(:x cell) (:y cell) (:z cell)])) (cost/hall-chance :roofed)))
 
+(defn standing
+  "The cell chance-at judges for `cell`: the one over it when it is solid."
+  [p cell]
+  (if (sh-sense/solid-at? p cell) (update cell :y inc) cell))
+
 (defn chance-at
   "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; one that leaves dark is dark by
   the chance it is in a dark hall, hall-chance), an unseen one at the chance it is dark (look/unseen-lit-chance): what full
@@ -51,14 +56,16 @@
   the first.
   subtract: the sky's darkening to judge it by (default: now; 0: full day). stay?: a seen cell, lit or dark, by the
   chance of its sh-inside/stay-hall: the dark floor the walkers come from, whatever light the cell itself has. solid-at:
-  the look/unseen-solid-at-fn to ask (one built per walk of cells, not per cell)."
+  the look/unseen-solid-at-fn to ask (one built per walk of cells, not per cell). block: the block light to judge a seen
+  cell by instead of the one remembered (the light it would have without a light that is gone)."
   ([p cell caves-free?] (chance-at p cell caves-free? nil))
   ([p cell caves-free? subtract] (chance-at p cell caves-free? subtract false))
   ([p cell caves-free? subtract stay?] (chance-at p cell caves-free? subtract stay? nil))
-  ([p cell caves-free? subtract stay? solid-at]
+  ([p cell caves-free? subtract stay? solid-at] (chance-at p cell caves-free? subtract stay? solid-at nil))
+  ([p cell caves-free? subtract stay? solid-at lit]
    (let [darkening (or subtract (sh-sense/sky-subtract-now p))
-         cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
-         block (seen-light p cell)
+         cell (standing p cell)
+         block (when-let [seen (seen-light p cell)] (or lit seen))
          reaches (sh-sense/sky-reaches-from-above? p cell)
          sky-light (sh-sense/sky-light-at p cell)
          ;; a sky-reached cell with no sky light data is priced as unseen, not as dark

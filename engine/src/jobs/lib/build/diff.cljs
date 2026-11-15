@@ -38,28 +38,45 @@
       (and (vector? want) (some others-own? (rest want)))))
 
 (defn night-chance-fn
-  "(fn [cell]) the spawn chance per second at a cell under a clear midnight's sky (spawn-light/chance-at, by the light the
-  body knows), remembered per cell, with one unseen-solid-at-fn: the floors of lights close together share cells."
+  "(fn [cell lit]) the spawn chance per second at a cell under a clear midnight's sky (spawn-light/chance-at, by the light the
+  body knows, or by block light `lit` where given), remembered per cell and light, with one unseen-solid-at-fn: the
+  floors of lights close together share cells."
   [c]
   (let [p (:primitives c)
         night (look/sky-subtract-at 18000 0 0)
         solid-at (look/unseen-solid-at-fn p)]
-    (memoize #(spawn-light/chance-at p % false night false solid-at))))
+    (memoize (fn [cell lit] (spawn-light/chance-at p cell false night false solid-at lit)))))
+
+(defn- light-of [block] (tp/light-of (str/replace block "wall_" "")))
+
+(defn- lit-by
+  "The block light a light at `pos` of `block` gives `cell` by its spread through open air (a step less a block)."
+  [[x y z] block {cx :x cy :y cz :z}]
+  (max 0 (- (light-of block) (+ (abs (- x cx)) (abs (- y cy)) (abs (- z cz))))))
 
 (defn light-loss
-  "Seconds a plan light ([x y z] wanting light block `block`) missing costs, as light-area's worth-of prices a dark stay: a
-  job's work (risk/work-s :work) at the mean `chance-at` ((night-chance-fn c), as given) of the cells of its floor its light
-  reaches (torch-plan/reach), every spawn-light ::step blocks; its hurt and death (price/stay-risk-s). nil for a block that
-  gives no light."
-  ([c pos block] (light-loss c pos block (night-chance-fn c)))
-  ([c [x y z] block chance-at]
+  "Seconds a plan light ([x y z] wanting light block `block`) missing costs, as light-area's worth-of prices a dark stay
+  (risk/dark-stay-s) at the `chance-at` ((night-chance-fn c), as given) of the cells of its floor its light reaches
+  (torch-plan/reach), every spawn-light ::step blocks. A cell remembered lit by the light is judged by what it would
+  keep without it: the light remembered there where more than the light gave, else the most `others` ([pos block] of
+  the plan's lights standing) give it, no more than remembered. nil for a block that gives no light."
+  ([c pos block] (light-loss c pos block (night-chance-fn c) nil))
+  ([c [x y z :as pos] block chance-at others]
    (when (or (torch/torch-blocks block) (torch/light-items block))
-     (let [reach (tp/reach (str/replace block "wall_" ""))
+     (let [p (:primitives c)
+           reach (tp/reach (str/replace block "wall_" ""))
            step (settings/get spawn-light/settings ::spawn-light/step)
            offs (range (- (* step (quot reach step))) (inc reach) step)
-           chances (for [dx offs dz offs :when (<= (+ (abs dx) (abs dz)) reach)]
-                     (chance-at {:x (+ x dx) :y y :z (+ z dz)}))]
-       (price/stay-risk-s c (/ (reduce + chances) (count chances)) (risk/work-s :work))))))
+           without (fn [cell]
+                     (let [seen (spawn-light/seen-light p (spawn-light/standing p cell))]
+                       (when seen
+                         (if (> seen (lit-by pos block cell))
+                           seen
+                           (min seen (reduce max 0 (map (fn [[o b]] (lit-by o b cell)) others)))))))
+           chances (for [dx offs dz offs :when (<= (+ (abs dx) (abs dz)) reach)
+                         :let [cell {:x (+ x dx) :y y :z (+ z dz)}]]
+                     (chance-at cell (without cell)))]
+       (risk/dark-stay-s #(price/stay-risk-s c %1 %2) chances)))))
 
 (defn diff
   "The cells of `cells` (plan cells) the body has seen differ from their want, judged as from-plan judges them
@@ -68,13 +85,19 @@
   lower half places it). A door, gate or trapdoor where the plan wants another block is wrong; a wanted one's swung state is no difference
   (jobs.maintenance.shut and the pen-gate trigger own it). A light cell carries its light-loss as :loss."
   [c cells]
-  (let [chance-at (delay (night-chance-fn c))]
-   (->> (plan/judged (:primitives c) {:cells (remove (comp others-own? :want) cells)} nil {} (first wood/species))
-       plan/loosened
-       (filterv #(and (#{:missing :wrong :extra} (:answer %))
-                      (not (plan/companion? (:want %)))
-                      (not (plan/swung? %))))
-       (mapv #(if-let [loss (light-loss c (:pos %) (shape/want-block (:want %)) (fn [cell] (@chance-at cell)))] (assoc % :loss loss) %)))))
+  (let [chance-at (delay (night-chance-fn c))
+        judged (->> (plan/judged (:primitives c) {:cells (remove (comp others-own? :want) cells)} nil {} (first wood/species))
+                    plan/loosened)
+        gives-light? #(let [b (shape/want-block (:want %))] (or (torch/torch-blocks b) (torch/light-items b)))
+        standing (vec (for [cell judged :when (and (= :match (:answer cell)) (gives-light? cell))]
+                        [(:pos cell) (shape/want-block (:want cell))]))]
+    (->> judged
+         (filterv #(and (#{:missing :wrong :extra} (:answer %))
+                        (not (plan/companion? (:want %)))
+                        (not (plan/swung? %))))
+         (mapv #(if-let [loss (light-loss c (:pos %) (shape/want-block (:want %)) (fn [cell lit] (@chance-at cell lit)) standing)]
+                  (assoc % :loss loss)
+                  %)))))
 
 (defn herd-gaps
   "{:mob :target :gaps n} of each part's :herd with broken cells in its :box or one column round it: a fence or wall
