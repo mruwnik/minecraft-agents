@@ -6,6 +6,7 @@
 ;; Dark case (Q334: darkness is no refusal of its own): a dark cell, a pig 10 blocks off, no hostile: a hurt body that cannot heal walks to it and eats.
 ;; Heal worth (card 28a867fe): the hungry reflex's call (:carry 0) at food 10-17 searches for the pig only because the body is
 ;; hurt (only food lets it heal); unhurt at the same food it is not hungry and walks nowhere (should-fail).
+;; Three pigs stand together: a hunt never leaves fewer than two known adults of a kind (Q199), so a lone pig is never killed.
 ;; Card c8a22aae: at 8 hp, its death near the respawn nearly free, the hp food lets it regain are still worth the search.
 {:defaults
  {:tags [:survival :get-food :hurt]
@@ -16,7 +17,7 @@
  :cases
  [{:name "hurt-body-hunts-the-pig-behind-a-wall"
    :blocks [[:fill [10 0 10] [10 2 22] "stone"]]
-   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
+   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 14.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 18.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]
          [:job (jobs.survival.get-food {:worth 1200})]]
@@ -24,7 +25,7 @@
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 20 :until {:source :job :kind :food.killed}}]}
   {:name "hurt-starving-body-hunts-a-near-pig-in-the-dark"
    :time :any :plot {:light :dark}
-   :act [[:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
+   :act [[:summon "pig" [14.5 0 16.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 14.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 18.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]
          [:job (jobs.survival.get-food {:worth 1200})]]
@@ -32,14 +33,14 @@
             {:no-event {:source :job :kind :waiting :data {:reason #{:low-health :exposed :dark}}} :for-s 20 :until {:source :job :kind :food.killed}}]}
   {:name "hurt-body-the-reflex-calls-without-a-reserve-hunts-the-pig-behind-a-wall"
    :blocks [[:fill [10 0 10] [10 2 22] "stone"]]
-   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
+   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 14.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 18.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]
          [:job (jobs.survival.get-food {:worth 1200 :food 6 :carry 0})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
   {:name "half-hurt-body-the-reflex-calls-without-a-reserve-hunts-the-pig-behind-a-wall"
    :blocks [[:fill [10 0 10] [10 2 22] "stone"]]
-   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
+   :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 14.5] "{NoAI:1b}"] [:summon "pig" [14.5 0 18.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 12 minecraft:generic"]
          [:job (jobs.survival.get-food {:worth 1200 :food 6 :carry 0})]]
