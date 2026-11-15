@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.build.diff :as diff]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
@@ -41,7 +42,7 @@
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
   A room walked to by :at whose inside was not seen emits enter-room.arrived {:seen :unseen :open-sides :closed-sides :closed} once its sides are all seen.
-  By day, done in a room of a plan the body made, jobs.build.repair of that plan runs once first (what a way in dug or set there against the plan is put back).
+  By day, done in a room of a plan the body made, jobs.build.from-plan runs once first over the cells touching the room seen to differ from that plan (what a way in dug or set there is put back), at the worth the call has; a mend that does not end done emits enter-room.mend-failed and the result carries :mend-failed {:kind :reason :cells}. Takes :ignore-zones? for that mend.
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :roof-not-held (a mend that did not stay), :roof-not-placed (the block was not placed; or the fill's own reason), :open (the room cannot be closed).
@@ -53,7 +54,8 @@
   {:at {:doc "a cell inside the room to enter, instead of a place" :spec ::a/pos :default nil}
    :flee? {:doc "walk in as a flee step: legs of jobs.movement.run-away (:leg-s seconds, no digging or pillaring), one leg a round; for a body running from a hostile" :spec boolean? :default false}
    :leg-s {:doc "seconds one flee leg may take; nil: the respond.options flight step setting" :spec (a/num-in 0.1 120) :default nil}
-   :place {:doc "the room to enter: a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}})
+   :place {:doc "the room to enter: a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds an entering may take." :spec (a/num-in 0 nil)}
@@ -265,7 +267,7 @@
           (seq (sh/open-room-doors p)) {:stop :door-open :text "an open door of the room would not shut"}
           :else {:stop :open :text "the room cannot be closed here"})))))
 
-(declare mend-due?)
+(declare mend-due? mend-s)
 
 (defn done? [c]
   (let [p (:primitives c)
@@ -273,7 +275,8 @@
     (checks/goal done [:in-room "the body is in a closed room with its doors shut"] [:open "the room is not closed"]
                  {:units :rooms :done (if done 1 0) :left (if done 0 1)
                   :result (cond-> (merge {:pos (sh-sense/feet p) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
-                            (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c))))})))
+                            (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))
+                            (:mend-failed (ctx/mem c)) (assoc :mend-failed (:mend-failed (ctx/mem c))))})))
 
 (defn walk-args [{:keys [name pos]}]
   (if name {:place name :range 0} {:pos (room-lib/mid pos) :range 0.7}))
@@ -314,7 +317,7 @@
         job-time (settings/get settings ::job-time-s)
         priced (fn [mean] {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time))]} :done [0 1 1]})]
     (cond
-      (and (shut? c) (nil? (room-lib/gap c))) (priced 0)
+      (and (shut? c) (nil? (room-lib/gap c))) (priced (await (mend-s c)))
       (not (here? c t))
       (if (or (nil? t) (and (not (:flee? (:args c))) (or (unclosable? (:primitives c) (:pos t)) (race-lost? c t))))
         (priced ##Inf)
@@ -325,8 +328,8 @@
       :else
       (let [{:keys [door gap plug stop]} (judge c)]
         (priced (cond stop ##Inf
-                     door (settings/get settings ::door-s)
-                     :else (* (count (or gap [plug])) (settings/get settings ::fill-s))))))))
+                     door (+ (settings/get settings ::door-s) (await (mend-s c)))
+                     :else (+ (* (count (or gap [plug])) (settings/get settings ::fill-s)) (await (mend-s c)))))))))
 
 (defn note-sides!
   "With :at, once a call: the sides of the room there seen and unseen as the walk starts (reach-room/boundary), when it is
@@ -421,30 +424,62 @@
                                             (ledger/confirm at)))
                     :again))))))
 
+(defn ring
+  "The cells of the room the body stands in and those touching them (a wall, a way dug in), as a set of [x y z]."
+  [c]
+  (let [p (:primitives c)]
+    (set (for [[x y z] (:cells (reach-room/room p (sh-sense/feet p))) [dx dy dz] [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
+           [(+ x dx) (+ y dy) (+ z dz)]))))
+
 (defn own-plan-here
-  "The id of a plan this body made that covers a cell of the room the body stands in or a cell touching it (a wall, a way dug in), else nil."
+  "The id of a plan this body made that covers a cell of the ring of the room the body stands in (ring), else nil; kept per room (the body's cell) while the plans stay."
   [c]
   (when (seq (access/own-plans c))
-    (let [p (:primitives c)
-          own-plan (own-builds/own-plan-fn c)
-          cells (:cells (reach-room/room p (sh-sense/feet p)))]
-      (some own-plan (for [[x y z] cells [dx dy dz] [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]] [(+ x dx) (+ y dy) (+ z dz)])))))
+    (let [feet (mapv #(js/Math.floor (% (sh-sense/feet (:primitives c)))) [:x :y :z])]
+      (check-cache/keyed c ::own-plan-here [feet (access/own-plans c)]
+                         #(some (own-builds/own-plan-fn c) (ring c))))))
 
 (defn mend-due?
-  "The plan id whose repair is still to run: by day, not yet this call, in a room of a plan the body made (own-plan-here)."
+  "The plan id whose way-in mend is still to run: by day, not yet this call, in a room of a plan the body made (own-plan-here)."
   [c]
   (when (and (not (:mended (ctx/mem c))) (not (sh-sense/night? (:primitives c))))
     (own-plan-here c)))
 
-(defn ^:async mend-plan!
-  "By day, in the closed room of a plan the body made, once: jobs.build.repair of that plan puts back what a way in dug or put
-  there that the plan does not want (the wall under which it dug, a door it set in it), at the repair's own worth; its ending
-  does not end the call, the room is judged again. :continue while it goes on, else :again."
+(defn way-in-cells
+  "The cells of plan id in the ring of the room (ring) seen differ from the plan (jobs.lib.build.diff/diff): what a way in dug or set there."
   [c plan]
-  (let [r (await (ctx/call c :mend-plan 'jobs.build.repair {:plan plan :ignore-zones? true}))]
+  (let [{:keys [cells trouble]} (diff/plan-cells c plan nil)
+        near (ring c)]
+    (when-not trouble
+      (mapv (comp vec :pos) (diff/diff c (filterv #(near (vec (:pos %))) cells))))))
+
+(defn ^:async mend-s
+  "Seconds the way-in mend of the room takes (jobs.build.from-plan's quote over way-in-cells, its mean job time), 0 when none is due."
+  [c]
+  (let [pid (mend-due? c)
+        cells (when pid (way-in-cells c pid))]
+    (if (empty? cells)
+      0
+      (let [q (await (ctx/quote c 'jobs.build.from-plan {:plan pid :cells cells :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        (or (get-in q [:uses :job-time 1]) 0)))))
+
+(defn ^:async mend-plan!
+  "By day, in the closed room of a plan the body made, once: jobs.build.from-plan over the cells of the way in the plan wants otherwise
+  (way-in-cells: the wall under which it dug, a door set in it), at the worth the call has. Its ending does not end the call: when it is
+  not done, mem :mend-failed {:kind :reason :cells} and enter-room.mend-failed say so, and the call's result carries :mend-failed.
+  :continue while it goes on, else :again."
+  [c plan]
+  (let [cells (or (:mend-cells (ctx/mem c)) (way-in-cells c plan))
+        _ (ctx/update-mem! c assoc :mend-cells cells)
+        r (if (seq cells)
+            (await (ctx/call c :mend-plan 'jobs.build.from-plan {:plan plan :cells cells :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+            {:kind :done})]
     (if (= :continue r)
       :continue
-      (do (ctx/update-mem! c assoc :mended true) :again))))
+      (let [failed (when (not= :done (:kind r)) {:kind (:kind r) :reason (get-in r [:cause :reason]) :cells cells})]
+        (when failed (ctx/emit! c :enter-room.mend-failed :warn (update failed :cells #(vec (take 5 %)))))
+        (ctx/update-mem! c assoc :mended true :mend-failed failed)
+        :again))))
 
 (defn ^:async step-judged!
   "The step after the looks: judge, then act on it."
@@ -461,7 +496,8 @@
       (:plug j) (await (mend! c (:plug j)))
       (and (:done j) (mend-due? c)) (await (mend-plan! c (mend-due? c)))
       (:done j) (ctx/end c :done nil (cond-> (merge {:pos (sh-sense/feet (:primitives c)) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
-                                         (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))))
+                                         (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))
+                                         (:mend-failed (ctx/mem c)) (assoc :mend-failed (:mend-failed (ctx/mem c)))))
       :else (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))))))
 
 (defn ^:async pick!

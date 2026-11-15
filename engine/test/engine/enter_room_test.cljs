@@ -372,7 +372,7 @@
 
 (def hut-plan
   "The body's own plan of the hut: the wall cell at 4,64..65,2 wants cobblestone."
-  {:id "hut" :metadata {:by "Fake"} :parts [{:id "wall" :cells [[4 64 2] [4 65 2]] :want "cobblestone"}]})
+  {:id "hut" :metadata {:by "Fake"} :parts [{:id "wall" :cells [[4 64 2] [4 65 2]] :want "cobblestone"} {:id "far" :cells [[20 64 20]] :want "cobblestone"}]})
 
 (deftest by-day-a-stray-door-in-a-planned-wall-of-the-own-hut-is-put-back-to-the-plan
   (async done
@@ -386,4 +386,19 @@
           (ew/set-data! (:world eng) {"hut" hut-plan} {})
           (core/submit! eng (tu/order '(jobs.survival.enter-room {})) {})
           (await (tu/run-until-empty eng 60))
-          (is (= "cobblestone" (block-at p [4 64 2])) "the wall cell is the plan's again"))))))
+          (is (= "cobblestone" (block-at p [4 64 2])) "the wall cell is the plan's again")
+          (is (not= "cobblestone" (block-at p [20 64 20])) "a planned cell far from the room is not the way in: left alone"))))))
+
+(deftest by-day-a-mend-that-cannot-be-done-is-reported-and-the-call-still-ends-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut-world {:x 5 :y 64 :z 0} {"4,64,2" "oak_door" "4,65,2" "oak_door"})
+                        (merge day)
+                        (assoc :inventory [] :sight 10)
+                        (update :states merge {"4,64,2" {:open false :half "lower" :facing "south"} "4,65,2" {:open false :half "upper" :facing "south"}}))
+              {:keys [eng p seen]} (st/setup world)]
+          (ew/set-data! (:world eng) {"hut" hut-plan} {})
+          (core/submit! eng (tu/order '(jobs.survival.enter-room {})) {})
+          (await (tu/run-until-empty eng 60))
+          (is (some #(= "enter-room.mend-failed" (name (or (:event %) (:kind %) :none))) @seen) (str "the failed mend is an event: " (pr-str (map #(select-keys % [:event :kind]) (take 8 @seen))))))))))
