@@ -7,10 +7,12 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.price :as price]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -184,47 +186,52 @@
   "The options flee-search/choose takes for the flight's step from threats (mobs), the one place they are built: the
   price of a flight (respond.cover/caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
   so their cornered verdicts agree. covered? (cell -> bool, out of the line of fire of the ranged threats and the shot
-  spots, flight/fire-spots: a step or end not covered pays the shooters' risk, an unseen one priced as its spot's :shooter) and home (a safe home's pos that is a closed room, closed-home) when given."
+  spots, flight/fire-spots: a step or end not covered pays the shooters' risk, an unseen one priced as its spot's :shooter) and home (a safe home's pos that is a closed room, closed-home) when given.
+  Everything but the home's mark is built once per covered? (the step's), the mob-spawn price from price/spawn-parts."
   [c threats covered? home]
   (let [p (:primitives c)
         from (u/self-pos c)
-        block-at (block-at-fn p)
-        bystanders (bystander-spots c threats)
-        floor (flight/floor c)
-        known (ledger/ways-of c)
-        door? (fn [cell] (some-> (block-at cell) (str/ends-with? "_door")))
         body (threats/death-body c)
         death (cost/death-s p (ctx/view c))
         risk (fn [chance] (* death chance))
-        drowned? (boolean (some #(= "drowned" (.-name %)) threats))
-        wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
-        other-mob (risk (:chance (cost/spawn-kill body from)))
-        creeper (some #(when (combat/creeper? %) (.-name %)) threats)
-        names (distinct (map #(.-name %) threats))
-        chance-of (fn [ns] (- 1 (reduce * (map #(- 1 (:chance (cost/threat-parts body % nil from))) ns))))
-        near-other? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
-        mark (fn [f s] {:holds? (search/at-step-or-end f) :s s})
-        fire (fire-price c threats covered?)
-        marks (concat [(mark near-other? other-mob)]
-                      (map #(mark % other-mob) (flight/avoid-ends c))
-                      (when creeper
-                        [{:holds? (fn [e] (boolean (some door? (:cells e))))
-                          :s (risk (:chance (cost/threat-parts body creeper nil from)))}])
-                      (when-let [{:keys [covered? route]} fire]
-                        [{:holds? (fn [e] (or (some (complement covered?) (:cells e)) ((search/at-step-or-end (complement covered?)) e)))
-                          :s (fn [e] (route {:cells (if (seq (:cells e)) (:cells e) (keep e [:step :end])) :end (:end e)}))}])
-                      (when home
-                        [{:holds? #(= home (:pos (:target %))) :s (- (risk (chance-of names)))}]))]
-    {:refused (:refused (ctx/mem c))
-     :never? (fn [end] (or (and (< (:y end) floor) (walk/roofed? block-at end)
-                                (not (and covered? (covered? end)))
-                                (not (contains? known [(:x end) (dec (:y end)) (:z end)])))
-                           ;; a mark prices a risk, not a swim: choose cannot weigh it against the cornered swim-out
-                           (and drowned? (wet? end))))
-     :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
-     :door? door?
-     :prefer? (when home #(= home (:pos (:target %))))
-     :marks marks}))
+        base (check-cache/keyed
+              c ::choose-opts [covered? (vec threats) (mapv #(danger-q/mob-pos p %) threats) from (:refused (ctx/mem c)) (keep (comp :pos :data) (ctx/entries c :hazard))]
+              (fn []
+                (let [block-at (block-at-fn p)
+                      bystanders (bystander-spots c threats)
+                      floor (flight/floor c)
+                      known (ledger/ways-of c)
+                      door? (fn [cell] (some-> (block-at cell) (str/ends-with? "_door")))
+                      drowned? (boolean (some #(= "drowned" (.-name %)) threats))
+                      wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
+                      other-mob (risk (:chance (:kill (price/spawn-parts c body from))))
+                      creeper (some #(when (combat/creeper? %) (.-name %)) threats)
+                      near-other? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
+                      mark (fn [f s] {:holds? (search/at-step-or-end f) :s s})
+                      fire (fire-price c threats covered?)]
+                  {:refused (:refused (ctx/mem c))
+                   :never? (fn [end] (or (and (< (:y end) floor) (walk/roofed? block-at end)
+                                              (not (and covered? (covered? end)))
+                                              (not (contains? known [(:x end) (dec (:y end)) (:z end)])))
+                                         ;; a mark prices a risk, not a swim: choose cannot weigh it against the cornered swim-out
+                                         (and drowned? (wet? end))))
+                   :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
+                   :door? door?
+                   :marks (concat [(mark near-other? other-mob)]
+                                  (map #(mark % other-mob) (flight/avoid-ends c))
+                                  (when creeper
+                                    [{:holds? (fn [e] (boolean (some door? (:cells e))))
+                                      :s (risk (:chance (cost/threat-parts body creeper nil from)))}])
+                                  (when-let [{:keys [covered? route]} fire]
+                                    [{:holds? (fn [e] (or (some (complement covered?) (:cells e)) ((search/at-step-or-end (complement covered?)) e)))
+                                      :s (fn [e] (route {:cells (if (seq (:cells e)) (:cells e) (keep e [:step :end])) :end (:end e)}))}]))})))]
+    (if-not home
+      base
+      (let [names (distinct (map #(.-name %) threats))
+            chance (- 1 (reduce * (map #(- 1 (:chance (cost/threat-parts body % nil from))) names)))]
+        (assoc base
+               :prefer? #(= home (:pos (:target %)))
+               :marks (concat (:marks base) [{:holds? #(= home (:pos (:target %))) :s (- (risk chance))}]))))))
 
 (defn usable
   "The goal of judged (judge!) when nothing speaks against it, else nil."

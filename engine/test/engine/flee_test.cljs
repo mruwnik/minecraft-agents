@@ -17,6 +17,7 @@
             [jobs.movement.go-to.result :as end]
             [jobs.lib.goal :as goal]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.answer :as answer]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -971,6 +972,24 @@
         (let [r (await (price-after-flight {:floor strip :blocks stair-rock :stair [[-1 64 0]] :entities [(zombie 7 1.5 {})]}))]
           (is (not= {:x -1 :y 65 :z 0} (:target r)) (str "the zombie a block off is on the body before it is up the step " (pr-str r)))
           (is (< 0.5 (:chance (:price r))) "so the flight is priced as one the zombie catches, not a free way"))))))
+
+(deftest choose-opts-for-one-step-reads-the-spawn-mix-once-whatever-the-home
+  ;; the hostile decision built the options four times, each pricing the mob-spawn mark afresh (answer/spawn-mets)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              s (setup {:ms-per-call 0 :blocks (tu/box 2 64 2 14 66 2 "stone")})
+              s (assoc-in s [:eng :jobs 'marker]
+                          {:round (fn ^:async r [c]
+                                    (let [covered? (cover/cover-fn (:primitives c) [] (respond.state/fire-spots c))
+                                          real answer/spawn-mets]
+                                      (with-redefs [answer/spawn-mets (fn [& args] (swap! calls inc) (apply real args))]
+                                        (respond.goal/choose-opts c [] covered? nil)
+                                        (respond.goal/choose-opts c [] covered? {:x 5 :y 64 :z 5})))
+                                    (ctx/end c :done nil))})]
+          (await (run-job! s 'marker {}))
+          (is (= 1 @calls)))))))
 
 (deftest an-unseen-shooters-line-of-fire-costs-a-flight-step-that-stays-in-it
   ;; the flight's marks priced only seen shooters' lines: a step straight along an unseen one's line cost it nothing
