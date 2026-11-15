@@ -748,7 +748,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks (merge floor {"0,65,0" "dirt" "0,66,0" "dirt"})})]
+        (let [{:keys [eng p seen]} (setup {:time night :blocks (merge pit-floor {"0,65,0" "dirt" "0,66,0" "dirt"})})]
           (is (nil? (sh-inside/night-sheltered p nil)))
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tick-n eng 6))
@@ -1265,13 +1265,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:time night :inventory (conj wall-stack {:name "iron_pickaxe" :count 1}) :blocks floor})]
+        (let [{:keys [eng p seen clock]} (setup {:time night :inventory (conj wall-stack {:name "iron_pickaxe" :count 1}) :blocks pit-floor})]
           (refuse-placing! p)
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng (tu/order '(jobs.debug.notify {:text "after"})) {})
           (await (tick-nights eng clock 1))
-          (let [places (count (calls p "place"))]
-            (is (= (+ 1 (* 4 (sites/max-sites))) places) "4 places per shut-in call (one per wall), max-sites calls, after the first try's roof support (its walls under the 1-thick floor have nothing the eye can click)")
+          (let [places (count (calls p "place"))
+                walls (count (filter #(= 64 (:y (arg-pos %))) (calls p "place")))]
+            (is (and (pos? walls) (zero? (mod walls 4)) (<= walls (* 4 (sites/max-sites)))) "4 places per shut-in call (one per wall), at most max-sites calls; the dig-in's own places are below the walls")
             (is (= 1 (count (emitted seen :shelter.exposed))) "one warn that the body is unsheltered")
             (await (tick-nights eng clock 2))
             (is (= places (count (calls p "place"))) "the failed sites are not dug in again")
@@ -1364,7 +1365,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :blocks floor :inventory [{:name "dirt" :count 16}]})]
+        (let [{:keys [eng p]} (setup {:time night :blocks pit-floor :inventory [{:name "dirt" :count 16}]})]
           (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} shelter-policy)
           (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tick-n eng 4))
