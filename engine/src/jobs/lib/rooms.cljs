@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.access :as access]
@@ -268,9 +269,33 @@
                                                   :left-ms (ms (- (cost/search-budget-s) (step-spent-s c)))}))
     (ctx/update-mem! c dissoc :search-log)))
 
-(defn step-meter "The flight step's search-meter, from what its searches have run (step-spent-s)." [c] (search-meter (step-spent-s c)))
+(defn start-decision!
+  "Start the decision's one deadline, cost/search-budget-s from now (Q202): every search of the decision (the meters of
+  step-meter and survey-meter) stops at it, whichever stage it is in."
+  [c]
+  (ctx/update-mem! c assoc :decision-deadline (+ (clock/now) (* 1000 (cost/search-budget-s)))))
 
-(defn survey-meter "step-meter for the searches that run before the flee search: less what it is to keep (flee-hold-s)." [c] (search-meter (step-spent-s c) (flee-hold-s c)))
+(defn end-decision! "The decision is made: its searches have no deadline now." [c] (ctx/update-mem! c dissoc :decision-deadline))
+
+(defn decision-deadline
+  "The decision's deadline (jobs.lib.clock ms, nil none) less ms kept back for what runs after the stage."
+  [c ms]
+  (some-> (:decision-deadline (ctx/mem c)) (- ms)))
+
+(defn step-meter
+  "The flight step's search-meter, from what its searches have run (step-spent-s). In a decision its deadline is the decision's, or
+  the flee search's held seconds from now when the stages before it have used that up: the flee search always gets its share."
+  [c]
+  (let [m (search-meter (step-spent-s c))
+        hold-ms (* 1000 (flee-hold-s c))]
+    (cond-> m (:decision-deadline (ctx/mem c)) (assoc :deadline (max (:decision-deadline (ctx/mem c)) (+ (clock/now) hold-ms))))))
+
+(defn survey-meter
+  "step-meter for the searches that run before the flee search: less what it is to keep (flee-hold-s), and its deadline the decision's less that."
+  [c]
+  (let [m (search-meter (step-spent-s c) (flee-hold-s c))
+        d (decision-deadline c (* 1000 (flee-hold-s c)))]
+    (cond-> m d (assoc :deadline d))))
 
 (defn spent-meter! "Keep what meter m has spent as the flight step's searches' CPU, by (spent!)." [c m by] (spent! c (reach/spent-s m) by))
 
@@ -289,7 +314,7 @@
   flight's steps judge it alike). Defaults: no threats, no fire, keep? true."
   ([c home] (survey c home {}))
   ([c home {:keys [threats fire keep? spent-s] :or {keep? true spent-s 0}}]
-   (binding [reach/*search* (search-meter spent-s (flee-hold-s c))]
+   (binding [reach/*search* (cond-> (search-meter spent-s (flee-hold-s c)) (decision-deadline c (* 1000 (flee-hold-s c))) (assoc :deadline (decision-deadline c (* 1000 (flee-hold-s c)))))]
      (let [p (:primitives c)
            me (u/self-pos c)
            failed (:refuges-failed (ctx/mem c) #{})

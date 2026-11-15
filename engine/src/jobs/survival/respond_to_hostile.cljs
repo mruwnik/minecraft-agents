@@ -4,6 +4,7 @@
             [jobs.lib.ready :as ready]
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.respond-flight :as flight]
+            [jobs.survival.respond.first-act :as first-act]
             [jobs.survival.respond.cover :as cover]
             [engine.args :as a]
             [jobs.lib.checks :as checks]
@@ -394,13 +395,17 @@
       :else (await (run-child c (other decision))))))
 
 (defn ^:async respond
-  "One decision and its answer's child. The decision is boxed by cost/search-budget-s of CPU from its start (Q141, Q202): a
-  stage that would start past it is left out (event hostile.decision-cut names them) and the answer is the cheapest of
-  what was priced, the covers, the flee search and the fight's walk quote the stages left out first, the looks last."
+  "One decision and its answer's child. The decision is boxed by one deadline, cost/search-budget-s of CPU from its start
+  (Q141, Q202): every search's meter stops at it and a stage that would start past it is left out (event
+  hostile.decision-cut names them); the covers leave the flee search its held share (flee-hold-s), which always runs.
+  When a physics tick has passed with no answer the body acts (first-act/act!: a swing or a step away) and the call
+  yields :continue to decide again from where it stands."
   [c near]
   (let [t0 (clock/now)
+        acted (volatile! false)
+        _ (room-lib/start-decision! c)
         cut (volatile! [])
-        in-time? (fn [stage] (or (cost/under-ceiling? (/ (- (clock/now) t0) 1000)) (do (vswap! cut conj stage) false)))
+        in-time? (fn [stage hold-s] (or (and (not @acted) (< (clock/now) (+ t0 (* 1000 (- (cost/search-budget-s) hold-s))))) (do (vswap! cut conj stage) false)))
         p (:primitives c)
         self (.self p)
         m (ctx/mem c)
@@ -416,9 +421,10 @@
         felt (walk-felt c)
         target (when-not (some combat/enderman? near) (first (hostile/fought p near)))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
-        specs (when-not (some combat/enderman? near) (when (in-time? :covers) (cover-specs c near sealing)))
-        caught (when-not (some combat/enderman? near) (when (in-time? :flee-search) (await (cover/caught-chance! c specs))))
-        fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %) (when (and target (in-time? :fight-walk)) (await (pick/quote! c (hostile/fight-walk-args p target)))) caught))
+        specs (when-not (some combat/enderman? near) (when (in-time? :covers (room-lib/flee-hold-s c)) (cover-specs c near sealing)))
+        _ (when (>= (- (clock/now) t0) (settings/physics-ms p)) (vreset! acted (boolean (await (first-act/act! c near)))))
+        caught (when-not (or @acted (some combat/enderman? near)) (await (cover/caught-chance! c specs)))
+        fight (when-not (some combat/enderman? near) (hostile/fight-answer c near #(struck-of c %) (when (and target (in-time? :fight-walk 0)) (await (pick/quote! c (hostile/fight-walk-args p target)))) caught))
         walk (when-not (some combat/enderman? near) (hostile/flee-answer c near fight felt caught))
         then (or (:then walk) (when fight [fight]))
         equipment (cost/equipment-of (.-equipment self))
@@ -427,17 +433,19 @@
         covers (cover-answers equipment (into (mapv #(hostile/mob-near p %) near) blasters) then fight specs)
         now (merge covers {:fight fight :flee walk})
         now-of (fn [mobs] (merge (cover-answers equipment (into mobs blasters) then fight specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
-        look (when (and (seq covers) (in-time? :look)) (look-answer c near now now-of sealing then))
-        look-in (when (in-time? :look-in) (building-look-answer c near now now-of caught fight felt))
-        weighed (some-> (hostile/weigh c near (cond-> now look (assoc :look (:answer look)) look-in (assoc :look-in (:answer look-in))))
-                        (assoc :way-scan (:way-scan caught) :refuge-s (:refuge-s caught) :way (:chance caught)) (eating-answer c))
+        look (when (and (seq covers) (in-time? :look 0)) (look-answer c near now now-of sealing then))
+        look-in (when (in-time? :look-in 0) (building-look-answer c near now now-of caught fight felt))
+        weighed (when-not @acted (some-> (hostile/weigh c near (cond-> now look (assoc :look (:answer look)) look-in (assoc :look-in (:answer look-in))))
+                        (assoc :way-scan (:way-scan caught) :refuge-s (:refuge-s caught) :way (:chance caught)) (eating-answer c)))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
         creeper (first (get-in weighed [:answers :fight :creepers]))
-        _ (when (seq @cut) (ctx/emit! c :hostile.decision-cut :debug {:stages @cut :ms (js/Math.round (- (clock/now) t0))
+        _ (room-lib/end-decision! c)
+        _ (when (seq @cut) (ctx/emit! c :hostile.decision-cut :debug {:acted @acted :stages @cut :ms (js/Math.round (- (clock/now) t0))
                                                                      :text (str "the decision's CPU budget ran out: left out " (str/join ", " (map name @cut)))}))]
     (cond
+      @acted :continue
       (and (= :look-in (:answer weighed)) (not stay?))
       (let [{:keys [value] price :cost :as h} look-in]
         (ctx/emit! c :hostile.look-in :info {:prices (update-vals (:prices weighed) js/Math.round) :value (js/Math.round value) :cost (/ (js/Math.round (* 10 price)) 10)

@@ -8,6 +8,7 @@
             [clojure.string :as str]
             [engine.sight :as sight]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.clock :as clock]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
@@ -27,9 +28,14 @@
   {:budget budget-s :left (volatile! (- budget-s spent-s)) :cuts (volatile! 0) :read-s read-s :cell-s cell-s :node-s node-s})
 
 (defn metered-cap
-  "budget cells, at most those *search* has left at its price-k (:read-s, :cell-s or :node-s) a cell."
+  "budget cells, at most those *search* has left at its price-k (:read-s, :cell-s or :node-s) a cell; none once its :deadline
+  (jobs.lib.clock ms, when the meter has one) has passed, so a search that began in time stops at its next part."
   [budget price-k]
-  (if-let [m *search*] (min budget (max 0 (js/Math.floor (/ @(:left m) (price-k m))))) budget))
+  (if-let [m *search*]
+    (if (some-> (:deadline m) (<= (clock/now)))
+      0
+      (min budget (max 0 (js/Math.floor (/ @(:left m) (price-k m))))))
+    budget))
 
 (defn spend!
   "Take s seconds off meter m (none with m nil); cut?: the part stopped where the meter ran out."

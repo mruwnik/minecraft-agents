@@ -3,6 +3,7 @@
   Their answers, and that one query reads each block at most once (a query over several mobs shares its reads)."
   (:require [cljs.test :refer [deftest is]]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.clock :as clock]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.movement.go-to.result :as end]
@@ -385,3 +386,9 @@
     (is (= :budget walk) "nothing is left for the walk search")
     (is (= [2 0] [@(:cuts m) (js/Math.round (* 1000 @(:left m)))]) "both counted cut, the meter spent")
     (is (number? (reach/search-steps (partial reach/forward ground) [0 64 0] [50 64 50])) "with no meter bound it searches to its own budget")))
+
+(deftest a-meter-past-its-deadline-allows-no-cells-whatever-it-has-left
+  (let [m (assoc (reach/meter 1 0 0.01 0.1 0.1) :deadline 1000)
+        cap-at (fn [ms] (with-redefs [clock/now (constantly ms)] (binding [reach/*search* m] (reach/metered-cap 50 :read-s))))]
+    (is (= 50 (cap-at 999)) "before the deadline the meter's own cells")
+    (is (= 0 (cap-at 1000)) "at it the search is cut at its next part")))

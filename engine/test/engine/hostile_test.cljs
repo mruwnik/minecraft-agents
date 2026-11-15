@@ -419,9 +419,23 @@
         (let [world {:self {:health 20} :inventory sword :entities [(zombie 3 0)]}
               slow (await (slow-clock-round respond world))
               quick (await (flight-round respond world))]
-          (is (fought? slow) "the body acts on what was priced")
-          (is (= [:covers :flee-search :fight-walk :look-in] (:stages (decision-cut slow))) (pr-str (decision-cut slow)))
+          (is (fought? slow) "the body acts at once")
+          (is (= [:covers :fight-walk :look-in] (:stages (decision-cut slow))) (pr-str (decision-cut slow)))
           (is (nil? (decision-cut quick)) "a decision within its budget leaves nothing out"))))))
+
+(deftest a-decision-that-outlasts-a-tick-swings-or-steps-away-first-and-never-fights-a-creeper
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie-slow (await (slow-clock-round respond {:self {:health 20} :inventory sword :entities [(zombie 3 0)]}))
+              creeper-slow (await (slow-clock-round respond {:self {:health 20} :inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]}))
+              quick (await (flight-round respond {:self {:health 20} :inventory sword :entities [(zombie 3 0)]}))]
+          (is (true? (:acted (decision-cut zombie-slow))))
+          (is (= "attack" (first (filter #{"attack" "moveTo"} (map #(.-name %) (.-calls (.-world (:p zombie-slow))))))) "the swing at the zombie in reach comes first")
+          (is (true? (:acted (decision-cut creeper-slow))))
+          (is (zero? (count (calls (:p creeper-slow) "attack"))) "a creeper is stepped away from, never fought as the cheap answer")
+          (is (pos? (count (calls (:p creeper-slow) "moveTo"))))
+          (is (nil? (decision-cut quick)) "a decision within its tick acts on its answer alone"))))))
 
 (deftest respond-says-once-what-it-answers-and-how-it-knows-it
   (async done
