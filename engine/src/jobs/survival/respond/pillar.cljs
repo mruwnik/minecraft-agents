@@ -105,6 +105,20 @@
   (set (map #(let [{:keys [x y z]} (danger-q/mob-pos p %)] (mapv js/Math.floor [x y z]))
             (danger-q/known-hostiles p (danger-q/hostile-radius) {}))))
 
+(defn cell-map [[x y z]] {:x x :y y :z z})
+
+(defn rise-look
+  "{:looks :blocked} of the cells a pillar at feet rises into that the body at primitives p has not sensed: plan! looks at
+  each before the first block, and the chance one of them is rock (lk/unseen-solid-at-fn) so the pillar cannot rise; 0 under
+  full sky light at the feet, which reaches it only straight down an open column."
+  [p feet]
+  (let [unseen (filter (escape/unseen-of p) (map #(escape/up feet %) (range 1 (+ 2 (pillar-height)))))
+        solid-at (lk/unseen-solid-at-fn p)]
+    {:looks (count unseen)
+     :blocked (if (or (empty? unseen) (= 15 (sh-sense/sky-light-at p (cell-map feet))))
+                0
+                (- 1 (reduce * 1 (map #(- 1 (solid-at %)) unseen))))}))
+
 (defn room-unseen-open?
   "room? where the body at primitives p stands at feet, a cell it has not sensed read open (plan! looks at the rise first)."
   [p feet]
@@ -157,8 +171,6 @@
   "Whether a pillar fits where the body at primitives p stands at feet (pillar-climb)."
   [p feet]
   (some? (pillar-climb p feet)))
-
-(defn cell-map [[x y z]] {:x x :y y :z z})
 
 (defn note-base!
   "Remember the feet cell a flight's first pillar here began from (lifted reads the rise from it); a new column starts over."

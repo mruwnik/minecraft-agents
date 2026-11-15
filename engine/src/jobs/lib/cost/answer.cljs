@@ -768,14 +768,8 @@
           (chance-blast (blast-hurt (armour/armour-stats equipment) (js/Math.hypot (min d swell-start) (* (or rise-h 0) (min 1 (/ at (or rise-s 0))))))
                         (:weight m 1))))))
 
-(defn cover-answer
-  "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails :dawn-s}
-  (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
-  it cannot be closed, default 0; :dig-s the dig away out of it, nil none): the blows of build-answer over open-s (the exits besides :then: exits); then, by the chance the mobs are still about
-  when the hide ends (stays-chance: all of them unless every mob is known to burn by day), the cheapest of then and the same cover again (:stays). A cover that fails is the
-  blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). A creeper
-  blasts as cover-blasts (only one whose fuse ends before the side shuts). With :reached (a pillar: an enderman teleports to its top) an enderman's blows
-  land at once over all of seconds."
+(defn cover-answer*
+  "cover-answer of a cover begun at once, no look first."
   [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s dig-s reached rise]}]
   (let [then (concat then (exits mobs dawn-s dig-s then))
         blasts (cover-blasts equipment mobs open-s rise)
@@ -786,6 +780,25 @@
     (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (stays-chance mobs)) :then (vec then))
       (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
                                                      [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s)}]]))))
+
+(defn cover-answer
+  "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails :dawn-s}
+  (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
+  it cannot be closed, default 0; :dig-s the dig away out of it, nil none): the blows of build-answer over open-s (the exits besides :then: exits); then, by the chance the mobs are still about
+  when the hide ends (stays-chance: all of them unless every mob is known to burn by day), the cheapest of then and the same cover again (:stays). A cover that fails is the
+  blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). A creeper
+  blasts as cover-blasts (only one whose fuse ends before the side shuts). With :reached (a pillar: an enderman teleports to its top) an enderman's blows
+  land at once over all of seconds. With :look-s (a pillar's look at the unsensed cells of its rise) the look comes first: its
+  blows over look-s, then by :blocked (the chance the look shows the cover cannot be made) at once the cheapest of failed,
+  else the cover."
+  [{:keys [equipment mobs failed] :as in} {:keys [look-s blocked] :as cover}]
+  (let [covered (cover-answer* in cover)]
+    (if (pos? (or look-s 0))
+      (assoc (build-answer {:equipment equipment :mobs mobs :seconds look-s})
+             :outcomes (if (and (seq failed) (pos? blocked))
+                         [[blocked {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}] [(- 1 blocked) covered]]
+                         [[1 covered]]))
+      covered)))
 
 (defn leave-answer
   "answer a begun after seconds spent breaking out of a seal among mobs [flee-mob's] wearing equipment: the blows they land over

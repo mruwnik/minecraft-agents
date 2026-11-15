@@ -201,12 +201,12 @@
 (defn quiet-s "Seconds a hidden body keeps its refuge after the last danger (hide-out ::quiet-s), for the job that may not require hide-out itself." [] (hide-out/quiet-s))
 
 (defn pillar-cover
-  "The cover {:open-s :seconds :fails :reached :rise} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
+  "The cover {:open-s :seconds :fails :reached :rise :look-s :blocked} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire or a creeper's sight; it fails for a mob in its cell by
   ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, respond.pillar/mob-class), with the refusals this
   flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb), and its
-  failures here (flight/fails-here); an unsensed cell of its rise is no fail: pillar! looks at it before the first block,
-  so rock there costs a look and the next option, which leaves the order of the options as it is;
+  failures here (flight/fails-here); begun by plan!'s look at the unsensed cells of its rise (cost/look-s), rock there by
+  :blocked (respond.pillar/rise-look);
   nil when no pillar fits here, a climber or a flyer is near (both reach its top) or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
   (when-let [climb (and (pillar/pillar-item c) (not-any? #(or (combat/climber? %) (combat/flyer? %)) hostiles)
@@ -215,11 +215,13 @@
     (let [h (- (pillar/pillar-height) (pillar/lifted c))
           s (* (settings/get settings ::pillar-s) (/ h (pillar/pillar-height)))
           seconds (+ s (hide-out/quiet-s))
+          {:keys [looks blocked]} (pillar/rise-look (:primitives c) (pl/feet-cell c))
           refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
                                      (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
       {:open-s (if (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles) seconds s) :seconds seconds
        :fails (flight/fails-here c :pillar (- 1 (* (- 1 refused) (- 1 climb))))
-       :reached (boolean (some combat/enderman? hostiles)) :rise [s h]})))
+       :reached (boolean (some combat/enderman? hostiles)) :rise [s h]
+       :look-s (cost/look-s looks) :blocked blocked})))
 
 (defn covers-in
   "What shut-in/covers reads past the ways: the body's feet cell, the cells the hostiles near fill and their kinds, its

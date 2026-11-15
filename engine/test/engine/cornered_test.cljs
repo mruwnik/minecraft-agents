@@ -20,6 +20,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.survival.respond-flight :as retreat]
@@ -2390,22 +2391,30 @@
     (is (some? (cover "zombie")))
     (is (nil? (cover "phantom")) "a phantom flies to the pillar's top")))
 
-;; pillar! looks at an unsensed rise before its first block: rock there is a look and the next option, no failed cover.
-(deftest an-unsensed-rise-is-no-chance-the-pillar-fails
-  (let [fails (fn [unseen?]
-                (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "dirt" :count 20}]})
-                      sensed (tu/sensed-by p)
-                      c (stub-ctx p (atom {}))]
-                  (tu/set-sensed! p (fn [pos] (if (and unseen? (= 0 (aget pos "x") (aget pos "z")) (< 65 (aget pos "y") 70)) #js {:unknown true :pos pos} (sensed pos))))
-                  (with-stub-mem
-                    (fn []
-                      (with-redefs [respond.pillar/pillar-item (fn ([_] "dirt") ([_ _] "dirt"))
-                                    respond.pillar/pillar-climb (constantly 0)
-                                    respond.pillar/mob-class (constantly :clear)
-                                    ctx/since (constantly [])
-                                    ctx/now (constantly 1000)]
-                        (:fails (cornered/pillar-cover c [#js {:name "zombie"}])))))))]
-    (is (= (fails false) (fails true)) "the cells over the head never sensed: the look before the pillar reads them")))
+;; pillar! looks at an unsensed rise before its first block: rock there (none under full sky light, which comes only
+;; straight down an open column) leaves the next answer after the look. Each unsensed cell is rock by 0.9, a tunnel's ceiling.
+(deftest an-unsensed-rise-prices-the-pillar-by-the-look-and-the-rock-behind-it
+  (let [prices (fn [sky]
+                 (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "dirt" :count 20}]
+                                            :entities [(zombie 2.5 64 0.5) (zombie -1.5 64 0.5) (zombie 0.5 64 2.5)]})
+                       sensed (tu/sensed-by p)
+                       c (stub-ctx p (atom {}))]
+                   (swap! (fake/state p) assoc :light-default [sky 0])
+                   (aset p "rawWorld" (fake-raw/create p))
+                   (tu/set-sensed! p (fn [pos] (if (and (= 0 (aget pos "x") (aget pos "z")) (< 64 (aget pos "y") 70)) #js {:unknown true :pos pos} (sensed pos))))
+                   (with-stub-mem
+                     (fn []
+                       (with-redefs [respond.pillar/pillar-climb (constantly 0)
+                                     respond.pillar/mob-class (constantly :clear)
+                                     sight/unseen-solid-at-fn (constantly (constantly 0.9))
+                                     ctx/since (constantly [])
+                                     ctx/now (constantly 1000)]
+                         (let [hs (cornered/near-hostiles c)]
+                           (:prices (hostile-fight/weigh c hs (hostile-fight/cornered-answers c hs {:pillar (cornered/pillar-cover c hs)} false nil)))))))))
+        tunnel (prices 0)
+        sky (prices 15)]
+    (is (< (:pillar sky) (:fight sky)) (str "open sky over the pit: the pillar rises, cheaper than the fight " sky))
+    (is (<= (:fight tunnel) (:pillar tunnel)) (str "a tunnel's unseen ceiling: likely rock, the pillar is a look and then the fight " tunnel))))
 
 (deftest the-pillar-climb-priced-is-kept-for-the-plan-after-its-look
   (let [m (atom {})
