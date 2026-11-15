@@ -65,7 +65,7 @@
   "A ctx for job j1 over a register in an atom; t the clock in ms."
   [t]
   (let [d (atom mem/empty-data)]
-    {:id "j1" :t t :d d
+    {:id "j1" :token 1 :t t :d d
      :view (fn [] {:data @d :now @t})
      :remember (fn [kind data policy]
                  (swap! d #(-> % (mem/remove-entries kind (fn [e] (= (:id data) (:id (:data e)))))
@@ -88,6 +88,25 @@
       (is (= ttl (ttl-ms)) "past half its ttl: stamped anew")
       (reset! (:t c) (* 5 ttl))
       (is (empty? (reserve/entries ((:view c)))) "the job never renewed: it lapsed"))))
+
+(deftest a-check-without-a-token-reads-a-due-reserve-without-writing-it
+  (let [c (assoc (writer (atom 0)) :primitives (tu/fake {:inventory [(item "diamond" 1)]}))]
+    (reserve/set-job-entries! c [{:id "j1/c0-a" :item "diamond" :count 1 :strength 1 :by "j1/c0"}])
+    (let [ttl (:until (first (reserve/entries ((:view c)))))
+          check (assoc c :token nil :remember #(throw (js/Error. "cut: the ownership token changed")))]
+      (reset! (:t c) (* 3 (quot ttl 4)))
+      (is (= {"diamond" 1} (reserve/held check :tools)))
+      (is (= ttl (:until (first (reserve/entries ((:view c))))))))))
+
+(deftest renewing-leaves-one-copy-of-the-entry
+  (let [t (atom 0)
+        c (assoc (writer t) :primitives (tu/fake {:inventory [(item "diamond" 1)]}))
+        add! #(swap! (:d c) mem/add-entry :reserve {:t 0 :data %} reserve/policy)
+        c (assoc c :remember (fn [kind data policy] (add! data)))]
+    (add! {:id "j1-a" :item "diamond" :count 1 :strength 1 :by "j1" :until 3600000})
+    (reset! t 3000000)
+    (reserve/rows c :tools)
+    (is (= 1 (count (reserve/entries ((:view c))))))))
 
 (deftest rows-renew-a-running-jobs-entries-and-release-drops-them
   (let [c (assoc (writer (atom 0)) :primitives (tu/fake {:inventory [(item "diamond" 1)]}))]
