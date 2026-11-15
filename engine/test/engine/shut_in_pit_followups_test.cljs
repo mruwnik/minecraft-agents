@@ -2,6 +2,11 @@
   "dig-in's zigzag pit: up-front fluid checks, the straight column only for a bad cell it refuses, a glance at unseen
   side columns, no side column with a hostile, and a bounded roof placement."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
+            [engine.events :as events]
+            [engine.registry :as registry]
+            [plan.shape :as shape]
+            [jobs.lib.world-files :as world]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.shut-in-pit-seen-test :as seen]
@@ -144,3 +149,23 @@
     (is (nil? (stop false)) "the floor block seen: stone to dig")
     (is (= [:no-floor true] ((juxt :stop :unseen) (stop true)))
         "never sensed, air seen over it: no rock read there, but :unseen, so dig-pit prices a pit it looks at first (old code: a plain :no-floor, the pit priced out)")))
+
+(deftest a-danger-pit-is-not-dug-in-the-bodys-own-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (shape/with-author {:id "hut" :parts [{:id "f" :want "stone" :cells (vec (for [x (range -3 4) y [62 63 64] z (range -3 4)] [x y z]))}]} "Fake")
+              p (await (seen/see-surface! (seen/sensing {:blocks seen/ground})))
+              clock (atom 1000000)
+              [log sink] (tu/legacy-capture-sink)
+              eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+                                :world (world/of-data {"hut" plan} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :danger})) {})
+          (loop [i 0]
+            (when (and (< i 100) (seq (:list (core/state eng))))
+              (swap! clock + 500)
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (empty? (seen/digs p)) "no dig into the plan's cells (old code: :spared applied to :for :night only, so the pit was dug)")
+          (is (= :spared (some #(when (= :stopped (:kind %)) (:reason %)) @log))))))))
