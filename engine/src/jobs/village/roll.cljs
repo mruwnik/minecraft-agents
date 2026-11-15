@@ -31,7 +31,7 @@
   most :max-price (nil: no limit). A villager out of view is looked for (round, from the cell beside the workstation, at the spot the body last saw it, by day
   toward where one is heard);
   at night it is waited for till day (reason :night-villager-out-of-view), then looked for once more; one seen this call
-  is waited for ::away-s by day; then :gone. With the body boxed in its stand of the built pen, its near end open
+  is waited for by day as long as the roll is worth (worth-of); then :gone. With the body boxed in its stand of the built pen, its near end open
   (jobs.lib.villager-pen/luring), a villager out of view is left to the pen child, which waits for it to walk in. Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
   the place again are one urgent section (a night or food reflex waits for it); with a spare workstation carried, the
   spare goes in the moment the villager reads jobless and the drop is picked up after, so the villager has no time to
@@ -67,14 +67,12 @@
 
 (a/defargs settings
   {::max-rolls {:default 20 :doc "Rolls (breaks of the workstation) without a match before the call gives up (:no-match)." :spec (a/int-in 1 200)}
-   ::away-s {:default 30 :doc "Seconds a villager seen before may stay out of view (after the workstation is placed) before the call ends :gone." :spec (a/int-in 1 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (villager/poll-s))
-(defn away-s [] (settings/get settings ::away-s))
 (defn reach [] (settings/get settings ::reach))
 (defn leg-s [] (settings/get settings ::leg-s))
 
@@ -685,7 +683,7 @@
   "The villager is out of view: walk to the cell when far from it and none was seen yet, look from where it was seen and
   round, from the cell beside the workstation, then at where the body last saw it (once a sighting), then by day toward
   where it is heard (vantage steps). At night villagers sleep indoors: wait polls till day, then search once more. A
-  villager seen this call is waited for ::away-s by day; then :gone. :again, :continue or the stop."
+  villager seen this call is waited for by day as long as the roll is worth (worth-of); then :gone. :again, :continue or the stop."
   [c pos villager]
   (let [m (ctx/mem c)]
     (cond
@@ -702,7 +700,7 @@
             (:night-waited m) (do (ctx/update-mem! c dissoc :night-waited :memory-walked :flanked :away-since :vantage) :again)
             :else
             (or (await (villager/hear-step! c villager))
-                (if (and (:seen m) (< (- (ctx/now c) (:away-since m (ctx/now c))) (* 1000 (away-s))))
+                (if (and (:seen m) (< (- (ctx/now c) (:away-since m (ctx/now c))) (* 1000 (worth-of c))))
                   (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
                       (await (wait-job! c :villager-out-of-view)))
                   (stop! c (villager/gone-cause c)))))))))

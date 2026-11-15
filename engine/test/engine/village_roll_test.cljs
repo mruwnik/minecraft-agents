@@ -986,6 +986,20 @@
     (add-watch state :hide step)
     (add-watch clock :hide step)))
 
+(deftest a-seen-villager-out-of-view-for-longer-than-the-old-30-s-is-waited-for-while-the-roll-is-worth-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 8.5 :y 64 :z 0.5}})]
+                                     :keeps-job? true
+                                     :wrap (fn [{:keys [p clock] :as env}]
+                                             (let [orig (.-entities p)
+                                                   hide-at (+ @clock 5000)
+                                                   show-at (+ @clock 100000)]
+                                               (aset p "entities" (fn [a] (if (or (< @clock hide-at) (> @clock show-at)) (.call orig p a) #js [])))
+                                               env))} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result)))))))
+
 (deftest a-villager-out-of-view-after-the-reroll-is-waited-for-not-gone
   (async done
     (tu/run-async done
