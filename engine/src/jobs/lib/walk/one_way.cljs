@@ -46,6 +46,11 @@
   (boolean (and (sh-sense/cell-light p at)
                 (look/lit-light? (or (sh-sense/block-light-at p at) 0) (or (sh-sense/sky-light-at p at) 0) (sh-sense/sky-subtract-now p)))))
 
+(defn lit-landing?
+  "Whether a landing at `at` is one the body carries a light to see by or has seen lit."
+  [p at]
+  (boolean (or (light-carried? p) (seen-lit? p at))))
+
 (defn chance
   "The chance that a drop landing at `at` ({:x :y :z}) traps the body: 0 for a one-block drop onto a floor seen (a step down the
   body can jump back up); ::lit-chance when it has seen the floor lit or carries a
@@ -54,8 +59,7 @@
   [p at small?]
   (cond
     (and small? (sh-sense/seen-cell? p (update at :y dec))) 0
-    (light-carried? p) (settings/get settings ::lit-chance)
-    (seen-lit? p at) (settings/get settings ::lit-chance)
+    (lit-landing? p at) (settings/get settings ::lit-chance)
     :else (let [hall (cost/hall-edge-chance (sh-inside/dark-hall-edge p at nil))]
             (+ (* hall (settings/get settings ::hall-chance)) (* (- 1 hall) (settings/get settings ::dark-chance))))))
 

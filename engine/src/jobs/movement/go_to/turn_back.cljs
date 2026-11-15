@@ -25,7 +25,8 @@
   "{:p :trap-s :cells} of steps' drop i (climb-back) onto a landing beside a seen solid side (a pit or trench, not open
   ground with other ways on) when the plan's own way back up from it (to step j) passes feet or head cells the body has
   not seen: :p the chance one of them is solid
-  (look/unseen-solid-at-fn), which shuts the body in at the landing; :trap-s what that costs,
+  (look/unseen-solid-at-fn), which shuts the body in at the landing, no more than one-way/chance of a landing seen lit
+  (or a body carrying a light), where the way on is seen on landing; :trap-s what that costs,
   the climb back out (one-way/climb-out-s) when escape-way/choose finds a way to make there and it is finite, else (nothing it may dig)
   the call's worth spent shut in and the goal lost (left). nil when there is no such drop or no unseen cell."
   [p steps [i j] worth left]
@@ -38,7 +39,9 @@
       (when (and (seq cells) (escape/walled-side? (let [block-at (escape/block-at-of p)] #(when-not (unseen? %) (block-at %))) (cell-of landing)))
         (let [solid-at (look/unseen-solid-at-fn p)
               way (escape-way/choose p (cell-of landing) (cell-of (peek steps)))]
-          {:p (- 1 (transduce (map #(- 1 (solid-at %))) * 1 cells))
+          {:p (let [p-solid (- 1 (transduce (map #(- 1 (solid-at %))) * 1 cells))
+                    landing-cell (zipmap [:x :y :z] (cell-of landing))]
+                (if (one-way/lit-landing? p landing-cell) (min p-solid (one-way/chance p landing-cell false)) p-solid))
            :trap-s (let [out-s (when-not (= :none (:step way)) (one-way/climb-out-s p rim landing))]
                      (if (and out-s (js/isFinite out-s)) out-s (+ worth left)))
            :cells (vec (take 6 cells))})))))

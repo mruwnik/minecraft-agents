@@ -46,3 +46,12 @@
     (is (< extra-s (:cost t)) (pr-str t))
     (is (nil? (turn-back/turn-back c round)) "the way round rests on no drop")
     (is (nil? (turn-back/exceeded c through)) "dirt is dug out of: not a trap worth refusing the goal for")))
+
+(deftest a-trench-landing-seen-lit-is-no-trap-worth-refusing-the-goal-for
+  (let [world {:sight 5 :self {:pos {:x 3.5 :y 64 :z 0.5}} :blocks bedrock-trench-room :time 18000 :light-default [0 0]}
+        dark (turn-back/turn-back (ctx-of world 1200) trench-plan)
+        lit-world (assoc world :light {[4 61 0] [0 14]})
+        lit (turn-back/turn-back (ctx-of lit-world 1200) trench-plan)]
+    (is (some? (turn-back/exceeded (ctx-of world 1200) trench-plan)) "unlit: still refused")
+    (is (< (:p (:shut lit)) (:p (:shut dark))))
+    (is (nil? (turn-back/exceeded (ctx-of lit-world 1200) trench-plan)) (pr-str lit))))
