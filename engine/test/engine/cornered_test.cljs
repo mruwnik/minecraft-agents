@@ -165,7 +165,7 @@
           (is (= 0 (:z m)) "in the stair's own column")
           (is (empty? (blocked-events seen))))))))
 
-(deftest respond-unarmed-flees-down-the-stair
+(deftest respond-unarmed-on-the-stair-flees-from-a-skeleton
   (async done
     (tu/run-async done
       (fn ^:async t []

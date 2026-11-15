@@ -380,9 +380,9 @@
 (deftest a-dig-beside-cells-never-sensed-may-lay-itself-open
   (let [cells [(cell 1 64 0) (cell 1 65 0)]
         rock (into {} (for [x (range -2 3) y (range 62 67) z (range -2 3)] [[x y z] "stone"]))]
-    (is (zero? (pit/shell-fails (sensing-stub rock) cells #{})) "rock seen all round: it cannot fail")
-    (is (< 0 (pit/shell-fails (sensing-stub {}) cells #{}) 1) "unseen round it: each cell open at the share of open rock")
-    (is (< 0 (pit/shell-fails (sensing-stub (dissoc rock [1 64 0] [1 65 0])) cells #{}) 1)
+    (is (zero? (pit/shell-fails (sensing-stub rock) cells (set cells))) "rock seen all round: it cannot fail")
+    (is (< 0 (pit/shell-fails (sensing-stub {}) cells (set cells)) 1) "unseen round it: each cell open at the share of open rock")
+    (is (< 0 (pit/shell-fails (sensing-stub (dissoc rock [1 64 0] [1 65 0])) cells (set cells)) 1)
         "rock seen all round but the dug cells never sensed: each may be open itself")))
 
 (deftest an-unsensed-dig-cell-in-the-bedrock-layer-may-be-undiggable
