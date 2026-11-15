@@ -2673,3 +2673,20 @@
     (is (< 0 pick ##Inf) "a pickaxe cuts the stair away from the mob")
     (is (nil? (dig-s [])) "no tool cuts stone: the walls are a hide, then the same fight")
     (is (< pick (dig-s [{:name "wooden_pickaxe" :count 1}])) "a slower tool digs dearer")))
+
+;; Tamsin S3r3: a husk hit the body while it decided to flee; the first flight step took those blows for a failed
+;; flight and fought (hp 20 -> 6) without a step away
+(deftest blows-taken-before-the-flights-first-leg-do-not-beat-the-body
+  (let [p (tu/fake-on-floor {:entities [(zombie 1.5 64 0.5)]})
+        data (atom (reduce #(mem/add-entry %1 :hurt {:t %2 :data {:amount 2.5 :attacker {:name "zombie"}}} {:cap 50 :ttl 60000})
+                           mem/empty-data [600 800]))
+        beaten? (fn [m] (boolean (with-stub-mem #(with-redefs [ctx/now (constantly 1000)]
+                                                   (pick/beaten? (remembering-ctx p (atom m) data))))))
+        m (atom {})
+        ran-at! (fn [t] (with-stub-mem #(with-redefs [ctx/now (constantly t)] (cornered/ran! (stub-ctx p m)))))]
+    (is (false? (beaten? {})) "two blows while it stood deciding: no leg yet, so no failed flight")
+    (is (false? (beaten? {:legs-at 700})) "one blow since its first leg")
+    (is (true? (beaten? {:legs-at 500})) "both since its first leg: the flight is failing")
+    (ran-at! 500)
+    (ran-at! 900)
+    (is (= [500 900] ((juxt :legs-at :ran-at) @m)) "a later leg keeps the first leg's time")))

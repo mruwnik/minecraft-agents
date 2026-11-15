@@ -1,0 +1,27 @@
+;; Card 4baeafd4 (Tamsin S3r3): a husk hit the body three times while respond-to-hostile decided to flee; the flight's
+;; first step took those blows for a failed flight (respond.cornered/beaten?) and fought without a step away (hp 20 -> 6).
+;; Blows before the flight's first leg say nothing of the flight: the body walks.
+;; The zombie (NoAI, helmeted, silent) stands 12 blocks west, outside the hostile radius; it "hits" the body twice
+;; (rcon damage by it, 0.6 s apart past the invulnerability ticks), then is moved to 2 blocks west of the body, so the
+;; hostile-near trigger fires with both blows within the cornered check's 5 s window and none on a leg.
+;; Should-succeed: the body decides :flee and walks off; no cornered step.
+;; Should-fail control: flee-melee-mob-close/armed-body-fights-a-zombie-beside-it (a won fight is still fought).
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :register [{:trigger :hostile-near}]
+  :plot {:light :lit :length 64}
+  :body {:spawnpoint :far :at [16.5 0 16.5]}
+  :limit-s 60}
+ :cases
+ [{:name "blows-before-the-first-step-do-not-corner-the-flight"
+   :act [[:summon "zombie" [4.5 0 16.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "damage $BODY 1 minecraft:mob_attack by @e[type=zombie,tag=wt,$BOX,limit=1]"]
+         [:wait-s 0.6]
+         [:rcon "damage $BODY 1 minecraft:mob_attack by @e[type=zombie,tag=wt,$BOX,limit=1]"]
+         [:rcon "tp @e[type=zombie,tag=wt,$BOX] ~10 ~ ~"]
+         [:await {:source :job :kind :hostile.decided :data {:decision :flee}} 15]
+         [:wait-s 8]]
+   :expect [{:no-event {:source :job :kind :retreat.cornered} :for-s 15}
+            {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 15}]
+   :after [[:body-far [16.5 0 16.5] 3] [:entities "type=zombie,tag=wt" [[3 -1 3] [62 6 30]] 1]]}]}

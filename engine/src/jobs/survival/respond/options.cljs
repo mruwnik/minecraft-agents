@@ -62,7 +62,7 @@
    ::fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
    ::shot-hits {:default 2 :doc "Hits by a ranged mob within hurt-window-s that make a walking body take cover (seal, or break the line of fire) instead of walking on under fire it cannot answer. 0: it keeps walking." :spec (a/int-in 0 nil)}
    ::cover-tries {:default 2 :doc "Cornered steps under fire in which cover (seal, back off) is tried before an armed body fights a melee mob pressing it: a mob standing in the cells to wall keeps every seal failing, and each back-off step makes the covers open again." :spec (a/int-in 1 nil)}
-   ::beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
+   ::beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s since the flight's first leg that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
    ::press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
    ::arrival-s {:default 4 :doc "Seconds within which a melee mob (not a creeper or an enderman) reaches a cornered armed body: it digs no pit or pocket, which take longer than the mob needs while the mob hits the digger. 0: never." :spec (a/num-in 0 nil)}
    ::pillar-mob-fails {:default {:beside {:k 4 :n 4} :clear {:k 4 :n 8}}
@@ -373,9 +373,11 @@
              [(.-id e) [(.-name e) (danger-q/mob-distance (:primitives c) e)]])))
 
 (defn ran!
-  "Note that the body starts a leg of the flight now: the time and health (memory :ran-at, :ran-health) hit-on-the-run! counts blows from."
+  "Note that the body starts a leg of the flight now: the time and health (memory :ran-at, :ran-health) hit-on-the-run! counts blows from;
+  the flight's first leg's time (:legs-at) beaten? counts them from."
   [c]
-  (ctx/update-mem! c assoc :ran-at (ctx/now c) :ran-health (.-health (.self (:primitives c)))))
+  (let [now (ctx/now c)]
+    (ctx/update-mem! c #(-> % (assoc :ran-at now :ran-health (.-health (.self (:primitives c)))) (update :legs-at (fnil identity now))))))
 
 (defn ^:async leg-step!
   "One flee step to target as a jobs.movement.run-away child of at most leg-s seconds (y-margin (16) blocks past body and target bound its route): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt).

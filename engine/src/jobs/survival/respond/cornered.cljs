@@ -99,19 +99,22 @@
 (defn beaten-hits [] (settings/get settings :jobs.survival.respond.options/beaten-hits))
 
 (defn beaten?
-  "Whether melee mobs within close-radius hit the body beaten-hits times within hurt-window-s: knocked back and
-  stepping away, it is out of hit-reach at each step, yet the flight is failing."
+  "Whether melee mobs within close-radius hit the body beaten-hits times within hurt-window-s since the flight's first
+  leg (memory :legs-at, ran!): knocked back and stepping away, it is out of hit-reach at each step, yet the flight is
+  failing. Blows taken before any leg, while it stood deciding, say nothing of the flight."
   [c]
   (let [n (beaten-hits)
         p (:primitives c)
+        legs-at (:legs-at (ctx/mem c))
         names (->> (near-hostiles c)
                    (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
                                  (<= (danger-q/mob-distance p %) (close-radius))))
                    (map #(.-name %))
                    set)]
     (and (pos? n)
+         (some? legs-at)
          (seq names)
-         (<= n (->> (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))
+         (<= n (->> (ctx/since c :hurt (max legs-at (- (ctx/now c) (* 1000 (hurt-window-s)))))
                     (filter #(some names (hurt-by %)))
                     (map #(:hits (:data %) 1))
                     (reduce + 0))))))
