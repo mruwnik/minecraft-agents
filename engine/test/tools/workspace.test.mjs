@@ -150,6 +150,7 @@ test('player help shows the ./bin form, no body/world plumbing, and says what ou
   for (const [command, word] of [['entities', /:age-ms/], ['map', /:box/], ['world-changes', /:cursor/], ['observe', /:unknown-job/], ['time', /:time-of-day/]]) {
     assert.match(help(command), word, command)
   }
+  assert.doesNotMatch(help('plans'), /--body/)
 })
 
 test('a bad request through a wrapper prints EDN on stdout with the ./bin usage, no body/world plumbing', t => {

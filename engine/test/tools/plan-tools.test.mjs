@@ -436,6 +436,22 @@ test('route tunnels through a hill by default and writes it as the plan\'s :span
   } finally { fx.close() }
 })
 
+test('route tunnels from ends in solid or unseen rock, priced as the blocks dug, but not through water', async () => {
+  const fx = fixture()
+  try {
+    const solid = groundCells().map(([x, y, z]) => [x, y, z, 'stone'])
+    await writeSeen(fx, 'Probe', solid, Date.now() - 1000)
+    const inRock = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    assert.equal(inRock.code, 0, inRock.output)
+    assert.deepEqual(inRock.value.route.spans.map(s => s.kind), [keyword('tunnel')])
+    await writeSeen(fx, 'Probe', solid.filter(([x]) => x >= 12 && x <= 28), Date.now() - 1000)
+    const unseenEnds = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    assert.equal(unseenEnds.code, 0, unseenEnds.output)
+    await writeSeen(fx, 'Probe', solid.map(([x, y, z]) => [x, y, z, x >= 18 && x <= 24 ? 'water' : 'stone']), Date.now() - 1000)
+    assert.equal((await invoke('plan', fx, [...ROUTE, '--dry-run', '--bridge', '0'])).code, 2)
+  } finally { fx.close() }
+})
+
 test('route bridges a seen drop of 2 or more and a lake by default; --bridge 0 forbids it', async () => {
   const fx = fixture()
   try {
@@ -523,7 +539,8 @@ test('route goes round the cells another plan wants, the maker\'s own plan too',
 test('route with no launch run free at its start names that end and the straight cells it lacks', async () => {
   const fx = fixture()
   try {
-    await writeSeen(fx, 'Probe', groundCells({ hills: [[0, 1, 70], [4, 30, 70]] }), Date.now() - 1000)
+    const walled = [-3, -2, -1, 11, 12, 13].flatMap(z => groundCells({ hills: [[0, 40, 69]] }).filter(c => c[2] === 0).map(([x, y, , name]) => [x, y, z, name]))
+    await writeSeen(fx, 'Probe', [...groundCells({ hills: [[0, 1, 69], [4, 30, 69]] }), ...walled], Date.now() - 1000)
     const refused = await invoke('plan', fx, [...ROUTE, '--tunnel', '0', '--dry-run'])
     assert.deepEqual(refused.value.reason, keyword('no-route'))
     assert.match(refused.value.message, /--from \[2 64 5\] has no heading with 7 straight cells/)
@@ -531,7 +548,7 @@ test('route with no launch run free at its start names that end and the straight
   } finally { fx.close() }
 })
 
-test('route refuses bad cells, a missing body or by, and an unseen world; --dry-run writes nothing', async () => {
+test('route refuses bad cells, a missing body or by, and an unseen world with no tunnel allowed; --dry-run writes nothing', async () => {
   const fx = fixture()
   try {
     const bad = args => invoke('plan', fx, ['route', 'line', '--body', 'Probe', '--by', 'Router', ...args])
@@ -541,7 +558,7 @@ test('route refuses bad cells, a missing body or by, and an unseen world; --dry-
     assert.deepEqual((await bad(['--from=1,64,5', '--to=9,64,5', '--nodes', '0'])).value.reason, keyword('bad-nodes'))
     assert.deepEqual((await invoke('plan', fx, ['route', 'line', '--by', 'Router', '--from=1,64,5', '--to=9,64,5'])).value.reason, keyword('body-required'))
     assert.deepEqual((await invoke('plan', fx, ['route', 'line', '--body', 'Probe', '--from=1,64,5', '--to=9,64,5'])).value.reason, keyword('actor-required'))
-    assert.deepEqual((await bad(['--from=2,64,5', '--to=38,64,5'])).value.reason, keyword('no-route'))
+    assert.deepEqual((await bad(['--from=2,64,5', '--to=38,64,5', '--tunnel', '0', '--dry-run'])).value.reason, keyword('no-route'))
     await writeSeen(fx, 'Probe', groundCells(), Date.now() - 1000)
     const spent = await invoke('plan', fx, [...ROUTE, '--nodes', '4'])
     assert.deepEqual(spent.value.reason, keyword('no-route'))

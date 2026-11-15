@@ -71,7 +71,9 @@
    [#"--body BODY " ""]
    [#" (?:<agent>|<body>|BODY)(?= )" ""]
    [#" --world (?:<world>|WORLD)" ""]
-   [#"(check <id>) --body <name>" "$1"]])
+   [#"(check <id>) --body <name>" "$1"]
+   [#"(--to=x,y,z) --body <name>" "$1"]
+   [#"(--box=x,y,z:x,y,z) --body <name>" "$1"]])
 (defn player-usage [text]
   (reduce (fn [t [from to]] (str/replace t (js/RegExp. (.-source from) "g") to)) text player-cuts))
 

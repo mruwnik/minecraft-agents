@@ -68,22 +68,32 @@
 
 (defn height-fn
   "(fn [x z]) -> the y a rail would have in that column: on the seen ground top within the ends' levels, nil when unknown,
-  fluid or claimed for :place (zone-refuses). name-at takes {:x :y :z}, returns the seen block name or nil."
-  [name-at [_ fy _ :as from] [_ ty _ :as to] zones by planned runs]
+  fluid or claimed for :place (zone-refuses). A column with no ground top whose rail and head cells (the ends' middle
+  level and the one above) are solid or unseen, and no water or chasm (gap), is rock: its y is the window's top, so the
+  route tunnels it, priced as the blocks dug (route-prices reads an unseen one as stone); in an end's launch run it is
+  one above that end's level, as a tunnel may not begin before the line has run straight (plan.rail-route/moves). name-at takes {:x :y :z},
+  returns the seen block name or nil."
+  [name-at [_ fy _ :as from] [_ ty _ :as to] zones by planned runs gap]
   (let [mid (quot (+ fy ty) 2)
         depth (+ depth-over-ends (abs (- fy ty)))
         refused? (zone-refuses zones by :place planned [[from (first runs)] [to (second runs)]])
         name-fn (fn [pos] (let [n (name-at pos)] (if (and n (or (re-find surface/on-ground n) (rail/rail-name? n))) "air" n)))
+        rock-at? (fn [x y z] (let [n (name-fn {:x x :y y :z z})]
+                               (or (nil? n) (not (or (ground/open? n) (ground/canopy? n) (ground/no-floor n))))))
+        launch-y (fn [x z] (some (fn [[end n]] (when (in-launch-run? end n [x (second end) z]) (inc (second end))))
+                                 [[from (first runs)] [to (second runs)]]))
         memo (volatile! {})]
     (fn [x z]
       (let [k [x z]
-            y (if (contains? @memo k)
-                (@memo k)
-                (let [top (ground/column-top name-fn x z mid depth)
-                      y (when top (inc top))]
-                  (vswap! memo assoc k y)
-                  y))]
-        (when (and y (not (refused? [x y z])) (not (refused? [x (inc y) z])))
+            [y rock?] (if (contains? @memo k)
+                        (@memo k)
+                        (let [top (ground/column-top name-fn x z mid depth)
+                              rock? (and (nil? top) (not (gap x z)) (rock-at? x mid z) (rock-at? x (inc mid) z))
+                              v [(cond top (inc top) rock? (or (launch-y x z) (+ mid depth))) rock?]]
+                          (vswap! memo assoc k v)
+                          v))
+            at (if rock? mid y)]
+        (when (and y (not (refused? [x at z])) (not (refused? [x (inc at) z])))
           y)))))
 
 (defn water-fn
@@ -158,7 +168,7 @@
                                " (a line's first and last cells run straight and level for its launch groups before a turn); move that end to where they do")
              :else "no rail line fits the seen ground")
        " between the cells (longest tunnel " (or tunnel "any") ", bridge " (or bridge "any")
-       "). Walk and look along the way: unseen columns are not ground, zones and other plans' cells are not touched, and a line needs room for its launch groups at both ends"))
+       "). Walk and look along the way: water and chasms need a bridge, zones and other plans' cells are not touched, and a line needs room for its launch groups at both ends"))
 
 (defn bad-route-text
   "Why the cheapest route cannot be laid (plan.rail/layout's error): a :touching one names the straight launch runs at its
@@ -177,10 +187,11 @@
   [{:keys [id by tunnel bridge launch nodes planned] :or {nodes route/max-nodes planned []}} from to name-at zones]
   (let [opts (cond-> {:tunnel tunnel :bridge bridge} launch (assoc :launch launch))
         [near far :as runs] (launch-runs opts)
-        height (height-fn name-at from to zones by planned runs)
+        gap (water-fn name-at from to)
+        height (height-fn name-at from to zones by planned runs gap)
         ends [[from near] [to far]]
         routed (route/connect height from to
-                              (assoc opts :max-nodes nodes :gap (water-fn name-at from to) :prices (route-prices name-at zones by planned ends)))]
+                              (assoc opts :max-nodes nodes :gap gap :prices (route-prices name-at zones by planned ends)))]
     (if (:error routed)
       {:error (if (= :no-route (:error routed)) :no-route :bad-route)
        :message (if (= :no-route (:error routed))
