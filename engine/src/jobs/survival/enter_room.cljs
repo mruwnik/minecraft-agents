@@ -35,7 +35,7 @@
   is when it is roofed) is walked to (a go-to child, key :roof-walk), then an
   open door or gate of the room is shut (respond.doors/shut-home-door!; a door still open once clicked writes
   :night-door-failed, which ends the job nothing-possible :door-open), a doorway gap in its walls is
-  filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; the filled cells go into the scaffold ledger as :doorway,
+  filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; by night the filled cells go into the scaffold ledger as :doorway (by day they stay),
   which survival.leave-shelter takes back by day (jobs.access.cleanup); a doorway tried once, or left open for want of blocks, is not tried again tonight, :doorway-tried) and a hole in
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
@@ -386,12 +386,12 @@
   :again)
 
 (defn ^:async fill-gap!
-  "Fill the doorway gap (jobs.blocks.fill-cells: a carried wooden door, else the call's blocks), the placed blocks entered in the
-  ledger as :doorway. Once it ends, the doorway is tried for tonight, filled or not, except after a hostile stood in it (the hostile reflex deals with that, the doorway is tried again). :again."
+  "Fill the doorway gap (jobs.blocks.fill-cells: a carried wooden door, else the call's blocks), by night the placed blocks entered in the
+  ledger as :doorway (by day the fill is the way in shut behind the body, which the morning does not take back). Once it ends, the doorway is tried for tonight, filled or not, except after a hostile stood in it (the hostile reflex deals with that, the doorway is tried again). :again."
   [c cells]
   (let [door (room-lib/carried-door (:primitives c))
         blocks (if door [door] (blocks c))
-        r (waits/waiting-out c (await (ctx/call c :shut-doorway 'jobs.blocks.fill-cells (cond-> {:cells (vec cells) :danger? true :ignore-zones? true :purpose :doorway} (seq blocks) (assoc :use {:blocks blocks})))))]
+        r (waits/waiting-out c (await (ctx/call c :shut-doorway 'jobs.blocks.fill-cells (cond-> {:cells (vec cells) :danger? true :ignore-zones? true} (sh-sense/night? (:primitives c)) (assoc :purpose :doorway) (seq blocks) (assoc :use {:blocks blocks})))))]
     (when-not (or (= :continue r) (= :hostile-in-cell (get-in r [:cause :reason])))
       (ctx/remember! c :doorway-tried (first cells) room-lib/doorway-tried-policy))
     (if (= :continue r) :continue :again)))
