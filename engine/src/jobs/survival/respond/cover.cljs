@@ -103,13 +103,13 @@
   "Turn to look along each glance-turns direction from dir ([ux uz]) with a cell the body has not sensed in its first
   glance-reach columns (feet, head, floor, and under an open floor the cell below; not past a seen wall), at the feet
   cell glance-reach blocks along, as a player turns round before running: at most three looks, a sight pass after
-  each, none at a cell already glanced this flight."
+  each, none at a cell already glanced this flight; none once the decision's deadline has passed (room-lib/decision-over?)."
   [c dir]
   (let [p (:primitives c)
         from (u/self-pos c)
         y (js/Math.floor (:y from))]
     (loop [[turn & more] glance-turns]
-      (when turn
+      (when (and turn (not (room-lib/decision-over? c)))
         (let [d (walk/rotate dir turn)
               [gx gz] (walk/column-along from d (cornered/glance-reach))
               cell [gx y gz]]
@@ -253,12 +253,13 @@
   "caught-chance-once!, after the glance along the way away the flight's step takes first (glance-away!, as judge!), and one
   look at the cells its flight would look at first (:look): a way that may be there is priced after the glance the flight
   takes anyway, not before it. One pass: the price asked again after the look is
-  the answer, whatever it still wants to look at (cells past the glance memory would cycle for ever)."
+  the answer, whatever it still wants to look at (cells past the glance memory would cycle for ever), and the answer too
+  when the decision's deadline has passed: the look and the second pricing are left out."
   ([c] (await (caught-chance! c nil)))
   ([c specs]
    (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
    (let [r (await (caught-chance-once! c specs))]
-     (if-let [cells (:look r)]
+     (if-let [cells (when-not (room-lib/decision-over? c) (:look r))]
        (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
            (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
            (await (caught-chance-once! c specs)))

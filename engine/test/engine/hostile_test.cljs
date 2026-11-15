@@ -16,6 +16,8 @@
             [jobs.lib.clock :as clock]
             [jobs.lib.flee-search :as flee-search]
             [jobs.lib.reach :as reach]
+            [jobs.lib.rooms :as room-lib]
+            [jobs.survival.respond.cover :as cover]
             [jobs.lib.look :as look]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.breath :as breath]
@@ -444,7 +446,7 @@
               slow (await (slow-clock-round respond world))
               quick (await (flight-round respond world))]
           (is (fought? slow) "the body acts at once")
-          (is (= [:covers :fight-walk :look-in] (:stages (decision-cut slow))) (pr-str (decision-cut slow)))
+          (is (= [:covers :look-in] (:stages (decision-cut slow))) "an answer the body already acted on is not priced further: no fight walk is asked")
           (is (nil? (decision-cut quick)) "a decision within its budget leaves nothing out"))))))
 
 (deftest a-decision-that-outlasts-a-tick-swings-or-steps-away-first-and-never-fights-a-creeper
@@ -460,6 +462,34 @@
           (is (zero? (count (calls (:p creeper-slow) "attack"))) "a creeper is stepped away from, never fought as the cheap answer")
           (is (pos? (count (calls (:p creeper-slow) "moveTo"))))
           (is (nil? (decision-cut quick)) "a decision within its tick acts on its answer alone"))))))
+
+(deftest a-decision-past-its-deadline-takes-no-glance-and-no-price-inputs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing {:inventory sword :entities []} nil)
+              looks (atom {})
+              gathered (atom 0)
+              orig-gather flee-search/gather
+              runner {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+                      :round (fn ^:async r [c]
+                               (ctx/update-mem! c assoc :decision-deadline 0)
+                               (await (cover/glance-away! c [1 0]))
+                               (swap! looks assoc :over (count (calls p "look")))
+                               (swap! looks assoc :priced (await (flee-search/price! c [] {:chasers [] :meter (reach/meter 0.1 0.1 0.001 0.001 0.001)})))
+                               (room-lib/end-decision! c)
+                               (await (cover/glance-away! c [1 0]))
+                               (swap! looks assoc :after (count (calls p "look")))
+                               (ctx/end c :done nil))}
+              eng (assoc-in eng [:jobs 'runner] runner)]
+          (set! flee-search/gather (fn [& a] (swap! gathered inc) (apply orig-gather a)))
+          (try (core/submit! eng (tu/order '(runner)) {})
+               (await (core/tick! eng))
+               (finally (set! flee-search/gather orig-gather)))
+          (is (zero? (:over @looks)) "no turn to look once the decision's deadline has passed")
+          (is (pos? (:after @looks)) "the same glance with no deadline turns: the cells were unseen")
+          (is (and (:cut? (meta (:priced @looks))) (empty? (:priced @looks)) (zero? @gathered))
+              "a flee price asked with its meter spent gathers nothing and answers a cut, empty set"))))))
 
 (deftest a-flight-steps-flee-search-stops-at-the-steps-deadline
   (async done

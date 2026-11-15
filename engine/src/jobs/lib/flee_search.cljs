@@ -248,7 +248,7 @@
       (update :policy #(into {} (remove (comp fn? val)) %))
       (dissoc :covers)))
 
-(declare price-all! arrive-at shooter? unreached-s scored choose trap-s)
+(declare price-all! arrive-at shooter? unreached-s scored choose trap-s spent?)
 
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
@@ -269,23 +269,26 @@
   would plan no further: the flight's first step after the decision that priced it, in the same step's meter). opts :ways, a
   delay of the chasers with their ways (with-ways), forced only by a search that plans (none: chasers as given)."
   [c targets {:keys [chasers enough?] :as opts}]
-  (let [chased (set (map #(floor-cell (:pos %)) chasers))
-        other? #(not (chased (floor-cell (:pos %))))
-        st (some-> (aget (:primitives c) "perception") :st)
-        in (gather c st targets opts chased other?)
-        k (when st (priced-key in))
-        hit (when st (.get kept-prices st))
-        v (:v hit)
-        left (some-> (:meter opts) :left deref)]
-    (if (and k (= k (:k hit)) (wworld/landing-reads-hold? (:primitives c) (:landings hit))
-             (or (not (:cut? (meta v))) (and left (:left hit) (<= left (:left hit))))
-             ;; a ring stopped at a good-enough way serves only an asker it is still good enough for
-             (or (not (:enough? (meta v))) (and enough? (enough? v #(< % (:staying (meta v)))))))
-      v
-      (let [landings (js/Map.)
-            v (await (price-all! c in other? landings (:meter opts) enough? (:ways opts)))]
-        (when st (.set kept-prices st {:k k :v v :landings landings :left left}))
-        v))))
+  (let [st (some-> (aget (:primitives c) "perception") :st)
+        hit (when st (.get kept-prices st))]
+    ;; a meter spent before the inputs are gathered plans nothing, whatever gathering would cost (Q202)
+    (if (and (spent? (:meter opts)) (nil? hit))
+      (with-meta [] {:nodes 0 :planned 0 :unrouted {} :plan-ms 0 :cut? true})
+      (let [chased (set (map #(floor-cell (:pos %)) chasers))
+            other? #(not (chased (floor-cell (:pos %))))
+            in (gather c st targets opts chased other?)
+            k (when st (priced-key in))
+            v (:v hit)
+            left (some-> (:meter opts) :left deref)]
+        (if (and k (= k (:k hit)) (wworld/landing-reads-hold? (:primitives c) (:landings hit))
+                 (or (not (:cut? (meta v))) (and left (:left hit) (<= left (:left hit))))
+                 ;; a ring stopped at a good-enough way serves only an asker it is still good enough for
+                 (or (not (:enough? (meta v))) (and enough? (enough? v #(< % (:staying (meta v)))))))
+          v
+          (let [landings (js/Map.)
+                v (await (price-all! c in other? landings (:meter opts) enough? (:ways opts)))]
+            (when st (.set kept-prices st {:k k :v v :landings landings :left left}))
+            v))))))
 
 (defn far?
   "Whether flee target t is an end of the far ring (not named, not the near ring's)."
@@ -358,7 +361,7 @@
                :dark (look/dark-fn p {:unseen-dark? false})}
         near (vec (remove far? targets))
         far (filterv far? targets)
-        far-sorted (delay (->> far (map (juxt identity #(- (estimate p @chasers pos % guess)))) (sort-by second) (mapv first)))
+        far-sorted (delay (->> far (map (juxt identity #(if (spent? meter) 0 (- (estimate p @chasers pos % guess))))) (sort-by second) (mapv first)))
         total (+ (count near) (count far))
         ring? (fn [i] (or (>= i (count near)) (nil? (:pos (nth near i)))))
         target (fn [i] (if (< i (count near)) (nth near i) (nth @far-sorted (- i (count near)))))]

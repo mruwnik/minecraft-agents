@@ -283,6 +283,11 @@
   [c ms]
   (some-> (:decision-deadline (ctx/mem c)) (- ms)))
 
+(defn decision-over?
+  "Whether a decision is running and its deadline has passed: a stage that is no search (a sight pass) has no meter to stop it, so it asks."
+  [c]
+  (boolean (some-> (decision-deadline c 0) (<= (clock/now)))))
+
 (defn step-meter
   "The flight step's search-meter, from what its searches have run (step-spent-s); in a decision it stops at the decision's deadline,
   the flee search's held share (flee-hold-s) being what the surveys before it leave of that box."
