@@ -1,0 +1,25 @@
+;; Card e0be9c32: jobs.village.trade/offers search for a named villager by day before ending :gone: one jobs.explore.search round
+;; the body once nothing is seen or heard (Silent villager, so no step to follow). NoAI farmer with one offer (1 emerald for 6 bread),
+;; 20 blocks behind the body (outside its sight cone). Should-succeed: trade-searches-for-a-villager-behind-the-body-by-day,
+;; offers-searches-for-a-villager-behind-the-body-by-day. Should-fail: no villager anywhere in the search radius ends stopped :gone.
+{:defaults
+ {:tags [:village :trade :jobs]
+  :time :day :time-why :villager-schedule
+  :plot {:floor "grass_block" :height 8}
+  :body {:at [24.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["emerald" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "trade-searches-for-a-villager-behind-the-body-by-day"
+   :act [[:summon "villager" [4.5 0 16.5] "{NoAI:1b,Silent:1b,UUID:[I;20263,7,3,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
+         [:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00030000034b" :buy "bread" :count 6})]]
+   :expect [{:event {:source :job :kind :completed :data {:bought 6}} :within-s 220 :of-job true}]
+   :after [[:item "bread" 6] [:item "emerald" 7]]}
+  {:name "offers-searches-for-a-villager-behind-the-body-by-day"
+   :act [[:summon "villager" [4.5 0 16.5] "{NoAI:1b,Silent:1b,UUID:[I;20263,7,4,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
+         [:job (jobs.village.offers {:worth 1200 :villager "00004f27-0000-0007-0000-00040000034b"})]]
+   :expect [{:event {:source :job :kind :completed :data {:profession "farmer"}} :within-s 220 :of-job true}]
+   :after [[:item "bread" 0] [:item "emerald" 8]]}
+  {:name "trade-with-no-villager-in-the-search-radius-ends-gone"
+   :act [[:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00050000034b" :buy "bread" :count 6})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 220 :of-job true}]
+   :after [[:item "bread" 0] [:item "emerald" 8]]}]}

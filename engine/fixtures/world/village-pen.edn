@@ -30,6 +30,15 @@
            [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]
            [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [16 2 15] "cobblestone"]
            [:block [15 1 15] "cobblestone"] [:block [17 1 15] "cobblestone"] [:block [16 1 14] "cobblestone"]]}
+  {:name "pen-at-a-lectern-one-above-the-ground-floors-the-near-end-and-the-boxs-entry"
+   ;; card 41317cb8: the lectern stands on a stone block, so the cells round it have air below: the plug and the box's entry are placed against floors the pen lays first
+   :blocks [[:fill [16 0 16] [16 0 16] "stone"] [:set [16 1 16] "lectern"]]
+   :body {:at [16.5 0 12.5] :yaw 0 :inventory [["cobblestone" 40] ["oak_slab" 2] ["torch" 4]]}
+   :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,81],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000051" :pos #at [16 1 16] :profession "librarian"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:block [16 1 16] "lectern"] [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"] [:block [16 2 18] "cobblestone"]
+           [:block [16 0 14] "cobblestone"] [:block [16 0 17] "cobblestone"] [:block [16 0 15] "cobblestone"]]}
   {:name "pen-shuts-over-a-wall-torch-without-the-body-walking-into-the-ring"
    ;; card 512e8f37: a wall torch stands in the pen's east wall cell (17 0 17); the shut fill digs it and no longer picks the drop up, so the body
    ;; never steps into the cells it encloses: the pen completes, the wall is cobblestone and the body stays in its stand 16 0 15
