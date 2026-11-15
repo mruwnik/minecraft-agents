@@ -33,9 +33,10 @@
                        (rec 3 :hurt :amount 3 :causes #{"zombie"} :at {:x 0.5 :y 70 :z 0.5})]))))
 
 (deftest the-rate-is-k-plus-one-over-the-dark-seconds
-  (let [r (d/report [{:under-40 100} {:under-40 100}] [[:under-40] [:under-40 nil]] [{:under-40 {:hp 10 :hits 3}}])]
+  (let [r (d/report [{:under-40 100} {:under-40 100 :surface-sky 50}] [[:under-40] [:under-40 nil]] [{:under-40 {:hp 10 :hits 3}}])]
     (is (= {:n-s 200 :k 2 :per-s 0.015 :hp 10 :hp-per-s 0.05} (get-in r [:bands :under-40])))
-    (is (= 200 (get-in r [:all :n-s])))))
+    (is (= 250 (get-in r [:all :n-s])))
+    (is (= 200 (get-in r [:underground :n-s])) "the open sky is surface")))
 
 ;; the open air at x 5: sky light 15, no block light
 (defn open-air [x _ _] (when (= 5 x) {:name "air" :block 0 :sky 15}))
@@ -43,7 +44,7 @@
 (deftest open-air-is-dark-at-night-and-lit-by-day
   (let [p (rec 0 :pos :x 5.5 :y 70 :z 0.5)
         q (rec 5000 :pos :x 5.5 :y 70 :z 0.5)]
-    (is (= {:surface 5} (d/exposure open-air (constantly 18000) [p q])))
+    (is (= {:surface-sky 5} (d/exposure open-air (constantly 18000) [p q])) "the open sky is its own band")
     (is (= {} (d/exposure open-air noon [p q])))
     (is (= {} (d/exposure open-air (constantly nil) [p q])) "no time of day, no count")))
 
