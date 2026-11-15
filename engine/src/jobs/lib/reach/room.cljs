@@ -234,21 +234,25 @@
     [[x (+ y 2) z] [nx ny nz] [nx (inc ny) nz]]
     (map (fn [cy] [nx cy nz]) (range (inc y) (dec ny) -1))))
 
+(defn unseen-fn
+  "(x y z) -> whether the body has not seen the cell, each cell read once: a flood asks again at every neighbour."
+  [p]
+  (memo-kind-at (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z})))))
+
 (defn pocket-steps
   "next-cells for the room flood: forward's steps, but onto an unseen feet cell only from a walker whose own feet cell is
   unseen, or from the start when `entered?` (stepped into through a seen door). From a seen open cell an unseen one is the
   edge of what the body knows, not more room: grazing sight down a tunnel misses a wall cell, and the rock behind it is no
   part of the tunnel. A refused step's unseen cells (step-cells) go to (edge! [x y z])."
-  [p kind-at [sx sy sz] entered? edge!]
-  (let [unseen? (memo-kind-at (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z}))))]
-    (fn [x y z]
-      (let [pocket? (or (unseen? x y z) (and entered? (== x sx) (== y sy) (== z sz)))]
-        (.filter (forward kind-at x y z)
-                 (fn [n]
-                   (let [nx (aget n 0) ny (aget n 1) nz (aget n 2)]
-                     (or pocket? (not (unseen? nx ny nz))
-                         (do (doseq [c (step-cells x y z nx ny nz) :when (apply unseen? c)] (edge! c))
-                             false)))))))))
+  [unseen? kind-at [sx sy sz] entered? edge!]
+  (fn [x y z]
+    (let [pocket? (or (unseen? x y z) (and entered? (== x sx) (== y sy) (== z sz)))]
+      (.filter (forward kind-at x y z)
+               (fn [n]
+                 (let [nx (aget n 0) ny (aget n 1) nz (aget n 2)]
+                   (or pocket? (not (unseen? nx ny nz))
+                       (do (doseq [c (step-cells x y z nx ny nz) :when (apply unseen? c)] (edge! c))
+                           false))))))))
 
 (defn room-flood
   "{:cells [...] :unseen? bool :edge #{[x y z]}}: the cells a walker at cell [x y z] reaches (room-kind-at, pocket-steps)
@@ -259,10 +263,11 @@
   ([p kind-at x y z budget] (room-flood p kind-at x y z budget false))
   ([p kind-at x y z budget entered?] (room-flood p kind-at x y z budget entered? nil))
   ([p kind-at x y z budget entered? abort?]
-   (let [edge (volatile! (transient #{}))]
-     (when-let [cells (flood-cells (pocket-steps p kind-at [x y z] entered? #(vswap! edge conj! %)) [x y z] budget abort?)]
+   (let [edge (volatile! (transient #{}))
+         unseen? (unseen-fn p)]
+     (when-let [cells (flood-cells (pocket-steps unseen? kind-at [x y z] entered? #(vswap! edge conj! %)) [x y z] budget abort?)]
        (let [edge (persistent! @edge)]
-         {:cells cells :edge edge :unseen? (boolean (or (seq edge) (some #(unseen-edge? p kind-at %) cells)))})))))
+         {:cells cells :edge edge :unseen? (boolean (or (seq edge) (some #(unseen-edge? p kind-at % unseen?) cells)))})))))
 
 (defn room-of
   "{:cells #{[x y z]} :doors [...]} (room*'s answer) for the cells #js [[x y z]..] of a closed flood."
@@ -566,8 +571,9 @@
    (fn [kind-at put!]
      (let [door? (some-> (u/seen-block p pos) .-name openable?)
            unseen (volatile! false)
+           unseen? (unseen-fn p)
            {:keys [cells closed?]} (flood-visit (partial forward kind-at) [x y z] budget
-                                                (fn [c] (when (unseen-edge? p kind-at c) (vreset! unseen true) true)))
+                                                (fn [c] (when (unseen-edge? p kind-at c unseen?) (vreset! unseen true) true)))
            room (if door?
                   (room* p pos kind-at budget)
                   (when (and closed? (not @unseen)) (room-of p cells)))
