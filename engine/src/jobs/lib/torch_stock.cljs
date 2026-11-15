@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.need :as need]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
@@ -38,7 +39,7 @@
   with a jobs.items.obtain child (slot :torches; chest, craft from coal or charcoal, charcoal by smelt, gather), and with
   coal or charcoal carried only what that fuel makes (4 each). Resolves nil to go on, :continue while the get waits.
   A get that ended :job-time (its chain ran longer than the quote its budget is, the logs and stone it made still carried) goes on as a fresh get,
-  :continue, while another try is worth its price (cost/try-again? :child-round); any other end sets :torches-tried: info torch.stocked, or warn torch.no-stock with the get's cause (nothing when a caller is already getting torches: :duplicate-call). The body walks back to
+  :continue, while another try is worth its price (cost/try-again? :child-round, a try priced at the get's own quote, fetch-time/items-s); any other end sets :torches-tried: info torch.stocked, or warn torch.no-stock with the get's cause (nothing when a caller is already getting torches: :duplicate-call). The body walks back to
   where it began (need :return?). Skipped without :gather in the call's ways."
   [c]
   (let [p (:primitives c)
@@ -51,7 +52,7 @@
                                   {:slot :torches :return? true}))]
         (cond
           (= :continue e) :continue
-          (and (= :job-time (need/cause-why e)) (<= (torch/torches-held p) held) (do (u/failed! c) (cost/try-again? c :child-round)))
+          (and (= :job-time (need/cause-why e)) (<= (torch/torches-held p) held) (do (u/failed! c) (cost/try-again? c :child-round {:try-s (fetch-time/items-s ["torch"] n)})))
           :continue
           :else
           (let [now (torch/torches-held p)]

@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.mine-support :as mt]
             [engine.test-util :as tu]
+            [jobs.lib.cost :as cost]
             [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]))
@@ -78,3 +79,16 @@
           (is (seq (mt/events-of s :limit_reached)) "the first get ran out of job time")
           (is (empty? (mt/events-of s :torch.no-stock)) "it did not give up with the pack worth more than when it began")
           (is (seq (own :torch.stocked s))))))))
+
+(deftest a-torch-get-retry-is-priced-at-the-quote-of-the-get-not-the-seconds-of-a-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              items-s fetch-time/items-s
+              try-again? cost/try-again?
+              s (with-redefs [fetch-time/items-s (fn ([names] (items-s names)) ([names n] (if (= ["torch"] names) 25 (items-s names n))))
+                              cost/try-again? (fn ([c kind] (try-again? c kind)) ([c kind opts] (swap! asked conj [kind opts]) (try-again? c kind opts)))]
+                  (await (mine-with-cooking!)))]
+          (is (seq (mt/events-of s :limit_reached)) "the get ran out of job time")
+          (is (= [[:child-round {:try-s 25}]] (filter (comp #{:child-round} first) @asked)) "its retry costs the quote the get was given"))))))
