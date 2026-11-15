@@ -85,11 +85,11 @@
   (breath/drown-hp (- (dive-s kind-at pos) (breath/air-left-s (.self p)))))
 
 (defn no-air-way
-  "The text that names why a pile under water is not gone for, else nil: the trip there and back does not fit one breath (the quoted
-  route drowns, or the dive down the pile's column and up is longer than the air less ::breath/margin-s) and no block is carried to
+  "The text that names why a pile under water, or one a drowning route leads to, is not gone for, else nil: the trip there and back does not fit one breath (the quoted
+  route drowns, whole or in the part planned so far, or the dive down the pile's column and up is longer than the air less ::breath/margin-s) and no block is carried to
   make an air pocket or a footing with."
   [p kind-at pos drown-hp]
-  (when (and pos (wet-pile? kind-at pos) (nil? (escape/carried-pillar-item p)))
+  (when (and pos (or (wet-pile? kind-at pos) (pos? drown-hp)) (nil? (escape/carried-pillar-item p)))
     (let [dive (dive-s kind-at pos)
           air (- (breath/air-left-s (.self p)) (breath/margin-s))]
       (cond
@@ -151,7 +151,7 @@
         wet-at (reach/seen-lookup p reach/kind-of :unseen)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
         mobs (mapv (fn [{:keys [mob pos]}] {:name mob :pos pos}) (get-in quoted [:risk :threats]))
-        drown-hp (get-in quoted [:route :drown] 0)
+        drown-hp (max (get-in quoted [:route :drown] 0) (get-in quoted [:route :partial :drown] 0))
         wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))
               {:name (if (= "drowning" cause) "drowning" "water")
                :danger (max drown-hp (if (wet-pile? wet-at pos) (dive-hp p wet-at pos) 0))})

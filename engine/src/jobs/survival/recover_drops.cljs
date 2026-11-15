@@ -141,6 +141,7 @@
                 (assoc :at (ctx/now c)))]
       (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (pl/baseline c (:t entry) (:pos (:data entry)) (cfg/collect-radius)))))
       (dth/save-trip! c)
+      (ctx/emit! c :recover_decided :info (assoc (est/numbers e) :text (est/decision-text (if (<= (est/ev-worth e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) (cfg/margin))) :skip :fetch) e (cfg/margin))))
       e)))
 
 

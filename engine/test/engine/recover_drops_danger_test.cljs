@@ -786,3 +786,20 @@
           (await (run-until-empty eng 20))
           (let [text (decided-text eng)]
             (is (re-find #"value [0-9.]+ \(.*, [0-9]+ other kinds [0-9.]+\)" text) text)))))))
+
+(deftest a-partial-quote-that-drowns-in-the-part-planned-skips-a-dry-pile-that-needs-the-swim
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [] :inventory []})
+        death {:pos {:x 20 :y 64 :z 0} :inventory dt/death-pile-of-the-field-report}
+        c {:primitives p :args {} :view #(mem/view (:store eng))}
+        quoted {:uses {:job-time [5 5 ##Inf]} :route {:found false :reason :partial :partial {:drown 4}}}
+        priced (estimate/estimate c death 5000 quoted)]
+    (is (= [js/Infinity :no-air-way] ((juxt :cost :reason) priced)) "the planned part drowns, the pile is dry, no block makes air")))
+
+(deftest the-fetch-decision-is-emitted-with-its-parts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await ((fetch-run "fall")))
+              decided (first (filter #(= :recover_decided (:kind %)) @seen))]
+          (is (some? decided))
+          (is (every? #(contains? decided %) [:value :chance :cost :parts :text])))))))
