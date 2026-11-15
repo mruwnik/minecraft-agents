@@ -291,7 +291,7 @@
 
 (defn fight-answer
   "The answer of fighting the mobs of near the fight goes for (fought, nearest first; nil when none) for cost/decide: the walk there (walk-hp and the mean
-  seconds of walk-q, go-to's quote of it, dark and unseen cells priced as go-to plans them; none: its lower bound, the straight way to the first; a walk with no finite time is ##Inf seconds, never cheap) and the fight with near and the
+  seconds of walk-q, go-to's quote of it, dark and unseen cells priced as go-to plans them; none, or one that began in the air (start-not-standable): its lower bound, the straight way to the first; a walk with no finite time is ##Inf seconds, never cheap) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
   felt lately or of its mobs, :shape cost/fight-answer's width over the fight's blows, :caught its fight gone bad (at the prior of the health its blasts leave) with the
   same walk, felt blows and blasts. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
@@ -313,7 +313,7 @@
             stats (cost/armour-stats (:equipment fight))
             {:keys [rate hardest]} (incoming c)
             a (cost/fight-answer fight)
-            walk-s (second (get-in walk-q [:uses :job-time]))
+            walk-s (when-not (= "start-not-standable" (some-> walk-q :route :reason name)) (second (get-in walk-q [:uses :job-time])))
             seconds (+ (:seconds a) (if (number? walk-s) walk-s (/ (danger-q/mob-distance p (first fought)) cost/walk-speed)))
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
             sighted (if lone-creeper? [] (sighted-blasting c near seconds))

@@ -359,6 +359,28 @@
           (is (every? #(<= (:x %) 0) (tu/walked-to (:eng s))) "no step toward the zombie 7 blocks off: it closes to the body")
           (is (not (fought? s)) "nothing is in reach to swing at"))))))
 
+(defn ^:async fight-price-with-quote
+  "respond's fight price (:hostile.decided :prices) over a world whose go-to quote of the walk to the fought mob is q."
+  [world q]
+  (let [quote! pick/quote!]
+    (set! pick/quote! (fn [_ _] (js/Promise.resolve q)))
+    (try
+      (let [{:keys [seen] :as s} (await (flight-round respond world))]
+        {:fight (:fight (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))) :fought? (fought? s)})
+      (finally (set! pick/quote! quote!)))))
+
+(deftest a-walk-quote-that-found-none-never-prices-the-fight-infinite
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [none {:uses {:job-time [##Inf ##Inf ##Inf]} :route {:found false :reason :no-path}}
+              mid-air {:uses {:job-time [##Inf ##Inf ##Inf]} :route {:found false :reason :start-not-standable}}
+              melee (await (fight-price-with-quote {:inventory sword :entities [(zombie 1 0)]} none))
+              shooter (await (fight-price-with-quote {:inventory sword :entities [{:id 1 :name "skeleton" :kind "hostile" :pos {:x 6 :y 64 :z 0} :visible true}]} mid-air))]
+          (is (and (number? (:fight melee)) (< (:fight melee) ##Inf)) "a zombie in reach needs no walk: its quote is not asked")
+          (is (:fought? melee) "full health, sword, one adjacent zombie: the body swings")
+          (is (< (:fight shooter) ##Inf) "a walk quoted from the air (start-not-standable) is priced as the straight way"))))))
+
 (deftest a-fight-holds-for-a-melee-mob-with-a-shooter-in-the-scene
   (async done
     (tu/run-async done
