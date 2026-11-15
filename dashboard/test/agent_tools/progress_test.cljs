@@ -380,14 +380,14 @@
         (is (nil? (:want kept)) "and the plan file lost them"))
       (finally (.rmSync fs dir #js {:recursive true :force true})))))
 
-(deftest an-ended-goal-is-forgotten-so-the-next-wait-does-not-wake-on-it
+(deftest an-ended-goal-and-its-wants-are-forgotten-so-the-next-wait-does-not-wake-on-them
   (let [dir (.mkdtempSync fs (.join path (.tmpdir os) "progress-plan-"))]
     (try
       (let [r (progress/remember-plan! (request "Probe" "--world" "w" "--state" dir "--goal" "j14" "--want" "iron_ingot:24"))
             _ (progress/forget-goal! r)
             later (progress/remember-plan! (request "Probe" "--world" "w" "--state" dir))]
         (is (nil? (:goal later)))
-        (is (= [["iron_ingot" 24]] (:want later))))
+        (is (nil? (:want later)) "the wants went with their goal"))
       (finally (.rmSync fs dir #js {:recursive true :force true})))))
 
 (deftest a-hit-wakes-progress-and-the-reply-says-so-first

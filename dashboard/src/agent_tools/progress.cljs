@@ -117,11 +117,12 @@
     (merge r plan)))
 
 (defn forget-goal!
-  "Drop the saved goal from the plan file: a goal's ending is reported once, not by every later wait."
+  "Drop the saved goal and its wants from the plan file: a goal's ending is reported once, not by every later wait,
+  and the wants belonged to that goal."
   [{:keys [plan-file]}]
   (when (and plan-file (.existsSync fs plan-file))
     (let [saved (data/read-edn (.readFileSync fs plan-file "utf8"))]
-      (.writeFileSync fs plan-file (str (data/write-edn (dissoc saved :goal)) "\n")))))
+      (.writeFileSync fs plan-file (str (data/write-edn (dissoc saved :goal :want)) "\n")))))
 
 ;; The line
 
