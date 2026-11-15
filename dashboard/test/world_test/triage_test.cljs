@@ -199,3 +199,14 @@
         "c4 (commit not in the revision) and c7 (not live) add nothing; fixture b names all its cases; c6's a/z is no case, so its fixture a runs whole")
     (is (= ["c3"] (map :id (:no-fixture r))))
     (is (= ["z/gone"] (:canary-missing r)))))
+
+(deftest a-live-card-with-no-named-case-runs-the-fixtures-its-commits-changed-or-the-cases-its-text-names
+  (let [cases (mapv (fn [id] {:id id}) ["a/x" "b/w" "b/e" "p/q" "p/r" "z/canary"])
+        card (fn [id commits text] {:id id :column "live" :title id :commits commits :description "" :all-text text})
+        r (t/select-ids {:cards [(card "k1" ["c1"] "nothing") (card "k2" ["c2"] "see p/q") (card "k3" ["c3"] "nothing") (card "k4" ["c4"] "plain")]
+                         :ancestor? (constantly true) :cases cases :canary []
+                         :files-of {"c1" #{"b"} "c3" #{"gone"}}})]
+    (is (= ["b/e" "b/w" "p/q"] (:ids r)) "k1: every case of fixture b; k2: the case its text names")
+    (is (= ["k1"] (map :id (:by-commits r))))
+    (is (= ["k2"] (map :id (:by-prose r))))
+    (is (= ["k3" "k4"] (map :id (:no-fixture r))) "a changed file with no case here names nothing")))

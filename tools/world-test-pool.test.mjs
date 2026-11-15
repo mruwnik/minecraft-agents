@@ -5,7 +5,7 @@ import net from 'node:net'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown, withoutUnskipped, childMatchArgs } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, emptySelectionCode, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown, withoutUnskipped, childMatchArgs } from './world-test-pool.mjs'
 import { pidFileBody } from './res-slot.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
@@ -358,6 +358,10 @@ test('noCasesSelected: a listing that leaves no unit is an empty selection; no l
   assert.equal(noCasesSelected([], parseListed('')), true)
   assert.equal(noCasesSelected(['a'], parseListed('a/x  nil\n')), false)
   assert.equal(noCasesSelected([], null), false)
+})
+test('emptySelectionCode: an empty selection is clean only when --match-ids asked for ids', () => {
+  assert.equal(emptySelectionCode(['a/x']), 0)
+  assert.equal(emptySelectionCode([]), 2)
 })
 test('runPool: no unit ran is exit 2 (no cases selected), like the single-body runner', { timeout: 10000 }, async () => {
   const r = await runPool({ units: [], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner((f) => ok(f), []) })

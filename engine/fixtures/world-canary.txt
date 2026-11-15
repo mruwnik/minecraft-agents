@@ -11,3 +11,7 @@ mine-lip-lean/lean-over-a-dug-cell-with-no-floor-keeps-the-body-up
 mine-hand-harvestable/stone-with-no-pickaxe-and-nothing-to-fetch-ends-no-tool-pickaxe
 village-roll/nitwit-cannot-be-rolled
 village-breed/met-target-feeds-nothing
+build-path/carried-shovel-paths-the-box
+obtain-any-wood/any-planks-explores-for-any-log
+cornered-retreat/pocket-when-pickaxe-and-no-blocks
+animals-baby-census/breed-done-counts-the-calf

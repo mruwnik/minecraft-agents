@@ -11,7 +11,7 @@
 (def usage
   (str "usage: node tools/sweep-triage.mjs --dir DIR [--previous RESULTS.edn ...] [--rev R] [--repo PATH] [--plans PLANS.edn] [--db FILE] [--board ID | --board-file BOARD.edn] [--out report.edn]\n"
        "       node tools/sweep-triage.mjs --unskip-list --previous RESULTS.edn ... [--repo PATH] [--rev R] [--prev-rev P] [--db FILE] [--board ID] --out FILE: the known failures named by the live plans of testing, live and in_review cards whose commits are in the revision, and all known failures of fixture files changed since P, one id per line, for world-sweep --unskip-ids.\n"
-       "       node tools/sweep-triage.mjs --select-list --cases CASES.txt [--canary CANARY.txt] [--repo PATH] [--rev R] [--db FILE] [--board ID] --out FILE: the targeted sweep's case ids (world-sweep --match-ids): the cases named by the live plans of live cards whose commits are in the revision, plus the canary ids. CASES.txt = output of the world-list suite (first word of each line is the id).\n"
+       "       node tools/sweep-triage.mjs --select-list --cases CASES.txt [--canary CANARY.txt] [--plans PLANS.edn] [--repo PATH] [--rev R] [--db FILE] [--board ID] --out FILE: the targeted sweep's case ids (world-sweep --match-ids): the cases named by the live plans of live cards whose commits are in the revision, plus, for a live card naming none, the fixtures its commits changed or the cases its text names, plus the canary ids. CASES.txt = output of the world-list suite (first word of each line is the id).\n"
        "DIR holds sweep-<pass>.edn (day, night, night-exclusive, any sweep-*.edn except sweep-summary.edn). --previous: the earlier sweep's result files, as the pool's --durations.\n"
        "--plans: EDN map of card id prefix -> text naming fixtures/cases, for a card whose own plan names none. "
        "--rev (default HEAD) and --repo (default .): a card is covered when its commits are ancestors of the revision. Prints a text summary; --out writes the full EDN report."))
@@ -149,15 +149,28 @@
                                  (map :id (filter #(contains? (set changed-files) (:file %)) cases))))))))
 
 (defn select-ids
-  "{:cards :ancestor? :cases :canary} -> {:ids :cards :no-fixture :canary-missing}: the case ids a targeted sweep runs. cases = every case of the fixtures ([{:id}]); cards = live cards, those whose commits are all in the revision count, each with the cases its live plan names; canary = fixed case ids that run every time (ones no longer in cases are listed in :canary-missing). :no-fixture lists the covered cards whose plan names no case."
-  [{:keys [cards ancestor? cases canary]}]
+  "{:cards :ancestor? :cases :canary :files-of} -> {:ids :cards :by-commits :by-prose :no-fixture :canary-missing}: the case ids a targeted sweep runs. cases = every case of the fixtures ([{:id}]); cards = live cards, those whose commits are all in the revision count; canary = fixed case ids that run every time (ones no longer in cases are listed in :canary-missing). A covered card runs the cases its live plan names; with none, all cases of the fixture files its commits changed (files-of: sha -> set of fixture file names; :by-commits); else those its title, description or live-plan notes name in prose (:all-text; :by-prose). :no-fixture lists the covered cards still without a case."
+  [{:keys [cards ancestor? cases canary files-of] :or {files-of (constantly #{})}}]
   (let [cases (mapv #(assoc % :file (first (str/split (:id %) #"/"))) cases)
         known (set (map :id cases))
         covered (filter #(and (= "live" (:column %)) (every? ancestor? (:commits %))) cards)
-        named (mapv (fn [c] {:id (:id c) :title (:title c) :cases (mapv :id (named-cases (card-plan-text c) cases))}) covered)]
-    {:ids (vec (sort (distinct (concat (mapcat :cases named) (filter known canary)))))
-     :cards (mapv #(select-keys % [:id :title]) (filter (comp seq :cases) named))
-     :no-fixture (mapv #(select-keys % [:id :title]) (remove (comp seq :cases) named))
+        by-file (group-by :file cases)
+        pick (fn [c]
+               (let [named (mapv :id (named-cases (card-plan-text c) cases))
+                     changed (into #{} (mapcat files-of) (:commits c))
+                     from-commits (mapv :id (mapcat by-file (sort changed)))
+                     from-prose (mapv :id (named-cases (:all-text c) cases))]
+                 (cond (seq named) [:plan named]
+                       (seq from-commits) [:commits from-commits]
+                       (seq from-prose) [:prose from-prose]
+                       :else [:none []])))
+        picked (mapv (fn [c] (let [[how ids] (pick c)] {:id (:id c) :title (:title c) :how how :cases ids})) covered)
+        with (fn [how] (mapv #(select-keys % [:id :title]) (filter #(= how (:how %)) picked)))]
+    {:ids (vec (sort (distinct (concat (mapcat :cases picked) (filter known canary)))))
+     :cards (with :plan)
+     :by-commits (with :commits)
+     :by-prose (with :prose)
+     :no-fixture (with :none)
      :canary-missing (vec (remove known canary))}))
 
 (defn bug-matches [bugs {:keys [id file]}]
@@ -225,7 +238,8 @@
         notes (group-by :task_id (q "select task_id, content from task_notes where task_id in (select id from tasks where board_id=BOARD and status in COLS) and lower(content) like '%live plan%' order by created_at"))
         commits (group-by :task_id (q "select task_id, sha from task_commits where task_id in (select id from tasks where board_id=BOARD and status in COLS)"))
         bugs (q "select id, title from tasks where board_id=BOARD and status not in ('done','rejected') and title like 'Bug%'")]
-    {:cards (mapv (fn [t] (assoc t :plan-notes (mapv :content (notes (:id t))) :commits (mapv :sha (commits (:id t))))) tasks)
+    {:cards (mapv (fn [t] (assoc t :plan-notes (mapv :content (notes (:id t))) :commits (mapv :sha (commits (:id t)))
+                                     :all-text (str/join "\n" (cons (str (:title t) "\n" (:description t)) (map :content (notes (:id t))))))) tasks)
      :bugs bugs}))
 
 (defn ancestor-fn
@@ -246,6 +260,13 @@
   (let [r (cp/spawnSync "git" #js ["diff" "--name-only" (str from ".." to) "--" "engine/fixtures/world"] #js {:cwd repo :encoding "utf8"})]
     (when-not (zero? (.-status r)) (throw (js/Error. (str "git diff " from ".." to ": " (.-stderr r)))))
     (fixture-stems (.-stdout r))))
+
+(defn commit-fixtures-fn
+  "A function sha -> the fixture file names the commit changed (empty for an unknown sha)."
+  [repo]
+  (fn [sha]
+    (let [r (cp/spawnSync "git" #js ["diff-tree" "--no-commit-id" "--name-only" "-r" sha] #js {:cwd repo :encoding "utf8"})]
+      (if (zero? (.-status r)) (fixture-stems (.-stdout r)) #{}))))
 
 (defn repo-fixture-files
   "The fixture file names (no .edn) under engine/fixtures/world of the repo's working tree."
@@ -287,12 +308,13 @@
         o (parse-args args)]
     (cond
       (and (:select-list o) (:cases o) (:out o))
-      (let [r (select-ids {:cards (:cards (read-board (:db o) (:board o) ["live"]))
+      (let [r (select-ids {:cards (:cards (with-plans (read-board (:db o) (:board o) ["live"]) (some-> (:plans o) (fs/readFileSync "utf8") reader/read-string)))
                            :ancestor? (ancestor-fn (:repo o) (:rev o))
+                           :files-of (commit-fixtures-fn (:repo o))
                            :cases (mapv (fn [id] {:id id}) (read-id-lines (:cases o)))
                            :canary (if (:canary o) (read-id-lines (:canary o)) [])})]
         (fs/writeFileSync (:out o) (apply str (map #(str % "\n") (:ids r))))
-        (js/console.log (str (count (:ids r)) " ids -> " (:out o) "; " (count (:cards r)) " live cards covered; " (count (:no-fixture r)) " name no case"
+        (js/console.log (str (count (:ids r)) " ids -> " (:out o) "; named by plan " (count (:cards r)) ", by commits' fixtures " (count (:by-commits r)) ", by prose " (count (:by-prose r)) ", no case " (count (:no-fixture r))
                              (apply str (map #(str "\n  no case: " (:id %) " " (:title %)) (:no-fixture r)))
                              (apply str (map #(str "\n  canary gone: " %) (:canary-missing r)))))
         0)

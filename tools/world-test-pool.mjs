@@ -142,6 +142,8 @@ export const parseListed = (text) => {
 }
 // the units that have at least one listed case (all of them without a listing)
 export const noCasesSelected = (units, listed) => listed !== null && !units.length
+// --match-ids naming nothing of this phase is a clean empty pass (a targeted sweep); no ids asked for and none found is a setup fault
+export const emptySelectionCode = (matchIds) => (matchIds.length ? 0 : 2)
 export const unitsWithCases = (units, listed) => (listed ? units.filter((u) => listed.has(u)) : units)
 // ---- night batches
 const NIGHT_BUDGET_S = 330 // the runner resets a night at 20000: 6000 ticks from 14000 are 300 s at 20 TPS, less the set-up of each body
@@ -711,7 +713,7 @@ const nightMain = async (p, byStem, previous, script) => {
   if (repeatOf(p) > 1) { console.error('world-test pool: --night-batches runs each case once (no --repeat)'); return 2 }
   const r = spawnSync(process.execPath, [script, ...nightListArgs(p)], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
   const cases = r.status === 0 ? parseNightClasses(r.stdout) : []
-  if (!cases.length) { console.error('world-test pool: no cases selected'); emitLine({ event: 'plan', total: 0 }); return 2 }
+  if (!cases.length) { console.error('world-test pool: no cases selected'); emitLine({ event: 'plan', total: 0 }); return r.status === 0 ? emptySelectionCode(p.matchIds) : 2 }
   const cores = os.cpus().length
   const capNow = () => poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
   if (!(await waitMin(p, capNow))) return 4
@@ -770,7 +772,7 @@ export const main = async (args) => {
   if (noCasesSelected(units, listed)) {
     console.error('world-test pool: no cases selected (none match the paths and flags, or all are unchanged under --changed-since-pass)')
     emitLine({ event: 'plan', total: 0 })
-    return 2
+    return emptySelectionCode(p.matchIds)
   }
   const cores = os.cpus().length
   const capNow = () => poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
