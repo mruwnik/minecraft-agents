@@ -1,8 +1,8 @@
 ;; Card d28f118e (Brindle S9): the cornered options go cheapest first, the stand priced with every mob that hits it. A pit 5x5,
-;; 3 deep (no way out), cut in a stone mass; the body in it unarmed with 16 dirt and resistance. Should-succeed: a NoAI creeper
-;; 2 off is already in swell range (walls would not stop its blast), so the body stands (a :pause hold) before any walls.
-;; The body faces the creeper (yaw 270, east): a creeper is silent, so out of the view cone it is never known and hostile-near never fires.
-;; Should-fail (the stand): with a NoAI zombie in reach as well, standing is priced with its blows and the walls come first.
+;; 3 deep, cut in a stone mass; the body in it unarmed with 16 dirt and resistance, facing (yaw 270, east) a NoAI creeper 2 off:
+;; a creeper is silent, so out of the view cone it is never known. Every answer pays the blast of a creeper already in swell
+;; range; the stand also holds for a whole hide, so a cover (walls or a pillar out of the pit) is cheaper by a clear margin.
+;; Should-fail (the stand): no :pause hold before a cover starts.
 {:defaults
  {:tags [:hostile :survival :cornered :creeper]
   :time :any
@@ -13,12 +13,7 @@
   :body {:at [9.5 1 15.5] :yaw 270 :effects [["resistance" 600 3]] :inventory [["dirt" 16]]}
   :limit-s 45}
  :cases
- [{:name "cornered-beside-a-creeper-in-swell-range-stands"
+ [{:name "cornered-beside-a-creeper-in-swell-range-covers-before-it-stands"
    :act [[:summon "creeper" [11.5 1 15.5] "{NoAI:1b}"]]
-   :expect [{:event {:source :job :kind :child_started :data {:slot :pause}} :within-s 30}
-            {:no-event {:source :job :kind :child_started :data {:slot :plug}} :for-s 30 :until {:source :job :kind :child_started :data {:slot :pause}}}]}
-  {:name "cornered-beside-a-creeper-and-a-zombie-walls-first"
-   :act [[:summon "creeper" [11.5 1 15.5] "{NoAI:1b}"]
-         [:summon "zombie" [9.5 1 14.0] "{NoAI:1b}"]]
-   :expect [{:event {:source :job :kind :child_started :data {:slot :plug}} :within-s 30}
-            {:no-event {:source :job :kind :child_started :data {:slot :pause}} :for-s 30 :until {:source :job :kind :child_started :data {:slot :plug}}}]}]}
+   :expect [{:event {:source :job :kind :child_started :data {:slot #{:plug :pillar}}} :within-s 30}
+            {:no-event {:source :job :kind :child_started :data {:slot :pause}} :for-s 30 :until {:source :job :kind :child_started :data {:slot #{:plug :pillar}}}}]}]}
