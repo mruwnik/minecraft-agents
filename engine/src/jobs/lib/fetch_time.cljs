@@ -10,11 +10,18 @@
 
 (defn one-unit-s [] (settings/get settings ::one-unit-s))
 
+(defn items-fig
+  "{:value :sd} of the fetch (cost/fetch-value) of n (default 1) of the one of names that adds up least; zeros for no names."
+  ([names] (items-fig names 1))
+  ([names n]
+   (if (seq names)
+     (apply min-key #(+ (:value %) (:sd %)) (map #(select-keys (cost/fetch-value [{:name % :count (or n 1)}]) [:value :sd]) names))
+     {:value 0 :sd 0})))
+
 (defn items-s
-  "Seconds a fetch of n (default 1) of any one of names may take: the least over them of its fetch-value (the usual cost
-  from nothing: measured gathers, the walk to each one's source and the recipe tree, so an anvil counts its 31 iron)
-  plus one sd of it (Q184)."
+  "Seconds a fetch of n (default 1) of any one of names may take: its items-fig value plus one sd (Q184), so an anvil counts its 31 iron."
   ([names] (items-s names 1))
   ([names n]
-   (let [s (if (seq names) (apply min (map #(let [{:keys [value sd]} (cost/fetch-value [{:name % :count (or n 1)}])] (+ value sd)) names)) 0)]
+   (let [{:keys [value sd]} (items-fig names n)
+         s (+ value sd)]
      (if (js/isFinite s) s 0))))

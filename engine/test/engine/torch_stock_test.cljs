@@ -6,6 +6,7 @@
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.fetch-time :as fetch-time]
+            [jobs.lib.need :as need]
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]))
 
@@ -74,7 +75,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [items-s fetch-time/items-s
-              s (with-redefs [fetch-time/items-s (fn ([names] (items-s names)) ([names n] (if (= ["torch"] names) 25 (items-s names n))))]
+              s (with-redefs [fetch-time/items-s (fn ([names] (items-s names)) ([names n] (if (= ["torch"] names) 25 (items-s names n))))
+                              need/obtain-spend (fn [_ _ _ _] {:job-time 25})]
                   (await (mine-with-cooking!)))]
           (is (seq (mt/events-of s :limit_reached)) "the first get ran out of job time")
           (is (empty? (mt/events-of s :torch.no-stock)) "it did not give up with the pack worth more than when it began")
@@ -88,6 +90,7 @@
               items-s fetch-time/items-s
               try-again? cost/try-again?
               s (with-redefs [fetch-time/items-s (fn ([names] (items-s names)) ([names n] (if (= ["torch"] names) 25 (items-s names n))))
+                              need/obtain-spend (fn [_ _ _ _] {:job-time 25})
                               cost/try-again? (fn ([c kind] (try-again? c kind)) ([c kind opts] (swap! asked conj [kind opts]) (try-again? c kind opts)))]
                   (await (mine-with-cooking!)))]
           (is (seq (mt/events-of s :limit_reached)) "the get ran out of job time")

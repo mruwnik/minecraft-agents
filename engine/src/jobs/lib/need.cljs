@@ -17,6 +17,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.storage :as storage]
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
@@ -29,7 +30,7 @@
 
 (def built-in
   "The limits of a fetch with every source."
-  {:what kinds :how sources :minutes 10 :fail-minutes 10})
+  {:what kinds :how sources :fail-minutes 10})
 
 (defn child-limits
   "The call keys of limits o for a fetch child job: :how as :ways (an obtain's :craft brings :smelt), :minutes as
@@ -220,6 +221,24 @@
           (:wait-ms data) (+ (/ (:wait-ms data) 1000) (or (:price (nth (status 0) 2 nil)) 0))
           :else ##Inf)))
 
+;; The obtain's own default budget is resolved from its args alone, so a far source's search (priced only in its quote)
+;; would outrun it: the caller quotes first.
+(defn ^:async obtain-spend
+  "The :spend {:job-time} for an obtain child of args with no budget given, booked in the caller's memory once per child
+  (slot fresh): the larger of its default (fetch-time/items-s) and its quote's mean plus the sd of the fetch; nil when
+  the quote is an ending or has no finite mean (the default stands)."
+  [c slot args fresh?]
+  (if-not fresh?
+    (get-in (ctx/mem c) [:need/spend slot])
+    (let [names (if (:item args) [(:item args)] (:any-of args))
+          q (when (seq names) (await (ctx/quote c 'jobs.items.obtain args)))
+          mean (get-in q [:uses :job-time 1])
+          s (when (and mean (js/isFinite mean))
+              {:job-time (max (fetch-time/items-s names (or (:count args) 1))
+                              (+ mean (:sd (fetch-time/items-fig names (or (:count args) 1)))))})]
+      (ctx/update-mem! c assoc-in [:need/spend slot] s)
+      s)))
+
 (defn ^:async fetch!
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
   [c job args cause-reason wanted {:keys [slot return?] :as o}]
@@ -236,7 +255,9 @@
         (when (and fresh? return? (not (:need/return (ctx/mem c))))
           (ctx/update-mem! c assoc :need/return {:cell (feet c)}))
         (let [total (total-of c slot job args fresh?)
-              r (await (call! c slot job (cond-> args total (assoc :count total))))
+              args (cond-> args total (assoc :count total))
+              spend (when (and (= 'jobs.items.obtain job) (not (:spend args))) (await (obtain-spend c slot args fresh?)))
+              r (await (call! c slot job (cond-> args spend (assoc :spend spend))))
               e (if (= :continue r) :continue (ending-for r cause-reason wanted))]
           (when-not (= :continue e)
             (ctx/update-mem! c #(cond-> (cond-> % (= :done (:kind e)) (assoc :need/done {:want want :have (counts c (got-names wanted e))}))

@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [jobs.lib.fetch-time :as fetch-time]
             [jobs.lib.need :as need]
             [jobs.lib.waits :as waits]))
 
@@ -22,8 +23,9 @@
 (defn stopper
   "A fetch job: each round records its args and slot, then does (step c), which ends it :done (nil) or with the
   reason's ending (ending-of); :continue yields instead."
-  [seen step start]
+  [seen step start quote-s]
   {:ways [:chest :craft :smelt :gather]
+   :quote-of (when quote-s (fn [_] {:uses {:job-time [0 quote-s ##Inf]}}))
    :can-start? (fn [c] (or (if (fn? start) (start (:args c)) start) (contract/ok :ready "ready")))
    :round (fn ^:async r [c]
             (swap! seen conj (assoc (:args c) :slot (peek (:slots c))))
@@ -37,7 +39,7 @@
   "An engine with the caller job running (call-fn c) each round, obtain and get-tool as stoppers doing obtain-step and
   tool-step, and go-to as a walker that puts the body on its :pos. Each round's answer is appended to got; the caller
   ends on one other than :done."
-  [call-fn {:keys [obtain-step obtain-start tool-step]}]
+  [call-fn {:keys [obtain-step obtain-start tool-step quote-s]}]
   (reset! got [])
   (reset! clock 1000000)
   (let [obtain (atom [])
@@ -51,8 +53,8 @@
                            (swap! walks conj (:args c))
                            (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) y (+ z 0.5)])
                            (ctx/end c :done nil)))}
-        jobs {'jobs.items.obtain (stopper obtain (or obtain-step (constantly nil)) obtain-start)
-              'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)) nil)
+        jobs {'jobs.items.obtain (stopper obtain (or obtain-step (constantly nil)) obtain-start quote-s)
+              'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)) nil nil)
               'jobs.movement.go-to walker
               'caller {:args {}
                        :round (fn ^:async r [c]
@@ -86,6 +88,21 @@
           (is (= :done (:kind (last @got))))
           (is (= {:item "iron_ingot" :count 3 :explore false :slot :need}
                  (select-keys (first @(:obtain r)) [:item :count :explore :slot]))))))))
+
+(deftest item!-gives-an-obtain-the-budget-its-quote-and-spread-ask
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/item! % "cobblestone" 8) {:quote-s 5000}))
+              sd (:sd (fetch-time/items-fig ["cobblestone"] 8))]
+          (is (= (+ 5000 sd) (get-in (first @(:obtain r)) [:spend :job-time])) "a far source's search, priced only in the quote, is inside the budget"))))))
+
+(deftest item!-with-minutes-keeps-the-callers-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/item! % "cobblestone" 8 {:minutes 1}) {:quote-s 5000}))]
+          (is (= 60 (get-in (first @(:obtain r)) [:spend :job-time]))))))))
 
 (deftest item!-failure-reads-as-the-need-with-the-childs-ending-as-because
   (async done
