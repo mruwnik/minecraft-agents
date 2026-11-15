@@ -612,7 +612,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [note [{:kind :seen :what "cow" :id "u1" :pos [100 64 0] :by "Other" :t 999900 :until 9e15}]
-              {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note :perceive? true)]
+              {:keys [eng seen]} (setup {:time 6000 :self {:food 4 :health 10}} :step-ms 5 :other-notes note :perceive? true)]
           (await (one-round! eng {}))
           (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
             (await (core/tick! eng))
@@ -646,7 +646,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[x death-chance walked?] [[100 0 true] [20000 0 false] [100 0.99 false]]]
+        (doseq [[x death-chance walked?] [[50 0 true] [100 0 false] [20000 0 false] [50 0.99 false]]]
           (let [note [{:kind :seen :what "cow" :id "u1" :pos [x 64 0] :by "Other" :t 999900 :until 9e15}]
                 {:keys [eng seen]} (setup {:time 6000 :self {:food 17 :health 20}} :step-ms 5 :other-notes note :perceive? true)]
             (await (pick-test/with-death-chance death-chance
@@ -656,7 +656,7 @@
                          (await (core/tick! eng))
                          (recur (inc n)))))))
             (is (= walked? (boolean (some #(= :noted-walk (:slot %)) (events-of seen :child_started))))
-                "a fed body carrying no food gains the food reserve from the meat; a walk that costs more, or likely ends in death, is not made")))))))
+                "a fed body carrying no food gains the food reserve from the meat; a walk there and back that costs more, or likely ends in death, is not made")))))))
 
 (deftest a-noted-animal-is-not-walked-toward-in-the-dark-or-from-under-rock
   (async done

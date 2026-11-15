@@ -57,7 +57,7 @@
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  priced by what food is worth the body (food-animals/search-benefit); not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward once the search found nothing, the cheapest note at any distance, under the same checks as the search, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  priced by what food is worth the body (food-animals/search-benefit); not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward once the search found nothing, the cheapest note at any distance whose meat outweighs the walk there and back, under the same checks as the search, each note once a job; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).

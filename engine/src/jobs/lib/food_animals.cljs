@@ -75,9 +75,10 @@
     (max (cost/food-worth (.-food (.self p)) (.-health (.self p)) (cost/death-fn p (ctx/view c))) stock)))
 
 (defn noted-benefit
-  "Seconds the meat of the noted animal n is worth the body (meat-benefit)."
+  "Seconds the meat of the noted animal n is worth the body (meat-benefit), less the walk back (cost/walk-cost) from its place to where the body stands."
   [c n]
-  (meat-benefit c (meat (:what n))))
+  (let [back (:cost (cost/walk-cost {:distance (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos n)))}))]
+    (- (meat-benefit c (meat (:what n))) back)))
 
 (defn search-benefit
   "Seconds a search for food is worth the body: what reaching food is worth (cost/food-worth), or cost/food-search-worth of the
