@@ -673,27 +673,32 @@
           (is (= :nothing-possible (:kind e)) "the walk ran: no route is not a fact to wait on")
           (is (= {:reason :unreachable :why :no-path} (select-keys (:cause e) [:reason :why]))))))))
 
+(def boxed-blocks
+  "A solid block with the body's two-high cell dug out of it: shut in, whoever built the walls."
+  (-> (tu/box -3 60 -3 3 70 3 "dirt")
+      (dissoc "0,65,0" "0,66,0")
+      (assoc "12,64,0" "dirt")))
+
 (deftest the-walk-into-reach-clears-seals-unless-the-call-says-not-and-then-takes-no-drop-it-cannot-climb
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [ways-of (fn ^:async ways-of* [args]
+        (let [ways-of (fn ^:async ways-of* [world args]
                         (let [seen (atom [])
-                              env (setup {:self body :blocks {"12,64,0" "dirt"}})
-                              _ (when (:purpose args)
-                                  (ledger/write! (:store (:eng env)) [{:cell [2 64 0] :item "dirt" :before "air" :job "j9" :purpose (:purpose args) :state :placed}]))
-                              args (dissoc args :purpose)
+                              env (setup world)
                               go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
                               stub (fn ^:async spy [c] (swap! seen conj (select-keys (:args c) [:ways :one-way])) (ctx/end c :done nil {:arrived false :why :no-path}))
                               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))]
                           (await (tu/child-outcome (:eng env) job (merge {:pos [12 64 0]} args) 6))
-                          (first @seen)))]
-          (is (= {:ways #{:walk :clear-seal} :one-way :open} (await (ways-of {}))) "by default a walk may dig its own seal")
+                          (first @seen)))
+              free {:self body :blocks {"12,64,0" "dirt"}}
+              boxed {:self {:pos {:x 0.5 :y 65 :z 0.5}} :blocks boxed-blocks}]
+          (is (= {:ways #{:walk :clear-seal} :one-way :open} (await (ways-of free {}))) "by default a walk may dig its own seal")
           ;; Tamsin j97 (card b1ab6233): walked "drop 1" two blocks down onto a pillar in a pit it then could not leave
-          (is (= {:ways #{:walk} :one-way :closed} (await (ways-of {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own, so takes no drop it cannot climb back")
-          (is (= #{:walk} (:ways (await (ways-of {:clear-seal false :purpose :shelter})))) "nor does its walk escalate by the seal beside it (dig-out, pillar)")
-          (is (contains? (:ways (await (ways-of {:purpose :shelter}))) :dig-out) "any other dig beside its seal may leave the shaft")
-          (is (= {:ways #{:walk :clear-seal} :one-way :open} (await (ways-of {:purpose :pillar}))) "a pillar the body climbed is no seal: no dig-out of the floor under it, no pillar again"))))))
+          (is (= {:ways #{:walk} :one-way :closed} (await (ways-of free {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own, so takes no drop it cannot climb back")
+          (is (= #{:walk} (:ways (await (ways-of boxed {:clear-seal false})))) "nor does its walk escalate out of where it is shut in (dig-out, pillar)")
+          ;; Brindle j35 (card 7b368a31): a smelt dig-out cell no ledger block marked; the walk-only ways ended exhausted
+          (is (= #{:walk :clear-seal :dig-out :pillar} (:ways (await (ways-of boxed {})))) "a body shut in, whatever built the walls, may take the way out go-to prices"))))))
 
 (deftest the-walk-never-carries-the-calls-leave-to-dig-in-zones
   (async done

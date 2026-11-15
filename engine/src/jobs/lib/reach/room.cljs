@@ -139,6 +139,21 @@
    (kept-at-pos p (str "enclosed|" (pr-str (sort solid)) "|" budget) unseen
                 #(enclosed-over p solid (world-kinds p body-kind-of unseen) budget))))
 
+(defn walled-in?
+  "Whether the body is shut in by walls: enclosed? (unseen as there), and no cell it can reach has a neighbour open to
+  stand in that it cannot step to (an edge over a drop is no wall: a platform is shut in by its drops, not by walls)."
+  [p unseen]
+  (let [kind-at (world-kinds p body-kind-of unseen)
+        {:keys [x y z]} (standing-cell p kind-at)
+        {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (reach/forward kind-at cx cy cz)) [x y z] room-cells)
+        drop-edge? (fn [c]
+                     (let [cx (aget c 0) cy (aget c 1) cz (aget c 2)]
+                       (some (fn [d] (let [nx (+ cx (aget d 0)) nz (+ cz (aget d 1))]
+                                       (and (passable? kind-at nx cy nz) (passable? kind-at nx (inc cy) nz)
+                                            (nil? (reach/step-to kind-at cx cy cz nx nz)))))
+                             reach/dirs)))]
+    (boolean (and (some-> (.self p) .-pos) closed? (not-any? drop-edge? cells)))))
+
 (defn dry-shut-in?
   "Whether the body is shut in when water is a wall: a dry pocket whose only way on is a swim. unseen as enclosed?."
   [p unseen]
