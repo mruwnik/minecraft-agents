@@ -342,9 +342,20 @@
   (let [mobs [(mob "creeper" 3) (mob "zombie" 4 35)]
         zombie-fight (cost/fight-answer (fight sword (mob "zombie" 0)))
         beside-creeper (assoc zombie-fight :blasts [15.5] :damage (+ 15.5 (:damage zombie-fight)))
-        price #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs mobs :caught 1 :later % :spent-later zombie-fight}) here)]
+        price #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs mobs :caught 1 :later % :spent-later (constantly zombie-fight)}) here)]
     (is (= (price zombie-fight) (price beside-creeper))
         "caught for sure, the creeper blew in the catch: the fight beside it is never met again")))
+
+(deftest a-catch-is-followed-by-the-walk-from-the-rest-alone-whatever-their-order
+  (let [zombie (mob "zombie" 4 35)
+        after-catch #(-> (cost/flee-answer {:food 20 :mobs % :caught 1}) :outcomes first second :then first)]
+    (is (= (cost/flee-answer {:food 20 :mobs [zombie] :returns 1 :caught 1}) (after-catch [(mob "creeper" 3) zombie])))
+    (is (= (cost/flee-answer {:food 20 :mobs [zombie] :returns 1 :caught 1}) (after-catch [zombie (mob "creeper" 3)])))))
+
+(deftest a-creeper-left-after-another-blew-is-in-the-fight-that-follows
+  (let [asked (atom [])]
+    (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "creeper" 24 24) (mob "zombie" 4 35)] :spent-later #(do (swap! asked conj %) nil)})
+    (is (some #{[1 2]} @asked) "the creeper that never reaches the walk is still there after the one that does blew")))
 
 (deftest a-body-that-can-neither-outrun-nor-outfight-a-spider-digs-in
   (let [spider (mob "spider" 2)

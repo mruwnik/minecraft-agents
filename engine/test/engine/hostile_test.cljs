@@ -1239,7 +1239,7 @@
         [[chance {:keys [then]}]] (:outcomes walk)]
     (is (seq (:blasts fight)) "the fight by the zombie takes the creeper's blast")
     (is (= (:chance (:caught walk)) chance) "a catch is followed by its own answers")
-    (is (= [false false] (mapv #(contains? % :blasts) then)) "the walk from the zombie again or the fight with it alone: the creeper blew in the catch")))
+    (is (= [true true] (mapv #(empty? (concat (:blasts %) (get-in % [:caught :blasts]))) then)) "the walk from the zombie again or the fight with it alone: the creeper blew in the catch")))
 
 ;; Card b50b2ca0 (Brindle S20): an unarmed body priced "fight: creeper" (194 s against the flee's 212) with a skeleton that had
 ;; no line of fire (seen a moment ago, now walled off); jobs.combat.attack counts no such skeleton, so the creeper was its lone target and it declined :creeper-unsafe

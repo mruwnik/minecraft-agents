@@ -514,7 +514,7 @@
   on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught, or got away and
   met again by flee-meets) unless the way back passes one nearer than it stands. A catch sets off every creeper (its blast is
   in :caught), so with creepers :stays is the got-away share alone and a catch is followed (:outcomes) by the cheapest of the
-  walk again from the rest and spent-later (the answer later with the creepers spent; default later). :caught: each flight is caught by its way (caught: the flee
+  walk again from the rest and the fight with them (spent-later, a fn of their indexes in mobs; default later). :caught: each flight is caught by its way (caught: the flee
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast, at caught-blast blocks when the flee search knows where its fuse ends, else at its swell start) over the flight, a melee mob over
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
@@ -540,8 +540,9 @@
         per (per-of mobs)
         times (inc (or returns 0))]
     (when (and (seq per) (every? some? per))
-      (let [walk-of (fn [per times]
-                      (let [hit (reduce max 0 (map :hit per))
+      (let [walk-of (fn [mobs per times]
+                      (let [priors (map #(caught-prior/prior (:name %) health) mobs)
+                            hit (reduce max 0 (map :hit per))
                             walk {:damage (* times (reduce + (map :damage per)))
                                   :hit hit
                                   :spread (when-let [s (seq (keep :spread per))] (mapv #(* times %) (apply map + s)))
@@ -581,27 +582,33 @@
                         (cond-> (assoc-in walk [:caught :damage] (+ d (reduce + 0 (get-in walk [:caught :blasts]))))
                           shape (assoc :shape shape)
                           d-shape (assoc-in [:caught :shape] d-shape))))
-            walk (walk-of per times)
+            walk (walk-of mobs per times)
             again-of (fn [mobs] (let [per (per-of (map #(assoc % :distance (min (:distance %) (:again % ##Inf))) mobs))]
-                                  (when (every? some? per) (walk-of per (inc times)))))
+                                  (when (every? some? per) (walk-of mobs per (inc times)))))
             again (again-of mobs)
             creeper? #(= "creeper" (:name %))
-            after-blast (or spent-later later)
-            ;; a catch sets off every creeper (walk-of's :caught :blasts): only the rest meet the body again
-            rest-then (when-let [rest (seq (remove creeper? mobs))]
-                        (not-empty (cond-> [] (again-of rest) (conj (again-of rest)) after-blast (conj after-blast))))]
+            ;; the fight with the mobs at idxs once the creepers beside them have blown
+            kept (fn [pred] (not-empty (vec (keep-indexed (fn [i m] (when (pred m) i)) mobs))))
+            after-blast (fn [idxs] (or (when spent-later (spent-later idxs)) later))
+            walk-from (fn [idxs]
+                        (let [after (after-blast idxs)
+                              again (flee-answer-on (assoc args :mobs (mapv (vec mobs) idxs) :returns times :later after))]
+                          (not-empty (cond-> [] again (conj again) after (conj after)))))]
         (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
               spent (set (keep (fn [[m f]] (when (and (creeper? m) (blows? f)) m)) (map vector mobs per)))
-              left (remove spent mobs)
+              left (kept (complement spent))
               c (get-in walk [:caught :chance] 0)]
           (cond
             (empty? spent) (cond-> walk (or again later) (assoc :then (cond-> [] again (conj again) later (conj later)))
                              (and (or again later) (not-any? #(< (:again % ##Inf) (:distance % 0)) mobs))
                              (as-> w (if (some creeper? mobs)
-                                       (cond-> (assoc w :stays (* (- 1 c) (flee-meets)))
-                                         (and rest-then (pos? c)) (assoc :outcomes [[c {:damage 0 :hit 0 :seconds 0 :then rest-then}]]))
+                                       (let [idxs (kept (complement creeper?))
+                                             ;; a catch sets off every creeper (walk-of's :caught :blasts): only the rest meet the body again
+                                             rest-then (when (and idxs (pos? c)) (walk-from idxs))]
+                                         (cond-> (assoc w :stays (* (- 1 c) (flee-meets)))
+                                           rest-then (assoc :outcomes [[c {:damage 0 :hit 0 :seconds 0 :then rest-then}]])))
                                        (assoc w :stays (- 1 (* (- 1 c) (- 1 (flee-meets))))))))
-            (seq left) (assoc walk :then (cond-> [(flee-answer-on (assoc args :mobs left :returns times :later after-blast))] after-blast (conj after-blast)))
+            left (assoc walk :then (walk-from left))
             :else walk))))))
 
 (defn blows-over
@@ -840,11 +847,10 @@
   (let [ms (mapv (fn [n] (let [m (if (map? n) n {:name n})] (assoc m :distance (or distance 0) :follow (threat/follow-range (:name m)))))
                  (if (or (string? mob-name) (map? mob-name)) [mob-name] mob-name))
         fight-of #(fight-answer {:weapon weapon :equipment equipment :health health :mobs % :wet? (some? swim)})
-        fight (fight-of ms)
-        rest (seq (remove #(= "creeper" (:name %)) ms))]
+        fight (fight-of ms)]
     (assoc (cornered-answers {:equipment equipment :mobs ms :fight fight :covers covers})
            :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight
-                               :spent-later (when rest (fight-of (vec rest))) :swim swim}))))
+                               :spent-later #(fight-of (mapv ms %)) :swim swim}))))
 
 (defn kill-price
   "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it (threat-answers' :fight),
