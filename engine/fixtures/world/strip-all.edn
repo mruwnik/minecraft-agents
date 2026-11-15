@@ -43,7 +43,7 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
   {:name "raw-iron-the-base-chest-holds-is-withdrawn-and-smelted"
-   :blocks [[:set [19 0 3] "chest[facing=south,type=left]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:3}]}"] [:set [20 0 3] "chest[facing=south,type=right]"]]
+   :blocks [[:set [19 0 3] "chest[facing=south,type=right]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:3}]}"] [:set [20 0 3] "chest[facing=south,type=left]"]]
    :memory [{:kind :fetch/stock :data {:pos #at [19 0 3] :items {"raw_iron" 3}} :policy {:cap 64 :ttl :forever}}]
    :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
                       ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["coal" 24] ["stick" 8]]}
