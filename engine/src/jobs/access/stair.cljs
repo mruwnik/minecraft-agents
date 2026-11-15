@@ -79,7 +79,7 @@
   failed attempts (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). :ignore-zones? skips all access
   refusals but :not-loaded; a cell of a plan this body made refuses :footprint unless the spare-own-builds setting is false.
   :undercuts-way: a cut cell is the floor of an earlier stair of this body (memory :stair-way, written at every end), or a step floor of air at a step of one.
-  :off-stair: off the line and another walk back not worth its price (cost/try-again? :walk, the times found off the line since the last step its failures) or dearer than cutting the steps again. A stair whose line is its own (:y given, no :heading or :through) starts its line again where the body stands instead (:stair.anchored; :steps counts every line's steps), and starts where a spare's fetch left it. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
+  :off-stair: off the line and another walk back not worth its price (cost/try-again? :walk, the times found off the line since the last step its failures) or dearer than cutting the steps again. A stair whose line is its own (:y given, no :heading or :through) starts its line again where the body stands instead (:stair.anchored; :steps counts every line's steps), and starts where a spare's fetch left it. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean. A piece is not begun when one step's quote exceeds the job time its call chain has left: it yields :continue and the next call takes it.
   :base-block names the block in its text; a crafting table is dug (zones and claims guard another's). Data {:steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
   A dig with a worn last tool (not a fresh one) first tries a spare once (trip/tool-ready!), whatever the :settings. A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
@@ -247,6 +247,13 @@
      :moves-to (mapv + feet (map #(* n %) (geo/delta dir heading)))}))
 
 (def facts atool/facts)
+
+(defn step-fits?
+  "Whether one more step of a stair going dir (quote-of's mean seconds for one) fits the job time its call chain has left: a
+  step the walk-leg budget would cut half-way is not begun, the next call takes it."
+  [c dir]
+  (let [left (when (:left c) (get-in (ctx/left c) [:spend :job-time]))]
+    (or (nil? left) (<= (stair-time/steps-s dir 1) left))))
 
 (defn breach?
   "Whether a stair stop's cause is the body's passage breaking into a cave, water or lava, not falling blocks."
@@ -463,6 +470,7 @@
                     :offset (mapv - feet origin)
                     :why (str "the body is " (pr-str (mapv - feet origin)) " from the stair's start " (pr-str origin)
                               ", off its line")})
+      (not (step-fits? c (dir-of c))) :continue
       :else
       (let [target (rim-target c feet i target)]
         (ctx/update-mem! c (fn [m] (cond-> (assoc m :at-step i :target target :furthest (max i (or (:furthest m) 0))) (> i (or (:furthest m) 0)) (dissoc :returns))))

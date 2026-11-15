@@ -28,6 +28,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.lib.stair-cells :as sc]
+            [jobs.lib.stair-time :as stair-time]
             [jobs.lib.cost.value :as value]
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.plan :as wplan]
@@ -1830,3 +1831,11 @@
                           ctx/call (fn ^:async f [_ _ _ args] (reset! seen args) :continue)]
               (await (sstep/run-bridge! {:args {:heading :east :dir :up} :primitives (tu/fake {})})))
             (is (= want (:checks @seen)) (pr-str caller @seen))))))))
+
+(deftest a-step-the-time-left-cannot-hold-is-not-begun
+  (let [left #(fn [] {:spend {:job-time %}})
+        one-step (stair-time/steps-s :up 1)]
+    (is (false? (stair/step-fits? {:left (left (- one-step 0.1))} :up)))
+    (is (true? (stair/step-fits? {:left (left one-step)} :up)))
+    (is (true? (stair/step-fits? {:left (left ##Inf)} :up)))
+    (is (true? (stair/step-fits? {} :up)))))
