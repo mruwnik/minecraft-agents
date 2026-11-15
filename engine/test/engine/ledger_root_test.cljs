@@ -11,7 +11,7 @@
 (defn rig []
   (let [clock (atom 1000000)
         s (mem/open (tu/tmp-dir) {:now #(deref clock)})
-        ctx (fn [id root] {:id id :root root :view #(mem/view s)
+        ctx (fn [id root] {:id id :root root :token 1 :view #(mem/view s)
                            :remember (fn [k d p] (mem/write! s k d p))})]
     {:clock clock :store s :ctx ctx}))
 
@@ -61,3 +61,10 @@
     (ledger/entries ((:ctx r) "j9/scan" "j9"))
     (reset! (:clock r) (+ 1000000 (* 1.5 ttl-ms)))
     (is (true? (orphan? r (first (entries r)))) "a job of another root did not renew the entry")))
+
+(deftest a-check-reads-the-ledger-without-writing-it
+  (let [r (rig) child ((:ctx r) "j1/stair" "j1")
+        check (assoc child :token nil :remember #(throw (js/Error. "cut: the ownership token changed")))]
+    (place! child [0 64 0])
+    (reset! (:clock r) (+ 1000000 (* 0.75 ttl-ms)))
+    (is (= 1 (count (ledger/entries check))))))

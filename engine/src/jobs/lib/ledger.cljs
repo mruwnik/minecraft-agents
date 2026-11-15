@@ -262,13 +262,14 @@
 
 (defn keep-alive!
   "Stamp the entries of c's root that run out within half the ttl anew (expiry/stamp): a root still running keeps the
-  scaffold its tree uses past the ttl, which is only the backstop for a cleanup that never ran."
+  scaffold its tree uses past the ttl, which is only the backstop for a cleanup that never ran. A check has no token and may not write: it renews nothing."
   [c]
-  (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))
-        l (:entries (:data (mem/latest (ctx/view c) kind)))
-        mine? #(and (= (:root c) (:root %)) (:until %) (expiry/current? now %) (expiry/due? now ttl %))]
-    (when (some mine? l)
-      (ctx/remember! c kind {:entries (mapv #(cond-> % (mine? %) (expiry/stamp now ttl)) l)} policy))))
+  (when (:token c)
+    (let [now (ctx/now c) ttl (* 1000 (settings/get settings ::ttl-s))
+          l (:entries (:data (mem/latest (ctx/view c) kind)))
+          mine? #(and (= (:root c) (:root %)) (:until %) (expiry/current? now %) (expiry/due? now ttl %))]
+      (when (some mine? l)
+        (ctx/remember! c kind {:entries (mapv #(cond-> % (mine? %) (expiry/stamp now ttl)) l)} policy)))))
 
 (defn entries
   "open-entries of c's body memory, after keep-alive!: a job reading the ledger for the floor or scaffold it relies on
