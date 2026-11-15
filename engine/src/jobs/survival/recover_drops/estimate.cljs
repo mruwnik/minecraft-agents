@@ -159,8 +159,13 @@
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) (/ mean 2)))
         danger-s (pick/risk-s c quoted (:danger wet 0))
         straight-s (when pos (/ (u/dist here pos) (cost/walk-blocks-per-s)))
-        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger-s danger-s :elapsed-ms elapsed :lost (lost c data)
-                               :back? true :stay-s (pl/collect-s c data)})
+        ;; the window is judged by the straight walk; the quote's longer route (a pit's exit) is only priced, never :too-far
+        extra-blocks (* 2 (max 0 (- (or quoted-s 0) (or straight-s 0))) (cost/walk-blocks-per-s))
+        fetch (as-> (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger-s danger-s :elapsed-ms elapsed :lost (lost c data)
+                                      :back? true :stay-s (pl/collect-s c data)}) f
+                (if (:reason f) f
+                    (let [w (cost/walk-cost {:distance extra-blocks})]
+                      (-> f (update :cost + (:cost w)) (update-in [:parts :walk] + (get-in w [:parts :walk]))))))
         refused (when (contract/ending? quoted) (str "the walk's quote ended: " (name (contract/cause-key quoted))))
         drowns (when-not (or refused (:reason fetch)) (no-air-way p wet-at pos drown-hp))
         named (cond-> (mapv #(select-keys % [:name]) mobs) wet (conj (select-keys wet [:name :danger])))]

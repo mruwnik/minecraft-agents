@@ -193,7 +193,7 @@
           (is (<= 5 (count @calls)) "every run walked again")
           (is (nil? (recovered eng)) "refusals that searched nothing are no failed walks"))))))
 
-(deftest a-pile-under-rock-with-no-pickaxe-to-get-is-skipped-up-front
+(deftest a-pile-under-rock-with-no-pickaxe-to-get-is-given-up-without-a-stair
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -202,5 +202,5 @@
           (die! eng {:pos pile-pos :inventory pile} 5000)
           (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 120))
-          (is (= {:decision :skip :reason :too-far :cost :infinite :chance 0} (select-keys (recovered eng) [:decision :reason :cost :chance])) (pr-str (recovered eng)))
+          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))) "no stair is started for a way down no tool can dig"))))))

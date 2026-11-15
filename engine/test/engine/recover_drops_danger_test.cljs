@@ -384,6 +384,16 @@
     (is (= :trip-refused (:reason refused)))
     (is (re-find #"risk-not-bought" (:detail refused)))))
 
+(deftest a-quote-longer-than-the-window-from-a-pit-prices-the-pile-and-never-says-too-far
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+        death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
+        c {:primitives p :args {} :view #(mem/view (:store eng))}
+        near (estimate/estimate c death 5000 {:uses {:job-time [5 5 15]}})
+        pit (estimate/estimate c death 5000 {:uses {:job-time [900 900 900]}})]
+    (is (nil? (:reason pit)))
+    (is (js/isFinite (:cost pit)))
+    (is (< (:cost near) (:cost pit)) "the quote's exit is priced as walk")))
+
 (deftest a-danger-of-spawns-on-dark-or-unseen-ground-is-named-in-the-text
   (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
         death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
