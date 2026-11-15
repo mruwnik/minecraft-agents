@@ -284,8 +284,12 @@
 
 (def step-margin "Blocks below the lower of body and step a walk into the cut step may plan: a step is a block off." 2)
 
-(defn step-walk [next-feet]
-  (assoc-in (child/walk-into-args :walk next-feet) [:settings :jobs.lib.walk.world/y-margin] step-margin))
+(defn step-walk
+  "The walk into a cut step: :one-way :closed, a step is a walk to something visible, never a frontier tour down the body's own tunnel; a step cell that gravel filled again fails at once and is dug again."
+  [next-feet]
+  (-> (child/walk-into-args :walk next-feet)
+      (assoc :one-way :closed)
+      (assoc-in [:settings :jobs.lib.walk.world/y-margin] step-margin)))
 
 (defn ^:async step!
   "Walk into the cut step, then wait for the drop to land (a walk ends on arriving over the cell, a step down is still falling) (a way into it dipping more than step-margin, round a mob in it through a cave, is none). :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the

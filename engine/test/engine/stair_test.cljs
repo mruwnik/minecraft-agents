@@ -1839,3 +1839,6 @@
     (is (true? (stair/step-fits? {:left (left one-step)} :up)))
     (is (true? (stair/step-fits? {:left (left ##Inf)} :up)))
     (is (true? (stair/step-fits? {} :up)))))
+
+(deftest a-step-walk-never-takes-a-frontier-walk-down-the-bodys-own-tunnel
+  (is (= :closed (:one-way (stair/step-walk [1 64 0]))) "a refilled step cell fails at once to be dug again, not a walk to the frontier"))
