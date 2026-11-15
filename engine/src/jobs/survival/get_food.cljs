@@ -380,7 +380,7 @@
 (defn noted-walk-args
   "The go-to args of the walk toward pos [x y z] of a noted animal worth `worth` seconds (near?: the second, nearer walk)."
   [c pos worth near?]
-  (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if near? noted-near-range animals/noted-range) :ways #{:walk} :torches :fetch :worth worth}))
+  (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if near? noted-near-range animals/noted-range) :torches :fetch :worth worth}))
 
 (defn quote-why
   "Why go-to's quote q of a walk costing `s` seconds prices it out against meat worth `worth`: its refusal's text or reason, else the two figures."

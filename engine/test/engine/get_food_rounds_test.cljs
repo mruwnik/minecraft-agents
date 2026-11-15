@@ -28,6 +28,7 @@
             [jobs.lib.food-animals :as animals]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]
+            [jobs.lib.ready]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.pace :as pace]
@@ -687,6 +688,11 @@
             (let [{:keys [eng seen]} (setup world :step-ms 5 :other-notes note)]
               (await (one-round! eng {}))
               (is (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)) "the same checks as the search: no walk in the dark or under rock"))))))))
+
+(deftest the-walk-to-a-noted-animal-may-take-any-way-go-to-prices
+  (with-redefs [jobs.lib.ready/cannot-heal? (constantly false)]
+    (doseq [near? [false true]]
+      (is (nil? (:ways (get-food/noted-walk-args {} [40 64 0] 100 near?))) "a body shut in where it stands is let out by the way go-to prices, not left walk-only"))))
 
 (deftest a-noted-animal-the-walk-cannot-reach-is-named-in-the-no-food-text
   (async done
