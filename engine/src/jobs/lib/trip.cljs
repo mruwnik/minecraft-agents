@@ -133,13 +133,20 @@
 
 (declare spare-name)
 
+(defn dig-price
+  "Seconds a cut of block-name costs with the carried tool entry (jobs.lib.cost/dig-use-price: the order tools-for picks by)."
+  [p block-name entry]
+  (cost/dig-use-price entry (/ (js/Number (.clearTime p block-name (:name entry))) 1000)))
+
 (defn dear-tool?
-  "Whether the tool (carried item name) to dig block-name with is dearer than the stone pickaxe a player would make from the
-  cobblestone carried: a finished iron pickaxe is not worn out on stone."
-  [p block-name item]
+  "Whether the tool (carried entry {:name :enchants}) to dig block-name with is dearer per cut than the stone pickaxe a
+  player would make from the cobblestone carried, so the spare would be the one used: an Efficiency, Unbreaking or
+  Mending tool that digs cheaper than stone is not worn out on stone, and gets no spare."
+  [p block-name entry]
   (let [cheap (spare-name p block-name nil)]
-    (boolean (and cheap (= "stone" (weapon/material-of cheap)) (> (weapon/cheap-rank item) (weapon/cheap-rank cheap))
-                  (<= 3 (transduce (comp (filter #(= "cobblestone" (:name %))) (map :count)) + 0 (u/inventory p)))))))
+    (boolean (and cheap (= "stone" (weapon/material-of cheap)) (> (weapon/cheap-rank (:name entry)) (weapon/cheap-rank cheap))
+                  (<= 3 (transduce (comp (filter #(= "cobblestone" (:name %))) (map :count)) + 0 (u/inventory p)))
+                  (< (dig-price p block-name {:name cheap}) (dig-price p block-name entry))))))
 
 (defn spare-need
   "The carried tool ({:item :uses-left :max}) that tool-ready! wants a spare for when digging block-name, or nil. With
@@ -161,7 +168,7 @@
      (when (and best full)
        (cond
          worn? (assoc best :max full)
-         (dear-tool? (:primitives c) block-name (:item best)) (assoc best :max full :dear true))))))
+         (dear-tool? (:primitives c) block-name (some #(when (= (:item best) (:name %)) %) (u/inventory (:primitives c)))) (assoc best :max full :dear true))))))
 
 (defn spent-tool?
   "Whether every carried tool that digs block-name is down to ::spent-uses uses or fewer (a tool with no known durability counts as whole) and some is carried:

@@ -199,6 +199,15 @@
               "made from carried logs, 24 digs' wear pays for its 4 crafts (tool-spare-and-table/whole-iron-pick-gets-a-stone-spare-when-cobble-is-carried)")
           (is (not-any? #{:tool.spare :tool.no-spare} (kinds without)) "no cobblestone to make one: the iron pickaxe digs"))))))
 
+(deftest a-pickaxe-that-digs-cheaper-than-stone-is-given-no-stone-spare
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [netherite {:name "netherite_pickaxe" :count 1 :durability 2000 :max-durability 2031
+                         :enchants [{:name "efficiency" :level 5} {:name "unbreaking" :level 3} {:name "mending" :level 1}]}
+              s (await (st/stair! (assoc spare-chest :inventory [netherite {:name "cobblestone" :count 20}]) (assoc east :steps 10) tu/seeing-all))]
+          (is (not-any? #{:tool.spare :tool.no-spare :tool.spare-skipped} (kinds s)) "the spare would never be the tool picked: none is made"))))))
+
 (deftest a-fetch-off-stair-crafts-the-stone-spare-from-what-is-carried-instead-of-wearing-the-iron-pickaxe
   (async done
     (tu/run-async done
