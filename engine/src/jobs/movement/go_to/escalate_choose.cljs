@@ -48,10 +48,10 @@
             [jobs.movement.go-to.way-steps :as ways]))
 
 (defn skips
-  "The escalation steps this call does not take: those that failed (memory :skipped-steps) and those of the ways it
-  does not allow."
+  "The escalation steps this call does not take: those that failed (memory :skipped-steps), the stair headings that failed
+  from the feet cell in an earlier call (smem/ruled-headings) and those of the ways it does not allow."
   [c]
-  (into (:skipped-steps (ctx/mem c) #{}) (ways/barred-steps c)))
+  (into (into (:skipped-steps (ctx/mem c) #{}) (ways/barred-steps c)) (smem/ruled-headings c (end/feet-cell c))))
 
 (def escalate-reasons
   "Planner reasons that prove the way needs the world changed. :start-enclosed is the search running out of land

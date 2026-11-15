@@ -12,10 +12,12 @@
 (a/defargs settings
   {::max-ways {:default 200 :doc "Stair ways the body remembers (memory :stair-way). Past it the one used least recently goes, unless it lies within ::home-keep of home." :spec (a/int-in 1 nil)}
    ::home-keep {:default 64 :doc "Blocks from its :home or :bed place within which a remembered stair way is never dropped for room." :spec (a/num-in 0 nil)}
+   ::ruled-ttl-s {:default 150 :doc "Seconds a stair heading that failed from a cell stays ruled out for every later go-to call from that cell (memory :stair-ruled): the same stair there fails the same way until the world has changed; as long as a recover trip remembers a danger." :spec (a/num-in 0 nil)}
    ::dig-plugs? {:default false :doc "A cell this body plugged against water may be dug while the water is still behind it (kept-plugs)." :spec boolean?}})
 (defn max-ways [] (settings/get settings ::max-ways))
 (defn home-keep [] (settings/get settings ::home-keep))
 (defn dig-plugs? [] (settings/get settings ::dig-plugs?))
+(defn ruled-policy [] {:cap 16 :ttl (* 1000 (settings/get settings ::ruled-ttl-s))})
 
 (def plug-policy {:cap 60 :ttl :forever})
 
@@ -41,6 +43,18 @@
   "Remember cell as filled against water, so a later stair keeps it shut."
   [c cell]
   (ctx/remember! c :stair-plug {:dim (.-dimension (.self (:primitives c))) :cell cell} plug-policy))
+
+(defn rule-out-heading!
+  "Remember that a stair toward heading failed from the cell `from` ([x y z]): the go-to calls that follow from there rule it out too (ruled-headings), until ::ruled-ttl-s has passed."
+  [c from heading]
+  (ctx/remember! c :stair-ruled {:dim (.-dimension (.self (:primitives c))) :from (vec from) :heading heading} (ruled-policy)))
+
+(defn ruled-headings
+  "The set of [:stair heading] skip keys remembered for stairs that failed from the cell `from` (rule-out-heading!), in this dimension."
+  [c from]
+  (let [dim (.-dimension (.self (:primitives c)))]
+    (set (keep #(let [d (:data %)] (when (and (= dim (:dim d)) (= (vec from) (:from d))) [:stair (:heading d)]))
+               (ctx/entries c :stair-ruled)))))
 
 (defn near-home?
   "Whether a floor of the way (entry data) lies within ::home-keep of the body's :home or :bed place."

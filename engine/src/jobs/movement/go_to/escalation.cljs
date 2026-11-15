@@ -640,6 +640,14 @@
     :stair [:stair heading]
     step))
 
+(defn skip-step!
+  "Rules out the skip-key of escalation e begun at from for this call, and a stair heading for the later calls from that cell too (stair-mem/rule-out-heading!)."
+  [c e from]
+  (let [k (skip-key e from)]
+    (ctx/update-mem! c update :skipped-steps (fnil conj #{}) k)
+    (when (and (vector? k) (= :stair (first k)) (second k) from)
+      (stair-mem/rule-out-heading! c from (second k)))))
+
 (defn no-tool?
   "Whether an escalation's stop or wait (detail) is for want of a tool: its own :no-tool, or its dig child's."
   [detail]
@@ -663,7 +671,7 @@
                                                                         (some-> (:reason detail) name)
                                                                         (if (dive-climb-on? c pos) "; climbing on another way" "; walking again"))))
   (when (dive-climb-on? c pos)
-    (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)) (:escalation-from (ctx/mem c)))))
+    (skip-step! c (:escalation (ctx/mem c)) (:escalation-from (ctx/mem c))))
   (escalated! c pos detail false))
 
 (defn ^:async escalation-next!
@@ -672,8 +680,8 @@
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
                                                                         (some-> (:reason detail) name)
                                                                         "; trying another way")))
-  (ctx/update-mem! c #(cond-> (-> % (update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)) (:escalation-from (ctx/mem c))))
-                                  (assoc :last-failed detail))
+  (skip-step! c (:escalation (ctx/mem c)) (:escalation-from (ctx/mem c)))
+  (ctx/update-mem! c #(cond-> (assoc % :last-failed detail)
                         (= :stair step) (update :fruitless dec)
                         (= :approach step) (update :approached (fnil conj #{}) (some-> (:escalation (ctx/mem c)) :pos vec))))
   (await (escalate! c pos detail)))
@@ -701,7 +709,7 @@
         no-tool (and (no-tool? detail) (not (:by-hand (ctx/mem c))))
         other? (and no-tool (other-heading? c pos e))
         hand? (and no-tool (not other?))]
-    (when other? (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key e (:escalation-from (ctx/mem c)))))
+    (when other? (skip-step! c e (:escalation-from (ctx/mem c))))
     (when hand? (by-hand! c detail))
     (cond
       (and hand? (= :dig-route (:step e))) :again

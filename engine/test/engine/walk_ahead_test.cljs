@@ -529,6 +529,22 @@
           (is (true? (:learn-spent (:done r))))
           (is (seq (:cells (:done r)))))))))
 
+(deftest a-learned-replan-of-the-cells-an-earlier-one-learned-ends-the-walk-at-once
+  ;; a swim-up that felt the same roof cell again: the memory did not take it, the next plan would be the same
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              walk-fn (fn [_ _]
+                        (swap! walks inc)
+                        (js/Promise.resolve [{:status :replan :why :changed :learned true :felt true :cells [[3 67 0]] :step 1 :at [3 64 0]} 1]))
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
+              r (await (drive/follow! c {:status "found" :r #js {} :steps (line 10) :ms 5}
+                                      {:plan-fn (fn [_] (js/Promise.resolve {:status "found" :r #js {} :steps (line 10) :ms 5}))
+                                       :walk-fn walk-fn :to [9 64 0] :policy executor/policy}))]
+          (is (= 2 @walks) "one replan to learn it, the second walk ends on the repeat")
+          (is (true? (:learn-spent (:done r)))))))))
+
 ;; follow! of a plan to x 200 whose walks end in a learned replan at (at-x i), arrived after n-ok of them
 (defn learn-walks [at-x n-ok]
   (let [walks (atom 0)

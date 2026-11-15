@@ -597,6 +597,20 @@
           (is (empty? (events-of seen :go-to.by-hand)))
           (is (= "stone" (block p [1 62 0])) "the stone is left"))))))
 
+(deftest a-stair-heading-that-failed-from-this-cell-is-ruled-out-in-the-next-go-to-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup (merge in-pit {:blocks pit}))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [10 64 0] :range 1})))]
+          (mem/write! (:store eng) :stair-ruled {:dim (.-dimension (.self p)) :from [0 61 0] :heading :east} {:cap 16 :ttl :forever})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
+          (await (tick-out! eng 1000))
+          (is (= {:arrived true} @out))
+          (is (not-any? #(and (= :stair (:step %)) (= :east (:heading %))) (events-of (:seen s) :go-to.escalated))
+              "the east stair that failed before is not tried again"))))))
+
 (deftest a-detour-s-stair-with-no-tool-for-its-heading-takes-another-heading-not-the-detour-give-up
   ;; sweep 225f36316 go-to-stair-heading/obsidian-east-other-heading-arrives: the detour's stair met obsidian east and the call gave up :detour
   (async done
