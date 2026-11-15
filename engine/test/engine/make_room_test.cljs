@@ -655,6 +655,20 @@
           (is (zero? (count (calls p "toss"))))
           (is (pos? (count (calls p "transfer"))) "Q149: walls outside a protected zone are dug through to reach the chest"))))))
 
+(deftest a-walled-in-body-walks-to-a-chest-only-when-it-costs-no-more-than-the-one-slot-short-is-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[factor chest?] [[0.99 true] [1.01 false]]]
+          (let [quote! pick/quote!
+                mean (* factor cost/short-slot-s)
+                {:keys [eng p]} (setup {:inventory (conj (many "junk" 34) {:name "iron_pickaxe" :count 1}) :blocks walled})]
+            (set! pick/quote! (fn [_ _] (js/Promise.resolve {:uses {:job-time [mean mean mean]}})))
+            (try (know-chest! eng chest-pos)
+                 (await (settings/with-settings {::mr/tidy-walk-s 0} #(run-reflex eng {:free 2} {})))
+                 (finally (set! pick/quote! quote!)))
+            (is (= chest? (pos? (count (calls p "transfer")))) (str "walk quoted at " factor " of the slot worth"))))))))
+
 (deftest a-walled-in-body-inside-another-s-zone-does-not-dig-out-to-the-chest
   (async done
     (tu/run-async done
