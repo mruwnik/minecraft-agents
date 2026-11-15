@@ -105,6 +105,16 @@
   (set (map #(let [{:keys [x y z]} (danger-q/mob-pos p %)] (mapv js/Math.floor [x y z]))
             (danger-q/known-hostiles p (danger-q/hostile-radius) {}))))
 
+(defn rise-blocked
+  "The chance a cell the body rises into on a pillar at feet, not sensed and so read open (room-unseen-open?), is solid
+  (lk/unseen-solid-at-fn): the pillar then cannot rise there."
+  [p feet]
+  (let [unseen (filter (escape/unseen-of p) (map #(escape/up feet %) (range 1 (+ 2 (pillar-height)))))]
+    (if (empty? unseen)
+      0
+      (let [solid-at (lk/unseen-solid-at-fn p)]
+        (- 1 (reduce * 1 (map #(- 1 (solid-at %)) unseen)))))))
+
 (defn room-unseen-open?
   "room? where the body at primitives p stands at feet, a cell it has not sensed read open (plan! looks at the rise first)."
   [p feet]

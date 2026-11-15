@@ -148,13 +148,14 @@
      :else (site/dig-s c (concat (:prep plan) (mapcat :dig (:steps plan)))))))
 
 (defn fails
-  "The chance the pit lays itself open through a cell round its dig the body never sensed (pit-cells/shell-fails); 0 with
-  no plan yet. a: its assess (default made here)."
+  "The chance the pit lays itself open through a cell of its dig or round it the body never sensed (pit-cells/shape-fails),
+  of its plan or, with none yet (an unseen cell rules the pit out until a look), of the pit its stop judges (pit-cells/stop-shape);
+  0 with neither. a: its assess (default made here)."
   ([c] (fails c (assess c)))
   ([c {:keys [plan]}]
    (let [feet (sh-sense/feet (:primitives c))]
-     (if-let [cells (some->> plan ((juxt :prep #(mapcat :dig (:steps %)))) (apply concat) seq)]
-       (pit/shell-fails (:primitives c) cells (set (into cells [feet (update feet :y inc)])))
+     (if-let [shape (or plan (pit/stop-shape c feet))]
+       (pit/shape-fails (:primitives c) feet shape)
        0))))
 
 (defn cover

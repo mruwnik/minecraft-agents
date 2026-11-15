@@ -403,6 +403,10 @@
             (is (not= {:x 10 :y 64 :z 0} placed) "outside the walled cell")
             (is (= [placed] (mapv st/arg-pos (st/calls p "sleep"))) "and slept in: nothing spawns on the lit ground")))))))
 
+(def deep-edges
+  "Dirt carrying wide-ground two cells further north and south: without it a pit at its z -2 edge digs beside the void under the fake's one-block floor (card a2f9dc44)."
+  (into {} (for [x (range -14 15) z [-4 -3 3 4] y (range 60 64)] [(str x "," y "," z) "dirt"])))
+
 (deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-in-the-bag-on-dark-ground
   ;; at a spawn rate of one meet in 200 s: at the measured one (0.0012) a bed in the open is the cheapest night
   (async done
@@ -411,7 +415,7 @@
         (await
          (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
            (fn ^:async inner []
-             (let [{:keys [eng p]} (await (night-at-home (-> bed-world (dissoc :lit-route) with-walled-home) {:x 10 :y 64 :z 0}))]
+             (let [{:keys [eng p]} (await (night-at-home (-> bed-world (dissoc :lit-route) with-walled-home (update :blocks merge deep-edges)) {:x 10 :y 64 :z 0}))]
                ((status! 0 5) eng)
                (await (tu/run-until-empty eng 60))
                (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")

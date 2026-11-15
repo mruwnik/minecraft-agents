@@ -365,6 +365,12 @@
           (is (empty? (:plugs plan)) "straight down has no side plug")
           (is (every? #(= 0 (:x %) (:z %)) (mapcat :dig (:steps plan))) "every dig in the body's own column"))))))
 
+;; Card a2f9dc44 (Brindle S20): a pit whose first dig lay beside a cave cell was the cheapest answer, then stopped :lays-open at once.
+(deftest a-pit-whose-dig-lies-beside-seen-open-air-does-not-fit
+  (let [p (seen-closed-cell (update (closed-cell-world nil) :blocks assoc (key-of 1 63 0) "air") false)]
+    (is (nil? (pit/pit-plan (plan-ctx p) (cell 0 64 0))) "every shape digs (0 63 0) or the air itself")
+    (is (= :lays-open (:stop (pit/stop-of (plan-ctx p) ["cobblestone"] (cell 0 64 0)))) "the stop names the air beside the dig")))
+
 (deftest drops-are-collected-only-within-pickup-reach
   (let [item (fn [id x y z] {:id id :name "item" :kind "item" :pos {:x x :y y :z z} :item {:name "cobblestone" :count 1}})
         p (tu/seeing-all (tu/fake {:blocks {} :entities [(item 1 0.5 64 0.5) (item 2 0.8 64 0.5) (item 3 2.5 64 0.5) (item 4 0.5 70 0.5)]}))]
@@ -375,7 +381,9 @@
   (let [cells [(cell 1 64 0) (cell 1 65 0)]
         rock (into {} (for [x (range -2 3) y (range 62 67) z (range -2 3)] [[x y z] "stone"]))]
     (is (zero? (pit/shell-fails (sensing-stub rock) cells #{})) "rock seen all round: it cannot fail")
-    (is (< 0 (pit/shell-fails (sensing-stub {}) cells #{}) 1) "unseen round it: each cell open at the share of open rock")))
+    (is (< 0 (pit/shell-fails (sensing-stub {}) cells #{}) 1) "unseen round it: each cell open at the share of open rock")
+    (is (< 0 (pit/shell-fails (sensing-stub (dissoc rock [1 64 0] [1 65 0])) cells #{}) 1)
+        "rock seen all round but the dug cells never sensed: each may be open itself")))
 
 (deftest an-unsensed-dig-cell-in-the-bedrock-layer-may-be-undiggable
   (let [rock (into {} (for [x (range -2 3) y (range -64 -40) z (range -2 3)] [[x y z] "stone"]))
@@ -392,5 +400,5 @@
         n (pit/unsensed-shell p cells keep)
         fails (fn [d] (with-redefs [sight/frontier-value-fn (constantly (constantly (some-> d (* 2))))] (pit/shell-fails p cells keep)))]
     (is (pos? n))
-    (is (> 1e-12 (Math/abs (- (- 1 (Math/pow (base-rates/unseen-solid 64 0 1 false nil true) n)) (fails nil)))) "no memory: as near a frontier as can be")
+    (is (> 1e-12 (Math/abs (- (- 1 (Math/pow (base-rates/unseen-solid 64 0 1 false nil true) (inc n))) (fails nil)))) "no memory: as near a frontier as can be; the dug cell, never sensed, counts too")
     (is (> (fails 1) (fails 6)) "far from where sight was cut: more likely rock")))

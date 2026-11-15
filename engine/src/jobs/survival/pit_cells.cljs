@@ -98,16 +98,25 @@
 
 (declare open-shell)
 
-(defn opens-onto-air?
-  "Whether digging the shape's prep cells would lay open a cell the body sees not solid (a shelter's one-block wall over air):
-  nothing beside, over or under them outside the shape and the feet and head cells."
-  [p feet {:keys [steps plugs roof prep]}]
-  (let [keep (into #{feet (update feet :y inc) roof} (concat plugs prep (mapcat :dig steps) (map :to steps)))]
-    (boolean (some #(open-shell p % keep) prep))))
+(defn dug-of "The cells a pit shape digs: its prep cells, then each drop's." [{:keys [steps prep]}] (concat prep (mapcat :dig steps)))
+
+(defn keep-of
+  "The cells round a pit shape dug from feet that may stand open without laying it open: its own, the feet and head cells
+  and each drop's feet and head cells."
+  [feet {:keys [steps plugs roof prep]}]
+  (into #{feet (update feet :y inc) roof}
+        (concat plugs prep (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps))))
+
+(defn air-beside
+  "The first cell beside, over or under a cell the pit shape digs from feet, outside keep-of, that the body sees not solid
+  (a cave side, a one-block wall over air): the dig would lay the pit open there. nil when none."
+  [p feet shape]
+  (let [keep (keep-of feet shape)]
+    (some #(open-shell p % keep) (dug-of shape))))
 
 (defn candidates
   "The pits the shapes allow from feet (dig-cells/pit-shapes) with a side column open and free of hostiles; with none, the
-  zigzags that take a rock side whose prep cells open onto no air: :prep is its two cells at feet and head height, dug first."
+  zigzags that take a rock side: :prep is its two cells at feet and head height, dug first."
   [c feet]
   (let [p (:primitives c)
         prepped (fn [shape]
@@ -117,19 +126,19 @@
     (concat (dig-cells/pit-shapes p feet #(side-open? c mobs %))
             (->> (dig-cells/pit-shapes p feet #(not (mobs %)))
                  (filter (comp seq :plugs))
-                 (map prepped)
-                 (remove #(opens-onto-air? p feet %))))))
+                 (map prepped)))))
 
 (defn pit-plan
   "A pit to dig down from feet and plug over the head (candidates) with blocks (default the call's, flight/blocks):
   {:steps :plugs :roof :prep}, or nil: no fluid where the body stands or at the roof, every cell to dig solid, no
-  fluid in or beside it, solid under the bottom, and material-stop none."
+  fluid in or beside it and no seen open cell beside it (air-beside), solid under the bottom, and material-stop none."
   ([c feet] (pit-plan c feet (flight/blocks c)))
   ([c feet blocks]
   (let [p (:primitives c)
-        fits? (fn [{:keys [steps prep roof]}]
-                (let [cells (concat prep (mapcat :dig steps))]
+        fits? (fn [{:keys [steps roof] :as shape}]
+                (let [cells (dug-of shape)]
                   (and (dug-cells-ok? p cells)
+                       (nil? (air-beside p feet shape))
                        (nil? (over-stop p roof))
                        (look/rock-solid? p (:floor (peek steps)))
                        (nil? (material-stop c blocks cells)))))
@@ -148,9 +157,9 @@
       shape)))
 
 (defn shape-stop
-  "The first thing that rules shape out, step by step as the digs would meet it, as a stop, nil when none does. A stop only
+  "The first thing that rules shape (dug from feet) out, step by step as the digs would meet it, as a stop, nil when none does. A stop only
   from a cell not seen yet (:unseen) gives way to a material-stop: what the dig yields to roof with does not wait for a look."
-  [c blocks {:keys [steps roof prep]}]
+  [c blocks feet {:keys [steps roof prep] :as shape}]
   (let [p (:primitives c)
         site (or (some (fn [{:keys [dig floor]}]
                          (or (some #(cell-stop p %) dig)
@@ -158,26 +167,35 @@
                                (cond-> (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
                                  (nil? (u/seen-name p floor)) (assoc :unseen true)))))
                        steps)
+                 (when-let [n (air-beside p feet shape)]
+                   (stop :lays-open (str (u/seen-name p n) " at " (pr-str (lb/cell n)) " beside the pit; not digging")))
                  (over-stop p roof))]
     (if (:unseen site)
       (or (material-stop c blocks (concat prep (mapcat :dig steps))) site)
       (or site (material-stop c blocks (concat prep (mapcat :dig steps)))))))
 
+(defn stop-shape
+  "The pit stop-of judges at feet: the straight column when its first cells are seen bad (refused-column), else the first
+  candidate; nil when none."
+  [c feet]
+  (let [plan (dig-cells/dig-plan (:primitives c) feet)]
+    (or (when plan (refused-column (:primitives c) feet plan)) (first (candidates c feet)))))
+
 (defn stop-of
   "Why no pit fits at feet: a stop. Water where the body stands, a pit that fits only with no hostile in the way (:hostile-near), no roof to place against (:no-roof-support), no pit whose
-  floor the body can see solid (:no-floor), else what rules out the first pit the shapes allow (shape-stop)."
+  floor the body can see solid (:no-floor), else what rules out stop-shape (shape-stop)."
   [c blocks feet]
   (let [p (:primitives c)]
     (or
       (here-stop p feet)
       (let [plan (dig-cells/dig-plan p feet)
-            shape (or (when plan (refused-column p feet plan)) (first (candidates c feet)))]
+            shape (stop-shape c feet)]
         (cond
           (pit-plan (assoc c ::ignore-hostiles true) feet blocks) (stop :hostile-near "a hostile stands in the way of the pit; not digging down")
           (nil? shape) (if plan
                          (stop :no-floor "no floor the body sees solid under a pit; not digging down")
                          (stop :no-roof-support "nothing solid beside the roof cell to place against; not digging a pit"))
-          :else (or (shape-stop c blocks shape) (stop :no-floor "no pit fits here")))))))
+          :else (or (shape-stop c blocks feet shape) (stop :no-floor "no pit fits here")))))))
 
 (defn ^:async plan-of!
   "The pit that fits at the feet (pit-plan with blocks, default the call's, after a look at the roof's surroundings and at the
@@ -291,14 +309,20 @@
                1 cells)))
 
 (defn shell-fails
-  "The chance a dig of cells lays itself open through a cell beside, over or under them, outside keep, the body never
-  sensed (unsensed-cells): each is solid at look/unseen-solid-at-fn, as beside a dug cell (rock is clumped); or meets bedrock
+  "The chance a dig of cells lays itself open through a cell of them, or one beside, over or under them outside keep, the body never
+  sensed (unsensed-cells; the plan reads its own as rock): each is solid at look/unseen-solid-at-fn, as beside a dug cell (rock is clumped); or meets bedrock
   in an unsensed cell of the dig (floor-bad-chance)."
   [p cells keep]
   (let [solid-at (sight/unseen-solid-at-fn p)
+        own (filter #(some-> (u/sensed p %) .-unknown) cells)
         open (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at [x y z] true)))
-                          1 (unsensed-cells p cells keep)))]
+                          1 (into (unsensed-cells p cells keep) own)))]
     (- 1 (* (- 1 open) (- 1 (floor-bad-chance p cells))))))
+
+(defn shape-fails
+  "shell-fails of a pit shape dug from feet: its digs, round them outside keep-of."
+  [p feet shape]
+  (shell-fails p (dug-of shape) (keep-of feet shape)))
 
 (defn ^:async lays-open?
   "After a dig of the last of cells (those dug so far): why what the digs laid open rules the refuge out, :fluid-adjacent
@@ -453,13 +477,12 @@
   "One step of the pit (pit-plan): dig the next drop's cells, then drop into it once its floor is seen solid, or at the
   bottom plug. The body never digs where it sees fluid, a hazard or open air, never digs the cell under its feet unless it
   knows the floor under that, nor drops onto a floor it has not seen solid: a stop instead (stop). :again, :hidden, or plug!'s result."
-  [c {:keys [anchor steps plugs roof prep] :as refuge}]
+  [c {:keys [anchor steps roof prep] :as refuge}]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         at (pit-index refuge feet)
         early-stop (delay (or (here-stop p feet) (over-stop p roof)))
-        keep (into #{anchor (update anchor :y inc) roof}
-                   (concat plugs prep (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps)))]
+        keep (keep-of anchor refuge)]
     (when at (await (pit-drops/collect-pit-drops! c feet)))
     (cond
       (nil? at) (stop :left-pit "the body left the pit's cells")

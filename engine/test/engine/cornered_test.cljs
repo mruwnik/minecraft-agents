@@ -169,11 +169,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng]} (await (first-round '(jobs.survival.respond-to-hostile)
+        (let [{:keys [p] :as s0} (await (first-round '(jobs.survival.respond-to-hostile)
                                               {:blocks stair :stair-way stair-floors :inventory [{:name "stone_pickaxe" :count 1}]
                                                :entities [(skeleton 3 67 0)]}))]
           (is (zero? (count (calls p "attack"))) "a pickaxe is no weapon: it flees first")
-          (is (< (:y (first-move eng)) 64) "down the stair"))))))
+          (is (= :flee (:decision (first (filter #(= :hostile.decided (:kind %)) @(:seen s0)))))
+              "it retreats: down the stair or into a pocket in its wall, whichever is cheaper (a pit beside the stair's open cells lays open, card a2f9dc44)"))))))
 
 (def tunnel-cells
   "A flat 1-wide tunnel along x on z 0, feet and head height, x -8..8."
@@ -2388,6 +2389,23 @@
                         (cornered/pillar-cover c [#js {:name mob}]))))))]
     (is (some? (cover "zombie")))
     (is (nil? (cover "phantom")) "a phantom flies to the pillar's top")))
+
+;; Card a2f9dc44: the rise of a pillar read open where never sensed is a chance it meets rock.
+(deftest an-unsensed-rise-is-a-chance-the-pillar-fails
+  (let [fails (fn [unseen?]
+                (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "dirt" :count 20}]})
+                      sensed (tu/sensed-by p)
+                      c (stub-ctx p (atom {}))]
+                  (tu/set-sensed! p (fn [pos] (if (and unseen? (= 0 (aget pos "x") (aget pos "z")) (< 65 (aget pos "y") 70)) #js {:unknown true :pos pos} (sensed pos))))
+                  (with-stub-mem
+                    (fn []
+                      (with-redefs [respond.pillar/pillar-item (fn ([_] "dirt") ([_ _] "dirt"))
+                                    respond.pillar/pillar-climb (constantly 0)
+                                    respond.pillar/mob-class (constantly :clear)
+                                    ctx/since (constantly [])
+                                    ctx/now (constantly 1000)]
+                        (:fails (cornered/pillar-cover c [#js {:name "zombie"}])))))))]
+    (is (< (fails false) (fails true) 1) "the cells over the head never sensed: rock there by the measured chance")))
 
 (deftest the-pillar-climb-priced-is-kept-for-the-plan-after-its-look
   (let [m (atom {})

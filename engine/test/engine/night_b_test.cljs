@@ -280,7 +280,7 @@
       (fn ^:async t []
         (let [fence (into {} (for [x (range -30 41) z (range -10 11) y (range 64 68) :when (or (#{-30 40} x) (#{-10 10} z))]
                                [(str x "," y "," z) "cobblestone"]))
-              {:keys [eng p seen]} (st/setup {:time night :blocks (merge fence (into {} (filter (fn [[k _]] (.endsWith k ",0"))) west-ground))
+              {:keys [eng p seen]} (st/setup {:time night :blocks (merge fence west-ground)
                                               :inventory [{:name "dirt" :count 12}] :light {} :light-default [15 15] :sees-all true})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x -11.5 :y 64 :z 0.5} :weight 1e6}])]

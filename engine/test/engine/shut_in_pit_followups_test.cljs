@@ -126,13 +126,14 @@
   {:steps [{:to {:x 1 :y 64 :z 0} :dig [{:x 1 :y 64 :z 0}]}] :plugs [] :roof {:x 0 :y 67 :z 0}
    :prep [{:x 1 :y 65 :z 0} {:x 1 :y 66 :z 0}]})
 
-(defn opens-with? [beyond]
-  (let [p (tu/fake {:self {:pos {:x 0.5 :y 65 :z 0.5}} :blocks (merge (seen/stone -1 1 60 70 -1 1) (when beyond (into {} (for [y [65 66]] [(str "2," y ",0") beyond]))))})]
-    (pit/opens-onto-air? p {:x 0 :y 65 :z 0} wall-shape)))
+(defn opens-with? [beyond ys]
+  (let [p (tu/fake {:self {:pos {:x 0.5 :y 65 :z 0.5}} :blocks (merge (seen/stone -1 1 60 70 -1 1) (when beyond (into {} (for [y ys] [(str "2," y ",0") beyond]))))})]
+    (some? (pit/air-beside p {:x 0 :y 65 :z 0} wall-shape))))
 
 (deftest a-zigzag-is-not-dug-through-a-wall-with-air-behind-it
-  (is (opens-with? nil) "a one-block wall over air")
-  (is (not (opens-with? "stone")) "rock behind the wall"))
+  (is (opens-with? nil []) "a one-block wall over air")
+  (is (not (opens-with? "stone" [64 65 66])) "rock behind the wall")
+  (is (opens-with? "stone" [65 66]) "rock behind the prep cells, air beside the drop's dig (card a2f9dc44)"))
 
 (deftest a-cell-to-dig-never-sensed-beside-seen-air-leaves-the-pit-to-a-look
   (let [p (tu/seeing-all (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}}}))
