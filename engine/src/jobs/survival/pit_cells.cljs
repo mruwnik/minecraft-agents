@@ -373,7 +373,7 @@
 (defn ^:async pocket!
   "Dig a side pocket (two cells deep, feet and head, closed on every other side), collecting the blocks, and step
   into its far end: :again, so the next step seals the way in with them. nil when no side fits or a dig fails or lays open fluid or a
-  cave (job memory :stop says which); :hit when a melee mob hurt the body during the dig."
+  cave (job memory :stop says which); :hit when a melee mob hurt the body during the dig (the next call from the same feet goes on with the same cells)."
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -381,13 +381,16 @@
         stop! (fn [reason text] (ctx/update-mem! c assoc :stop {:reason reason :text text}) nil)
         health0 (.-health (.self p))
         hit? #(wall-placer/hit-since? c health0)]
-    (when-let [cells (pocket-site c feet)]
+    (when-let [cells (let [{at :feet kept :cells} (:pocket-dug (ctx/mem c))]
+                       (if (= feet at) kept (pocket-site c feet)))]
+      (ctx/update-mem! c assoc :pocket-dug {:feet feet :cells cells})
       (when-not (lb/pick c (flight/blocks c)) (ctx/update-mem! c assoc :loose-plug true))
       (let [in (access/rules-input c)]
         (access/trespass! c "shut-in" (some #(access/trespass-refusal in :dig %) cells)))
       (loop [[cell & more] cells]
         (if (nil? cell)
-          (do (await (step-to! c (nth cells 2)))
+          (do (ctx/update-mem! c dissoc :pocket-dug)
+              (await (step-to! c (nth cells 2)))
               :again)
           (let [_ (await (tools/equip-for! c (look/rock-name p cell) {:fast true}))
                 r (await (tidy/dig! c cell true))]

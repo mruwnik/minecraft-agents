@@ -19,11 +19,11 @@
             [jobs.survival.respond.state :as flight]))
 
 (defn melee-spots
-  "Where the seen melee hostiles within the flight's :radius stand."
+  "Where the seen melee hostiles within the flight's :radius stand, and the ones whose blow the body felt (where it came from)."
   [c]
   (let [p (:primitives c)]
-    (->> (danger-q/known-hostiles p (danger-q/hostile-radius) {})
-         (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
+    (->> (danger-q/known-hostiles p (danger-q/hostile-radius) {:felt (danger-q/felt-hostiles p (ctx/view c))})
+         (filter #(and (not (combat/ranged? %)) (or (danger-q/seen-only? %) (danger-q/felt? %))))
          (mapv #(danger-q/mob-pos p %)))))
 
 (a/defargs settings

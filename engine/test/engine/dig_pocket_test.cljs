@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
@@ -383,3 +384,20 @@
           (is (nil? (failed seen)))
           (is (= 1 (count (:list (core/state eng)))) "the job yielded and is still there")
           (is (= ["air" "stone"] (mapv #(block-at p %) [[4 64 0] [5 64 0]])) "the first cell was dug, the second left: the body is hit, not digging on"))))))
+
+(deftest a-mob-felt-hitting-the-dig-ends-the-pocket-step-though-never-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup [] {})]
+          (.override (.-world p) "dig" (fn ^:async hurt-dig [token args impl]
+                                         (fake/swap-self! p assoc :health 15)
+                                         (mem/write! (:store eng) :hurt {:amount 5 :health 15 :pos {:x 0.5 :y 64 :z 0.5} :dir {:x 1 :z 0} :attacker {:id 7 :name "zombie"}} {:cap 50 :ttl 60000})
+                                         (await (impl token args))))
+          (core/submit! eng (tu/order (list 'jobs.survival.dig-pocket {})) {})
+          (loop [i 0]
+            (when (and (< i 10) (= "stone" (block-at p [4 64 0])))
+              (await (core/tick! eng))
+              (recur (inc i))))
+          (is (nil? (failed seen)))
+          (is (= ["air" "stone"] (mapv #(block-at p %) [[4 64 0] [5 64 0]])) "a blow from a mob never seen still ends the dig after its first cell"))))))
