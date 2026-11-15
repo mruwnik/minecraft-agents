@@ -846,6 +846,10 @@
     (is (<= (/ (* 2 (worth "oak_planks")) 4) (worth "stick"))
         "not a leaf's (vanilla drops one 1 in 50, not every time) nor bamboo's, which grows in jungles alone")))
 
+;; value/::gather-counts: 185 cobblestone in 1980 s of gathers (stone is often walked to far), 10.7 s each, not the 6.9 of the 2026-10-29 count
+(deftest a-cobblestone-goal-is-worth-what-the-trial-gathers-took-for-it
+  (is (< 8 (:value (cost/goal-value [{:name "cobblestone" :count 1}])) 12)))
+
 (deftest a-measured-item-is-worth-its-gathers-seconds-per-item-as-a-goal-and-what-is-made-of-it-follows
   (let [goal #(:value (cost/goal-value [{:name % :count 1}]))
         margin #(:value (cost/item-value [{:name % :count 1}]))
