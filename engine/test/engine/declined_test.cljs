@@ -139,8 +139,7 @@
   ;; after 4 16.5 s; a round with no seconds, or whose child was declined, is priced at the kind's 17.1 s; a round
   ;; begun (child/begin!) is priced from there, the caller's own 300 s in it counted though its child took 5 ms;
   ;; :craft-refused's .01/1 at 3.677 s allows 3. Those rounds end in different ways; the same ending twice in a row
-  ;; is priced as :child-round-refused (.01/1) at 17.1 s at least: a 1.5 s round ending alike is not tried a third time,
-  ;; where 1.5 s rounds ending in different ways go on
+  ;; is priced as :child-round-refused (.049/.352 at 13.3 s, at least) and stops after 6 rounds of 1.5 s, where varied ones go on
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -149,7 +148,7 @@
               declined {:kind :condition-failed :cause :x :report {:uses {:wall-time 0.005}}}]
           (is (= {:none false :30s [false false true] :300s [false true] :unpriced [false false false true] :progress false
                   :declined [false false false true] :begun [false true] :refused [false false false true]
-                  :alike [false true true] :varied [false false false]}
+                  :alike [false false false false false true] :varied [false false false]}
                  (await (in-parent walker
                                    (fn ^:async f [c]
                                      (let [after (fn [slot e] (child/fruitless! c slot e) (child/exhausted? c slot))
@@ -161,7 +160,7 @@
                                         :declined (mapv #(after :f (assoc declined :cause %)) (range 4))
                                         :begun (mapv begun (range 2))
                                         :refused (mapv (fn [_] (child/fruitless! c :g) (child/exhausted? c :g :craft-refused)) (range 4))
-                                        :alike (mapv (fn [_] (after :h (round 1.5))) (range 3))
+                                        :alike (mapv (fn [_] (after :h (round 1.5))) (range 6))
                                         :varied (mapv #(after :i (round 1.5 %)) (range 3))
                                         :progress (do (child/progress! c :a) (child/exhausted? c :a))}))
                                    (atom []) clock age)))))))))

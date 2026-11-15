@@ -559,7 +559,7 @@
         (loop [[[y dug worth runs why] & more] [[64 {:cut {:level 32} :tunnel {:steps 32}} 5000 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
                                                 [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 5000 3 "one whose tunnel only walked open air cut nothing: after three 120 s runs a fourth is not worth its price"]
                                                 [64 {} 5000 3 "a run that cut nothing is fruitless: three end the gather"]
-                                                [64 {:same true} 5000 2 "the same ending twice in a row is the same failure again (:child-round-refused): a third run is not worth its price"]
+                                                [64 {:same true} 5000 3 "the same ending twice in a row is the same failure again (:child-round-refused): a third run is not worth its price"]
                                                 [16 {:cut {:level 32} :tunnel {:steps 32}} (- (one-more-run-worth 16) (plan/strip-s 16 nil)) 1 "a run after which no strip leg pays is fruitless: at this worth one ends the gather"]
                                                 [64 {:cut {:level 32} :tunnel {:steps 32}} 1 0 "a call worth less than a search's trip does not start"]
                                                 [16 {:cut {:level 32} :tunnel {:steps 32}} (one-more-run-worth 16) 2 "the second run spends what a third would need: it is fruitless and ends the gather"]
