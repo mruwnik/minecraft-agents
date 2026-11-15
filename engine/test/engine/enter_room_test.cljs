@@ -419,3 +419,15 @@
           (core/submit! eng (tu/order '(jobs.survival.enter-room {})) {})
           (await (tu/run-until-empty eng 60))
           (is (= "cobblestone" (block-at p [3 64 0])) "the dug-out wall cell is the plan's again"))))))
+
+(deftest at-night-a-wall-cell-dug-out-of-the-own-hut-is-put-back-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut-world {:x 5 :y 64 :z 0} {"3,64,0" "air"})
+                        (assoc :time st/night :inventory [{:name "cobblestone" :count 4}] :sight 10))
+              {:keys [eng p]} (st/setup world)]
+          (ew/set-data! (:world eng) {"hut" side-wall-plan} {})
+          (core/submit! eng (tu/order '(jobs.survival.enter-room {})) {})
+          (await (tu/run-until-empty eng 60))
+          (is (= "cobblestone" (block-at p [3 64 0])) "the mend is not a day-only answer"))))))

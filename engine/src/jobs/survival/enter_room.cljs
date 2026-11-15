@@ -16,6 +16,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.own-builds :as own-builds]
             [jobs.lib.pace :as pace]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.look :as look]
             [jobs.lib.look-edge :as look-edge]
@@ -25,6 +26,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
@@ -42,7 +44,7 @@
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
   A room walked to by :at whose inside was not seen emits enter-room.arrived {:seen :unseen :open-sides :closed-sides :closed} once its sides are all seen.
-  By day, in a room of a plan the body made (once its doors are shut), jobs.build.from-plan runs once first over the cells touching the room seen to differ from that plan (what a way in dug or set there is put back; a room a wall was dug out of, open, every such cell of the plan), at the worth the call has; a mend that does not end done emits enter-room.mend-failed and the result carries :mend-failed {:kind :reason :cells}. Takes :ignore-zones? for that mend.
+  In a room of a plan the body made (once its doors are shut), jobs.build.from-plan runs once first over the cells touching the room seen to differ from that plan (what a way in dug or set there is put back; a room a wall was dug out of, open, every such cell of the plan), at the worth the call has; a mend that does not end done emits enter-room.mend-failed and the result carries :mend-failed {:kind :reason :cells}. Takes :ignore-zones? for that mend.
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :roof-not-held (a mend that did not stay), :roof-not-placed (the block was not placed; or the fill's own reason), :open (the room cannot be closed).
@@ -449,9 +451,9 @@
                             ((own-builds/plan-around-fn c) feet))))))
 
 (defn mend-due?
-  "The plan id whose way-in mend is still to run: by day, not yet this call, in a room of a plan the body made (own-plan-here)."
+  "The plan id whose way-in mend is still to run: not yet this call, in a room of a plan the body made (own-plan-here)."
   [c]
-  (when (and (not (:mended (ctx/mem c))) (not (sh-sense/night? (:primitives c))))
+  (when-not (:mended (ctx/mem c))
     (own-plan-here c)))
 
 (defn way-in-cells
@@ -464,17 +466,20 @@
       (mapv (comp vec :pos) (diff/diff c (filterv #(near (vec (:pos %))) cells))))))
 
 (defn ^:async mend-s
-  "Seconds the way-in mend of the room takes (jobs.build.from-plan's quote over way-in-cells, its mean job time), 0 when none is due."
+  "Seconds the way-in mend of the room takes (jobs.build.from-plan's quote over way-in-cells, its mean job time) and the risk of
+  those seconds spent where the body stands (price/stay-risk-s at the light there now: dear at night, near nothing by day), 0 when none is due."
   [c]
   (let [pid (mend-due? c)
         cells (when pid (way-in-cells c pid))]
     (if (empty? cells)
       0
       (let [q (await (ctx/quote c 'jobs.build.from-plan {:plan pid :cells cells :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-        (or (get-in q [:uses :job-time 1]) 0)))))
+        (let [secs (or (get-in q [:uses :job-time 1]) 0)
+              p (:primitives c)]
+          (+ secs (price/stay-risk-s c (spawn-light/chance-at p (sh-sense/feet p) false nil true) secs (price/way-fight-hp c (u/self-pos c)))))))))
 
 (defn ^:async mend-plan!
-  "By day, in the closed room of a plan the body made, once: jobs.build.from-plan over the cells of the way in the plan wants otherwise
+  "In the closed room of a plan the body made, once: jobs.build.from-plan over the cells of the way in the plan wants otherwise
   (way-in-cells: the wall under which it dug, a door set in it), at the worth the call has. Its ending does not end the call: when it is
   not done, mem :mend-failed {:kind :reason :cells} and enter-room.mend-failed say so, and the call's result carries :mend-failed.
   :continue while it goes on, else :again."
