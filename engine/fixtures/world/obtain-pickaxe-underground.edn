@@ -13,6 +13,6 @@
   :limit-s 400}
  :cases
  [{:name "underground-empty-pack-climbs-for-wood-and-makes-a-stone-pickaxe"
-   :act [[:job (jobs.items.obtain {:item "stone_pickaxe" :count 1 :explore true :worth 300})]]
+   :act [[:job (jobs.items.obtain {:item "stone_pickaxe" :count 1 :explore true :worth 300 :spend {:job-time 370}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]}]}

@@ -14,7 +14,7 @@
  :cases
  [{:name "a-buried-body-with-a-worth-that-pays-the-stair-climbs-and-fells"
    :body {:inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :worth 500 :explore true})]]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :worth 500 :explore true :spend {:job-time 260}})]]
    :expect [{:event {:source :job :kind :stair.step} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed} :within-s 270 :of-job true}]
    :after [[:item "oak_log" 4]]}

@@ -1,9 +1,6 @@
-;; items.obtain's default :spend :job-time (fetch-time/items-s: cost/fetch-value, the item's usual cost with the walk to
-;; each gathered item's source at the edge of sight, plus one sd) covers a fetch from an empty pack with its sources
-;; 40 and 50 blocks off. Bare body at [16.5 0 12.5] facing south (+z); an oak tree at z 52, stone at z 62..63; no table.
-;; Should-succeed: 4 oak planks (worth 2000) and a stone pickaxe (worth 3000) on the default budget are made, no limit
-;; reached (the budgets before were 20.9 s and 64.4 s, both ran out). Should-fail (control): the planks under
-;; :spend {:job-time 8}, less than the walk to the tree, stop :limit-reached with none made.
+;; A root obtain's default :spend :job-time (fetch-time/items-s) is priced from its args alone, so it does not cover the walk to a far
+;; source or a search: an agent quotes first (./bin/quote) and passes :spend. Bare body at [16.5 0 12.5] facing south (+z); an oak tree at z 52.
+;; Should-fail: 4 oak planks under :spend {:job-time 8}, less than the walk to the tree, stop :limit-reached with none made.
 {:defaults
  {:tags [:items :obtain :budget :jobs]
   :plot {:height 12 :floor "grass_block" :isolate true :length 32 :width 64}
@@ -12,19 +9,7 @@
   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]]
   :limit-s 150}
  :cases
- [{:name "four-planks-from-a-tree-40-blocks-off-fit-the-default-budget"
-   :act [[:job (jobs.items.obtain {:worth 2000 :item "oak_planks" :count 4 :explore false})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 140 :until {:source :job :kind :completed}}]
-   :after [[:item "oak_planks" [:>= 4]]]}
-  {:name "a-stone-pickaxe-from-a-tree-and-stone-far-off-fits-the-default-budget"
-   :blocks [[:fill [20 0 62] [22 1 63] "stone"]]
-   :act [[:job (jobs.items.obtain {:worth 3000 :item "stone_pickaxe" :explore false})]]
-   :limit-s 280
-   :expect [{:event {:source :job :kind :completed} :within-s 270 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 270 :until {:source :job :kind :completed}}]
-   :after [[:item "stone_pickaxe" 1]]}
-  {:name "four-planks-under-a-budget-shorter-than-the-walk-reach-the-limit"
+ [{:name "four-planks-under-a-budget-shorter-than-the-walk-reach-the-limit"
    :act [[:job (jobs.items.obtain {:worth 2000 :item "oak_planks" :count 4 :explore false :spend {:job-time 8}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached}} :within-s 60 :of-job true}]
    :after [[:item "oak_planks" 0]]}]}
