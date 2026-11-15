@@ -136,3 +136,16 @@
       skipping 0
       needed (max 0 (- needed (- (or sleeping 0) (if (counts-self? p view status) 1 0)) 1))
       :else (max 0 (- (count (.-players (.self p))) (count (sleeping-players p (default-player-radius))))))))
+
+(defn stints-tonight
+  "How many log-out stints the body has taken since dusk: each came back to the same night (a stint that skipped it
+  would have ended it)."
+  [p view]
+  (count (filter #(#{"ok" "cut"} (:status (:data %))) (mem/since view :log-out (sh-clock/tonight p view)))))
+
+(defn stint-skip-chance
+  "The chance the next log-out stint skips the night: the chance the players short lie down (value/skip-chance of
+  sleepers-short) as a Beta prior of the uniform prior's weight (2), less each stint tonight that came back to the same night."
+  [p view]
+  (let [q (value/skip-chance (sleepers-short p view))]
+    (value/counted-chance {:k 0 :n (stints-tonight p view) :prior [(* 2 q) (* 2 (- 1 q))]})))

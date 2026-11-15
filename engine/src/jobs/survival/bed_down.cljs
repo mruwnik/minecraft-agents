@@ -242,7 +242,7 @@
   (exposed-price: the hostiles known there once),
   and by day that shelter's morning and the walk back to where the night found the body; :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-gain there. :exposed the night left in the open where the body stands (or the worst cell
-  it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers, plus its quoted death (chance x seconds: the mobs known at the spot wait for the return).
+  it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds plus its quoted death (chance x seconds: the mobs known at the spot wait for the return), and, unless the stint skips the night (sh-sleepers/stint-skip-chance: the players short lying down, less each stint tonight that came back to the same night), the cheapest other answer.
   Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
   the other players online wait for (sh-sleepers/skip-wait-s)."
   [c {:keys [bed walk-s walk-secs log-out? niche flee home]}]
@@ -281,7 +281,8 @@
                      carried? (seal-plan c)
                      (and bed (not asleep?)) (when-let [l (placed-layout p bed)] (seal-plan c l)))
         out-s (when log-out? (let [{:keys [uses death]} (await (ctx/quote c 'jobs.survival.log-out {}))]
-                               (+ (get-in uses [:job-time 1]) (* (:chance death 0) (:death death 0)))))
+                               {:stint (+ (get-in uses [:job-time 1]) (* (:chance death 0) (:death death 0)))
+                                :skip (sh-sleepers/stint-skip-chance p view)}))
         here (await (dig-in-quote c))]
     (as-> {:exposed (way-s {:open-s (open left)})} prices
      (cond-> prices
@@ -301,7 +302,7 @@
                           (if carried?
                             (+ lost (- (way-s w) (way-s {})) (- (cost/spawn-gain body (:pos home) feet)))
                             (way-s w))))
-      (number? out-s) (assoc :log-out out-s))
+      out-s (assoc :log-out (+ (:stint out-s) (* (- 1 (:skip out-s)) (apply min (vals prices))))))
      (cond-> prices
        (:home prices) (update :home failed-walk-s (:cost home) (vals (dissoc prices :home)) (sh-beds/home-walk-fails c (:pos home)))))))
 

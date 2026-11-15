@@ -445,3 +445,19 @@
           (await (tu/run-until-empty eng 8))
           (is (= 1 (count (st/calls p "sleep"))))
           (is (= [] (st/calls p "offline"))))))))
+
+(deftest each-log-out-stint-that-came-back-to-the-same-night-makes-the-next-one-dearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [answers (fn ^:async q [stints]
+                        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
+                          (dotimes [_ stints] (write! eng :log-out {:ms 7000 :status "ok"}))
+                          (sleep-count! p 1 3)
+                          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
+                          (await (tu/run-until-empty eng 10))
+                          (first (st/emitted seen :night.answers))))
+              fresh (await (answers 0))
+              failed (await (answers 6))]
+          (is (> (get-in failed [:prices :log-out]) (get-in fresh [:prices :log-out])) "failed stints are evidence the night does not skip while out")
+          (is (not= :log-out (:answer (await (answers 9)))) "after enough failed stints the shelter is cheaper"))))))
