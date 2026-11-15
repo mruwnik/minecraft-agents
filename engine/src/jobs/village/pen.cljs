@@ -15,6 +15,7 @@
             [jobs.lib.placement :as placement]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.villager :as villager]
@@ -29,7 +30,9 @@
   the body inside. The side is the one the villager stands in, else the one with the fewest blocks to place or dig
   among those whose cell, stand and near end are seen open (a pen already standing costs least).
   Each step re-reads the world and does the first owed: get
-  building blocks (jobs.items.obtain) and fill the floors, walls and roofs (jobs.blocks.fill-cells), place a wooden slab
+  building blocks (jobs.items.obtain) and fill the floors, walls and roofs seen open (jobs.blocks.fill-cells); cells
+  never seen are looked at first (a :look at the start while it pays, then a walk to see each, digging the box's entry
+  when boxed in; still unseen: nothing-possible :unseen), place a wooden slab
   in the upper half over the workstation (a block of another kind there is dug first), light the cell while it reads dark and
   the body can reach it (jobs.build.light-area, once a call), dig a plug of an empty pen open; with the villager in: wait while another
   villager shares the cell, fill the near end (from the stand, digging the box's entry first to walk out); then step
@@ -48,7 +51,7 @@
   through the pen, so a villager out of view is waited for to walk in like one in view.
   Ends done when the pen holds the villager (jobs.lib.villager-pen/penned; result {:side [dx dz] :cell [x y z]}), else condition-failed
   :villager-out-of-view (not luring), :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
-  :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :dark, :not-walked-in (the villager
+  :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :unseen (:cells), :dark, :not-walked-in (the villager
   stayed out for the whole wait; :sites names the other job sites seen), or a child's ending. What it built stays: the
   next call finds the pen standing.")
 
@@ -86,9 +89,28 @@
       error (contract/never :bad-args error :why error)
       :else (contract/ok :args "a villager, a profession and a cell"))))
 
-(def can-start? bad-args)
-
 (defn the-villager [c] (villager/find-by-uuid (:primitives c) (:villager (:args c))))
+
+(defn lay-of
+  "The pen's layout: the side chosen for the villager in view, else the built pen the body is boxed in and lures from."
+  [c]
+  (let [p (:primitives c)
+        ws (ws-cell c)
+        e (the-villager c)]
+    ;; boxed in, the body sees out only through the pen: the walk-in is what it waits for, not the villager in view
+    (if e (some->> (vp/choose p ws e) (vp/layout ws)) (vp/luring p ws))))
+
+(defn unseen [p cells] (filterv #(nil? (vp/name-at p %)) cells))
+
+(defn shut-unseen
+  "Look :unseen at the pen's shut cells never seen that a look from here pays for (sense/paid-look-at); ok when none."
+  [c]
+  (let [paid (some->> (lay-of c) :shut (unseen (:primitives c)) seq (sense/paid-look-at c))]
+    (if (seq paid)
+      (contract/look :unseen "cells of the pen were never seen" :look-at (vec paid))
+      (contract/ok :seen "the pen's cells are seen or no look from here shows them"))))
+
+(defn can-start? [c] (let [s (bad-args c)] (if (= :ok (first s)) (shut-unseen c) s)))
 
 (defn done?
   "Ok once the villager stands in a shut, lit pen alone (jobs.lib.villager-pen/penned) with the workstation placed."
@@ -232,21 +254,48 @@
         :continue)
     (stop! c :nothing-possible :not-walked-in {:sites (villager/job-sites c (:pos (b/parse (:args c))))})))
 
+(defn ^:async see!
+  "Walk to where the eye sees the nearest of the shut cells never seen (blocks/walk-into-reach!) and look at it; a cell
+  looked at once this call and still unseen ends nothing-possible :unseen."
+  [c cells]
+  (let [cell (first (sort-by #(u/dist (u/self-pos c) (u/cell-pos %)) cells))]
+    (if (contains? (:looked (ctx/mem c) #{}) cell)
+      (stop! c :nothing-possible :unseen {:cells cells :text "cells of the pen stay unseen after a walk to see them"})
+      (let [w (await (b/walk-into-reach! c (u/cell-pos cell) true))]
+        (cond
+          (= :continue w) :continue
+          (:unreachable w) (stop! c :nothing-possible :unseen {:cells cells :why (:unreachable w) :text (str "could not walk to see the pen's cells: " (:text w))})
+          (= :again w) (do (ctx/update-mem! c update :looked (fnil conj #{}) cell)
+                           (await (look/look-at! c cell))
+                           :again)
+          :else (ctx/end c (:kind w) (:cause w) (:data w)))))))
+
+(defn ^:async shut!
+  "The shut cells seen open are filled (blocks fetched for those only); with none, the unseen ones are looked at, the
+  box's entry dug first when the body stands boxed in."
+  [c lay]
+  (let [p (:primitives c)
+        owed (vp/owed p (:shut lay))
+        open (filterv #(vp/name-at p %) owed)]
+    (cond
+      (seq open) (await (fill! c :shut open {:collect false}))
+      (and (vp/at-stand? p lay) (not (vp/way-in? p lay))) (await (dig-open! c :entry lay :entry))
+      :else (await (see! c owed)))))
+
 (defn ^:async step!
   "The first owed piece of the pen, from the world as it reads now. :again, :continue or the stop."
   [c]
   (let [p (:primitives c)
         ws (ws-cell c)
         e (the-villager c)
-        ;; boxed in, the body sees out only through the pen: the walk-in is what it waits for, not the villager in view
-        lay (if e (some->> (vp/choose p ws e) (vp/layout ws)) (vp/luring p ws))
+        lay (lay-of c)
         block (vp/name-at p ws)
         in? (boolean (and e lay (vp/inside? lay e)))]
     (cond
       (and (nil? e) (nil? lay)) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})
       (and block (not (bs/air block)) (not= (item-of (:args c)) block)) (stop! c :condition-failed :occupied {:block block})
-      (seq (vp/owed p (:shut lay))) (await (fill! c :shut (vp/owed p (:shut lay)) {:collect false}))
+      (seq (vp/owed p (:shut lay))) (await (shut! c lay))
       (not (vp/top-slab? p (:slab lay))) (await (slab! c (:slab lay)))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c))) (not (and in? (vp/plug-shut? p lay)))) (await (light! c (:cell lay)))
       (and (not in?) (seq (vp/solids p (:plug lay)))) (await (dig-open! c :reopen lay :plug))

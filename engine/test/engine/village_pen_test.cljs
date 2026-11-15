@@ -129,6 +129,25 @@
           (is (every? #(vp/solid? (block p %)) (concat (:shut lay) (:plug lay) (:box lay))))
           (is (= ["oak_slab" "top"] [(block p [2 65 0]) (get-in @(fake/state p) [:states [2 65 0] :type])])))))))
 
+(deftest a-boxed-body-that-never-saw-the-pen-walls-digs-out-to-look-and-fetches-or-places-nothing-for-walls-that-stand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walls #{[1 64 1] [1 65 1] [1 66 1] [1 64 -1] [1 65 -1] [1 66 -1]}
+              hide (fn [{:keys [p]}]
+                     (let [sensed (.-sensedAt p)
+                           shown (atom false)]
+                       (.override (.-world p) "look" (fn [token a impl] (when (not= [3 64 0] (vp/body-cell p)) (reset! shown true)) (impl token a)))
+                       (tu/set-sensed! p (fn [q] (if (and (walls [(.-x q) (.-y q) (.-z q)]) (not @shown)) #js {:unknown true :pos q} (sensed q))))))
+              [result p] (await (run (assoc (world (merge shut plug box)) :entities [(jobless {:x 1 :y 64 :z 0})]
+                                            :inventory [{:name "cobblestone" :count 2}])
+                                     {} 400 hide))
+              lay (vp/layout ws [-1 0])]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= (set (:entry lay)) (set (map #(let [a (.-pos (.-args %))] [(.-x a) (.-y a) (.-z a)]) (vt/calls p "place"))))
+              "only the entry dug to walk out and look is placed back")
+          (is (every? #(vp/solid? (block p %)) (:box lay))))))))
+
 (defn ticking
   "World age runs with the clock (a game tick each 50 ms) at day time 1000: the ticks villagers count by."
   [{:keys [p clock]}]

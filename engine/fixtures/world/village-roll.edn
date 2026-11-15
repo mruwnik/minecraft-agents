@@ -5,8 +5,9 @@
 ;; A roll breaks only with the villager penned (jobs.lib.villager-pen): rolled cases stand the pen in :blocks (villager cell 16 0 17,
 ;; a glowstone roof lighting it, the body boxed in its stand 16 0 15; the walled cases close their own cell the same way);
 ;; jobless villagers are penned by the roll's pen child from carried blocks.
-;; A body boxed in its stand cannot see the pen's side walls (an unseen cell counts as owed, so the pen child would ask for blocks): the pen cases start
-;; beside the pen, look at it from both sides, and are teleported into the stand before the job.
+;; A body boxed in its stand cannot see the pen's side walls: the pen cases start
+;; beside the pen, look at it from both sides, and are teleported into the stand before the job; roll-librarian-boxed-in-never-seen-pen-walls-digs-out-to-look
+;; starts boxed in: the pen child digs the box's entry, walks out to see the walls and shuts the box again.
 ;; roll-three-times-in-one-call: three rerolls in one call (no villager offers a netherite ingot), then no-match; the report counts every lectern picked up (yields = uses).
 ;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
 ;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
@@ -37,6 +38,17 @@
    :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~6 ~ ~ 90 0"] [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~-3 ~ ~-1 0 0"] [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
+   :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-librarian-boxed-in-never-seen-pen-walls-digs-out-to-look"
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [16.5 0 15.5] :yaw 0}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,73],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 3]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000049" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-with-carried-ways-places-the-workstation-it-broke"
