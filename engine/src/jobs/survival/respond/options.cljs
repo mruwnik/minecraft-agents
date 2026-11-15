@@ -239,16 +239,20 @@
 (defn covers
   "shut-in/covers of ways where the body stands, each way's kept (memory ::covers) for check-cache/ttl-ms while what
   they read stays the same (covers-in): one decision prices them once for its answers, its flee search's dead end and
-  its cornered step. Each way's :fails counts its failures where the body stands (flight/fails-here)."
+  its cornered step. Each way's :fails counts its failures where the body stands (flight/fails-here), and :dig-s the dig
+  away out of it from the nearest hostile (hide-out/dig-out-s; the pillar has none)."
   [c ways]
-  (let [in (covers-in c)
+  (let [p (:primitives c)
+        in (covers-in c)
         now (ctx/now c)
         kept (::covers (ctx/mem c))
         kept (if (and (= in (:in kept)) (<= 0 (- now (:t kept)) (check-cache/ttl-ms))) kept {:in in :t now :asked #{} :v {}})
         missing (remove (:asked kept) ways)
         kept (cond-> kept (seq missing) (-> (update :v merge (shut-in/covers c missing)) (update :asked into missing)))]
     (when (seq missing) (ctx/update-mem! c assoc ::covers kept))
-    (into {} (map (fn [[w spec]] [w (update spec :fails #(flight/fails-here c w (or % 0)))])) (select-keys (:v kept) ways))))
+    (let [nearest (some->> (seq (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (apply min-key #(danger-q/mob-distance p %)))
+          dig-s (hide-out/dig-out-s p (some->> nearest (danger-q/mob-pos p)))]
+      (into {} (map (fn [[w spec]] [w (cond-> (update spec :fails #(flight/fails-here c w (or % 0))) dig-s (assoc :dig-s dig-s))])) (select-keys (:v kept) ways)))))
 
 (defn exits-of
   "{:dawn-s} every cover's spec carries (cost/cover-answer's exits): the mean seconds of night left."

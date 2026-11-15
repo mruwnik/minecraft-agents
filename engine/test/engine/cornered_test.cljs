@@ -2656,3 +2656,11 @@
     (is (false? (hit? {:step-at 500})) "no leg walked since the last step")
     (is (false? (hit? {:step-at 500 :ran-at 700 :ran-health 14})) "lost in the search before the leg began, then a leg: no hit on the run")
     (is (true? (hit? {:step-at 500 :ran-at 700 :ran-health 16})) "lost on the leg")))
+
+(deftest a-body-walled-in-rock-digs-away-only-with-a-tool-that-cuts-it
+  (let [rock (dissoc (tu/box -8 56 -8 8 76 8 "stone") "0,64,0" "0,65,0")
+        dig-s #(hide-out/dig-out-s (tu/seeing-all (tu/fake {:blocks rock :inventory %})) {:x 3 :y 64 :z 0})
+        pick (dig-s [{:name "stone_pickaxe" :count 1}])]
+    (is (< 0 pick ##Inf) "a pickaxe cuts the stair away from the mob")
+    (is (nil? (dig-s [])) "no tool cuts stone: the walls are a hide, then the same fight")
+    (is (< pick (dig-s [{:name "wooden_pickaxe" :count 1}])) "a slower tool digs dearer")))

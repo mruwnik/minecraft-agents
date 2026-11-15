@@ -788,6 +788,13 @@
     (is (= (price false {:dawn-s 100}) (price false {})) "the sun is no exit from a mob that does not burn")
     (is (< (price true {:dawn-s 100}) (price false {:dawn-s 100})) "so a burner's cover is cheaper than a helmeted mob's")))
 
+(deftest walled-off-from-a-mob-that-does-not-burn-a-body-that-digs-pays-the-dig-away-not-the-same-fight
+  (let [zombie (assoc (mob "zombie" 3) :burns false)
+        fight (cost/fight-answer (assoc (fight nil zombie) :health 20))
+        walls #(cost/answer-price (body 20) (cost/cover-answer {:mobs [zombie] :then [fight]} (merge {:open-s 2 :seconds 32} %)) here)]
+    (is (< (walls {:dig-s 20}) (walls {})) "a dig away meets the mob again only by the chance a mob got away from is met again")
+    (is (= (walls {:dig-s 1e6}) (walls {})) "a dig dearer than the fight is no exit")))
+
 (deftest a-hide-in-a-refuge-keeps-the-measured-stay-chance-whatever-the-mob-burns
   (let [price #(cost/answer-price (body 4) (cost/refuge-answer {:mobs [(assoc (mob "zombie" 7) :burns %)] :later (cost/fight-answer (assoc (fight nil (mob "zombie" 7)) :health 4))} {:door-s 4 :hide-s 30}) here)]
     (is (= (price nil) (price false)) "the refuge hides counted (hide-stays) are of refuges, a house is lived in; only a cover (pillar, walls, pit) is a delay a non-burner outlasts")))

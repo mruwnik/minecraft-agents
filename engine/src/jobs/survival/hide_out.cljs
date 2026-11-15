@@ -11,12 +11,17 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.access :as access]
+            [jobs.lib.escape :as escape]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.survival.respond.state :as flight]))
 
 (def doc
@@ -132,6 +137,27 @@
           (= :continue e) :again
           (= :done (:kind e)) :out
           :else (do (ctx/update-mem! c assoc-in [:dig-out :i] (inc i)) :again))))))
+
+(defn dig-out-s
+  "Seconds the stair dig-out! digs first (::dig-out-steps steps up on the heading away from a mob at `from`, escape/stair-cuts)
+  takes from the body's feet: each step cost/stair-leg-pricer's, its cuts at the quickest carried tool (tools/avg-clear-ms; a
+  seen open cell none, an unsensed one access/hidden-guess) with what they destroy (cost/destroyed-fn). nil when the body
+  is not buried or a cut needs a tool it does not carry (tools/needs-tool-to-clear?): no dig away."
+  [p from]
+  (when (sh-sense/buried? p)
+    (let [feet (sh-sense/feet p)
+          steps (settings/get settings ::dig-out-steps)
+          heading (first (dig-leave/heading-order feet (when from {:x (- (* 2 (:x feet)) (:x from)) :z (- (* 2 (:z feet)) (:z from))})))
+          cells (escape/stair-cuts [(:x feet) (:y feet) (:z feet)] (escape/heading-dirs heading) steps)
+          pos #(zipmap [:x :y :z] %)
+          seen? #(sh-sense/seen-cell? p (pos %))
+          names (map #(when-not (and (seen? %) (not (sh-sense/solid-at? p (pos %)))) (or (u/seen-name p (pos %)) access/hidden-guess)) cells)
+          destroyed (cost/destroyed-fn (fn [c] (u/sensed p (pos c))))
+          cut-s (fn [n cell] (when n (+ (/ (tools/avg-clear-ms p n (count cells)) 1000) (destroyed n cell false))))
+          leg-s (cost/stair-leg-pricer (wworld/unseen-share p))]
+      (when-not (some #(and % (tools/needs-tool-to-clear? p %)) names)
+        (transduce (map (fn [step] (leg-s (map (fn [[n cell]] (cut-s n cell)) step) nil (not-every? (comp seen? second) step))))
+                   + 0 (partition 3 (map vector names cells)))))))
 
 (defn stays-for-creeper?
   "Whether staying in the refuge is the cheaper of the two with a creeper at it (hostile-loss/loss-over): a plug or pit shuts the blast off
