@@ -742,6 +742,8 @@
       (= "nitwit" profession) (stop! c :nitwit)
       (other-job? c e) (rule-out! c :other-job)
       (= "unemployed" profession) (if (penned? c e) (await (wait-take-job! c)) (await (pen! c)))
+      ;; offers missed: the pen child owns the body (its stand walk is out of reach by design) until the villager is shut in
+      (and (:pen-after-miss (ctx/mem c)) (not (penned? c e))) (await (pen! c))
       (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (or (await (leave-box! c)) (await (walk! c e)))
       :else
       (let [r (await (read-offers! c))]
@@ -750,8 +752,8 @@
           (= :locked r) (rule-out! c :locked)
           (= :miss r) (cond
                         out-of-tries? (stop! c :no-match)
-                        (penned? c e) (await (dig! c))
-                        :else (await (pen! c)))
+                        (penned? c e) (do (ctx/update-mem! c dissoc :pen-after-miss) (await (dig! c)))
+                        :else (do (ctx/update-mem! c assoc :pen-after-miss true) (await (pen! c))))
           :else r)))))
 
 (defn ^:async cleanup

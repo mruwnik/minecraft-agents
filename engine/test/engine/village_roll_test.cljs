@@ -636,6 +636,19 @@
                                                              (ctx/end c :nothing-possible (:reason result))
                                                              (ctx/end c :done nil result))))))))
 
+(deftest after-an-offers-miss-the-pen-child-keeps-the-body-until-the-villager-is-shut-in-the-offers-are-not-read-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wrap (fn [env]
+                     (let [j (get (:jobs (:eng env)) 'jobs.village.pen)]
+                       (assoc-in env [:eng :jobs 'jobs.village.pen]
+                                 (assoc j :round (fn ^:async waiting [c] :continue)))))
+              [_ p] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true :pen? false :wrap wrap}
+                                 {:spend {:wall-time 30}}))
+              reads (filter #(= "offers" (.-op (.-args %))) (vt/calls p "trade"))]
+          (is (= 1 (count reads))))))))
+
 (def stopped {:status :stopped :reason :no-tool})
 
 (deftest a-dig-child-that-stops-ends-with-its-ending
