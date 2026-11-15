@@ -4,7 +4,9 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.contract :as contract]
             [jobs.lib.cost :as cost]
+            [jobs.survival.get-food.risk :as risk]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
@@ -169,8 +171,6 @@
 
 (def meta {:category :reflex})
 
-(def safe? ready/safe-roaming)
-
 (def fit? ready/fed-fit?)
 
 
@@ -291,6 +291,14 @@
   (let [p (:primitives c)
         hangs? (fn [{[x y z] :cell action :action}] (and (= :dig action) (not (b/support? p {:x x :y y :z z}))))]
     (concat (remove hangs? waiting) (filter hangs? waiting))))
+
+(def safe?
+  "Safe at the cell the body walks to first (the farthest waiting entry; safe-roaming with none), and, while the body is fragile (one hit may kill), calm: tidying is no errand to run in the dark or beside a known hostile (jobs.survival.get-food.risk, as the search for food)."
+  (let [at (ready/safe-at-or-roaming
+            (fn [c] (some->> (farthest-first c (tidy/entries c)) first :cell (zipmap [:x :y :z]))))
+        uncalm (fn [c] (when-let [why (risk/search-refusal c)] (contract/later :uncalm why)))]
+    (with-meta (fn [c] (or (uncalm c) (at c)))
+      {::ready/exposure (fn [c] (or (uncalm c) ((::ready/exposure (meta at)) c)))})))
 
 (defn max-passes [] (settings/get settings ::max-passes))
 

@@ -16,6 +16,7 @@
             [engine.memory :as mem]
             [engine.ready-test :as ready-test]
             [engine.settings :as settings]
+            [engine.shelter-support :as st]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -189,6 +190,21 @@
             (is (= [] (zs/calls p "place")) (pr-str reason))
             (is (= [] (zs/calls p "dig")) (pr-str reason))
             (is (= (count entries) (count (tidy-entries eng))) (pr-str reason))))))))))
+
+(deftest a-fragile-body-does-not-tidy-in-the-dark-beside-a-known-zombie
+  ;; a lit spot under a dark sky: nothing over the feet to wait for; the zombie is seen 14 blocks off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:time st/night :inventory [{:name "stone" :count 2}] :blocks (assoc floor "3,64,0" "cobblestone")
+                     :self {:pos {:x 0 :y 64 :z 0} :health 4.6} :light {[0 64 0] [14 0]}
+                     :entities [(assoc zombie :pos {:x 14 :y 64 :z 0})]}
+              {:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] [(assoc placed :cell [3 64 0])])
+              id (first (:list (core/state eng)))]
+          (await (zs/run-until-empty eng 6))
+          (is (= :uncalm (:reason (core/waiting eng id))))
+          (is (= [] (zs/calls p "dig")))
+          (is (= 1 (count (tidy-entries eng)))))))))
 
 (deftest a-hostile-seen-during-the-walk-holds-the-put-back-and-costs-no-try
   ;; place of a cell in reach asks no readiness check, so the run's own look after the walk is all that holds it
