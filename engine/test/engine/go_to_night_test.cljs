@@ -325,22 +325,28 @@
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "sent back by day, no home due: not for the night, it walks out")
           (is (nil? (mem/latest (mem/view (:store eng)) :sent-back))))))))
 
-(deftest a-sent-back-entry-ends-when-a-sleep-brings-the-morning
-  ;; the entry was written at night; the body slept and the world clock passed the morning, so the walk out is not held
-  ;; (wall-clock ttl and time of day alone kept it holding all the next day)
+(defn ^:async walk-held-for-dawn-then
+  "x the seeded walker ends at, held for dawn by its :sent-back entry, after (morning! world) moved the clock."
+  [morning!]
+  (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :light {} :light-default [15 15]) {'seeded (seeded-walker sent-back-seed)})
+        id (core/submit! eng (tu/order '(seeded)) {})]
+    (await (ticks eng 20))
+    (is (= :dawn (:wait (waiting-of eng id))))
+    (is (> (:wait-s (waiting-of eng id)) 100))
+    (swap! (fake/state p) morning!)
+    (await (tu/run-until-empty eng 60))
+    (:x (st/pos-of p))))
+
+(deftest a-sent-back-entry-ends-when-the-morning-comes-however-it-came
+  ;; a sleep passes the absolute morning (wall-clock ttl and time of day alone held all the next day); a `time set`
+  ;; puts the absolute clock back before :until (Brindle S20r3 held for dawn at tod 1471 and 2103 until cancelled)
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (hut-with (assoc (night-hut {}) :light {} :light-default [15 15]) {'seeded (seeded-walker sent-back-seed)})
-              id (core/submit! eng (tu/order '(seeded)) {})]
-          (await (ticks eng 20))
-          (let [sent (:data (mem/latest (mem/view (:store eng)) :sent-back))]
-            (is (= :dawn (:wait (waiting-of eng id))))
-            (is (< (.-dayTime (.self p)) (:until sent)) "the entry ends at an absolute morning")
-            (is (> (:wait-s (waiting-of eng id)) 100)))
-          (swap! (fake/state p) #(-> % (assoc :time 1000) (update :days inc)))
-          (await (tu/run-until-empty eng 60))
-          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the morning came: the walk out goes"))))))
+        (is (> 2 (js/Math.abs (- 15 (await (walk-held-for-dawn-then #(-> % (assoc :time 1000) (update :days inc)))))))
+            "slept to the morning: the walk out goes")
+        (is (> 2 (js/Math.abs (- 15 (await (walk-held-for-dawn-then #(assoc % :time 1500 :days 0))))))
+            "clock set to day: the walk out goes")))))
 
 ;; ------------------------------------------------------------------ in-place jobs still run
 

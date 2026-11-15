@@ -2,8 +2,8 @@
   "A walk the body was sent back from at dusk or by night, learned from its own walks: a cut walk that resumes in shelter
   (a closed room, the ground) or home when the cut found it outside that shelter, with the sky dark or home due where the
   cut found it and no hostile near the way (that one is go-to's own send-back), was sent back for the night. One :sent-back entry
-  {:to cell :place kind :at time-of-day :until world-day-time}, kept until the world clock reaches that morning (a sleep
-  or a time skip ends it early), holds walks out of that place (walk-risk): walked
+  {:to cell :place kind :at time-of-day :until world-day-time}, kept until the world clock reaches that morning or the time of day leaves that
+  night (a sleep or a time set ends it early), holds walks out of that place (walk-risk): walked
   now, the same cut sends them back again."
   (:require [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -30,12 +30,14 @@
   (.-dayTime (.self p)))
 
 (defn remaining-ticks
-  "Ticks until the entry's morning: by the absolute clock, else by the time of day; 0 once it has passed."
-  [p {:keys [until]}]
-  (let [dt (day-time p)]
-    (max 0 (if (and dt until)
-             (- until dt)
-             (until-morning-ticks (.-timeOfDay (.self p)))))))
+  "Ticks until the entry's morning: by the time of day, 0 once it lies outside the night from the entry's :at (a clock set
+  back or forward past it) or the absolute clock passed :until (a sleep, a whole day gone)."
+  [p {:keys [until at]}]
+  (let [dt (day-time p)
+        left (until-morning-ticks (.-timeOfDay (.self p)))]
+    (cond (and at (> left (until-morning-ticks at))) 0
+          (and dt until) (max 0 (min left (- until dt)))
+          :else left)))
 
 (defn place-kind
   "What shelters a body at pos: :home (sh/home-at?), :room (a closed roofed room), :ground (sealed from the sky), else nil."

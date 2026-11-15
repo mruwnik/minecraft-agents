@@ -58,6 +58,24 @@
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :for-s 60 :at-least 1 :at-most 1}]
    :after [[:body-near [14.5 0 16.5] 4]]
    :limit-s 90}
+  ;; card b57059b5: a `time set` back to day put the absolute clock before the entry's morning and the walk stayed held
+  ;; for dawn in daylight. Should-fail: still waiting :risky after the clock is set to day.
+  {:name "walk-held-for-dawn-goes-when-the-clock-is-set-to-day"
+   :register [{:trigger :dusk-home}]
+   :blocks [[:fill [10 0 12] [18 3 20] "oak_planks" :hollow] [:fill [11 0 13] [17 2 19] "air"]
+            [:set [10 0 16] "oak_door[facing=west,half=lower,hinge=left,open=false]"]
+            [:set [10 1 16] "oak_door[facing=west,half=upper,hinge=left,open=false]"]]
+   :body {:at [14.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [14 0 16]}) [:now]]
+         [:time-set 11000]
+         [:job (jobs.movement.go-to {:worth 3600 :pos #at [60 0 16]})]
+         [:await {:source :job :kind :walk.sent-back :data {:place :home}} 60]
+         [:await {:source :job :kind :waiting :data {:reason :risky}} 60]
+         [:time-set 1500]]
+   :expect [{:event {:source :job :kind :walk.sent-back :data {:place :home}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 120}]
+   :after [[:body-near [60.5 0 16.5] 3]]
+   :limit-s 150}
   {:name "go-home-by-hand-with-a-home-300-away-waits-too-far"
    :blocks [[:set [304 0 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [304 0 16]}) [:now]]
