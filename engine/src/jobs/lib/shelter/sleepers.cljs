@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.danger :as danger]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.util :as u]
@@ -82,12 +83,12 @@
 
 (defn skip-wait-s
   "Seconds of skipped night the other players online lose while the body stays awake, left seconds of night still to run:
-  each waits it out, but only when the body's own sleep would skip the night (sleepers-short 0: every other player is
-  known asleep). Awake players not known to lie down keep the night from skipping whatever the body does, so it holds
-  none of them up; none either when tonight's latest count says the night skips anyway."
+  each waits it out, in the chance the body's own sleep skips the night (value/skip-chance of the players not known
+  asleep, sleepers-short: each lies down at the measured share); none when tonight's latest count says the night
+  skips anyway."
   [p view left]
   (let [{:keys [skipping]} (:data (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view)))]
-    (if (or skipping (pos? (sleepers-short p view))) 0 (* (others-online p) left))))
+    (if skipping 0 (* (others-online p) left (value/skip-chance (sleepers-short p view))))))
 
 (defn sleepers-known
   "How many other players are known asleep tonight: the larger of those in sight and tonight's latest count less the

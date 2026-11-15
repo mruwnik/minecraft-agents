@@ -116,6 +116,10 @@
                           :spec (a/pred "a map {:knock n :kept n} of pseudo-counts >= 0"
                                         (fn [m] (and (map? m) (every? #(and (number? (get m %)) (<= 0 (get m %))) [:knock :kept]))))
                           :doc "The Beta prior that a blow shoves the body off a pillar for each block placed (cost/pillar-knock-s): 1 off-column ending in 99 blocks placed (pillar.done and pillar.gave-up of 7 bodies' logs, 2026-10-30; no pillar.knockback logged yet, so a lower bound), spread fitted by moments over the bodies' shares (effective n 4.9). Recount: node tools/event-counts.mjs pillar-knocks (:prior)."}
+   ::sleep-counts {:default {:k 5066 :n 29275}
+                   :spec (a/pred "a map {:k n :n n} of counts, 0 <= k <= n, n > 0"
+                                 (fn [m] (and (map? m) (number? (:k m)) (number? (:n m)) (<= 0 (:k m) (:n m)) (pos? (:n m)))))
+                   :doc "Of the other players online while a body slept, the share asleep: 5066 of 29275 other-player slots over 4093 :sleep-status lines (sleeping less the body's own of needed less it) in the bodies' logs (2026-11-15; a line is written per change, so n counts repeats; bodies and strangers not told apart). Recount: sum those two fields per :sleep-status line."}
    ::retry-counts {:default {:craft {:win 0.141 :fail 0.013 :try-s 3.677} :dig {:win 0.022 :fail 0.163 :try-s 10.764} :furnace {:win 1 :fail 1 :try-s 0.293} :place {:win 0.095 :fail 0.104 :try-s 8.968} :place-refused {:win 0.01 :fail 1 :try-s 8.968} :craft-refused {:win 0.01 :fail 1 :try-s 3.677} :walk {:win 0.031 :fail 0.101 :try-s 17.148} :walk-round {:win 0.016 :fail 0.24 :try-s 1.771} :respond {:win 0.043 :fail 0.093 :try-s 9.054} :risky-stay {:win 0.043 :fail 0.093 :try-s 5} :comb-look {:win 0.043 :fail 0.093 :try-s 5} :kit-later {:win 0.043 :fail 0.093 :try-s 30} :escalate {:win 0.043 :fail 0.093 :try-s 17.148} :reseal {:win 0.043 :fail 0.093 :try-s 8.968} :refill {:win 0.043 :fail 0.093 :try-s 10.764} :child-round {:win 0.043 :fail 0.093 :try-s 17.148} :child-round-refused {:win 0.049 :fail 0.352 :try-s 13.3} :cover {:win 0.043 :fail 0.093 :try-s 8.968}}
                    :spec (a/pred "a map of retry kind to {:win n :fail n :try-s s}, pseudo-counts >= 0 not both 0 and seconds >= 0"
                                  (fn [m] (and (map? m) (every? (fn [{:keys [win fail try-s]}] (and (number? win) (number? fail) (number? try-s) (<= 0 win) (<= 0 fail) (pos? (+ win fail)) (<= 0 try-s)))
@@ -260,6 +264,17 @@
   [{:keys [k n prior]}]
   (let [[a b] (or prior [1 1])]
     (/ (+ k a) (+ n a b))))
+
+(defn other-sleeps-chance
+  "The chance an online player not known asleep lies down tonight: counted-chance over ::sleep-counts."
+  []
+  (counted-chance {:k 0 :n 0 :prior (let [{:keys [k n]} (settings/get settings ::sleep-counts)] [k (- n k)])}))
+
+(defn skip-chance
+  "The chance the night skips when the body sleeps, short others not known asleep still to lie down: each does at
+  other-sleeps-chance."
+  [short]
+  (js/Math.pow (other-sleeps-chance) short))
 
 (defn pillar-knock-chance
   "The chance a blow shoves the body off a pillar for each block placed: the mean of ::pillar-knock-counts."

@@ -17,6 +17,7 @@
             [jobs.forestry.maintain :as forest-maintain]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.farm :as cost-farm]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.crops :as crops]
             [jobs.lib.trees :as forestry]
@@ -259,7 +260,7 @@
   (let [night #(worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor (merge {:time 14000} %))) {})
         left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))
         asleep (assoc sleeper :name "Alex")]
-    (is (< (Math/abs (- left (- (night {}) (night {:players ["Alex"]})))) 1e-6) "one other awake and not known to lie down: its own sleep skips nothing (the worth lost is the night left) and nobody waits for it")
+    (is (< (Math/abs (- (* left (- 1 (value/other-sleeps-chance))) (- (night {}) (night {:players ["Alex"]})))) 1e-6) "one other awake and not known to lie down: it lies down at the measured share, so only that share of the night left is waited for")
     (is (< (Math/abs (- left (- (night {:players ["Alex"] :entities [asleep]}) (night {})))) 1e-6) "the one other asleep: it waits out the night left for the body")))
 
 (deftest an-exposed-night-prices-its-hurt-and-death-by-cost-risk-s

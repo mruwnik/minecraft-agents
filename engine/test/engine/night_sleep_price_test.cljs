@@ -289,6 +289,28 @@
             (is (< (:exposed prices) (:bed prices)) "the work goes on here through the night, so the skip saves nothing the walk to the bed costs")
             (is (not= :bed pick))))))))
 
+(defn ^:async night-answers-with
+  "The first :night.answers of the night job in the sealed room with the bed 10 blocks off, world extended with extra."
+  [extra]
+  (let [{:keys [eng seen]} (st/setup (merge {:time night :blocks sealed-room :light {} :light-default [0 15]} extra))]
+    (st/know-bed! eng {:x 10 :y 64 :z 0})
+    (mem/write! (:store eng) :spawn-bed {:pos {:x 10 :y 64 :z 0}} {:cap 1 :ttl :forever})
+    (core/submit! eng (tu/order '(jobs.survival.night)) {})
+    (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+    (first (st/emitted seen :night.answers))))
+
+(deftest thirteen-awake-players-keep-the-body-in-its-closed-room-and-one-asleep-sends-it-to-the-bed
+  ;; Brindle S7: 13 awake others charged every awake answer ~6500 s, so the walk out to the bed won
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [crowd (mapv #(str "Probe" %) (range 13))
+              awake (await (night-answers-with {:players crowd}))
+              one-asleep (await (night-answers-with {:players ["Alex"] :entities [sleeper]}))]
+          (is (< (:exposed (:prices awake)) (:bed (:prices awake))) "13 awake, none asleep: the night cannot skip, staying holds nobody up")
+          (is (not= :bed (:pick awake)))
+          (is (= :bed (:pick one-asleep)) "the one other player asleep: the body's sleep skips the night, the walk is taken"))))))
+
 (deftest a-bed-whose-walk-outlasts-the-night-skips-none-of-it
   ;; Brindle S2: a dark walk of ~1000 blocks to the respawn bed was priced as a skipped night and won over sheltering
   (async done
@@ -319,7 +341,7 @@
               alone (:exposed (await (exposed {})))
               awake (:exposed (await (exposed {:players ["Alex" "Bo" "Cy"]})))
               asleep (:exposed (await (exposed {:players ["Alex"] :entities [sleeper]})))]
-          (is (= alone awake) "three players awake and none known asleep: the body's sleep skips nothing, nobody waits for it")
+          (is (< (- awake alone) (/ (- asleep alone) 10)) "three players awake and none known asleep: the night skips only if all three lie down (a 1 in 200 chance), little is charged")
           (is (> asleep alone) "the one other player asleep: the night skips if the body lies down, so staying awake holds it up"))))))
 
 (deftest a-flee-off-the-ground-owes-the-walk-back-by-day
