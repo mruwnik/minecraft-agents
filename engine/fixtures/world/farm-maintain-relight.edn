@@ -2,6 +2,7 @@
 ;; (diff/light-loss), the rest of the plan sound. Old code priced it at its placing only (about 1 s), under the mend's walk
 ;; and place, so the repair ended :not-worth and the torch stayed out (S19).
 ;; Should-succeed: torch carried; torch crafted from coal and a stick. Control: farm-maintain-repair/a-sound-plan-skips-the-repair.
+;; The body faces west (yaw 90) so the torch cell is in its view: a cell never seen is :unknown and never mended.
 {:defaults
  {:tags [:farm :jobs]
   :time :any
@@ -11,7 +12,7 @@
            :parts [{:id "wheat" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "wheat"}}
                    {:id "water" :cells [#at [12 -1 16]] :want "water"}
                    {:id "torch" :cells [#at [8 0 14]] :want "torch"}]}]
-  :body {:at [10.5 0 14.5] :settle-s 2}
+  :body {:at [10.5 0 14.5] :yaw 90 :settle-s 2}
   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:farm" :part "wheat"}})]]
   :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
   :after [[:block [8 0 14] "torch"]]
