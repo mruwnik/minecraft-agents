@@ -62,11 +62,11 @@
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0 :spec (a/num-in 0 nil)
                :doc "Floor of one block walked in the dark, on top of per-block; the price of the mobs that spawn to the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
-   ::spawn-chance-per-s {:default {:k 120 :n-s 113230 :below {40 {:k 41 :n-s 18260}}}
+   ::spawn-chance-per-s {:default {:k 120 :n-s 113230 :below {40 {:k 41 :n-s 18260}} :wide {:k 46 :n-s 21235}}
                          :spec (a/pred "a map {:k n :n-s s} counts, :below an optional map of height to such counts"
                                        (fn [m] (let [ok? #(and (map? %) (number? (:k %)) (<= 0 (:k %)) (number? (:n-s %)) (<= 0.1 (:n-s %)))]
-                                                 (and (ok? m) (every? (fn [[y c]] (and (number? y) (ok? c))) (:below m))))))
-                         :doc "Counts {:k :n-s} behind the chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (spawn-rate reads (k + 1) / n-s): k hostile meets (the first respond decision about a spawnable mob) in n-s seconds the body stood on a cell not lit-light? at the record's time of day (recorded block and sky light, sky less the darkening of the clock the bodies' memory entries stamp, clear sky) and not shut in (both room cells and every cell round them and over the head recorded solid), trial logs to 2026-11-13. :below {y counts}: a cell under y counts by the lowest such y above it, the rest by the pooled counts: under y 40 41 in 18260 s (0.0023), at y 40 and over 120 in 113230 s (0.00107; y 40-55 alone 5 in 9498, too few for a band). Recount: tools/event-counts.mjs dark-meets."}
+                                                 (and (ok? m) (every? (fn [[y c]] (and (number? y) (ok? c))) (:below m)) (or (nil? (:wide m)) (ok? (:wide m)))))))
+                         :doc "Counts {:k :n-s} behind the chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (spawn-rate reads (k + 1) / n-s): k hostile meets (the first respond decision about a spawnable mob) in n-s seconds the body stood on a cell not lit-light? at the record's time of day (recorded block and sky light, sky less the darkening of the clock the bodies' memory entries stamp, clear sky) and not shut in (both room cells and every cell round them and over the head recorded solid), trial logs to 2026-11-13. :below {y counts}: a cell under y counts by the lowest such y above it, the rest by the pooled counts: under y 40 41 in 18260 s (0.0023), at y 40 and over 120 in 113230 s (0.00107; y 40-55 alone 5 in 9498, too few for a band). :wide counts {:k :n-s}: the same at y 40 and over with a wide view (wide-view?), 46 in 21235 s (0.0022; the rest of y 40 and over 99 in 117923 s, 0.00085), read by a stay (spawn-chance :wide?). The mobs come along the sight lines: with the sky over and the view shut the rate is as the rest (6 in 9600 s), and a clear view roofed too counts the wide rate. Recount: tools/event-counts.mjs dark-meets (:surface-wide, :40-55-wide)."}
    ::loose-over-loose-counts {:default {:h1 {:loose 38.8 :other 5.2} :h2 {:loose 31.1 :other 12.9} :h3 {:loose 29.6 :other 14.4}
                                         :h4 {:loose 10.2 :other 33.8} :h5 {:loose 4 :other 40}}
                               :spec (a/pred "a map of :h1 to :h5 to {:loose n :other n} pseudo-counts >= 0"
@@ -465,24 +465,37 @@
   (let [cells (cells-of place)]
     (/ (transduce (map (spawns-fn opts)) + 0 cells) (max 1 (count cells)))))
 
+(def view-rays "The sight lines of wide-view?: rays round the cell, blocks each reaches, and clear ones that make a wide view." {:rays 16 :reach 16 :wide 8})
+
+(defn wide-view?
+  "Whether the head of the cell x y z (ints) looks along a wide view: at least (:wide view-rays) of (:rays view-rays) level rays from the cell's centre
+  to (:reach view-rays) blocks pass only cells not solid-at? (a fn [x y z]), as a mob that sees the body comes along them."
+  [solid-at? x y z]
+  (let [{:keys [rays reach wide]} view-rays
+        clear? (fn [k] (let [a (* k (/ (* 2 js/Math.PI) rays))]
+                         (not-any? (fn [r] (solid-at? (js/Math.floor (+ x 0.5 (* r (js/Math.cos a)))) (inc y) (js/Math.floor (+ z 0.5 (* r (js/Math.sin a)))))) (range 1 (inc reach)))))]
+    (>= (count (filter clear? (range rays))) wide)))
+
 (defn spawn-rate
   "The chance per second a mob spawns and reaches a body on a dark cell at height y (nil: the pooled counts): (k + 1) / n-s
-  of ::spawn-chance-per-s, of its :below band when y is under one."
+  of ::spawn-chance-per-s, of its :below band when y is under one, of :wide when wide? and y is at 40 or over (or nil)."
   ([] (spawn-rate nil))
   ([y] (spawn-rate (settings/get settings ::spawn-chance-per-s) y))
-  ([{:keys [below] :as counts} y]
-   (let [{:keys [k n-s]} (or (when y (some (fn [[top c]] (when (< y top) c)) (sort-by key below))) counts)]
+  ([counts y] (spawn-rate counts y false))
+  ([{:keys [below wide] :as counts} y wide?]
+   (let [band (when y (some (fn [[top c]] (when (< y top) c)) (sort-by key below)))
+         {:keys [k n-s]} (or band (when wide? wide) counts)]
      (/ (inc k) n-s))))
 
 (defn spawn-chance
   "The chance per second a mob spawns at place and reaches a body standing there: over its cells, spawn-rate at each one's
-  height x spawns-fn of opts."
+  height (the wide rate when (:wide? opts) is true) x spawns-fn of opts."
   ([place] (spawn-chance place nil))
   ([place opts]
    (let [cells (cells-of place)
          spawns (spawns-fn opts)
          counts (settings/get settings ::spawn-chance-per-s)]
-     (/ (transduce (map #(* (spawn-rate counts (second %)) (spawns %))) + 0 cells) (max 1 (count cells))))))
+     (/ (transduce (map #(* (spawn-rate counts (second %) (:wide? opts)) (spawns %))) + 0 cells) (max 1 (count cells))))))
 
 (def loose-stack-cap "The tallest run of loose cells ::loose-over-loose-counts tells apart." 5)
 

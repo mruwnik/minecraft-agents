@@ -14,7 +14,7 @@
 
 (deftest exposure-counts-the-seconds-between-close-positions-in-dark-cells-by-band
   (is (= {:under-40 5} (d/exposure cave noon [(pos 0 10) (pos 5000 10)])))
-  (is (= {:40-55 3} (d/exposure cave noon [(pos 0 50) (pos 3000 70)])) "the first cell is the one counted")
+  (is (= {:40-55-wide 3} (d/exposure cave noon [(pos 0 50) (pos 3000 70)])) "the first cell is the one counted")
   (is (= {} (d/exposure cave noon [(pos 0 70) (pos 3000 10)])) "a lit cell")
   (is (= {} (d/exposure cave noon [(pos 0 10) (pos 20000 10)])) "a gap hides where the body was"))
 
@@ -33,18 +33,27 @@
                        (rec 3 :hurt :amount 3 :causes #{"zombie"} :at {:x 0.5 :y 70 :z 0.5})]))))
 
 (deftest the-rate-is-k-plus-one-over-the-dark-seconds
-  (let [r (d/report [{:under-40 100} {:under-40 100 :surface-sky 50}] [[:under-40] [:under-40 nil]] [{:under-40 {:hp 10 :hits 3}}])]
+  (let [r (d/report [{:under-40 100} {:under-40 100 :surface-wide 50}] [[:under-40] [:under-40 nil]] [{:under-40 {:hp 10 :hits 3}}])]
     (is (= {:n-s 200 :k 2 :per-s 0.015 :hp 10 :hp-per-s 0.05} (get-in r [:bands :under-40])))
     (is (= 250 (get-in r [:all :n-s])))
-    (is (= 200 (get-in r [:underground :n-s])) "the open sky is surface")))
+    (is (= 200 (get-in r [:underground :n-s])) "a wide view over the surface is surface")))
 
 ;; the open air at x 5: sky light 15, no block light
 (defn open-air [x _ _] (when (= 5 x) {:name "air" :block 0 :sky 15}))
 
+(defn boxed-air [x y _] (if (and (= 71 y) (>= (js/Math.abs (- x 5)) 2)) {:name "stone" :block 0 :sky 0} {:name "air" :block 0 :sky 15}))
+
+(deftest a-wide-view-is-its-own-band-at-40-and-over
+  (let [p (rec 0 :pos :x 5.5 :y 70 :z 0.5)
+        q (rec 5000 :pos :x 5.5 :y 70 :z 0.5)]
+    (is (= {:surface-wide 5} (d/exposure open-air (constantly 18000) [p q])))
+    (is (= {:surface 5} (d/exposure boxed-air (constantly 18000) [p q])) "stone at head height two blocks round shuts every sight line")
+    (is (= {:under-40 5} (d/exposure open-air (constantly 18000) [(assoc p :y 10) (assoc q :y 10)])))))
+
 (deftest open-air-is-dark-at-night-and-lit-by-day
   (let [p (rec 0 :pos :x 5.5 :y 70 :z 0.5)
         q (rec 5000 :pos :x 5.5 :y 70 :z 0.5)]
-    (is (= {:surface-sky 5} (d/exposure open-air (constantly 18000) [p q])) "the open sky is its own band")
+    (is (= {:surface-wide 5} (d/exposure open-air (constantly 18000) [p q])))
     (is (= {} (d/exposure open-air noon [p q])))
     (is (= {} (d/exposure open-air (constantly nil) [p q])) "no time of day, no count")))
 

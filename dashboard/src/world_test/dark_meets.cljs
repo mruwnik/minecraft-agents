@@ -5,10 +5,11 @@
   less the sky darkening at the time of day of the record (clear sky; rain only makes more dark), at: (fn [x y z]) ->
   {:block :sky} or nil for a column never recorded, tod: (fn [t-ms]) -> time of day or nil (see clock).
   Exposure: the seconds between two positions of one body run at most gap-ms apart with the first one's feet cell dark,
-  by y band and open sky. Meets: the first decision of each respond run about a mob of threat/spawn-weights, not another run's about one
+  by y band and view. Meets: the first decision of each respond run about a mob of threat/spawn-weights, not another run's about one
   within window-ms (the same meet going on), counted to the band of the body's cell when dark (its last position within
   gap-ms). Hurt: the hp a spawnable mob (or its arrow) dealt at a dark cell. Pure parts: exposure, meets, hurt, report."
   (:require [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.look :as look]
             [jobs.lib.solid :as solid]))
 
@@ -53,13 +54,13 @@
 
 (defn dark-band
   "The band of position {:x :y :z} at time t when its feet cell is dark by at and tod and not shut in (enclosed?), else nil
-  (nil too without a time of day): its y band, -sky under the open sky (recorded sky light 15: dark only by the night)."
+  (nil too without a time of day): its y band, -wide from y 40 with a wide view (value/wide-view?)."
   [at tod t {:keys [x y z]}]
   (let [x (js/Math.floor x) y (js/Math.floor y) z (js/Math.floor z)
         c (at x y z)
         w (tod t)]
     (when (and c w (not (look/lit-light? (:block c) (:sky c) (look/sky-subtract-at w 0 0))) (not (enclosed? at x y z)))
-      (cond-> (band y) (= 15 (:sky c)) (-> name (str "-sky") keyword)))))
+      (cond-> (band y) (and (not= :under-40 (band y)) (value/wide-view? (fn [x y z] (solid/solid? (:name (at x y z)))) x y z)) (-> name (str "-wide") keyword)))))
 
 (defn positions [records] (filter #(#{:pos :at} (:k %)) records))
 
@@ -93,7 +94,7 @@
        (keep (fn [r] (when-let [bd (dark-band at tod (:t r) (:at r))] [bd (:amount r)])))
        (reduce (fn [m [bd a]] (-> m (update-in [bd :hp] (fnil + 0) a) (update-in [bd :hits] (fnil inc 0)))) {})))
 
-(def surface? #{:surface :surface-sky})
+(def surface? #{:surface :surface-wide})
 
 (defn r5 [x] (/ (js/Math.round (* 1e5 x)) 1e5))
 

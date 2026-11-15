@@ -17,6 +17,7 @@
             [jobs.lib.spawn-light :as spawn-light]))
 
 (def open-night-chance (cost/spawn-chance [0 64 0]))
+(def wide-night-chance (cost/spawn-chance [0 64 0] {:wide? true}))
 
 (def pit
   "A 1x1 pit with a roof: dirt round the feet and head cells, a roof over the head."
@@ -154,7 +155,7 @@
                                                        {:x 0 :y 64 :z 0} false))])
     (walled 14 #{}) 0 "a walled yard of 841 cells, all within 24 blocks: nothing spawns that reaches the body" 0
     (walled 14 #{[15 0]}) 0 "a gap in its wall lets in the dark field beyond" open-night-chance
-    {} 0 "a dark open field" open-night-chance
+    {} 0 "a dark open field" wide-night-chance
     {} 14 "a lit open field, by its light" 0
     (hall 30) 0 "a roofed hall reaching past 24 blocks" open-night-chance
     (hall 10) 0 "a short shut hall" 0))
@@ -171,9 +172,18 @@
   (let [chance (fn [block] (with-redefs [sh-sense/block-light-at (constantly block) sh-sense/sky-light-at (constantly 15)]
                              (spawn-light/night-chance (sky/with-sky (tu/fake {:floor [-30 -30 30 30] :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
                                                        {:x 0 :y 64 :z 0})))]
-    (is (= open-night-chance (chance 0)) "dark floor seen round the cell")
+    (is (= wide-night-chance (chance 0)) "dark floor seen round the cell, a wide view over it")
     (is (pos? (chance 4)) "a dim cell is no spawn cell, but the floor round it may be dark past what is seen")
     (is (= (chance 14) (chance 4)))))
+
+(deftest a-stay-with-the-view-shut-is-priced-at-the-pooled-rate-and-with-a-wide-view-at-the-wide-one
+  (let [chance (fn [solid?] (with-redefs [sh-sense/block-light-at (constantly 0) sh-sense/sky-light-at (constantly 15)
+                                          sh-sense/solid-at? (fn [_ {:keys [x y]}] (and (= 65 y) (solid? x)))]
+                              (spawn-light/night-chance (sky/with-sky (tu/fake {:floor [-30 -30 30 30] :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
+                                                        {:x 0 :y 64 :z 0})))]
+    (is (< open-night-chance wide-night-chance))
+    (is (= wide-night-chance (chance (constantly false))))
+    (is (= open-night-chance (chance #(>= (js/Math.abs %) 3))) "a wall three blocks round shuts the sight lines")))
 
 (deftest a-night-spawn-price-over-open-ground-seen-at-full-sky-relights-no-section
   ;; the memory's light of open ground seen at full sky is sky 15 and, with no light source, block 0, and of the ground
@@ -188,7 +198,7 @@
       (swap! (fake/state raw-p) assoc :yaw yaw)
       (perception/pass! per))
     (set! (.-lightTable ^js (:st per)) (js/Object.assign #js {} table #js {:sectionLight (fn [t ids bits] (swap! floods inc) (.sectionLight table t ids bits))}))
-    (is (= open-night-chance (spawn-light/chance-at p {:x 30 :y 64 :z 16} false)) "dark open ground")
+    (is (= wide-night-chance (spawn-light/chance-at p {:x 30 :y 64 :z 16} false)) "dark open ground")
     (is (pos? (look/unseen-lit-chance p {:x 4 :y 64 :z 90} 0)) "full day may light the ground past the seen field")
     (is (zero? @floods))))
 

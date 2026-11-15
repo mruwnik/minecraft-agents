@@ -55,7 +55,8 @@
   day would light, open ground under the sky, in full, what it would not at unseen-hall-share; under caves-free? only
   the first.
   subtract: the sky's darkening to judge it by (default: now; 0: full day). stay?: a seen cell, lit or dark, by the
-  chance of its sh-inside/stay-hall: the dark floor the walkers come from, whatever light the cell itself has. solid-at:
+  chance of its sh-inside/stay-hall: the dark floor the walkers come from, whatever light the cell itself has. A seen dark
+  cell with a wide view (cost/wide-view?) is at the wide rate (cost/spawn-rate). solid-at:
   the look/unseen-solid-at-fn to ask (one built per walk of cells, not per cell). block: the block light to judge a seen
   cell by instead of the one remembered (the light it would have without a light that is gone)."
   ([p cell caves-free?] (chance-at p cell caves-free? nil))
@@ -71,7 +72,8 @@
          ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
          known (and block (or (not reaches) sky-light))]
      (cond
-       known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2})})
+       known (let [wide (delay (cost/wide-view? #(sh-sense/solid-at? p {:x %1 :y %2 :z %3}) (:x cell) (:y cell) (:z cell)))
+                   at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2}) :wide? (and (zero? %1) (zero? %2) @wide)})
                    lit? (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))]
                (cond
                  stay? (let [hall (cost/hall-edge-chance (sh-inside/stay-hall p (hall-cell p cell) darkening))]
@@ -109,10 +111,10 @@
 
 (defn dark-share
   "chance-at of cell (under the sky's darkening subtract, default now; solid-at as chance-at's) as a share of that of a
-  cell certainly dark at its height: 1 dark, 0 lit, the chance of dark between."
+  cell certainly dark at its height (at most 1, though a wide view's rate is over it): 1 dark, 0 lit, the chance of dark between."
   [p cell caves-free? & [subtract solid-at]]
   (let [dark (cost/spawn-rate (:y cell))]
-    (if (pos? dark) (/ (chance-at p cell caves-free? subtract false solid-at) dark) 0)))
+    (if (pos? dark) (min 1 (/ (chance-at p cell caves-free? subtract false solid-at) dark)) 0)))
 
 (defn share-of
   "dark-share of cells {:x :y :z} (caves-free?, subtract as there), each cell read once and their spawn-regions
