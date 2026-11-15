@@ -633,14 +633,14 @@
 
 (defn killed-events [seen] (filterv #(= :food.killed (:kind %)) @seen))
 
-(deftest get-food-hunts-a-lone-wild-adult-no-pair-to-keep
+(deftest get-food-leaves-a-lone-wild-adult-alone-a-kill-would-leave-no-pair
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (hunt-world [cow] nil)]
           (await (run-until-empty eng 40))
-          (is (seq (calls p "attack")) "the hunt is not told to keep a pair back from a lone adult")
-          (is (= [{:adults 1 :rule :lone}] (mapv #(select-keys % [:adults :rule]) (killed-events seen)))))))))
+          (is (= [] (calls p "attack")))
+          (is (some #(and (= :no-food (:reason %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)))))))
 
 (deftest get-food-takes-the-surplus-of-its-own-pen-when-nothing-else-is-found
   (async done
@@ -755,17 +755,6 @@
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
           (is (some #(and (= :no-food (:reason %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)))))))
-
-(deftest get-food-names-the-starvation-lift-as-the-rule
-  (async done
-    (tu/run-async done
-      (fn [] (settings/with-settings {:jobs.survival.get-food/kept-lifted-below 3}
-        (fn ^:async t []
-          (let [{:keys [eng seen]} (setup {:self {:food 2} :entities (take 2 three-cows)})]
-            (core/submit! eng (tu/order '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0}})) {})
-            (await (run-until-empty eng 40))
-            (is (= [{:adults 2 :keep 2 :food 2 :rule :starved}]
-                   (mapv #(select-keys % [:adults :keep :food :rule]) (killed-events seen)))))))))))
 
 (def pen-ring
   (merge (tu/box 3 64 -2 12 64 -2 "oak_fence") (tu/box 3 64 2 12 64 2 "oak_fence")

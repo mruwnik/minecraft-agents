@@ -70,7 +70,7 @@
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it searches unknown ground only in the light with no hostile known near; walks to known food are priced by go-to's start check (all but 1 hp may be spent). With nothing else to try it writes a :food-too-dangerous entry (no :hungry) and ends condition-failed
   :too-dangerous after a refused search; the hungry trigger then rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count.
-  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and a breeding pair (2 up to ::keep-adults (2) adults of a kind in sight and noted, counted as combat.hunt counts, jobs.lib.animal-spare/adults-of-kind; a lone adult is hunted; kept even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal a hunt killed is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and a breeding pair (2 up to ::keep-adults (2) adults of a kind in sight and noted, counted as combat.hunt counts, jobs.lib.animal-spare/adults-of-kind; never a kill that leaves fewer than ::keep-adults known adults of its kind within ::keep-radius (500), even when starving; above that, one that leaves fewer in sight is priced at the walk to the nearest noted one against its meat's worth) are never hunted (:ignore-zones? lifts the others' zone only). Each animal a hunt killed is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when the caller passed :ignore-zones?, as the last way, when no permitted crop, field or other way is left and the body is hungry with nothing edible carried (one
   get-food.trespass-last-resort warning). Without :ignore-zones? the foreign crops and chests seen are left and named in the no-food text.
   A cut call starts again from the world: carried food first, then the ways.
@@ -95,7 +95,7 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
    ::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
-   ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
+   ::keep-radius {:default 500 :doc "Blocks within which known adults of a kind (in sight or noted) count toward the breeding pair a hunt never leaves fewer than ::keep-adults of." :spec (a/num-in 1 nil)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::max-chases {:default 3 :doc "Chases of one animal in a call before it is passed over as tried: a missed chase is repeated, a fleeing rabbit is chased again." :spec (a/int-in 1 nil)}
    ::max-ways {:default 12 :doc "Ways one call tries without getting fed before it ends :still-hungry." :spec (a/int-in 0 nil)}})
@@ -175,24 +175,18 @@
       (= :continue e) :continue
       (pos? (:collected (:data e) 0)) :again)))
 
-(defn animal-opts [c own?] {:radius (hunt-radius c) :reach #(hunt-reach c %) :lift (settings/get settings ::kept-lifted-below) :own? own?})
+(defn animal-opts [c own?] {:radius (hunt-radius c) :reach #(hunt-reach c %) :keep-radius (settings/get settings ::keep-radius) :own? own?})
 
 (defn hunt-left?
   "Whether an animal in sight is left to hunt (own?: in its own pens too)."
   [c own?]
   (some? (animals/nearest c (animal-opts c own?))))
 
-(defn starved?
-  "Food at the ::kept-lifted-below line or less with no food carried: the last adults of a kind may go too."
-  [c]
-  (let [self (.self (:primitives c))]
-    (and (<= (.-food self) (settings/get settings ::kept-lifted-below)) (not (meal/carries-food? self)))))
-
 (defn keep-for
-  "Adults of the kind the kill leaves alive: the spare rule's keep, none when starved or when the animal is a lone adult
-  (the hunt would end :keep at once with fewer than keep in range)."
-  [c {:keys [adults]}]
-  (if (or (starved? c) (< (or adults 0) (spare/keep-adults))) 0 (spare/keep-adults)))
+  "Adults of the kind the kill leaves alive for the child job: none for a wild animal (in-sight's floor and price decided it, over
+  a wider count than the hunt's radius), the spare rule's keep for an own pen's cull."
+  [own? {:keys [adults]}]
+  (if (and own? (<= (spare/keep-adults) (or adults 0))) (spare/keep-adults) 0))
 
 (def meat-of
   "The raw meat each food animal drops: what a hunt of it is for."
@@ -201,7 +195,7 @@
 (defn kill-job
   "The real job and args that kill the food animal of target: animals.cull over the own pen it stands in (own?), else combat.hunt."
   [c own? {animal :entity :as target}]
-  (let [common {:mob (.-name animal) :count 1 :keep (keep-for c target) :spend {:job-time 60}
+  (let [common {:mob (.-name animal) :count 1 :keep (keep-for own? target) :spend {:job-time 60}
                 :checks {:safe? '(job-safe-or-starving) :fit? '(always)}}
         pos (u/pos-of (.-pos animal))
         box (when own? (sources/box-around c pos))]

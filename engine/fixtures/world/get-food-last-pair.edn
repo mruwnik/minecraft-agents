@@ -1,22 +1,24 @@
-;; Card 4058b81f: survival.get-food never hunts the last ::keep-adults (2) adults of a kind in sight, even when hungry and carrying no food,
-;; unless the setting ::kept-lifted-below lifts it (default -1: never). Hunger is drained by RCON (food 9-10), hp 15; only a sword.
-;; Should-fail (the default): exactly 2 cows in the open are kept (the :no-food ending), both stay and the ending text names each cow's cell (card 4025d210). Should-succeed: with ::kept-lifted-below 19
-;; (food 19 or less with none carried counts) one of the two is killed. (Three cows: get-food-own-pen.edn.)
+;; survival.get-food never hunts a kill that leaves fewer than ::keep-adults (2) known adults of the kind within ::keep-radius, even when
+;; starving (hunger drained by RCON, food 9-10), hp 15; only a sword. Should-fail: exactly 2 cows in the open are kept (the :no-food ending),
+;; both stay and the ending text names each cow's cell. Should-succeed: a third cow makes a surplus, one is killed. (Three cows in an own pen: get-food-own-pen.edn.)
 {:defaults
  {:tags [:survival :get-food :animals]
   :plot {:height 6}
   :body {:at [4.5 0 16.5] :inventory [["iron_sword" 1]] :settle-s 2}
-  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
-        [:rcon "damage $BODY 5 minecraft:generic"]
-        [:summon "cow" [24.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [25.5 0 24.5] "{NoAI:1b}"]
-        [:job (jobs.survival.get-food {:worth 1200})]]
   :limit-s 100}
  :cases
- [{:name "the-last-pair-is-kept-by-default"
+ [{:name "the-last-pair-is-kept-even-when-starving"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:summon "cow" [24.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [25.5 0 24.5] "{NoAI:1b}"]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "passed over 2 animals (cow: kept for breeding at ["]}} :within-s 90}
             {:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
-  {:name "the-last-pair-is-hunted-when-the-setting-lifts-it"
-   :settings {:jobs.survival.get-food/kept-lifted-below 19}
+  {:name "a-third-cow-is-the-surplus-and-hunted"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:summon "cow" [24.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [25.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [26.5 0 24.5] "{NoAI:1b}"]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 90}]
-   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 1]]}]}
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}]}

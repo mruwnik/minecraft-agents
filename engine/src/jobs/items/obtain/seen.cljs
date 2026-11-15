@@ -123,7 +123,7 @@
         pens (atom [])
         es (remove #(true? (.-baby %)) (animals/herd (:primitives c) mob (seen-radius)))
         n (spare/adults-of-kind c mob es (set (map #(.-uuid %) es)) (seen-radius))]
-    #(spare/why (spare/keep-adults) mob n (spare/penned? c pens %) false)))
+    #(spare/why (spare/keep-adults) mob n (spare/penned? c pens %))))
 
 (defn animals-of
   "The animals in sight a hunt or shear of an animal need may go for, nearest first: sheep of its colour in range, or adults

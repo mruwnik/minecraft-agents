@@ -11,7 +11,6 @@
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.foods :as foods]
             [jobs.lib.home-food :as home-food]
-            [jobs.lib.meal :as meal]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.util :as u]
@@ -130,23 +129,40 @@
                                       :ttl-ms (* 1000 (settings/get settings ::note-ttl-s))}))
                            seen)))))
 
+(defn replacement-cost
+  "Seconds to find a breeding pair again after a kill of an adult of `kind`: 0 while the kill leaves `keep` adults in sight, else
+  the walk to the nearest noted adult out of sight (noted-cost), which the floor guarantees exists."
+  [c kind sight-n seen-uuids radius near]
+  (if (>= (dec sight-n) (spare/keep-adults))
+    0
+    (let [me (u/self-pos c)]
+      (or (some->> (spare/noted-adult-notes c kind seen-uuids radius near) (map #(noted-cost me %)) seq (apply min)) 0))))
+
+(defn kept-by-floor
+  "Whether the kill of an adult of `kind` is left alone to keep a breeding pair: :kept when it would leave fewer than ::keep-adults
+  known adults (n counts those in sight and noted within the keep radius; starving lifts nothing), or when the meat is worth less than
+  the walk to find a pair again (replacement-cost)."
+  [c kind n sight-n seen-uuids radius near]
+  (cond (<= n (spare/keep-adults)) :kept
+        :else (let [price (replacement-cost c kind sight-n seen-uuids radius near)]
+                (when (and (pos? price) (< (meat-benefit c (meat kind)) price)) :kept))))
+
 (defn in-sight
   "The food animals the entity scan lists within radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone, claim or plan), or what jobs.lib.animal-spare/why
-  says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last ::keep-adults of a kind are lifted only at
-  lift food or less with no food carried); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt.
+  says (:off-limits, :pen: a zone or plan of its own or a closed enclosure), or :kept (kept-by-floor: a kill that leaves fewer than ::keep-adults adults known within keep-radius, or priced above its meat); n counts the adults of its kind in sight and noted within keep-radius and k is the spare rule that allowed the hunt.
   reach (kind -> blocks), when given, drops the animals of a kind farther than it after the adults of each kind in sight are counted (a pair in view past its reach is still a pair); animals in a zone or plan of the body's own under own? are kept.
   own? (the :pen way): an animal in a zone or plan of its own is no pen, and its rule is :own-pen."
-  [c {:keys [radius reach lift own?]}]
+  [c {:keys [radius reach keep-radius own?]}]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         me (u/self-pos c)
         seen (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
         adult-es (remove #(true? (.-baby %)) seen)
         seen-uuids (set (map #(.-uuid %) seen))
-        adults (into {} (map (fn [k] [k (spare/adults-of-kind c k adult-es seen-uuids radius)])) (distinct (map #(.-name %) adult-es)))
-        self (.self (:primitives c))
-        pens (atom [])
-        starved? (and (<= (.-food self) lift) (not (meal/carries-food? self)))]
+        near (or keep-radius radius)
+        adults (into {} (map (fn [k] [k (spare/adults-of-kind c k adult-es seen-uuids radius near)])) (distinct (map #(.-name %) adult-es)))
+        sight (frequencies (map #(.-name %) adult-es))
+        pens (atom [])]
     (->> seen
          (filter (fn [e] (or (nil? reach) (and own? (access/in-own-area? c (u/pos-of (.-pos e))))
                              (<= (u/dist me (u/pos-of (.-pos e))) (reach (.-name e))))))
@@ -160,7 +176,7 @@
                        why (cond (skipped (.-id e)) :tried
                                  (true? (.-baby e)) :baby
                                  refusal :refused
-                                 :else (spare/why (spare/keep-adults) (.-name e) n penned? starved?))]
+                                 :else (or (spare/why 0 (.-name e) n penned?) (when-not mine? (kept-by-floor c (.-name e) n (sight (.-name e)) seen-uuids radius near))))]
                    {:entity e :why why :adults n
                     :by (when refusal (access/refusal-text (access/refusal-fields [refusal])))
                     :rule (when-not why (if mine? :own-pen (spare/allowed-by (spare/keep-adults) n penned?)))}))))))
@@ -223,28 +239,23 @@
     (when (seq seen)
       (ctx/update-mem! c update :spared-seen #(merge % (into {} (map (juxt :id identity)) seen))))))
 
-(defn lone? "Whether the entry is an adult alone of its kind in sight and noted: a pair may stand out of view." [target] (= :lone (:rule target)))
-
 (defn ^:async look-for-animals!
   "The nearest food animal after one look around from this cell for animals: another job's look (collect's) is no such look, since entities
-  count only while in the view cone and its last heading points away. A lone adult stops the look only at its end (the body then faces away, so the lone one seen on the way is the answer): the others of its kind may stand in a heading not yet looked at (each look notes what it saw)."
+  count only while in the view cone and its last heading points away. Each look notes what it saw."
   [c opts]
   (let [cell (cell-of (u/self-pos c))]
     (when (not= cell (:animals-looked (ctx/mem c)))
       (look/forget-survey! c))
-    (let [lone (atom nil)
-          found (await (look/survey-until! c :cell (fn [] (note-seen! c opts) (note-spared! c opts)
-                                                     (let [t (nearest c opts)]
-                                                       (if (lone? t) (do (reset! lone t) nil) t)))
+    (let [found (await (look/survey-until! c :cell (fn [] (note-seen! c opts) (note-spared! c opts) (nearest c opts))
                                            (look/glance-effort) look/hazards-only))]
       (ctx/update-mem! c assoc :animals-looked cell)
-      (or found (do (note-seen! c opts) (nearest c opts)) @lone))))
+      (or found (do (note-seen! c opts) (nearest c opts))))))
 
 (defn ^:async nearest-or-look
   "The nearest food animal in sight (an in-sight entry), its surroundings looked at first when they may be a pen (see pen-looked); with none, the body looks around once from where it stands and tries again, remembering what it spared on the way."
   [c opts]
   (note-seen! c opts)
-  (when-let [target (or (let [t (nearest c opts)] (when-not (lone? t) t)) (await (look-for-animals! c opts)))]
+  (when-let [target (or (nearest c opts) (await (look-for-animals! c opts)))]
     (if (= :own-pen (:rule target)) target (await (pen-looked c opts target false)))))
 
 (defn note-kill!

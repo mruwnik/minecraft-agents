@@ -396,7 +396,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [cow]} :step-ms 5)
+        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [cow]} :step-ms 5 :other-notes [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 999900 :until 9e15}
+                                                                                 {:kind :seen :what "cow" :id "u3" :pos [22 64 3] :by "Other" :t 999900 :until 9e15}])
               run* child/run!*
               chases (atom 0)]
           (with-redefs [child/run!* (fn ^:async f
@@ -748,7 +749,7 @@
           (await (one-round! eng {}))
           (is (empty? (calls p "attack")) "the note counts by where the animal was seen, not by its distance from the body"))))))
 
-(deftest a-noted-cow-whose-cell-is-in-view-with-no-cow-there-is-gone-and-the-seen-one-is-lone
+(deftest a-noted-cow-whose-cell-is-in-view-with-no-cow-there-is-gone-and-the-seen-one-is-kept-as-the-only-one
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -757,13 +758,13 @@
               sensed (.-sensedAt p)]
           (tu/set-sensed! p (fn [pos] (let [b (sensed pos)] (when b (aset b "visible" true)) b)))
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
-          (is (seq (calls p "attack")) "the note's cell is seen empty: the one in sight is alone and is hunted"))))))
+          (is (empty? (calls p "attack")) "the note's cell is seen empty: the one in sight is alone, a kill leaves no pair"))))))
 
-(deftest a-hungry-hurt-body-hunts-a-lone-cow-in-sight-at-noon
+(deftest a-hungry-hurt-body-hunts-a-cow-of-a-herd-in-sight-at-noon
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :perceive? true)]
+        (let [{:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities herd} :step-ms 5 :perceive? true)]
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (seq (calls p "attack")) "a cow in plain daylight is hunted at food 8"))))))
 
@@ -789,15 +790,37 @@
           (is (seq (calls p "attack")) "the hunt counts the noted pair as get-food does: the cow in sight is the surplus")
           (is (= [{:name "cow" :adults 3 :keep 2}] (mapv #(select-keys % [:name :adults :keep]) (filterv #(= :food.killed (:kind %)) @seen)))))))))
 
-(deftest a-cow-seen-with-one-noted-far-beyond-the-search-is-a-lone-cow-and-hunted
+(defn two-cows-and-a-note-at
+  "A starving body (food 0) with two cows in sight and a third noted at x."
+  [x]
+  (let [notes [{:kind :seen :what "cow" :id "u1" :pos [x 64 0] :by "Other" :t 999900 :until 9e15}]]
+    (setup {:time 6000 :self {:food 0 :health 10} :entities [(assoc cow :uuid "u2") (assoc cow :id 8 :uuid "u3" :pos {:x 8 :y 64 :z 0})]} :step-ms 5 :other-notes notes)))
+
+(deftest a-cow-noted-beyond-the-keep-radius-is-no-mate-even-when-starving
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [notes [{:kind :seen :what "cow" :id "u1" :pos [900 64 0] :by "Other" :t 999900 :until 9e15}]
-              {:keys [eng p seen]} (setup {:time 6000 :self {:food 0 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes notes)]
+        (let [{:keys [eng p]} (two-cows-and-a-note-at 900)]
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
-          (is (seq (calls p "attack")) "a cow far off is no mate: the cow in sight is lone")
-          (is (= [1] (mapv :adults (filterv #(= :food.killed (:kind %)) @seen)))))))))
+          (is (empty? (calls p "attack")) "two known cows within 500 blocks are the last pair"))))))
+
+(deftest a-cow-noted-within-the-keep-radius-makes-a-third-and-the-nearer-one-is-hunted-priced-by-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (two-cows-and-a-note-at 400)]
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (is (seq (calls p "attack")) "starving, the meat is worth more than the walk to the noted one")
+          (is (= [3] (mapv :adults (filterv #(= :food.killed (:kind %)) @seen)))))))))
+
+(deftest a-cow-noted-within-the-keep-radius-is-kept-when-its-meat-is-worth-less-than-finding-a-pair-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (let [notes [{:kind :seen :what "cow" :id "u1" :pos [400 64 0] :by "Other" :t 999900 :until 9e15}]]
+                                (setup {:time 6000 :self {:food 17 :health 20} :entities [(assoc cow :uuid "u2") (assoc cow :id 8 :uuid "u3" :pos {:x 8 :y 64 :z 0})]} :step-ms 5 :other-notes notes))]
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (is (empty? (calls p "attack")) "food 17 at full health: the meat is not worth a 400-block walk to a pair"))))))
 
 (defn see-only-ahead!
   "Passive mobs count only on the side the body last looked at (a look act's target), facing +x at first: a view cone."
@@ -1481,17 +1504,6 @@
           (await (one-round! eng {:explore false}))
           (is (empty? (calls p "fish"))))))))
 
-(deftest a-starving-body-takes-the-last-adults-only-when-the-lift-is-set
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[lift food n] [[3 2 true] [3 5 false] [-1 2 false]]]
-          (await (settings/with-settings {:jobs.survival.get-food/kept-lifted-below lift}
-                   (fn ^:async t2 []
-                     (let [{:keys [eng p]} (setup {:self {:food food} :entities [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0})]})]
-                       (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0} :explore false :food 6}))
-                       (is (= n (boolean (seq (calls p "attack")))) (str "lift " lift " food " food)))))))))))
-
 (deftest the-hungry-reflex-cooks-raw-food-and-eats-it
   (async done
     (tu/run-async done
@@ -1561,7 +1573,7 @@
                             ctx/update-mem! (constantly nil)
                             notes/notes (fn [_] @notes-seen)
                             notes/note! (fn [_ ns] (swap! notes-seen into ns))]
-                (is (= hunted? (some? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20 :lift 0}))))
+                (is (= hunted? (some? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20}))))
                     (pr-str [penned-by-read? listed-after-read? relook-finds?]))
                 (is (= ["u1" "u2" "u3"] (distinct (map :id @notes-seen))) "the cows stay :seen notes")))))))))
 
@@ -1570,7 +1582,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/fake-on-floor {})
-              herd (clj->js [#js {:name "cow" :uuid "u1" :id 1 :baby false :pos #js {:x 5 :y 64 :z 0}}])
+              herd (clj->js (mapv (fn [i] #js {:name "cow" :uuid (str "u" i) :id i :baby false :pos #js {:x (+ 4 i) :y 64 :z 0}}) [1 2 3]))
               reads (atom 0)
               relooked? (atom false)]
           (with-redefs [look/seen-objs (fn [_ _] (if (or (zero? @reads) @relooked?) herd #js []))
@@ -1586,7 +1598,7 @@
                         ctx/update-mem! (constantly nil)
                         notes/notes (constantly [])
                         notes/note! (constantly nil)]
-            (is (nil? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20 :lift 0}))) "the cow found by the relook is read as penned, not hunted")
+            (is (nil? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20}))) "the cow found by the relook is read as penned, not hunted")
             (is (= 2 @reads) "one read for the first target, one for the one found")))))))
 
 (deftest forgive-clears-the-pass-over-of-the-animals-named
@@ -1603,8 +1615,8 @@
                   access/trespass-refusal (constantly nil)
                   spare/penned? (fn [& _] false)
                   ctx/mem (constantly {})]
-      (is (= ["chicken" "cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach reach}))))
-      (is (= ["cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach (assoc reach "chicken" 20)})))
+      (is (= ["chicken" "cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :reach reach}))))
+      (is (= ["cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :reach (assoc reach "chicken" 20)})))
           "a chicken past what its own meat pays is left, as a cow of that distance is not"))))
 
 (deftest a-pair-in-view-past-its-reach-is-still-a-kept-pair
@@ -1616,7 +1628,7 @@
                   spare/penned? (fn [& _] false)
                   notes/notes (constantly [])
                   ctx/mem (constantly {})]
-      (let [r (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach {"chicken" 20}})]
+      (let [r (animals/in-sight {:primitives p :args {}} {:radius 100 :reach {"chicken" 20}})]
         (is (= 1 (count r)) "only the near chicken is within reach")
         (is (= [2 :kept] [(:adults (first r)) (:why (first r))]) "the far chicken in view still makes the pair, so the near one is kept")))))
 
@@ -1629,7 +1641,7 @@
                   spare/penned? (fn [& _] false)
                   notes/notes (constantly [])
                   ctx/mem (constantly {})]
-      (let [opts {:radius 100 :lift 0 :reach {"chicken" 20} :own? true}]
+      (let [opts {:radius 100 :reach {"chicken" 20} :own? true}]
         (is (= [:own-pen] (map :rule (animals/in-sight {:primitives p :args {}} opts))) "an own-pen animal is walked to whatever its kill pays")
         (is (empty? (animals/in-sight {:primitives p :args {}} (assoc opts :own? false))))))))
 

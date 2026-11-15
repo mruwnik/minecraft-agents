@@ -27,11 +27,11 @@
 
 (defn why
   "Why a hunt leaves an adult animal alone, or nil: :off-limits, :pen (in a zone or plan of the body's own, unless
-  ::spare-pens is false) or :kept (a breeding pair: 2 up to `keep` adults of its kind in sight, unless starved?; a lone adult is no pair)."
-  [keep kind adults-of-kind in-own-area? starved?]
+  ::spare-pens is false) or :kept (a breeding pair: 2 up to `keep` adults of its kind in sight; a lone adult is no pair)."
+  [keep kind adults-of-kind in-own-area?]
   (cond (contains? (off-limits) kind) :off-limits
         (and (spare-pens?) in-own-area?) :pen
-        (and (<= 2 adults-of-kind keep) (not starved?)) :kept))
+        (<= 2 adults-of-kind keep) :kept))
 
 (defn gone?
   "Whether a :seen note's animal is proven gone: its cell is in view now and within the `radius` the entity scan covers, and the animal is not among `seen-ids` (the uuids in sight: a visible animal a hunt skips is not gone)."
@@ -42,21 +42,26 @@
           (<= (u/dist (u/self-pos c) pos) radius)
           (true? (some-> (u/sensed (:primitives c) pos) .-visible))))))
 
+(defn noted-adult-notes
+  "The live :seen notes (any body's) of adult animals of `kind` within `near` of the body (a cow far off is no mate; `near` defaults to `radius`) that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair. A note whose cell is in view within `radius` with no such animal there (gone?) is dropped; the rest age out with their ttl."
+  ([c kind seen-uuids radius] (noted-adult-notes c kind seen-uuids radius radius))
+  ([c kind seen-uuids radius near]
+   (filter #(and (= :seen (:kind %)) (= kind (:what %)) (:id %) (not (:baby %)) (not (seen-uuids (:id %)))
+                 (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos %))) near)
+                 (not (gone? c % radius)))
+           (notes/notes c))))
+
 (defn noted-adults
-  "The uuids of adult animals of `kind` that live :seen notes (any body's) place within `radius` of the body (a cow far off is no mate) and that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair. A note whose cell is in view with no such animal there (gone?) is dropped; the rest age out with their ttl."
-  [c kind seen-uuids radius]
-  (into #{}
-        (comp (filter #(and (= :seen (:kind %)) (= kind (:what %)) (:id %) (not (:baby %)) (not (seen-uuids (:id %)))
-                            (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos %))) radius)
-                            (not (gone? c % radius))))
-              (map :id))
-        (notes/notes c)))
+  "The uuids of the adults of `kind` that noted-adult-notes lists."
+  [c kind seen-uuids radius near]
+  (into #{} (map :id) (noted-adult-notes c kind seen-uuids radius near)))
 
 (defn adults-of-kind
   "The adults of `kind` the keep rule counts: the adult entities of it in sight (`adults`) plus the noted ones not in sight
   (noted-adults; `seen-uuids` every entity in sight). get-food and combat.hunt both count so, so the pair the one keeps is the pair the other spares."
-  [c kind adults seen-uuids radius]
-  (+ (count (filter #(= kind (.-name %)) adults)) (count (noted-adults c kind seen-uuids radius))))
+  ([c kind adults seen-uuids radius] (adults-of-kind c kind adults seen-uuids radius radius))
+  ([c kind adults seen-uuids radius near]
+   (+ (count (filter #(= kind (.-name %)) adults)) (count (noted-adults c kind seen-uuids radius near)))))
 
 (def wool-keep "Sheep of a colour combat.hunt spares (its :keep default for animals); shears spare them all." 2)
 
@@ -74,7 +79,7 @@
 
 (defn allowed-by
   "Which rule let a hunt take an adult why left alone: :pen-taken (::spare-pens false and it stood in a pen), :lone (the only
-  one of its kind in sight), :surplus (more than `keep` of its kind) or :starved (the kept pair, lifted by hunger)."
+  one of its kind in sight), :surplus (more than `keep` of its kind) or :starved (the kept pair)."
   [keep adults-of-kind in-own-area?]
   (cond (and in-own-area? (not (spare-pens?))) :pen-taken
         (< adults-of-kind 2) :lone
@@ -152,4 +157,4 @@
 (defn spared
   "The rule a hunt leaves the adult animal e alone by whatever its count (why: :off-limits or :pen), else nil; pens as in enclosed?."
   [c pens e]
-  (why -1 (.-name e) 0 (penned? c pens e) false))
+  (why -1 (.-name e) 0 (penned? c pens e)))
