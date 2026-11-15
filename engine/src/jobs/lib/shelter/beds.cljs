@@ -208,6 +208,26 @@
                              (and (= pos (:pos d)) (or (nil? from) (= from here)))))
                    entries))))
 
+(defn refusal
+  "Why beds-to-use skips the bed at pos, or nil when it does not: :occupied, :outside-area (bed-permit), :not-permitted (another permit?),
+  :unreachable, :open, :walk-unsafe or :leaves-shelter."
+  [p view permit? worth shelter overdue? pos]
+  (cond (not (permit? pos)) (cond (not (bed-free? p pos)) :occupied
+                                  (let [{:keys [x y z]} (sh-sense/feet p)] (wworld/goal-outside-area? [x y z] pos bed-reach)) :outside-area
+                                  :else :not-permitted)
+        (unreachable-entry? p (mem/entries view :bed-unreachable) pos) :unreachable
+        (some #(= pos (:pos (:data %))) (mem/entries view :bed-open)) :open
+        (walk-unsafe? p view pos worth) :walk-unsafe
+        (and (not overdue?) (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) :leaves-shelter))
+
+(defn refused-beds
+  "{bed-pos reason} (refusal) of every known or seen bed beds-to-use skips tonight."
+  [p view permit? worth]
+  (let [shelter (:data (mem/latest view :shelter))
+        overdue? (>= (or (days-awake-in view) 0) (max-days-awake))]
+    (into {} (keep (fn [pos] (when-let [why (refusal p view permit? worth shelter overdue? pos)] [pos why])))
+          (distinct (concat (sh-spawn/known-beds p view) (seen-bed-places p))))))
+
 (defn beds-to-use
   "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place (a bed set with
   jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds and the live :spawn-bed,
@@ -223,10 +243,7 @@
              (empty? (mem/entries view :sleep-failed)))
     (let [shelter (:data (mem/latest view :shelter))
           overdue? (>= (or (days-awake-in view) 0) (max-days-awake))
-          ok? (fn [pos] (and (permit? pos) (not (unreachable-entry? p (mem/entries view :bed-unreachable) pos))
-                             (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
-                             (not (walk-unsafe? p view pos worth))
-                             (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))))))]
+          ok? (fn [pos] (nil? (refusal p view permit? worth shelter overdue? pos)))]
       (distinct (concat (some-> (seen-bed p ok?) vector)
                         (let [known (sh-spawn/known-beds p view)
                               placed (mem/place view :bed)]

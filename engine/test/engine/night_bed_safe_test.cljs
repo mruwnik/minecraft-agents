@@ -249,6 +249,17 @@
               free (await (bed-price-with-respawn-at-feet {:jobs.lib.cost.death/spawn-horizon-s 0}))]
           (is (> priced free) "the far bed's respawn is worse for the deaths at the work than the one the body has"))))))
 
+(deftest the-night-says-which-bed-it-refuses-and-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup (assoc on-open-ground :entities [{:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 40 :y 64 :z 0}}]))]
+          (core/submit! eng (tu/order '(jobs.survival.night)) {})
+          (await (st/tick-n eng 12))
+          (let [noted (st/emitted seen :night.bed-refused)]
+            (is (= 1 (count noted)) "one event, however many rounds")
+            (is (= {far-bed :occupied} (:beds (first noted))))))))))
+
 (defn ^:async sealed-price-with-respawn-at-feet
   "The :sealed price of the first :night.answers of a night for a body carrying a bed that slept where it stands, under settings."
   [settings]

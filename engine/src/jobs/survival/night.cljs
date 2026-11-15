@@ -1,5 +1,6 @@
 (ns jobs.survival.night
-  (:require [engine.notes :as notes]
+  (:require [clojure.string :as str]
+            [engine.notes :as notes]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.ready :as ready]
             [jobs.survival.log-out :as log-out]
@@ -631,6 +632,17 @@
                                        "; sheltering here tonight")})
                 false))))))
 
+(defn note-refused-beds!
+  "One :night.bed-refused info event when the beds beds-to-use skips differ from the last noted: {:beds {pos reason}}."
+  [c permit? worth]
+  (let [p (:primitives c)
+        refused (sh-beds/refused-beds p (ctx/view c) permit? worth)]
+    (when (and (seq refused) (not= refused (:refused-noted (ctx/mem c))))
+      (ctx/update-mem! c assoc :refused-noted refused)
+      (ctx/emit! c :night.bed-refused :info
+                 {:beds refused
+                  :text (str "beds not used tonight: " (str/join ", " (map (fn [[pos why]] (str (pr-str pos) " " (name why))) refused)))}))))
+
 (defn ^:async walkable-bed
   "The bed the night walks to now: of the beds sh-beds/beds-to-use names (a bed refused on price judged at its own bed-worth), the :bed place when it leads them (no bed is seen) and its walk is safe, else the one whose walk go-to quotes cheapest (cheapest-walk!; the first
   when none is priced; no time limit, a far bed's walk is weighed against staying by bed-walk-safe?), if its walk bed-walk-safe? finds fine, unless a bed-down is already under way; :searching while a quote's search goes on; else nil."
@@ -642,6 +654,7 @@
         _ (doseq [bed refused] (swap! worths assoc bed (await (bed-worth c bed :bed))))
         worth #(get @worths %)
         beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) permit? worth)) {:price (sense/fails-to c)}))
+        _ (note-refused-beds! c permit? worth)
         walk sh-beds/bed-walk
         placed (mem/place (ctx/view c) :bed)
         set-bed (when (= placed (first beds)) placed)
