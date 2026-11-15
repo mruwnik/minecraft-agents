@@ -594,7 +594,7 @@
         p (body 4.2)
         unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
         stair {:step :stair :heading :east :steps 3}
-        route-s #(:seconds (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {}))]
+        route-s #(:seconds (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {:max-nodes 5000}))]
     (is (= (at-chance 1 route-s) (at-chance 1 #(escape-way/price p [0 64 0] stair))) "unseen rock sure to be solid")
     (is (< (escape-way/price (body 50) [0 64 0] stair) (at-chance 1 #(escape-way/price p [0 64 0] stair))) "unseen cells cost more")
     (is (< (escape-way/price p [0 64 0] stair) (at-chance 1 #(escape-way/price p [0 64 0] stair))) "an unseen cut is dug at the chance it is solid")
@@ -974,6 +974,19 @@
     ;; it may dig down into the unseen cell, onto the seen rock under it
     (is (seq stands))
     (is (not-any? #{[2 64 0]} stands) "no step stands on the unseen floor under the seen-open cell")))
+
+(deftest a-dig-route-into-a-room-never-seen-across-an-open-yard-is-the-straight-dig-when-the-search-spends-its-nodes
+  ;; the walls are seen, the room inside never was: the straight dig through the wall is a route in hand, and the search
+  ;; over the yard cannot beat it inside its nodes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge (box -60 63 -60 90 63 60 "stone") (box 20 64 -3 26 66 3 "dirt") (box 21 64 -2 25 65 2 "air"))
+              p (hiding-with-pickaxe world (fn [[x y z]] (and (<= 21 x 25) (<= 64 y 65) (<= -2 z 2))))
+              e (await (settings/with-settings {:jobs.lib.dig-route/max-nodes 20}
+                         (fn ^:async run [] (choose/dig-way p [0 64 1] [23 64 0] (constantly true) {:skip #{} :range 0.7 :near [23 64 0]}))))]
+          (is (= :dig-route (:step e)) (pr-str (select-keys e [:step])))
+          (is (some #{[20 64 1]} (map :cell (:cells e))) "it digs through the wall"))))))
 
 (deftest a-far-walled-in-goal-is-searched-for-a-slice-a-call-and-reached
   ;; a body in a walled yard on a stone mass, the goal a sealed pocket 80 across and 12 down: each escalate! call's dig

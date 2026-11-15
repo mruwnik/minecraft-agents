@@ -679,8 +679,8 @@
             ;; with a :range the goal is worked from a stand within it, never dug away
             (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) spent (:searched-s route-opts 0) lazy? false]
             (let [a (search refused spent lazy?)
-                  ;; the straight dig needs no search: when the search prices its own expansions past it, it is the route
-                  a (if-let [st (when (= :dearer (:problem a)) (some-> (straight refused) (as-> st (when (<= (:seconds st) (or (:bound-s route-opts) ##Inf)) st))))] st a)
+                  ;; the straight dig needs no search: when the search prices its own expansions past it or spends its nodes, it is the route
+                  a (if-let [st (when (#{:dearer :budget} (:problem a)) (some-> (straight refused) (as-> st (when (<= (:seconds st) (or (:bound-s route-opts) ##Inf)) st))))] st a)
                   bad (when (map? a) (remove allowed? (:dig a)))]
               (cond (= :searching a) a
                     (nil? (:dig a)) (when dearer? (cond (= :dearer (:problem a)) :dearer (:boxed a) a))
