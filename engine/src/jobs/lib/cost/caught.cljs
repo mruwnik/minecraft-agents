@@ -10,7 +10,8 @@
   10 hp uniform, b uniform over [-0.4, 0.4], lambda 1/lambda, mu uniform. A fight is counted alike (::fights): gone bad
   at the chance, its mobs land lambda blows, else mu (the fight's own); one followed by a flight counts what the flight
   took too, the price of choosing it. A bow group's lambda is arrows at the ::counted-difficulty's shot rate; prior
-  scales it to the cost difficulty's (threat/shot-rate)."
+  scales it to the cost difficulty's (threat/shot-rate). A creeper's flight has no blows to count: caught is its blast landing
+  (binary-chance), the blast one of catch-blasts."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
@@ -25,9 +26,15 @@
                                  :died [[1 1 2] [2 1 2] [3 2 3] [4 2 2] [5 2 1] [6 3 3] [7 3 1] [8 4 3] [9 4 1] [15 6 1] [17 7 1] [19 8 1] [20 8 1]]}
                         :bow {:lived [[1 0 1] [2 0 2] [5 2 1] [6 3 1] [7 0 2] [8 0 2] [8 1 2] [10 0 1] [11 0 1] [11 1 1] [12 2 1] [13 0 1] [16 1 1]
                                       [17 2 1] [17 4 1] [17 7 1] [19 0 2] [19 1 1] [20 0 11] [20 1 2] [20 3 1]]
-                              :died [[1 1 1] [6 3 1]]}}
+                              :died [[1 1 1] [6 3 1]]}
+                        :creeper {:lived [[1 0 1] [6 0 2] [7 0 2] [8 0 1] [10 1 2] [11 0 2] [11 1 1] [12 1 1] [13 0 6] [13 1 2] [14 0 1] [14 1 1] [15 1 3]
+                                          [16 1 2] [17 0 1] [18 0 1] [18 1 2] [19 0 2] [20 0 12] [20 1 8]]
+                                  :died [[20 1 1]]}}
               :spec (a/map-of keyword? (a/map-with {:lived counts? :died counts?}))
-              :doc "Per group of mob kinds (group-of), the trial flights from it: :lived [health blows n], n flights begun at health that lived through it hurt by blows (a shooter's arrows) of it; :died [health blows n], n that died of it, blows the least that kill at health. A flight is the run of flee decisions about the group, each within 30 s of the one before, and the 30 s after it; one whose run held still (hid, sealed, cornered, under a roof) before it stepped is none (25 zombie, 3 of them died; 7 bow). Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-11-07."}
+              :doc "Per group of mob kinds (group-of), the trial flights from it: :lived [health blows n], n flights begun at health that lived through it hurt by blows (a shooter's arrows) of it; :died [health blows n], n that died of it, blows the least that kill at health. A flight is the run of flee decisions about the group, each within 30 s of the one before, and the 30 s after it; one whose run held still (hid, sealed, cornered, under a roof) before it stepped is none (25 zombie, 3 of them died; 7 bow). Recount: node tools/event-counts.mjs caught-flights (trial bodies, easy), 2026-11-07. A :creeper group counts blows 1 for a flight a blast of it hurt (within the 30 s after): its catch is that one blast, so binary-chance reads it, not the blows mixture; 23 of 54 flights, 1 died (30 of 85 held still: none counted); from the bodies' logs, 2026-11-15."}
+   ::catch-blasts {:default [2.3 2.4 2.5 2.6 2.8 2.8 2.9 2.9 3.3 3.6 4.0 4.0 4.0 4.3 4.3 4.4 5.8 6.1 6.1 7.4 7.5 7.9 8.1 8.1 8.2 8.3 9.3 9.4 10.1 10.3 11.2 11.6 12.0 12.1 18.3]
+                   :spec (a/coll-of (a/num-in 0 nil))
+                   :doc "hp the blast of a creeper that caught a body in flight hurt it (35 of the ::flights :creeper flights, at ::counted-difficulty, through whatever armour the body wore; median 4.3, 43% at 7 or more); a catch lands one of them. Recount: 2026-11-15, the hurts of the creeper flights."}
    ::fights {:default {:zombie {:lived [[11 2 1] [12 2 1] [13 0 2] [13 2 1] [13 3 1] [13 4 1] [14 1 2] [14 3 1] [15 1 1] [15 3 1] [16 0 1] [16 1 1] [17 0 1]
                                         [17 4 1] [18 0 4] [18 1 1] [18 2 3] [19 0 1] [20 0 17] [20 1 8] [20 2 12] [20 3 5] [20 4 3] [20 7 1] [20 8 1]]
                                 :died [[9 4 1] [20 8 4]]}
@@ -134,6 +141,27 @@
       (let [{:keys [points]} (posterior counts) x (- health 10)]
         (areduce points i acc 0 (let [p (aget points i)] (+ acc (* (aget p 3) (sigmoid (+ (aget p 0) (* (aget p 1) x)))))))))))
 
+(defn catch-blasts
+  "The hp a creeper's catch may land (::catch-blasts, equally likely) at the cost difficulty: each measured one scaled from the counted difficulty's damage."
+  []
+  (let [normal (if (= 1 (settings/get settings ::counted-difficulty)) #(* 2 (- % 1)) identity)]
+    (mapv #(threat/difficulty-scale (normal %)) (settings/get settings ::catch-blasts))))
+
+(def binary-chance
+  "The posterior mean chance a flight from a group of counts (blows 1: caught) begun at health is caught, of the logistic
+  chance a + b (health - 10) with the posterior's priors. Memoized."
+  (memoize
+    (fn [{:keys [lived died]} health]
+      (let [rows (into (mapv (fn [[h k n]] [(- h 10) (if (pos? k) 1 0) n]) lived) (map (fn [[h _ n]] [(- h 10) 1 n])) died)
+            pts (for [a (grid -3 0.25 25) b (grid -0.4 0.05 17)
+                      :let [pa (sigmoid a)
+                            lw (+ (js/Math.log (* pa (- 1 pa)))
+                                  (reduce + (map (fn [[x k n]] (let [p (sigmoid (+ a (* b x)))] (* n (js/Math.log (if (pos? k) p (- 1 p)))))) rows)))]]
+                  [lw (sigmoid (+ a (* b (- health 10))))])
+            top (reduce max (map first pts))
+            ws (map (fn [[lw c]] [(js/Math.exp (- lw top)) c]) pts)]
+        (/ (reduce + (map (fn [[w c]] (* w c)) ws)) (reduce + (map first ws)))))))
+
 (defn prior
   "{:chance :blows :shape} of a flight (which ::flights, the default) or a fight (::fights) with mob-name begun at
   health (default 20, read in whole hp: chance's memo keys on it): the posterior mean chance it is caught or goes bad (chance) and of the blows it then takes (a bow group's at the cost difficulty's shot rate), the Gamma shape of their mean's uncertainty (blow-chance's width)."
@@ -141,9 +169,10 @@
   ([which mob-name health]
    (let [group (group-of which mob-name)
          counts (get (settings/get settings which) group)
-         {:keys [blows shape]} (posterior counts)
+         creeper? (and (= ::flights which) (= :creeper group))
+         {:keys [blows shape]} (if creeper? {} (posterior counts))
          rate (if (= :bow group) (/ (threat/shot-rate) (threat/shot-rate (settings/get settings ::counted-difficulty))) 1)]
-     {:chance (chance counts (js/Math.round (or health 20))) :blows (* rate blows) :shape shape})))
+     {:chance ((if creeper? binary-chance chance) counts (js/Math.round (or health 20))) :blows (* rate (or blows 0)) :shape shape})))
 
 (defn matchup
   "The key \"tier/foes\" of a fight: the kit's tier (its weapon's material: wooden, stone, iron ...; fist for none) and how many foes (at least 1)."

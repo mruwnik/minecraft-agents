@@ -15,7 +15,8 @@
     #(value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version)))
     blocks/default-state-table]
    (for [which [::caught/flights ::caught/fights]
-         counts (vals (settings/get caught/settings which))]
+         [group counts] (settings/get caught/settings which)
+         :when (not= [::caught/flights :creeper] [which group])]
      #(caught/posterior counts))))
 
 (defn warm!

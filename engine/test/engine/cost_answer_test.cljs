@@ -294,11 +294,11 @@
 
 (deftest a-flight-caught-by-a-creeper-takes-the-blast-at-the-distance-the-search-puts-the-body-when-the-fuse-ends
   (let [creeper (mob "creeper" 4)
-        blasts #(get-in (cost/flee-answer (merge {:food 20 :mobs [creeper] :caught 1} %)) [:caught :blasts])
-        swell (first (blasts {}))
-        far (first (blasts {:caught-blast 5.5}))]
-    (is (< 0 far swell) "5.5 off takes a little of the swell-start blast")
-    (is (zero? (first (blasts {:caught-blast 6}))) "6 off, none")))
+        caught #(:caught (cost/flee-answer (merge {:food 20 :mobs [creeper] :caught 1} %)))
+        far (first (:blasts (caught {:caught-blast 5.5})))]
+    (is (< 0 far (answer/mean (:spread (caught {})))) "5.5 off takes a little of a measured catch's blast")
+    (is (empty? (:spread (caught {:caught-blast 5.5}))) "the search's distance replaces the measured spread")
+    (is (zero? (first (:blasts (caught {:caught-blast 6})))) "6 off, none")))
 
 (deftest the-prior-and-the-ways-catch-are-one-mix-so-a-small-dead-end-chance-moves-the-price-little
   (let [zombie (mob "zombie" 4 35)
@@ -318,12 +318,19 @@
     (is (< capped (caught ##Inf 0.5) (caught ##Inf nil)) "the race's seconds bound the swim's blows, the prior's the walk's on land")
     (is (= (caught 1000 0.5) (caught ##Inf 0.5)) "land past the walk that outruns the follow range adds no blows")))
 
-(deftest a-walk-caught-beside-a-creeper-takes-its-blast-as-a-sure-part-of-the-life
+(deftest a-walk-caught-beside-a-creeper-takes-a-measured-catch-blast-as-a-sure-part-of-the-life
   (let [walk (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "zombie" 3 35)] :caught 1})
-        {:keys [damage hit blasts]} (:caught walk)
-        blast (cost/blast-hurt (cost/armour-stats nil) answer/swell-start)]
-    (is (= [blast] blasts))
-    (is (= (death/blow-chance (body 8) damage hit blast) (cost/death-chance (body 8) walk)))))
+        {:keys [spread blasts damage]} (:caught walk)
+        stats (cost/armour-stats nil)]
+    (is (= (caught/catch-blasts) spread) "the one blast of the catch is a measured one, each equally likely")
+    (is (empty? blasts) "no second creeper: nothing at the swell-start blast")
+    (is (< (answer/mean spread) damage) "the zombie's blows come on top of the mean blast")
+    (is (< (answer/mean spread) (cost/blast-hurt stats answer/swell-start)) "measured catches land less than a swell-start blast")))
+
+(deftest a-creeper-flight-is-caught-at-its-own-measured-chance-not-the-zombies
+  (is (< (:chance (caught/prior "creeper" 7)) 0.5 (:chance (caught/prior "zombie" 7))) "at 7 hp a creeper catches 1 flight in 3, a zombie most")
+  (is (< (:chance (caught/prior "zombie" 20)) (:chance (caught/prior "creeper" 20))) "at full health the slope runs the other way")
+  (is (zero? (:blows (caught/prior "creeper" 7))) "a creeper's catch is one blast, no blows to count"))
 
 (deftest a-walk-from-a-mob-that-keeps-up-is-no-answer
   (is (nil? (cost/flee-answer {:food 20 :mobs [(mob "spider" 4)]})) "a spider outruns the body")

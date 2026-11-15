@@ -550,7 +550,11 @@
                                   :near (reduce max 0 (map :seconds per))
                                   :caught {:chance (- 1 (js/Math.pow (- 1 caught) times))
                                            :hit hit
-                                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (if caught-blast (blast-hurt stats caught-blast) (blow stats m))))}}
+                                           :blasts (let [creepers (filter #(= "creeper" (:name %)) mobs)]
+                                                     (if caught-blast
+                                                       (mapv (fn [_] (blast-hurt stats caught-blast)) creepers)
+                                                       (mapv (fn [_] (mean (caught-prior/catch-blasts))) (rest creepers))))
+                                           :spread (when (and (not caught-blast) (some #(= "creeper" (:name %)) mobs)) (caught-prior/catch-blasts))}}
                             melee (keep (fn [[m f]] (when-not (= "creeper" (:name m)) (assoc f :kind (threat/kind m)))) (map vector mobs per))
                             shared (vals (group-by :kind (filter :rate-shape melee)))
                             shape (fight/sum-shape (concat (map (fn [f] [(* times (:damage f)) (some-> (:shape f) (* times))]) (remove :rate-shape melee))
@@ -579,7 +583,7 @@
                             {d :damage d-shape :shape} (mix (if (pos? caught)
                                                               [[(/ (* way (- 1 pc)) caught) by-way] [(/ pc caught) by-prior]]
                                                               [[1 by-prior]]))]
-                        (cond-> (assoc-in walk [:caught :damage] (+ d (reduce + 0 (get-in walk [:caught :blasts]))))
+                        (cond-> (assoc-in walk [:caught :damage] (+ d (reduce + 0 (get-in walk [:caught :blasts])) (mean (get-in walk [:caught :spread]))))
                           shape (assoc :shape shape)
                           d-shape (assoc-in [:caught :shape] d-shape))))
             walk (walk-of mobs per times)

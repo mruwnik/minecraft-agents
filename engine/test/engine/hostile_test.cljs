@@ -1815,6 +1815,16 @@
     (is (< 11.5 (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x -30 :y 64 :z 0}}}])) 12.5) "the respond job's own goal first")
     (is (nil? (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x 30 :y 64 :z 0} :goal-reached true}}]))) "a goal reached is behind it")))
 
+;; Card fc7d2edb (Tamsin S3): a lone creeper's flight was priced at the zombies' catch counts (flee 1516 against fight 524 at 7 hp)
+(deftest a-lone-creeper-at-seven-hp-prices-its-flight-at-the-creepers-own-catch-not-the-zombies
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (flight-round respond {:self {:health 7} :inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 6 :y 64 :z 0}}]}))
+              {:keys [flee fight]} (:prices (first (filter #(= :hostile.decided (:kind %)) @(:seen s))))]
+          (is (< flee fight) "the flight is caught 1 in 3 and a catch's blast is a measured one: fled, as a player does")
+          (is (= :flee (:decision (first (hostile-entries (:eng s)))))))))))
+
 ;; ce634b35 (Bramble #39): a blast of 17 beside a fight; card a45ce0db: priced as one Poisson count of blast-sized blows
 (deftest a-creeper-by-a-zombie-at-normal-difficulty-is-walked-from-a-flight-from-both-caught-at-the-zombies-prior
   (async done
