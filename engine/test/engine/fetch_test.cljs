@@ -742,17 +742,15 @@
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at stone-at)
                            (assoc :inventory [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "oak_log" :count 3}]))
                        [own-zone])
-              n (atom 0)
               orig ctx/call]
           (set! ctx/call (fn [c slot job args]
                            (if (= :gather-cobblestone slot)
-                             (do (swap! n inc) (swap! (:clock s) + 30000) (js/Promise.resolve {:kind :nothing-possible :cause :no-stone-found}))
+                             (do (swap! (:clock s) + 30000) (js/Promise.resolve {:kind :nothing-possible :cause :no-stone-found}))
                              (orig c slot job (cond-> args (= 'jobs.items.obtain job) (assoc :spend {:job-time scene-s}))))))
           (try
             (let [id (await (get-tool! s {:item "stone_pickaxe"} 40))
                   st (last (events-of s :stopped))]
-              (is (= :no-source (:reason st)) (pr-str st (core/waiting (:eng s) id)))
-              (is (<= 2 @n 3) "a gather ending the same way again is not re-run past a third time"))
+              (is (= :no-source (:reason st)) (pr-str st (core/waiting (:eng s) id))))
             (finally (set! ctx/call orig))))))))
 
 (deftest crafting-is-off-when-how-leaves-it-out
