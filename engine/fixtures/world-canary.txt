@@ -1,0 +1,13 @@
+# Cases every targeted sweep runs (world-sweep --match-ids via sweep-triage --select-list --canary): one or two quick ones per area. Keep each one a case that stays green; swap one that is retired.
+go-to-from-a-fall/fall-onto-floor-then-arrives
+go-to-vine-ledge/jumps-down-off-a-high-vine-ledge
+night-refuge-and-bed/dig-in-walls-sealed
+night-b06-shelter/pillar-top-walls-get-support-first
+hostile-line-of-fire/zombie-through-wheat-fires
+hostile-close-quarters/armed-body-hit-at-a-dead-end-fights-before-it-seals
+farm-food/plant-sows-wheat-seeds-and-keeps-the-carrot-reserve
+farm-tidy/clean-field-is-done-with-nothing-dug
+mine-lip-lean/lean-over-a-dug-cell-with-no-floor-keeps-the-body-up
+mine-hand-harvestable/stone-with-no-pickaxe-and-nothing-to-fetch-ends-no-tool-pickaxe
+village-roll/nitwit-cannot-be-rolled
+village-breed/met-target-feeds-nothing

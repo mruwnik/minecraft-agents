@@ -190,3 +190,12 @@
     (is (= ["new/x"] (:missing (first (:cards r)))))
     (is (= ["c1"] (:no-plan r)))
     (is (= [] (:tick r)))))
+
+(deftest a-targeted-sweep-runs-the-cases-live-cards-in-the-revision-name-plus-the-canary
+  (let [cases (mapv (fn [id] {:id id}) ["a/x" "a/y" "b/w" "b/e" "c/new" "z/canary"])
+        r (t/select-ids {:cards (conj board {:id "c7" :column "pending" :title "seven" :commits ["aaa"] :description "live: a/y"})
+                         :ancestor? #(not= % "bbb") :cases cases :canary ["z/canary" "z/gone"]})]
+    (is (= ["a/x" "a/y" "b/e" "b/w" "c/new" "z/canary"] (:ids r))
+        "c4 (commit not in the revision) and c7 (not live) add nothing; fixture b names all its cases; c6's a/z is no case, so its fixture a runs whole")
+    (is (= ["c3"] (map :id (:no-fixture r))))
+    (is (= ["z/gone"] (:canary-missing r)))))

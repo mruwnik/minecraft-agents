@@ -11,6 +11,7 @@
 (def usage
   (str "usage: node tools/sweep-triage.mjs --dir DIR [--previous RESULTS.edn ...] [--rev R] [--repo PATH] [--plans PLANS.edn] [--db FILE] [--board ID | --board-file BOARD.edn] [--out report.edn]\n"
        "       node tools/sweep-triage.mjs --unskip-list --previous RESULTS.edn ... [--repo PATH] [--rev R] [--prev-rev P] [--db FILE] [--board ID] --out FILE: the known failures named by the live plans of testing, live and in_review cards whose commits are in the revision, and all known failures of fixture files changed since P, one id per line, for world-sweep --unskip-ids.\n"
+       "       node tools/sweep-triage.mjs --select-list --cases CASES.txt [--canary CANARY.txt] [--repo PATH] [--rev R] [--db FILE] [--board ID] --out FILE: the targeted sweep's case ids (world-sweep --match-ids): the cases named by the live plans of live cards whose commits are in the revision, plus the canary ids. CASES.txt = output of the world-list suite (first word of each line is the id).\n"
        "DIR holds sweep-<pass>.edn (day, night, night-exclusive, any sweep-*.edn except sweep-summary.edn). --previous: the earlier sweep's result files, as the pool's --durations.\n"
        "--plans: EDN map of card id prefix -> text naming fixtures/cases, for a card whose own plan names none. "
        "--rev (default HEAD) and --repo (default .): a card is covered when its commits are ancestors of the revision. Prints a text summary; --out writes the full EDN report."))
@@ -147,6 +148,18 @@
     (vec (sort (distinct (concat (mapcat #(map :id (named-cases (card-plan-text %) cases)) waiting)
                                  (map :id (filter #(contains? (set changed-files) (:file %)) cases))))))))
 
+(defn select-ids
+  "{:cards :ancestor? :cases :canary} -> {:ids :cards :no-fixture :canary-missing}: the case ids a targeted sweep runs. cases = every case of the fixtures ([{:id}]); cards = live cards, those whose commits are all in the revision count, each with the cases its live plan names; canary = fixed case ids that run every time (ones no longer in cases are listed in :canary-missing). :no-fixture lists the covered cards whose plan names no case."
+  [{:keys [cards ancestor? cases canary]}]
+  (let [cases (mapv #(assoc % :file (first (str/split (:id %) #"/"))) cases)
+        known (set (map :id cases))
+        covered (filter #(and (= "live" (:column %)) (every? ancestor? (:commits %))) cards)
+        named (mapv (fn [c] {:id (:id c) :title (:title c) :cases (mapv :id (named-cases (card-plan-text c) cases))}) covered)]
+    {:ids (vec (sort (distinct (concat (mapcat :cases named) (filter known canary)))))
+     :cards (mapv #(select-keys % [:id :title]) (filter (comp seq :cases) named))
+     :no-fixture (mapv #(select-keys % [:id :title]) (remove (comp seq :cases) named))
+     :canary-missing (vec (remove known canary))}))
+
 (defn bug-matches [bugs {:keys [id file]}]
   (mapv :id (filter #(let [toks (tokens (:title %))] (or (toks id) (toks file))) bugs)))
 
@@ -250,9 +263,16 @@
     (cond
       (empty? args) o
       (= a "--previous") (let [[files rst] (split-with #(not (str/starts-with? % "--")) more)] (recur rst (update o :previous into files)))
-      (#{"--dir" "--rev" "--repo" "--db" "--board" "--board-file" "--plans" "--out" "--prev-rev"} a) (recur (rest more) (assoc o (keyword (subs a 2)) (first more)))
+      (#{"--dir" "--rev" "--repo" "--db" "--board" "--board-file" "--plans" "--out" "--prev-rev" "--cases" "--canary"} a) (recur (rest more) (assoc o (keyword (subs a 2)) (first more)))
+      (= a "--select-list") (recur more (assoc o :select-list true))
       (= a "--unskip-list") (recur more (assoc o :unskip-list true))
       :else (recur more (update o :extra (fnil conj []) a)))))
+
+(defn read-id-lines
+  "A file of ids, one per line: only the first word of a line counts; blank lines and # comments are skipped."
+  [file]
+  (into [] (comp (map str/trim) (remove #(or (str/blank? %) (str/starts-with? % "#"))) (map #(first (str/split % #"\s+"))))
+        (str/split-lines (str (fs/readFileSync file "utf8")))))
 
 (defn result-files [dir]
   (->> (array-seq (fs/readdirSync dir))
@@ -266,6 +286,16 @@
   (let [args (vec (array-seq argv))
         o (parse-args args)]
     (cond
+      (and (:select-list o) (:cases o) (:out o))
+      (let [r (select-ids {:cards (:cards (read-board (:db o) (:board o) ["live"]))
+                           :ancestor? (ancestor-fn (:repo o) (:rev o))
+                           :cases (mapv (fn [id] {:id id}) (read-id-lines (:cases o)))
+                           :canary (if (:canary o) (read-id-lines (:canary o)) [])})]
+        (fs/writeFileSync (:out o) (apply str (map #(str % "\n") (:ids r))))
+        (js/console.log (str (count (:ids r)) " ids -> " (:out o) "; " (count (:cards r)) " live cards covered; " (count (:no-fixture r)) " name no case"
+                             (apply str (map #(str "\n  no case: " (:id %) " " (:title %)) (:no-fixture r)))
+                             (apply str (map #(str "\n  canary gone: " %) (:canary-missing r)))))
+        0)
       (and (:unskip-list o) (not (:extra o)) (:out o))
       (let [ids (unskip-ids (merge {:previous (mapv read-results (:previous o))
                                     :ancestor? (ancestor-fn (:repo o) (:rev o))}
