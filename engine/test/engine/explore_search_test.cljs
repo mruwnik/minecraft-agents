@@ -303,6 +303,14 @@
           (is (nil? (leg 60)) "ground searched for cows a minute ago is skipped")
           (is (some? (leg 300)) "five minutes on it is walked again: animals wander"))))))
 
+(deftest ground-searched-for-a-villager-a-while-ago-is-walked-again
+  (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
+        leg (fn [age-s] (:leg (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
+                                #(search/choose-leg {:args {:pattern :spiral} :primitives p :view (constantly {:now 1000000}) :worth (constantly tu/order-worth)} {:origin [0 64 0]} ["villager"]
+                                                    [{:kind :searched :what ["villager"] :pos [0 64 0] :r 200 :t (- 1000000 (* 1000 age-s))}]))))]
+    (is (nil? (leg 60)) "ground searched a minute ago is skipped")
+    (is (some? (leg 300)) "villagers wander: five minutes on, it is looked at again")))
+
 (deftest the-whole-search-is-one-round
   (async done
     (tu/run-async done

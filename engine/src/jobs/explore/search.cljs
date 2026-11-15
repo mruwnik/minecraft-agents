@@ -53,7 +53,7 @@
   Legs are cost/leg-spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond distance-limit (XZ) of the origin: :within and cost/search-radius of the worth. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
-  radius (for farm animals only a note younger than ::animal-searched-ttl-s: they wander); with :use-notes false only a note this job made counts.
+  radius (for farm animals and villagers only a note younger than ::animal-searched-ttl-s: they wander); with :use-notes false only a note this job made counts.
 
   A leg needs a standing cell in its column from 12 above the feet down to :descent (40) below, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
@@ -112,7 +112,7 @@
    ::stale-s {:default 60 :doc "Seconds after which an animal noted no longer counts as found by a note, and one seen earlier in this search is reported with how long ago." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
-   ::animal-searched-ttl-s {:default 120 :doc "Seconds a note of ground searched for farm animals keeps a leg off that ground: they wander, so older ground is looked at again (its note still lowers the chance of a find, cost/look-chance)." :spec (a/num-in 0 nil)}
+   ::animal-searched-ttl-s {:default 120 :doc "Seconds a note of ground searched for farm animals or villagers keeps a leg off that ground: they wander, so older ground is looked at again (its note still lowers the chance of a find, cost/look-chance)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds from the first round before a search gives up, waits included." :spec (a/num-in 0 nil)}
    ::load-reach {:default 64 :doc "Columns still unloaded this far (XZ) from the body are walked toward, since chunks load only near it; nearer ones are waited for." :spec (a/num-in 0 nil)}
@@ -245,6 +245,11 @@
   "Whether every name is an animal that spawns on lit grass at the surface: nothing is looked for underground."
   [names]
   (boolean (and (seq names) (every? food-animals/food-animals names))))
+
+(defn wanderers?
+  "Whether every name is a mob that walks off: a food animal or a villager, so ground searched for it ages fast."
+  [names]
+  (boolean (and (seq names) (every? #(or (food-animals/food-animals %) (= "villager" %)) names))))
 
 (defn finding-key [{:keys [what id pos]}] [what (or id pos)])
 
@@ -560,7 +565,7 @@
         surface? (surface-only? names)
         buried? (sh-sense/buried? p)
         covering (cond->> (searched-notes c m ns)
-                   surface? (filter #(< (- (ctx/now c) (:t %)) (* 1000 (settings/get settings ::animal-searched-ttl-s)))))
+                   (wanderers? names) (filter #(< (- (ctx/now c) (:t %)) (* 1000 (settings/get settings ::animal-searched-ttl-s)))))
         underground? (fn [sy pt] (and surface? sy (or (< sy (- y (settings/get settings ::surface-dip)))
                                                       (sh-sense/buried-at? p {:x (pt 0) :y sy :z (pt 1)}))))]
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :held 0 :unloaded (vec (:deferred m))}]
