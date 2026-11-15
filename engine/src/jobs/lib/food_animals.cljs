@@ -82,17 +82,20 @@
 
 (defn search-benefit
   "Seconds a search for food is worth the body: what reaching food is worth (cost/food-worth), or cost/food-search-worth of the
-  points the pack lacks of the :carry reserve (those the bar lacks past the carried food as hunger, the rest as reserve
-  above the carried food the bar leaves), less the walk back (cost/walk-cost) from the search's reach (cost/search-radius
-  of that worth) where the hunt ends."
+  points the pack lacks of the :carry reserve (those the bar lacks past the carried food as hunger, the rest at what carrying
+  them saves on the trip, home-food/reserve-worth), less the walk back (cost/walk-cost) from the search's reach
+  (cost/search-radius of that worth) where the hunt ends."
   [c]
   (let [p (:primitives c)
         food (.-food (.self p))
         stock (foods/stock-points (u/inventory p))
         lack (max 0 (- foods/full-food food))
         short (max 0 (- (carry c) stock))
+        hunger (min short (max 0 (- lack stock)))
+        held (max 0 (- stock lack))
+        reserve (if (> short hunger) (home-food/reserve-worth c held (+ held (- short hunger))) 0)
         worth (max (cost/food-worth food (.-health (.self p)) (cost/death-fn p (ctx/view c)))
-                   (cost/food-search-worth short {:hunger (max 0 (- lack stock)) :held (max 0 (- stock lack))}))
+                   (cost/food-search-worth hunger reserve))
         back (:cost (cost/walk-cost {:distance (cost/search-radius worth (cost/leg-spacing))}))]
     (max 0 (- worth back))))
 

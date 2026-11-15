@@ -201,6 +201,11 @@
   ([c] (carry-points c (chain-trip c)))
   ([c trip] (food/carry-points (sources c (:far trip)) (priced c trip true))))
 
+(defn reserve-worth
+  "jobs.lib.cost.food/reserve-worth of carrying k points instead of had on trip (default chain-trip), priced as carry-points prices it."
+  ([c had k] (reserve-worth c (chain-trip c) had k))
+  ([c trip had k] (food/reserve-worth (food/priced-trip (sources c (:far trip)) (priced c trip true)) had k)))
+
 (defn trip-fetch
   "jobs.lib.cost.food/trip-fetch of the home food (sources from the trip's far end) and trip priced, no field food: what
   to fill the pack to from home before trip, or nil."

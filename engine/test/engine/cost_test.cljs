@@ -185,6 +185,15 @@
     (is (<= (food-cost/trip-cost t k) (food-cost/trip-cost t (inc k))))
     (is (= 82 (:walk-out t)) "the walk home and out again: a trip of 10 s and 240 blocks at 0.3")))
 
+(deftest a-reserve-point-is-worth-what-running-out-on-the-trip-costs
+  (let [w (fn [home fig had k] (food-cost/reserve-worth (food-cost/priced-trip home (assoc trip :figure fig)) had k))
+        hour [3600 3600 3600]]
+    (is (zero? (w [] [1800 1800 1800] 30 60)) "a trip the carried food outlasts: more saves nothing")
+    (is (> 1e-9 (abs (- (* 30 (food-cost/field-point-s)) (w [] [1800 1800 1800] 0 30))))
+        "far from home food, each point the trip eats saves getting it in the field")
+    (is (< (w [(chest 320)] hour 0 60) (w [] hour 0 60)) "by its chests, running out costs only the walk home and out")
+    (is (= (w [] hour 30 60) (w [] nil 30 60)) "no trip yet: the reserve's 3 days")))
+
 (deftest home-food-is-taken-by-one-rule-only-while-cheaper-than-the-field
   (let [dear (chest 100 :fetch-s 2000)
         t (food-cost/priced-trip [dear] (assoc trip :figure [0 840 10800]))]

@@ -141,6 +141,14 @@
         p (tail t)]
     (min (value/chance-times p death-s) (value/chance-times p walk-out) (* (field-point-s) points-per-s (beyond t)))))
 
+(defn reserve-worth
+  "Seconds carrying k points instead of had saves on trip (priced-trip): the drop in run-out-s. A trip no line bounds yet
+  (nil figure) is taken to last the reserve's days, the span the 3-day reserve is carried for."
+  [trip had k]
+  (let [s (/ reserve-points points-per-s)
+        sp (trip-spread (or (:figure trip) [s s s]))]
+    (max 0 (- (run-out-s trip sp had) (run-out-s trip sp k)))))
+
 (defn trip-cost
   "Expected seconds carrying k food points on trip (priced-trip) costs: getting them (acquire-s), their slots (slot-s), the
   ones a death loses (:point-cost each) and running out (run-out-s)."
