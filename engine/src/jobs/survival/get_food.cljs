@@ -70,7 +70,7 @@
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it searches unknown ground only in the light with no hostile known near; walks to known food are priced by go-to's start check (all but 1 hp may be spent). With nothing else to try it writes a :food-too-dangerous entry (no :hungry) and ends condition-failed
   :too-dangerous after a refused search; the hungry trigger then rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count.
-  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and a breeding pair (2 up to ::keep-adults (2) adults of a kind in sight and noted, counted as combat.hunt counts, jobs.lib.animal-spare/adults-of-kind; never a kill that leaves fewer than ::keep-adults known adults of its kind within ::keep-radius (500), even when starving; above that, one that leaves fewer in sight is priced at the walk to the nearest noted one against its meat's worth) are never hunted (:ignore-zones? lifts the others' zone only). Each animal a hunt killed is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and a breeding pair (2 up to ::keep-adults (2) adults of a kind in sight and noted, counted as combat.hunt counts, jobs.lib.animal-spare/adults-of-kind; never a kill that leaves fewer than ::keep-adults known adults of its kind within ::keep-radius (500), even when starving; above that, one that leaves fewer than that in sight is priced at the walks to as many nearest noted ones as it lacks (cost/pair-find-s) against its meat's worth) are never hunted (:ignore-zones? lifts the others' zone only). Each animal a hunt killed is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when the caller passed :ignore-zones?, as the last way, when no permitted crop, field or other way is left and the body is hungry with nothing edible carried (one
   get-food.trespass-last-resort warning). Without :ignore-zones? the foreign crops and chests seen are left and named in the no-food text.
   A cut call starts again from the world: carried food first, then the ways.
@@ -403,7 +403,7 @@
                     (:estimate q) (do (vreset! searching true) ##Inf)
                     (< s worth) (/ s (points n))
                     :else (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q s worth)})) ##Inf))))
-        res (await (pick/best! c (animals/noted-targets c done (partial hunt-reach c))
+        res (await (pick/best! c (animals/noted-targets c done (partial hunt-reach c) (settings/get settings ::keep-radius))
                                {:bound #(animals/noted-price me %)
                                 :args #(noted-walk-args c (:pos %) (animals/noted-benefit c %) false)
                                 :price price}))
@@ -515,9 +515,9 @@
                     (do
                       (ctx/update-mem! c assoc :explored
                                        (report/explored-text res))
-                      (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter #(and (:id %) (animals/noted-here? c % (partial hunt-reach c))) (:found res))))]
+                      (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter #(and (:id %) (animals/noted-here? c % (partial hunt-reach c)) (not (animals/noted-kept? c % (partial hunt-reach c) (settings/get settings ::keep-radius)))) (:found res))))]
                         (ctx/update-mem! c assoc :walk-to (:pos noted)))
-                      (when (or (= :done (:kind e)) (animals/noted-target c (set (:noted-walked (ctx/mem c))) (partial hunt-reach c))) :again))))))))))))
+                      (when (or (= :done (:kind e)) (animals/noted-target c (set (:noted-walked (ctx/mem c))) (partial hunt-reach c) (settings/get settings ::keep-radius))) :again))))))))))))
 
 (defn rod-carried?
   "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within its ::bank-radius."

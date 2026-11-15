@@ -307,7 +307,7 @@
   (finish! c :gave-up))
 
 (defn allowed-by
-  "Which animal-spare rule let the hunt take the adult e: :pen-taken, :surplus or :starved."
+  "Which animal-spare rule let the hunt take the adult e: :pen-taken, :lone or :surplus."
   [c e]
   (let [adults (adults-counted c)]
     (spare/allowed-by (keep-of c) adults (spare/penned? c (atom []) e))))

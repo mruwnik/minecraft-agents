@@ -635,6 +635,12 @@
     (* (food-point-worth) (food-points meat) (or (tbl/kill-drops mob meat) expected-drops))
     (:value (item-value [{:name mob :count expected-drops}] :overrides (measured-worths @game/version)))))
 
+(defn pair-find-s
+  "Seconds to find `k` more animals of a kind again, given the walks (seconds) to the ones known: the k nearest legs summed, so
+  the rarer the kind or the farther its known ones, the dearer; ##Inf when fewer than k are known."
+  [walk-costs k]
+  (if (< (count walk-costs) k) ##Inf (reduce + 0 (take k (sort walk-costs)))))
+
 (defn per-climb [] (settings/get settings ::per-climb))
 
 (defn detour-cost

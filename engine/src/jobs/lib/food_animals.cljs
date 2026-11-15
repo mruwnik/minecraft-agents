@@ -103,20 +103,31 @@
   [c n reach]
   (not (spare/gone? c n (reach (:what n)))))
 
+(declare kept-by-floor)
+
+(defn noted-kept?
+  "Whether a kill of the noted animal n is left alone as in-sight leaves it (kept-by-floor): the kill would leave fewer than ::keep-adults known adults of its kind within `keep-radius`, or the walks to find a pair again cost more than its meat; none of its kind counts as in sight."
+  [c n reach keep-radius]
+  (let [kind (:what n)
+        radius (reach kind)
+        near (or keep-radius radius)]
+    (boolean (kept-by-floor c kind (spare/adults-of-kind c kind [] #{} radius near) 1 #{(:id n)} radius near))))
+
 (defn noted-targets
   "The food animals a :seen note (any body's) places anywhere whose meat may be worth the walk (noted-benefit over
-  noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies, the animals tried, those proven gone (spare/gone? within the walk `reach` of its kind, kind -> blocks); not cut at a distance."
-  [c done reach]
+  noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies, the animals tried, those proven gone (spare/gone? within the walk `reach` of its kind, kind -> blocks) and those a kill of which in-sight would leave alone (noted-kept? over `keep-radius`); not cut at a distance."
+  [c done reach keep-radius]
   (let [c (assoc-in c [:args :carry] (carry c))
         me (u/self-pos c)
         skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (notes/notes c)
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
                        (not (done (:id %))) (not (skipped (:id %))) (noted-here? c % reach)
-                       (> (noted-benefit c %) (noted-cost me %))))
+                       (> (noted-benefit c %) (noted-cost me %))
+                       (not (noted-kept? c % reach keep-radius))))
          (sort-by #(noted-price me %)))))
 
-(defn noted-target "The first of noted-targets, nil when none." [c done reach] (first (noted-targets c done reach)))
+(defn noted-target "The first of noted-targets, nil when none." [c done reach keep-radius] (first (noted-targets c done reach keep-radius)))
 
 (defn note-seen!
   "Write the adults and babies of food animals in sight as :seen notes, so a later look at one of a pair counts the other."
@@ -130,18 +141,19 @@
                            seen)))))
 
 (defn replacement-cost
-  "Seconds to find a breeding pair again after a kill of an adult of `kind`: 0 while the kill leaves `keep` adults in sight, else
-  the walk to the nearest noted adult out of sight (noted-cost), which the floor guarantees exists."
+  "Seconds to find a breeding pair again after a kill of an adult of `kind`: the walks (noted-cost) to the noted adults out of sight
+  that the `keep` adults the kill leaves in sight lack (cost/pair-find-s: the nearest ones, so a rarer kind costs more)."
   [c kind sight-n seen-uuids radius near]
-  (if (>= (dec sight-n) (spare/keep-adults))
-    0
-    (let [me (u/self-pos c)]
-      (or (some->> (spare/noted-adult-notes c kind seen-uuids radius near) (map #(noted-cost me %)) seq (apply min)) 0))))
+  (let [lack (- (spare/keep-adults) (dec sight-n))]
+    (if (pos? lack)
+      (let [me (u/self-pos c)]
+        (cost/pair-find-s (map #(noted-cost me %) (spare/noted-adult-notes c kind seen-uuids radius near)) lack))
+      0)))
 
 (defn kept-by-floor
   "Whether the kill of an adult of `kind` is left alone to keep a breeding pair: :kept when it would leave fewer than ::keep-adults
   known adults (n counts those in sight and noted within the keep radius; starving lifts nothing), or when the meat is worth less than
-  the walk to find a pair again (replacement-cost)."
+  the walks to find a pair again (replacement-cost)."
   [c kind n sight-n seen-uuids radius near]
   (cond (<= n (spare/keep-adults)) :kept
         :else (let [price (replacement-cost c kind sight-n seen-uuids radius near)]

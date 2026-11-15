@@ -563,6 +563,7 @@
 (def cover-tour-s value/cover-tour-s)
 (def food-worth food/food-worth)
 (def animal-worth value/animal-worth)
+(def pair-find-s value/pair-find-s)
 (def crop-worth value/crop-worth)
 (def expected-drops value/expected-drops)
 (def food-point-worth value/food-point-worth)

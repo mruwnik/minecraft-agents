@@ -78,13 +78,12 @@
           (>= (carried "iron_ingot") 2) :craft)))
 
 (defn allowed-by
-  "Which rule let a hunt take an adult why left alone: :pen-taken (::spare-pens false and it stood in a pen), :lone (the only
-  one of its kind in sight), :surplus (more than `keep` of its kind) or :starved (the kept pair)."
-  [keep adults-of-kind in-own-area?]
+  "Which rule let a hunt take an adult why left alone: :pen-taken (::spare-pens false and it stood in a pen), :lone (a lone
+  adult: a combat.hunt of one) or :surplus (more than `keep` of its kind); a kept pair is not taken."
+  [_keep adults-of-kind in-own-area?]
   (cond (and in-own-area? (not (spare-pens?))) :pen-taken
         (< adults-of-kind 2) :lone
-        (> adults-of-kind keep) :surplus
-        :else :starved))
+        :else :surplus))
 
 (def built-block #"_fence$|_fence_gate$|_wall$|_planks$|bricks?$|^cobblestone$|^mossy_cobblestone$|_slab$")
 

@@ -1202,3 +1202,8 @@
     192 10 0
     1400 10 0
     0 0 1))
+
+(deftest finding-animals-again-costs-the-nearest-walks-and-more-the-fewer-are-known
+  (is (= 0 (cost/pair-find-s [30 10 20] 0)))
+  (is (= 30 (cost/pair-find-s [30 10 20] 2)) "the 2 nearest legs")
+  (is (= ##Inf (cost/pair-find-s [30] 2)) "fewer known than needed"))

@@ -612,6 +612,11 @@
             (is (= 1 (count (filter #(= :explore (:slot %)) (events-of seen :child_ended)))) "searched: the hp only food lets it regain are worth their price")
             (finally (set! cost/death-fn real))))))))
 
+(defn herd-notes
+  "Three cows another body noted round x (a lone or paired cow is kept, so a noted walk needs a third), each noted until `until`."
+  ([x] (herd-notes x 9e15))
+  ([x until] (mapv (fn [i] {:kind :seen :what "cow" :id (str "u" (inc i)) :pos [(+ x i) 64 0] :by "Other" :t 999900 :until until}) (range 3))))
+
 (deftest an-animal-only-another-body-noted-is-walked-toward-not-given-up-on
   (async done
     (tu/run-async done
@@ -625,7 +630,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [100 64 0] :by "Other" :t 999900 :until 9e15}]
+        (let [note (herd-notes 100)
               {:keys [eng seen]} (setup {:time 6000 :self {:food 4 :health 10}} :step-ms 5 :other-notes note :perceive? true)]
           (await (one-round! eng {}))
           (loop [n 0] (when (and (< n 80) (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)))
@@ -649,10 +654,10 @@
           (set! child/search-args (fn [opts] (swap! worths conj (:worth opts)) (real opts)))
           (try
             (let [bare (await (worth-with []))
-                  noted (await (worth-with [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]))]
+                  noted (await (worth-with (herd-notes 40)))]
               (is (pos? noted))
               (is (< noted bare) "a find saves at most the walk to the cow already known")
-              (is (= bare (await (worth-with [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 1000001}])))
+              (is (= bare (await (worth-with (herd-notes 40 1000001))))
                   "a note that has expired caps nothing: the worth is read from the notes at each start"))
             (finally (set! child/search-args real))))))))
 
@@ -661,7 +666,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[x death-chance walked?] [[50 0 true] [100 0 false] [20000 0 false] [50 0.99 false]]]
-          (let [note [{:kind :seen :what "cow" :id "u1" :pos [x 64 0] :by "Other" :t 999900 :until 9e15}]
+          (let [note (herd-notes x)
                 {:keys [eng seen]} (setup {:time 6000 :self {:food 17 :health 20}} :step-ms 5 :other-notes note :perceive? true)]
             (await (pick-test/with-death-chance death-chance
                      (fn ^:async r []
@@ -698,7 +703,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]
+        (let [note (herd-notes 40)
               {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)
               quote! pick/quote!
               searching (atom true)
@@ -800,7 +805,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (two-cows-and-a-note-at 900)]
+        (let [{:keys [eng p]} (two-cows-and-a-note-at 600)]
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (empty? (calls p "attack")) "two known cows within 500 blocks are the last pair"))))))
 
@@ -812,6 +817,34 @@
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (seq (calls p "attack")) "starving, the meat is worth more than the walk to the noted one")
           (is (= [3] (mapv :adults (filterv #(= :food.killed (:kind %)) @seen)))))))))
+
+(deftest a-lone-noted-cow-is-never-walked-toward-to-be-refused-on-arrival
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]
+              {:keys [eng seen]} (setup {:time 6000 :self {:food 0 :health 10}} :step-ms 5 :other-notes note)]
+          (await (one-round! eng {}))
+          (is (not-any? #(= :noted-walk (:slot %)) (events-of seen :child_started)) "a kill of the only known cow is never made, so no walk to it"))))))
+
+(deftest a-rarer-kind-costs-more-to-replace-the-keep-is-priced-by-the-walks-to-as-many-noted-as-the-kill-lacks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real animals/meat-benefit
+              walk (animals/noted-cost {:x 0 :y 64 :z 0} {:pos [400 64 0]})
+              attacks (fn ^:async attacks* [entities notes]
+                        (let [{:keys [eng p]} (setup {:time 6000 :self {:food 0 :health 10} :entities entities} :step-ms 5 :other-notes notes)]
+                          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
+                          (seq (calls p "attack"))))
+              note (fn [id x] {:kind :seen :what "cow" :id id :pos [x 64 0] :by "Other" :t 999900 :until 9e15})]
+          (set! animals/meat-benefit (fn [_ _] (* 1.5 walk)))
+          (try
+            (let [lacks-one (await (attacks [(assoc cow :uuid "u2") (assoc cow :id 8 :uuid "u3" :pos {:x 8 :y 64 :z 0})] [(note "u1" 400)]))
+                  lacks-two (await (attacks [(assoc cow :uuid "u2")] [(note "u1" 400) (note "u4" 401)]))]
+              (is lacks-one "two in sight, one noted: the kill lacks one, one walk is priced under the meat")
+              (is (not lacks-two) "one in sight, two noted: the kill lacks two, two walks are priced over the meat"))
+            (finally (set! animals/meat-benefit real))))))))
 
 (deftest a-cow-noted-within-the-keep-radius-is-kept-when-its-meat-is-worth-less-than-finding-a-pair-again
   (async done
