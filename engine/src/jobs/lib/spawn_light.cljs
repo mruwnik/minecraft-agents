@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
@@ -49,6 +50,23 @@
   [p cell]
   (if (sh-sense/solid-at? p cell) (update cell :y inc) cell))
 
+(defonce ^:private wide-kept (js/WeakMap.))
+
+(defn- wide-cell?
+  "Whether the cell looks along a wide view (cost/wide-view?: up to 256 reads), kept per body while its memory stays (memory-age/epoch)."
+  [p {:keys [x y z]}]
+  (let [view #(cost/wide-view? (fn [x y z] (sh-sense/solid-at? p {:x x :y y :z z})) x y z)
+        ^js st (some-> (aget p "perception") :st)
+        epoch (when st (memory-age/epoch st))]
+    (if-not epoch
+      (view)
+      (let [^js e (or (.get wide-kept st) (let [e #js {:epoch nil :cells (js/Map.)}] (.set wide-kept st e) e))
+            k (str x "," y "," z)]
+        (when-not (= epoch (.-epoch e)) (set! (.-epoch e) epoch) (set! (.-cells e) (js/Map.)))
+        (if (.has ^js (.-cells e) k)
+          (.get ^js (.-cells e) k)
+          (let [v (view)] (.set ^js (.-cells e) k v) v))))))
+
 (defn chance-at
   "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; one that leaves dark is dark by
   the chance it is in a dark hall, hall-chance), an unseen one at the chance it is dark (look/unseen-lit-chance): what full
@@ -72,8 +90,7 @@
          ;; a sky-reached cell with no sky light data is priced as unseen, not as dark
          known (and block (or (not reaches) sky-light))]
      (cond
-       known (let [wide (delay (cost/wide-view? #(sh-sense/solid-at? p {:x %1 :y %2 :z %3}) (:x cell) (:y cell) (:z cell)))
-                   at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2}) :wide? (and (zero? %1) (zero? %2) @wide)})
+       known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2}) :wide? (and (zero? %1) (zero? %2) (wide-cell? p cell))})
                    lit? (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))]
                (cond
                  stay? (let [hall (cost/hall-edge-chance (sh-inside/stay-hall p (hall-cell p cell) darkening))]

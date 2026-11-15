@@ -185,6 +185,22 @@
     (is (= wide-night-chance (chance (constantly false))))
     (is (= open-night-chance (chance #(>= (js/Math.abs %) 3))) "a wall three blocks round shuts the sight lines")))
 
+(deftest a-cells-wide-view-is-read-once-while-the-memory-stays
+  (let [raw-p (tu/fake {:floor [-16 -16 48 48] :time st/night :self {:pos {:x 4.5 :y 64 :z 16.5}}})
+        _ (swap! (fake/state raw-p) merge {:light-default [15 0]})
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000) :rand (constantly 0.5)})
+        p (perception/wrap raw-p per)
+        reads (atom 0)
+        view cost/wide-view?]
+    (doseq [yaw [0 90 180 270]]
+      (swap! (fake/state raw-p) assoc :yaw yaw)
+      (perception/pass! per))
+    (with-redefs [cost/wide-view? (fn [& args] (swap! reads inc) (apply view args))]
+      (is (= wide-night-chance (spawn-light/chance-at p {:x 30 :y 64 :z 16} false)) "a wide view is read")
+      (spawn-light/chance-at p {:x 30 :y 64 :z 16} false)
+      (spawn-light/night-chance p {:x 30 :y 64 :z 16})
+      (is (= 1 @reads)))))
+
 (deftest a-night-spawn-price-over-open-ground-seen-at-full-sky-relights-no-section
   ;; the memory's light of open ground seen at full sky is sky 15 and, with no light source, block 0, and of the ground
   ;; under it its own: no section is flooded for the dark-hall flood, its unseen floors' frontier nor a full day's guess

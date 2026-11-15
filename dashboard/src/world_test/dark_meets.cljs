@@ -16,7 +16,7 @@
 (def gap-ms "Longest gap between two positions whose seconds still count as exposure." 10000)
 (def window-ms "Time after a meet within which a run about a mob is the same meet going on." 30000)
 
-(defn band "The y band of height y." [y] (cond (< y 40) :under-40 (< y 56) :40-55 :else :surface))
+(defn band "The y band of height y, the heights spawn-rate tells apart (value/::spawn-chance-per-s :below)." [y] (if (< y 40) :under-40 :surface))
 
 (def ticks-per-ms "The server's 20 ticks a second." (/ 1 50))
 (def day-ticks 24000)
@@ -60,7 +60,7 @@
         c (at x y z)
         w (tod t)]
     (when (and c w (not (look/lit-light? (:block c) (:sky c) (look/sky-subtract-at w 0 0))) (not (enclosed? at x y z)))
-      (cond-> (band y) (and (not= :under-40 (band y)) (value/wide-view? (fn [x y z] (solid/solid? (:name (at x y z)))) x y z)) (-> name (str "-wide") keyword)))))
+      (cond-> (band y) (and (= :surface (band y)) (value/wide-view? (fn [x y z] (solid/solid? (:name (at x y z)))) x y z)) (-> name (str "-wide") keyword)))))
 
 (defn positions [records] (filter #(#{:pos :at} (:k %)) records))
 

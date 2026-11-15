@@ -14,7 +14,7 @@
 
 (deftest exposure-counts-the-seconds-between-close-positions-in-dark-cells-by-band
   (is (= {:under-40 5} (d/exposure cave noon [(pos 0 10) (pos 5000 10)])))
-  (is (= {:40-55-wide 3} (d/exposure cave noon [(pos 0 50) (pos 3000 70)])) "the first cell is the one counted")
+  (is (= {:surface-wide 3} (d/exposure cave noon [(pos 0 50) (pos 3000 70)])) "the first cell is the one counted")
   (is (= {} (d/exposure cave noon [(pos 0 70) (pos 3000 10)])) "a lit cell")
   (is (= {} (d/exposure cave noon [(pos 0 10) (pos 20000 10)])) "a gap hides where the body was"))
 
