@@ -58,7 +58,7 @@
    :bill {:doc "{item count}: carry at least count of each item, one obtain child after the other (instead of :item, :any-of and :count); the furnace material the items need together is got first" :spec (a/map-of a/item? number?) :default nil}
    :count {:doc "how many to carry at least (carried at the start count)" :spec (a/int-in 1 nil) :default 1}
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
-   :avoid {:doc "cells [x y z] a crafting table is never put in or dug for and a climb out of the rock never starts through (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
+   :avoid {:doc "cells [x y z] a crafting table is never put in or dug for, no mined block is dug from, and a climb out of the rock never starts through (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
    :sky {:doc "the sky's darkening (0-15) the start check's price judges the light of its walks by (jobs.lib.walk-risk/estimate :sky); nil: as now" :spec (a/num-in 0 15) :default nil}
    :ignore-zones? :shared

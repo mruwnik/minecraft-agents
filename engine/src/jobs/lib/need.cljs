@@ -189,11 +189,12 @@
 
 (defn fetch-args
   "The args of the fetch child job for args and options o (the count still the one asked for)."
-  [job args {:keys [how explore minutes for-plan center worth]}]
+  [job args {:keys [how explore minutes for-plan center worth avoid]}]
   (cond-> (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
     for-plan (assoc :for-plan for-plan)
     worth (assoc :worth worth)
-    (and center (= job 'jobs.items.obtain)) (assoc :center center)))
+    (and center (= job 'jobs.items.obtain)) (assoc :center center)
+    (and (seq avoid) (= job 'jobs.items.obtain)) (assoc :avoid (vec avoid))))
 
 (defn item-status
   "The start status of the jobs.items.obtain child item! would call now for n more of item under options o, worth `worth`

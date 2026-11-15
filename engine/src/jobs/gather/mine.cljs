@@ -59,6 +59,7 @@
    :center :shared
    :wet :shared
    :given-up {:doc "{[x y z] {:n runs :s seconds}}: cells earlier calls gave up on (their results' :given-up), passed to jobs.gather.dig-for with the trip's own dig calls' added" :spec (a/map-of (a/pred "a cell [x y z]" #(and (sequential? %) (= 3 (count %)) (every? number? %))) (a/map-with {:n (a/int-in 1 nil) :s (a/num-in 0 nil)})) :default nil}
+   :keep {:doc "cells [x y z] never dug (a caller's own build)" :spec (a/coll-of a/position?) :default nil}
    :ignore-zones? :shared
    :mend {:doc "fill the ground under the start again once the dig is over" :spec boolean? :default false}
    :heading :shared

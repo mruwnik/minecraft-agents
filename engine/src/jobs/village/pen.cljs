@@ -174,7 +174,7 @@
   fill-cells child."
   [c slot cells & [extra]]
   (let [{:keys [short]} (choose/fillers-for c :build (count cells))
-        opts (need/fetch-opts c)]
+        opts (some-> (need/fetch-opts c) (assoc :avoid (some-> (lay-of c) vp/cells)))]
     (cond
       (zero? short) (await (built! c slot (await (child! c slot 'jobs.blocks.fill-cells (merge {:cells cells :clear-loose true} extra)))
                                    #(= cells (vp/owed (:primitives c) cells))))

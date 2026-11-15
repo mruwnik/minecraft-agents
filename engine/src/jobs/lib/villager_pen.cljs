@@ -137,6 +137,11 @@
         :when (inside? lay e)]
     e))
 
+(defn cells
+  "Every cell of the pen layout lay: what a fetch for the pen's own blocks must never dig."
+  [lay]
+  (vec (concat [(:cell lay) (:slab lay) (:stand lay)] (:shut lay) (:plug lay) (:box lay))))
+
 (defn solids
   "The cells standing solid (to dig: a plug of an empty pen, the box's entry)."
   [p cells]

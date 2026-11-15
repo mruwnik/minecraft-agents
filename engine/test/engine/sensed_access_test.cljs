@@ -6,6 +6,7 @@
             [engine.dig-to-see-test :as d]
             [engine.test-util :as tu]
             [engine.perception :as perception]
+            [jobs.gather.mine.targets :as targets]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
             [jobs.lib.dig-look :as look]
@@ -51,3 +52,10 @@
     (is (true? (look/unknown? p [6 67 0])) "the cells over the entry are out of the eye's sight")
     (with-redefs [access/guessed-at (fn [_] (fn [[x]] (if (>= x 5) "stone" "air")))]
       (is (false? (scaffold-left/walk-blocked? p (constantly false) [entry] entry)) "unseen cells over it are no roof, whatever the prior says of them"))))
+
+(deftest a-mine-never-digs-a-cell-its-caller-keeps
+  (let [p (d/sensing {:blocks (dissoc d/ground "5,60,0")})
+        ctx-of (fn [keep] {:primitives p :args {:keep keep} :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})
+        verdict (fn [keep] (access/may-dig? (targets/rules-in (ctx-of keep)) {:x 5 :y 60 :z 0}))]
+    (is (= :footprint (:reason (verdict [[5 60 0]]))))
+    (is (not= :footprint (:reason (verdict [[6 60 0]]))) "another cell is not kept")))

@@ -6,6 +6,7 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.village-trade-test :as vt]
+            [jobs.lib.need :as need]
             [jobs.lib.villager-pen :as vp]
             [jobs.lib.villager :as villager]))
 
@@ -296,3 +297,15 @@
     9500 12500 1000
     11500 36000 10490
     -500 500 490))
+
+(deftest a-fetch-for-the-pens-fillers-never-digs-the-pens-own-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom nil)
+              lay (vp/layout ws [-1 0])]
+          (with-redefs [need/fetch! (fn [_ _ _ _ _ opts] (reset! asked opts) {:kind :condition-failed :cause {:reason :need}})]
+            (await (run (assoc (world {} {:slab? false}) :entities [(jobless {:x 1 :y 64 :z 0})]
+                               :inventory [{:name "cobblestone" :count 1} {:name "oak_slab" :count 1} {:name "torch" :count 2}])
+                        {} 400)))
+          (is (= (set (vp/cells lay)) (set (:avoid @asked))) (pr-str @asked)))))))

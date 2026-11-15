@@ -83,6 +83,7 @@
    :center :shared
    :wet :shared
    :given-up {:doc "{[x y z] {:n runs :s seconds}}: cells earlier calls gave up on (their results' :given-up, u/add-given-up), each left out while another try is not worth its price (dear-again)" :spec (a/map-of (a/pred "a cell [x y z]" #(and (sequential? %) (= 3 (count %)) (every? number? %))) (a/map-with {:n (a/int-in 1 nil) :s (a/num-in 0 nil)})) :default nil}
+   :keep {:doc "cells [x y z] never dug (a caller's own build)" :spec (a/coll-of a/position?) :default nil}
    :ignore-zones? :shared
    :track-ground {:doc "dig the 5x5x2 ground under the start last and list the cells of it that were open at the end or dug in :ground of the result, for a caller that fills them again" :spec boolean? :default false}
    :heading :shared

@@ -104,7 +104,9 @@
   "The rules input: another's plans always refuse, this body's own too unless the spare-own-builds setting is false; a base
   block (chest, bed, furnace ...) is never dug. The call's :through plan is the permission to dig its cells."
   [c]
-  (assoc (access/rules-input c {:own-plans-ok? (false? (access/spare-own-builds)) :except (:through (:args c))}) :keep-base? true))
+  (-> (access/rules-input c {:own-plans-ok? (false? (access/spare-own-builds)) :except (:through (:args c))})
+      (update :footprints merge (into {} (map (fn [cell] [(vec cell) :keep])) (:keep (:args c))))
+      (assoc :keep-base? true)))
 
 (def soil-blocks "Mined blocks gathered from the top layer of the ground only." #{"dirt" "grass_block"})
 

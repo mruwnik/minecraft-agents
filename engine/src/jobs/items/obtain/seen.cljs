@@ -78,6 +78,12 @@
   [c b]
   (contains? (get (ctx/mem c) :cut-off #{}) [(:x (:pos b)) (:z (:pos b))]))
 
+(defn kept?
+  "Whether the block b stands on a cell of the call's :avoid (cells its caller builds in)."
+  [c b]
+  (let [{:keys [x y z]} (:pos b)]
+    (boolean (some #(= [x y z] (vec %)) (:avoid (:args c))))))
+
 (defn seen-blocks-of
   "The seen blocks of a need (within the seen radius), nearest first, with those a zone, claim or plan footprint bars
   taking left out unless all? is true (a crop in a plan of the body's own may be cut: the harvest replants it). The nearest n are read and filtered, n doubling until one may be taken or
@@ -89,7 +95,7 @@
           read (fn [n] (if water?
                          (water/seen-sources c (seen-radius))
                          (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max n})))
-          takeable (fn [blocks] (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks))]
+          takeable (fn [blocks] (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %)) (not (kept? c %))) blocks))]
       (if all?
         (read 1)
         (loop [n 64]
@@ -218,7 +224,7 @@
         heading (when-not (get-in (ctx/mem c) [:gather :dug (:key need)]) (get-in (ctx/mem c) [:gather :climb-heading]))]
     (case (:job need)
       jobs.forestry.harvest-wood (cond-> need cut (assoc-in [:args :avoid] (vec cut)))
-      jobs.gather.mine (cond-> need given-up (assoc-in [:args :given-up] given-up) heading (assoc-in [:args :heading] heading))
+      jobs.gather.mine (cond-> need given-up (assoc-in [:args :given-up] given-up) (seq (:avoid (:args c))) (assoc-in [:args :keep] (vec (:avoid (:args c)))) heading (assoc-in [:args :heading] heading))
       need)))
 
 (defn gather-slot
