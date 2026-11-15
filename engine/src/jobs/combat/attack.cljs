@@ -382,10 +382,11 @@
       :else :lost)))
 
 (defn weapon-for
-  "The name of the first of uses (item names or parts of one) carried, the best of those an entry matches."
-  [p uses]
+  "The name of the first of uses (item names or parts of one) carried, the best of those an entry matches, priced against
+  the mob named mob-name (a zombie when nil)."
+  [p uses mob-name]
   (let [carried (map :name (u/inventory p))]
-    (some (fn [use] (->> carried (filter #(str/includes? % use)) (sort-by cost/weapon-price) first)) uses)))
+    (some (fn [use] (->> carried (filter #(str/includes? % use)) (sort-by #(cost/weapon-price % mob-name)) first)) uses)))
 
 (declare strike!)
 (def back-leg-s "Seconds one step back from a creeper may take." 2)
@@ -407,7 +408,7 @@
 (defn ^:async engage!
   "Equip, walk to the nearest target and swing once; a creeper is waited for, hit once and backed away from."
   [c target]
-  (await (combat/equip-best! c (weapon-for (:primitives c) (ctx/use c :tools))))
+  (await (combat/equip-best! c (weapon-for (:primitives c) (ctx/use c :tools) (.-name target))))
   (await (strike! c target))
   :again)
 

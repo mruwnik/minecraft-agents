@@ -94,11 +94,6 @@
   [item-name]
   (get weapon-damage-by-name item-name 1))
 
-(defn weapon-score
-  "Higher is better: the damage a second of item-name's hits (weapon-damage over attack-gap-ms)."
-  [item-name]
-  (/ (weapon-damage item-name) (attack-gap-ms item-name)))
-
 (defn digging-tool?
   "Whether item-name is a pickaxe or shovel: a hit wears it twice as a sword's does."
   [item-name]

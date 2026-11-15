@@ -298,3 +298,7 @@
   (is (< (v/weapon-price "wooden_axe") (v/weapon-price "golden_axe")) "the golden axe swings faster but is gone in 32 swings")
   (is (< (v/weapon-price "diamond_pickaxe") (v/weapon-price "wooden_axe")) "a diamond pickaxe's kill is quicker than the wear on it costs")
   (is (< (v/weapon-price "wooden_pickaxe") (v/weapon-price nil)) "a body with only a pickaxe is better with it than with a fist"))
+
+(deftest a-weapon-is-priced-against-the-mob-it-fights
+  (is (< (v/weapon-price "iron_sword") (v/weapon-price "iron_axe")) "a zombie (20 hp) takes the sword's 4 quick hits less than the axe's 3 slow ones")
+  (is (< (v/weapon-price "iron_axe" "silverfish") (v/weapon-price "iron_sword" "silverfish")) "a silverfish (8 hp) dies to one axe hit, the sword needs two"))

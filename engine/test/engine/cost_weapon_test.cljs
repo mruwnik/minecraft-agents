@@ -56,10 +56,6 @@
   (is (= 1 (weapon/weapon-damage "wooden_hoe")) "a hoe hits as a fist")
   (is (= 1 (weapon/weapon-damage "stick")) "an unknown item is a fist"))
 
-(deftest weapons-rank-by-the-damage-their-hits-deal-a-second
-  (is (= ["iron_sword" "iron_axe" "stone_sword" "stone_axe" "stone_pickaxe" "stone_shovel" nil]
-         (sort-by weapon/weapon-score > [nil "stone_pickaxe" "stone_axe" "iron_axe" "stone_shovel" "stone_sword" "iron_sword"]))))
-
 (deftest a-trident-or-mace-is-no-melee-weapon-of-ours
   (is (= [1 1] (mapv weapon/weapon-damage ["trident" "mace"]))))
 

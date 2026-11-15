@@ -412,11 +412,11 @@
 ;; ---------------------------------------------------------------- the cost
 
 (defn weapon-price
-  "Seconds a fight with one zombie (at 3 blocks) costs with item-name (nil a fist): the fight's seconds, the hp it loses
-  (health/hp-cost) and the wear on the weapon, its whole item-value over its maxDurability per swing (a digging tool wears
-  twice a swing). Lower is better."
-  [item-name]
-  (let [fight {:weapon item-name :mobs [{:name "zombie" :distance 3}]}
+  "Seconds a fight with one mob (at 3 blocks; a zombie unless mob-name is given) costs with item-name (nil a fist): the
+  fight's seconds, the hp it loses (health/hp-cost) and the wear on the weapon, its whole item-value over its maxDurability
+  per swing (a digging tool wears twice a swing). Lower is better."
+  [item-name & [mob-name]]
+  (let [fight {:weapon item-name :mobs [{:name (or mob-name "zombie") :distance 3}]}
         max-durability (some-> (aget (.-itemsByName (facts/data @game/version)) (or item-name "")) .-maxDurability)
         swings (fight/swings item-name (first (:mobs fight)))
         wear (if (pos? max-durability)
