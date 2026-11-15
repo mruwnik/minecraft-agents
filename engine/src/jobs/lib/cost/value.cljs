@@ -129,6 +129,8 @@
                          :doc "Items a measured item's recipe-tree price counts as beside its gathers (measured-worth): the shape of the gathers' rates about their item's, fitted by moments over the items with two or more gathers and pooled. Recount: node tools/event-counts.mjs item-costs (:prior-items)."}
    ::food-worth-per-point {:default 30 :spec (a/num-in 0 nil)
                            :doc "Seconds reaching food is worth per food point the body is under ::food-worth-from."}
+   ::reserve-eaten-points {:default 8.05 :spec (a/num-in 0.01 nil)
+                           :doc "Mean hunger points a fed body eats away from easy food before it next reaches some (reserve-share): 1425 points the hungry get-food calls of 6 trial bodies ate from the pack or the field over 177 runs that ended at a chest food take (7 more cut by the log's end), an exponential's mean, 2026-11-15; spread by body is wide (home-chest bodies ~2, far ones over 100)."}
    ::food-worth-from {:default 10 :spec (a/num-in 0 20)
                       :doc "Food at or over which reaching food is worth nothing; it rises as the bar falls under it."}
    ::torch-place-s {:default 1.5 :spec (a/num-in 0 nil)
@@ -589,10 +591,23 @@
   []
   (settings/get settings ::food-worth-per-point))
 
+(defn reserve-share
+  "The share (0 to 1) of n more reserve food points (above the hunger the body eats now) eaten before the next easy food
+  while held such points are carried: the k-th is eaten at e^(-k/mean), mean ::reserve-eaten-points. 1 for n of 0."
+  ([held n] (reserve-share held n (settings/get settings ::reserve-eaten-points)))
+  ([held n mean]
+   (if (pos? n)
+     (/ (* mean (- (js/Math.exp (- (/ held mean))) (js/Math.exp (- (/ (+ held n) mean))))) n)
+     1)))
+
 (defn food-search-worth
-  "Seconds a search for food is worth while the pack lacks `short` hunger points: food-point-worth each, less one trip."
-  [short]
-  (max 0 (- (* (food-point-worth) short) (trip))))
+  "Seconds a search for food is worth while the pack lacks `short` points: food-point-worth each of the :hunger of them
+  (default all), the rest at their reserve-share above :held reserve points carried (default 0); less one trip."
+  ([short] (food-search-worth short {}))
+  ([short {:keys [hunger held] :or {held 0}}]
+   (let [h (min short (or hunger short))
+         r (- short h)]
+     (max 0 (- (* (food-point-worth) (+ h (* r (reserve-share held r)))) (trip))))))
 
 (def meal-points
   "{item hunger points} per item of the items a crafting recipe of that item alone makes a food of (3 wheat a bread: 5/3 a wheat), memoised per version."
