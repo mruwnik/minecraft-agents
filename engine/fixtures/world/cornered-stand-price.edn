@@ -1,6 +1,7 @@
 ;; Card d28f118e (Brindle S9): the cornered options go cheapest first, the stand priced with every mob that hits it. A pit 5x5,
 ;; 3 deep (no way out), cut in a stone mass; the body in it unarmed with 16 dirt and resistance. Should-succeed: a NoAI creeper
 ;; 2 off is already in swell range (walls would not stop its blast), so the body stands (a :pause hold) before any walls.
+;; The body faces the creeper (yaw 270, east): a creeper is silent, so out of the view cone it is never known and hostile-near never fires.
 ;; Should-fail (the stand): with a NoAI zombie in reach as well, standing is priced with its blows and the walls come first.
 {:defaults
  {:tags [:hostile :survival :cornered :creeper]
@@ -9,7 +10,7 @@
   :register [{:trigger :hostile-near}]
   :blocks [[:fill [2 0 8] [20 3 22] "stone"]
            [:fill [8 1 13] [12 3 17] "air"]]
-  :body {:at [9.5 1 15.5] :effects [["resistance" 600 3]] :inventory [["dirt" 16]]}
+  :body {:at [9.5 1 15.5] :yaw 270 :effects [["resistance" 600 3]] :inventory [["dirt" 16]]}
   :limit-s 45}
  :cases
  [{:name "cornered-beside-a-creeper-in-swell-range-stands"
