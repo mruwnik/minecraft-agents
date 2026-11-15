@@ -293,3 +293,8 @@
     (is (js/isFinite price))
     (is (> price (table/smelt-step)))
     (is (= (+ (each "potato") price) (each "baked_potato")) "the table's smelt step is the shared price")))
+
+(deftest a-fight-is-priced-by-its-seconds-and-the-wear-on-the-weapon
+  (is (< (v/weapon-price "wooden_axe") (v/weapon-price "golden_axe")) "the golden axe swings faster but is gone in 32 swings")
+  (is (< (v/weapon-price "diamond_pickaxe") (v/weapon-price "wooden_axe")) "a diamond pickaxe's kill is quicker than the wear on it costs")
+  (is (< (v/weapon-price "wooden_pickaxe") (v/weapon-price nil)) "a body with only a pickaxe is better with it than with a fist"))

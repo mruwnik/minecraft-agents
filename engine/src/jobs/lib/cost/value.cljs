@@ -45,6 +45,7 @@
             [jobs.lib.recipes :as recipes]
             [jobs.lib.cost.table :as tbl]
             [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.health :as health]
             [jobs.lib.foods :as foods]
             [engine.game :as game]
@@ -407,6 +408,20 @@
       0)))
 
 ;; ---------------------------------------------------------------- the cost
+
+(defn weapon-price
+  "Seconds a fight with one zombie (at 3 blocks) costs with item-name (nil a fist): the fight's seconds, the hp it loses
+  (health/hp-cost) and the wear on the weapon, its whole item-value over its maxDurability per swing (a digging tool wears
+  twice a swing). Lower is better."
+  [item-name]
+  (let [fight {:weapon item-name :mobs [{:name "zombie" :distance 3}]}
+        max-durability (some-> (aget (.-itemsByName (facts/data @game/version)) (or item-name "")) .-maxDurability)
+        swings (fight/swings item-name (first (:mobs fight)))
+        wear (if (pos? max-durability)
+               (* swings (if (weapon/digging-tool? item-name) 2 1)
+                  (/ (:value (item-value [{:name item-name :count 1}])) max-durability))
+               0)]
+    (+ (fight/fight-seconds fight) (health/hp-cost (fight/fight-damage fight)) wear)))
 
 (defn reserve-cost
   "What using one unit worth value costs against a reservation of strength s (0..1): value x s/(1-s), so 0.5 counts the

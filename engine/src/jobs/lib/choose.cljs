@@ -41,7 +41,7 @@
          prefer (:prefer (overrides c :tools))
          rank-in (fn [name] (let [i (.indexOf prefer name)] (if (neg? i) (count prefer) i)))
          order (fn [t] [(rank-in (:name t))
-                        (cond (= :attack what) (weapon/weapon-order (:name t))
+                        (cond (= :attack what) (cost/weapon-price (:name t))
                               (:fast opts) (- (weapon/weapon-rank (:name t)))
                               :else (weapon/cheap-rank (:name t)))
                         (or (:durability t) whole)])

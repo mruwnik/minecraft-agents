@@ -60,10 +60,8 @@
   (is (= ["iron_sword" "iron_axe" "stone_sword" "stone_axe" "stone_pickaxe" "stone_shovel" nil]
          (sort-by weapon/weapon-score > [nil "stone_pickaxe" "stone_axe" "iron_axe" "stone_shovel" "stone_sword" "iron_sword"]))))
 
-(deftest a-sword-or-axe-outranks-a-digging-tool-though-it-hits-slower
-  (is (= ["golden_sword" "wooden_axe" "netherite_shovel" "diamond_pickaxe"]
-         (sort-by weapon/weapon-order ["netherite_shovel" "diamond_pickaxe" "wooden_axe" "golden_sword"])))
-  (is (= [1 1] (mapv weapon/weapon-damage ["trident" "mace"])) "a trident or mace is no melee weapon of ours"))
+(deftest a-trident-or-mace-is-no-melee-weapon-of-ours
+  (is (= [1 1] (mapv weapon/weapon-damage ["trident" "mace"]))))
 
 (deftest a-copper-sword-is-costed-as-a-weapon-not-a-fist
   (let [mobs [{:name "zombie" :distance 3}]]

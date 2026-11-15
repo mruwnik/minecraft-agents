@@ -472,7 +472,7 @@
         (let [{:keys [eng p]} (await (first-round-ms fight {:inventory [{:name "wooden_sword" :count 1} {:name "iron_axe" :count 1}
                                                                         {:name "iron_pickaxe" :count 1}]
                                                             :entities [(zombie 7 3 0)]} 20))]
-          (is (= ["iron_axe"] (mapv #(.-item (.-args %)) (calls p "equip"))) "the best weapon, not the pickaxe")
+          (is (= ["wooden_sword"] (mapv #(.-item (.-args %)) (calls p "equip"))) "the cheapest fight (five quick swings, a cheap blade), not the pickaxe")
           (is (= [7 7 7 7] (mapv #(.-id (.-args %)) (calls p "attack"))) "four hits kill the 20 health zombie")
           (is (= [] (:list (core/state eng))) "done in one call"))))))
 

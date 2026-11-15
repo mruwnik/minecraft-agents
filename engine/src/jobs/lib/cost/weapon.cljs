@@ -100,14 +100,9 @@
   (/ (weapon-damage item-name) (attack-gap-ms item-name)))
 
 (defn digging-tool?
-  "Whether item-name is a pickaxe or shovel: a hit wears it twice as a sword's does, and it is dear."
+  "Whether item-name is a pickaxe or shovel: a hit wears it twice as a sword's does."
   [item-name]
   (boolean (some #(str/ends-with? (or item-name "") %) ["_pickaxe" "_shovel"])))
-
-(defn weapon-order
-  "Sort key, best first: a sword or axe before any digging tool, then the higher weapon-score."
-  [item-name]
-  [(if (digging-tool? item-name) 1 0) (- (weapon-score item-name))])
 
 (defn kill-seconds
   "Seconds the hits of item-name (a fist for nil) take to kill a mob of hp, one every attack gap."

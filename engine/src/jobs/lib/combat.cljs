@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -68,13 +69,13 @@
   (boolean (some #(str/includes? item-name %) weapons)))
 
 (defn best-weapon
-  "The name of the best carried item matching one of the weapons substrings,
+  "The name of the carried item matching one of the weapons substrings with the lowest weapon-price,
   or nil."
   [p weapons]
   (->> (u/inventory p)
        (map :name)
        (filter #(weapon? weapons %))
-       (sort-by weapon/weapon-order)
+       (sort-by value/weapon-price)
        first))
 
 (defn ^:async equip-best!

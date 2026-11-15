@@ -79,10 +79,10 @@
 (deftest kind-purposes-list-the-carried-tools-of-their-kinds
   (let [c (body [(tool "iron_pickaxe" 180 250) (tool "iron_axe" 100 250) (tool "stone_sword" 20 131) (tool "iron_hoe" 50 250) (tool "shears" 100 238)])]
     (are [purpose items] (= items (map :item (:list (choose/tools-for c purpose 1))))
-      [:attack] ["iron_axe" "stone_sword"]
+      [:attack] ["stone_sword" "iron_axe"]
       [:till] ["iron_hoe"]
       [:shear] ["shears"])
-    (is (= ["iron_axe" "stone_sword"] (map :item (:list (choose/tools-for c [:attack] 1 {:fast true})))))
+    (is (= ["stone_sword" "iron_axe"] (map :item (:list (choose/tools-for c [:attack] 1 {:fast true})))) "four swings of 0.6 s kill a zombie before three of 1.1 s")
     (is (= ["stone_sword" "stone_axe"] (map :item (:list (choose/tools-for (body [(tool "stone_axe" 50 131) (tool "stone_sword" 50 131)]) [:attack] 1 {:fast true})))) "a sword before an axe of the same material")
     (is (= ["stone_sword" "stone_axe"] (map :item (:list (choose/tools-for (body [(tool "stone_axe" 50 131) (tool "stone_sword" 50 131)]) [:attack] 1)))))))
 
