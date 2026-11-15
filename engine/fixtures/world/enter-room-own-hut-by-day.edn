@@ -1,0 +1,18 @@
+;; Card 11a31bdf: by day, enter-room into the body's own planned hut that has no door: the way in cuts the wall and the plan's wall is
+;; put back (a stray door or a hole in a planned wall is not the plan). Hut: dirt shell x 2..8, z 2..8, y 0..2 (plan "home", the body's,
+;; its :box shell wants dirt), room x 3..7; the body 2 west of the wall.
+;; Should-succeed: the body ends inside, and at dusk the west wall cells [2 0 5] and [2 1 5] are dirt as the plan wants.
+{:defaults
+ {:tags [:survival :build]
+  :time :day
+  :time-why :dawn-decision
+  :plot {:height 8 :light :sky}
+  :blocks [[:fill [2 0 2] [8 2 8] "dirt"] [:fill [3 0 3] [7 1 7] "air"]]
+  :plans [{:id "home" :metadata {:by "$body"} :parts [{:id "shell" :box [#at [2 0 2] #at [8 2 8]] :want "dirt"}]}]
+  :body {:at [0.5 0 5.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["oak_door" 1] ["dirt" 8]]}
+  :limit-s 150}
+ :cases
+ [{:name "own-hut-dug-into-by-day-matches-its-plan-after"
+   :act [[:job (jobs.survival.enter-room {:worth 1200 :at #at [5 0 5]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.enter-room"}} :within-s 140 :of-job true}]
+   :after [[:block [2 0 5] "dirt"] [:block [2 1 5] "dirt"] [:body-near [5.5 0 5.5] 2.5]]}]}

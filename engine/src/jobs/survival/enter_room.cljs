@@ -13,6 +13,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.own-builds :as own-builds]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.look :as look]
@@ -40,6 +41,7 @@
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
   A room walked to by :at whose inside was not seen emits enter-room.arrived {:seen :unseen :open-sides :closed-sides :closed} once its sides are all seen.
+  By day, done in a room of a plan the body made, jobs.build.repair of that plan runs once first (what a way in dug or set there against the plan is put back).
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :roof-not-held (a mend that did not stay), :roof-not-placed (the block was not placed; or the fill's own reason), :open (the room cannot be closed).
@@ -263,9 +265,11 @@
           (seq (sh/open-room-doors p)) {:stop :door-open :text "an open door of the room would not shut"}
           :else {:stop :open :text "the room cannot be closed here"})))))
 
+(declare mend-due?)
+
 (defn done? [c]
   (let [p (:primitives c)
-        done (and (here? c (target-of c)) (shut? c) (nil? (room-lib/gap c)))]
+        done (and (here? c (target-of c)) (shut? c) (nil? (room-lib/gap c)) (not (mend-due? c)))]
     (checks/goal done [:in-room "the body is in a closed room with its doors shut"] [:open "the room is not closed"]
                  {:units :rooms :done (if done 1 0) :left (if done 0 1)
                   :result (cond-> (merge {:pos (sh-sense/feet p) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
@@ -417,6 +421,31 @@
                                             (ledger/confirm at)))
                     :again))))))
 
+(defn own-plan-here
+  "The id of a plan this body made that covers a cell of the room the body stands in or a cell touching it (a wall, a way dug in), else nil."
+  [c]
+  (when (seq (access/own-plans c))
+    (let [p (:primitives c)
+          own-plan (own-builds/own-plan-fn c)
+          cells (:cells (reach-room/room p (sh-sense/feet p)))]
+      (some own-plan (for [[x y z] cells [dx dy dz] [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]] [(+ x dx) (+ y dy) (+ z dz)])))))
+
+(defn mend-due?
+  "The plan id whose repair is still to run: by day, not yet this call, in a room of a plan the body made (own-plan-here)."
+  [c]
+  (when (and (not (:mended (ctx/mem c))) (not (sh-sense/night? (:primitives c))))
+    (own-plan-here c)))
+
+(defn ^:async mend-plan!
+  "By day, in the closed room of a plan the body made, once: jobs.build.repair of that plan puts back what a way in dug or put
+  there that the plan does not want (the wall under which it dug, a door it set in it), at the repair's own worth; its ending
+  does not end the call, the room is judged again. :continue while it goes on, else :again."
+  [c plan]
+  (let [r (await (ctx/call c :mend-plan 'jobs.build.repair {:plan plan :ignore-zones? true}))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c assoc :mended true) :again))))
+
 (defn ^:async step-judged!
   "The step after the looks: judge, then act on it."
   [c]
@@ -430,6 +459,7 @@
       (:door j) (await (shut-door! c (:door j)))
       (:gap j) (await (fill-gap! c (:gap j)))
       (:plug j) (await (mend! c (:plug j)))
+      (and (:done j) (mend-due? c)) (await (mend-plan! c (mend-due? c)))
       (:done j) (ctx/end c :done nil (cond-> (merge {:pos (sh-sense/feet (:primitives c)) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
                                          (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))))
       :else (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))))))

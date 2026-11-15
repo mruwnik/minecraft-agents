@@ -7,7 +7,7 @@
             [engine.events :as events]
             [jobs.lib.world-files :as ew]
             [engine.triggers :as triggers]
-            [engine.hut-shelter-test :refer [hut-world door-states door-open?]]
+            [engine.hut-shelter-test :refer [hut-world door-states door-open? block-at]]
             [engine.memory :as mem]
             [jobs.lib.ledger :as ledger]
             [engine.registry :as registry]
@@ -369,3 +369,21 @@
                (await (enter-room/quote-of c))
                (finally (set! enter-room/picks-seen? picks?) (set! enter-room/pick-seen pick)))
           (is (= [nil {:n 1}] @kept) (str "the second quote goes on from the first's state: " @kept)))))))
+
+(def hut-plan
+  "The body's own plan of the hut: the wall cell at 4,64..65,2 wants cobblestone."
+  {:id "hut" :metadata {:by "Fake"} :parts [{:id "wall" :cells [[4 64 2] [4 65 2]] :want "cobblestone"}]})
+
+(deftest by-day-a-stray-door-in-a-planned-wall-of-the-own-hut-is-put-back-to-the-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut-world {:x 5 :y 64 :z 0} {"4,64,2" "oak_door" "4,65,2" "oak_door"})
+                        (merge day)
+                        (assoc :inventory [{:name "cobblestone" :count 4}] :sight 10)
+                        (update :states merge {"4,64,2" {:open false :half "lower" :facing "south"} "4,65,2" {:open false :half "upper" :facing "south"}}))
+              {:keys [eng p]} (st/setup world)]
+          (ew/set-data! (:world eng) {"hut" hut-plan} {})
+          (core/submit! eng (tu/order '(jobs.survival.enter-room {})) {})
+          (await (tu/run-until-empty eng 60))
+          (is (= "cobblestone" (block-at p [4 64 2])) "the wall cell is the plan's again"))))))
