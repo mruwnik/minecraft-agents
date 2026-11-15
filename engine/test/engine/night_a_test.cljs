@@ -27,7 +27,7 @@
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? leaves? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night]]))
+            [engine.night-support :refer [night noon roof holds? leaves? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night zombie]]))
 
 ;; ------------------------------------------------------------------ trigger
 (defn bed-for
@@ -406,6 +406,21 @@
           (is (= ["logged-out-for-sleeping-player"] (offline-why p)))
           (is (= [] (st/calls p "place")) "not dug in")
           (is (= [] (:list (core/state eng))) "ended at morning"))))))
+
+(deftest a-known-zombie-at-the-spot-makes-the-log-out-dearer-than-the-stint
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [price (fn ^:async q [entities]
+                      (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor :entities entities})]
+                        (sleep-count! p 1 2)
+                        (core/submit! eng (tu/order '(jobs.survival.night {})) {})
+                        (await (tu/run-until-empty eng 10))
+                        (get-in (first (st/emitted seen :night.answers)) [:prices :log-out])))
+              alone (await (price []))
+              beside (await (price [(assoc zombie :pos {:x 18 :y 64 :z 0})]))]
+          (is (number? alone))
+          (is (> beside alone) "the return meets the mob the body leaves: its death is part of the log-out's price"))))))
 
 (deftest a-hungry-body-eats-before-each-log-out-stint
   (async done

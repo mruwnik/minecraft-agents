@@ -215,7 +215,7 @@
   (exposed-price: the hostiles known there once),
   and by day that shelter's morning and the walk back to where the night found the body; :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-gain there. :exposed the night left in the open where the body stands (or the worst cell
-  it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers.
+  it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers, plus its quoted death (chance x seconds: the mobs known at the spot wait for the return).
   Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
   the other players online wait for (sh-sleepers/skip-wait-s)."
   [c {:keys [bed walk-s walk-secs log-out? niche flee home]}]
@@ -251,7 +251,8 @@
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) into-home?))
         body (respawn-body c)
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
-        out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))
+        out-s (when log-out? (let [{:keys [uses death]} (await (ctx/quote c 'jobs.survival.log-out {}))]
+                               (+ (get-in uses [:job-time 1]) (* (:chance death 0) (:death death 0)))))
         here (await (dig-in-quote c))]
     (as-> {:exposed (way-s {:open-s (open left)})} prices
      (cond-> prices
