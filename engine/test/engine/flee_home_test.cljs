@@ -756,21 +756,36 @@
             (is (= [:unpriced] (mapv :why (:verdicts v))) "the flee search's hold leaves three cells: the walk search to the door is cut, the flee search keeps the rest")
             (is (<= (:spent-s v) (- budget held)) (str (:spent-s v))))
           (do
-            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} nil)
+            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} nil 0)
             (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a plan's measured nodes a block of the straight way are held for the flee search")
-            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} {:x 5.5 :y 64 :z 3000.5})
+            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} {:x 5.5 :y 64 :z 3000.5} 0)
             (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a far goal adds nothing: the home leg is the one held")
-            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} {:x 5.5 :y 64 :z 8.5})
+            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 30.5} {:x 5.5 :y 64 :z 8.5} 0)
             (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 30.5})) (rooms/flee-hold-s c)) "a goal nearer than home does not shrink the home's hold")
-            (rooms/hold-for-flee! c nil {:x 5.5 :y 64 :z 8.5})
+            (rooms/hold-for-flee! c nil {:x 5.5 :y 64 :z 8.5} 0)
             (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) {:x 5.5 :y 64 :z 8.5})) (rooms/flee-hold-s c)) "no home: the goal's plan is held")
-            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 3000.5} nil)
+            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 3000.5} nil 0)
             (is (= (cost/search-budget-s) (rooms/flee-hold-s c)) "never more than the step's search")
+            (rooms/hold-for-flee! c {:x 5.5 :y 64 :z 7.5} nil 20)
+            (is (= (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) 20) (rooms/flee-hold-s c)) "a body beside its home still holds the ring's plans: the ring's reach is the longer way")
             (rooms/new-step! c)
             (is (zero? (rooms/flee-hold-s c)) "a new step starts with none held"))
           (is (<= (:spent-s late) budget) (str (:spent-s late)))
           (is (= [nil] (mapv :why (:verdicts fresh))) "a step with its search to spend runs home")
           (is (< 0 (:spent-s fresh) budget) (str (:spent-s fresh))))))))
+
+(deftest a-body-beside-its-home-holds-the-flee-search-its-ring
+  ;; Fenwick seq 2622008: the home 1.5 blocks off held ~1 ms, the surveys spent the step and the ring planned nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 7.5} hs/door-states [(zombie 5.5 12.5 0.4)]))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              home-leg (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) (cover/home-pos c)))]
+          (cover/hold-for-flee! c)
+          (is (< home-leg (rooms/flee-hold-s c)) "the hold is longer than the home leg alone")
+          (is (<= (rooms/flee-hold-s c) (cost/search-budget-s))))))))
 
 (deftest surveys-that-would-spend-the-step-leave-the-flee-search-its-home-plan
   ;; Brindle S9 j1747: the survey's walk searches spent the whole step meter, the flee search got 0 ms and planned nothing.

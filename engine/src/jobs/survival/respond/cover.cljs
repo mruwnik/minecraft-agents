@@ -57,9 +57,12 @@
       {:exposed? (not (covered? (sh-sense/feet p)))})))
 
 (defn hold-for-flee!
-  "room-lib/hold-for-flee! for the home leg of the flee search this step; the goal only as the fallback."
+  "room-lib/hold-for-flee! for the home leg of the flee search this step (the goal only as the fallback) or its ring's
+  reach (flee-search/reach from the body), whichever is longer."
   [c]
-  (room-lib/hold-for-flee! c (home-pos c) (respond.goal/active c)))
+  (let [p (:primitives c)]
+    (room-lib/hold-for-flee! c (home-pos c) (respond.goal/active c)
+                             (search/reach (u/self-pos c) (respond.goal/chasers c) (.-food (.self p))))))
 
 (defn survey
   "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead or the shooters' fire, fire-on,

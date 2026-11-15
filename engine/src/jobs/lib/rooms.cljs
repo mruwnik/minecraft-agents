@@ -240,13 +240,14 @@
 (defn flee-hold-s "Seconds of the step's search kept back from its surveys for the flee search (hold-for-flee!), 0 when none." [c] (:flee-hold-s (ctx/mem c) 0))
 
 (defn hold-for-flee!
-  "Keep back for the flee search of this step the CPU of its home leg: a plan to the home (a position, nil when none)
-  expands cost/plan-nodes-per-block planner nodes a block of the straight way (cost/search-cell-ceiling-s each), at most the step's budget.
-  The home is the refuge that earns the closed-room bonus, so its plan always runs; the goal (the interrupted walk,
-  held only when there is no home) plans on what is left, as the meter allows. The surveys and looks that run before it
-  (survey-meter) leave that to it."
-  [c home goal]
-  (let [s (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block) (u/dist (u/self-pos c) (or home goal (u/self-pos c))))]
+  "Keep back for the flee search of this step the CPU of its longest plan: a plan expands cost/plan-nodes-per-block planner
+  nodes a block of its straight way (cost/search-cell-ceiling-s each), at most the step's budget. The way is the longer of
+  the home (a position, nil when none: the refuge that earns the closed-room bonus, so its plan always runs; the goal, the
+  interrupted walk, only when there is no home) and ring-blocks, the reach of the run-away ring (0 none), whose ends a
+  body beside its home still plans. The surveys and looks that run before it (survey-meter) leave that to it."
+  [c home goal ring-blocks]
+  (let [s (* (cost/search-cell-ceiling-s) (cost/plan-nodes-per-block)
+             (max ring-blocks (u/dist (u/self-pos c) (or home goal (u/self-pos c)))))]
     (ctx/update-mem! c assoc :flee-hold-s (min s (cost/search-budget-s)))))
 
 (defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))
