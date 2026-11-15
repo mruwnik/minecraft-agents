@@ -754,19 +754,19 @@
             (is (empty? (events-of s :near.risky-stay)) (pr-str age-ms))))))))
 
 
-;; the only stone is within reach beside a creeper's fresh death and the call's worth (a root obtain's for one cobblestone) is below
-;; the stay: the dig is refused and the target skipped as risky (dig-for :risky -> targets/skip-risky!), so the call ends :none
+;; the only sand (dug bare-handed: a carried pickaxe or shovel is a weapon and cheapens the stay) is within reach beside a creeper's fresh
+;; death and the call's worth (a root obtain's for one sand) is below the stay: the dig is refused and the target skipped as risky (dig-for :risky -> targets/skip-risky!), so the call ends :none
 (deftest a-lone-target-whose-stay-costs-more-than-its-worth-is-skipped-as-risky
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[s _] (spy-go-to (start {:world {:blocks (merge floor {"3,64,0" "stone"}) :inventory [{:name "wooden_pickaxe" :count 1} {:name "torch" :count 10}]}}))
+        (let [[s _] (spy-go-to (start {:world {:blocks (merge floor {"3,64,0" "sand"}) :inventory [{:name "torch" :count 10}]}}))
               _ (swap! (fake/state (:p s)) assoc :worldSpawn [0 64 0])]
           (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "creeper" :death-t (- @(:clock s) 500)} core/deaths-policy)
-          (core/submit! (:eng s) (tu/order (spec {:block "stone" :count 1 :ways #{:seen}}) (cost/items-find-worth {"cobblestone" 1})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}}) (cost/items-find-worth {"sand" 1})) {})
           (await (run-ticks s 5))
           (is (= 1 (count (events-of s :near.risky-stay))) "the stay by the death was refused")
-          (is (empty? (dug-cells s)) "and the stone not dug")
+          (is (empty? (dug-cells s)) "and the sand not dug")
           (is (= :none (:reason (first (events-of s :stopped))))))))))
 
 ;; the zombie died on the cell beside the near sand (a solid block is in no threat's field: the cell it is dug from is), in the dark
