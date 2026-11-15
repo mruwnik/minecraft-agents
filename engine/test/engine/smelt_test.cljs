@@ -1147,6 +1147,17 @@
           (is (= :no-furnace-seen (:reason r)))
           (is (< (get-in @(fake/state p) [:self :pos :x]) 100) "the body stayed near"))))))
 
+(deftest a-remembered-furnace-far-away-is-not-walked-to-while-cobblestone-for-one-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"600,64,0" "furnace"} :floor [-30 -10 700 10]
+                                         :inventory (conj iron-and-coal {:name "cobblestone" :count 8})}
+                                        {:item "raw_iron" :count 3 :worth 20000} {}
+                                        #(mem/write! (:store %) :furnace {:pos {:x 600 :y 64 :z 0}} mem/place-policy)))]
+          (is (= :no-furnace-seen (:reason r)) (pr-str r))
+          (is (< (get-in @(fake/state p) [:self :pos :x]) 100) "the body stayed near"))))))
+
 (deftest a-remembered-furnace-is-walked-to-when-that-costs-less-than-making-one
   (async done
     (tu/run-async done
