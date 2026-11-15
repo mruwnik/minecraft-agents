@@ -570,6 +570,14 @@
           (is (zero? (digs p)))
           (is (= "lectern" (workstation p))))))))
 
+(deftest an-empty-cell-with-no-villager-known-is-not-given-a-workstation-the-call-ends-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [] :inventory [{:name "lectern" :count 1}] :blocks {ws-key "air"} :pen? false} {}))]
+          (is (= {:found false :status :stopped :reason :gone} (select-keys result [:found :status :reason])) (pr-str result))
+          (is (= "air" (workstation p)) "the lectern is still in the bag"))))))
+
 (deftest a-restart-with-the-workstation-missing-and-a-drop-beside-it-does-not-place-a-spare
   (async done
     (tu/run-async done

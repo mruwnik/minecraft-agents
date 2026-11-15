@@ -723,6 +723,8 @@
       (nil? block) (await (approach! c pos))
       (bs/air block)
       (cond
+        ;; a workstation placed before any villager is known would be spent for nothing
+        (and (nil? e) (not (:broken (ctx/mem c)))) (await (look-for! c pos villager))
         (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true :expect-carried (expect-after-unseen-break c pos item)) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back (one that took another job
         ;; never will: place at once, the next step ends :other-job)
