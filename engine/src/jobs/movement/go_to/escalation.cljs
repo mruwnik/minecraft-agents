@@ -61,7 +61,7 @@
             [jobs.movement.go-to.search-bound :as search-bound]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.tuning :as tuning]
-            [jobs.movement.go-to.way-steps :as ways]))
+            [jobs.lib.way-steps :as ways]))
 
 (defn ways-for "The :ways of an access child: crafting from carried goods always, fetching a pickaxe only when fetch? is true." [fetch?]
   (if fetch? #{:carried :chest :craft :gather} #{:carried :craft}))

@@ -22,7 +22,7 @@
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as escalation]
             [jobs.lib.own-builds :as own-builds]
-            [jobs.movement.go-to.way-steps :as way-steps]
+            [jobs.lib.way-steps :as way-steps]
             [plan.shape :as shape]))
 
 (def doc

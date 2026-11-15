@@ -33,7 +33,7 @@
             [jobs.movement.go-to.tuning :as tuning]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as walk]
-            [jobs.movement.go-to.way-steps :as ways]))
+            [jobs.lib.way-steps :as ways]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of

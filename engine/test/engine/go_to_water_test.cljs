@@ -16,7 +16,7 @@
             [jobs.lib.near :as near]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.column]
-            [jobs.movement.go-to.way-steps :as ways]
+            [jobs.lib.way-steps :as ways]
             [jobs.movement.go-to.walk :as walk]))
 
 ;; a stone plain (top y 63) with a pond 6 deep (water y 58..63) from x 0 to x-end, z -4..4; the body on land west of it

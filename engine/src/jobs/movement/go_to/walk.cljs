@@ -61,7 +61,7 @@
             [jobs.movement.go-to.turn-back :as turn-back]
             [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! none-held? round-unknown]]
             [jobs.movement.go-to.unstick :as unstick]
-            [jobs.movement.go-to.way-steps :as ways]
+            [jobs.lib.way-steps :as ways]
             [jobs.movement.go-to.climb :as climb]))
 
 (defn ^:async arrived!

@@ -45,7 +45,7 @@
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked]]
-            [jobs.movement.go-to.way-steps :as ways]))
+            [jobs.lib.way-steps :as ways]))
 
 (defn skips
   "The escalation steps this call does not take: those that failed (memory :skipped-steps), the stair headings that failed

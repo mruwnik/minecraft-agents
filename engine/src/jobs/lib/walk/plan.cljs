@@ -14,7 +14,7 @@
             [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]
-            [jobs.movement.go-to.way-steps :as way-steps]))
+            [jobs.lib.way-steps :as way-steps]))
 
 (def wide-box
   "The planner's search box (options margin and yMargin, blocks round start and goal) of the walks' searches. A way

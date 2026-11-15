@@ -1,4 +1,4 @@
-(ns jobs.movement.go-to.way-steps
+(ns jobs.lib.way-steps
   "go-to's ways, the methods a call may use to reach its goal, and the escalation steps each allows."
   (:require [engine.ctx :as ctx]))
 
