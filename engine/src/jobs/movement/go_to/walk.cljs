@@ -386,13 +386,16 @@
   mouth) and of its feet (a retreat's or a pit's seal that shuts the body in, once the hostile is gone): a jobs.access.cleanup
   child for each of the two that has some takes them back (clear-seals!), so the walk is planned again. The cells the cleanups left for a known hostile (held
   :hostile-near or :danger: the shelter keeps the hostile out) are kept (mem :seal-kept): no escalation of the call cuts
-  them (own-builds/may-dig-fn), so the way out it prices goes another side."
+  them (own-builds/may-dig-fn), so the way out it prices goes another side. A body shut in its own shelter keeps its feet's seals
+  for the escalation's leave-shelter (shelter-exit?) or its night refusal, which price the way out."
   [c pos result]
   (when (and (ways/way? c :clear-seal) (ledger/seal-blocked-whys (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
     (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius ledger/seal-clear-radius})
           entries (into [] (remove #(= :pillar (:purpose %))) (ledger/entries c))
+          sheltered? (or (choose/shelter-exit? c result) (choose/night-refusal? c result))
           todo (into [] (keep (fn [[near slot]] (when-let [es (seq (ledger/near-of entries near))] {:near near :slot slot :purpose (into #{} (map :purpose) es)})))
-                     [[(at [(:x pos) (:y pos) (:z pos)]) :seal-cleanup] [(at (end/feet-cell c)) :seal-cleanup-feet]])]
+                     (cond-> [[(at [(:x pos) (:y pos) (:z pos)]) :seal-cleanup]]
+                       (not sheltered?) (conj [(at (end/feet-cell c)) :seal-cleanup-feet])))]
       (when (seq todo)
         (ctx/update-mem! c assoc :seal-cleared true :seal-clearing {:todo todo :kept #{}})
         (await (clear-seals! c))))))

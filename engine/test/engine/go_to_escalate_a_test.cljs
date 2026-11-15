@@ -596,6 +596,16 @@
           (is (seq (calls p "dig")) "it dug out of the shelter")
           (is (= {:arrived true} @out)))))))
 
+(deftest go-to-sealed-in-its-own-shelter-leaves-through-leave-shelter-though-the-ledger-holds-seals-at-its-feet
+  ;; the goal-seal take-back must not open the shelter first: the body would no longer be sheltered-in and pillar out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seal (for [y [64 65]] {:cell [1 y 0] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed})
+              {:keys [out seen]} (await (run-in-shelter! 1000 [8 64 0] 1 {:ledger seal}))]
+          (is (= [:leave-shelter] (mapv :step (events-of seen :go-to.escalated))))
+          (is (= {:arrived true} @out)))))))
+
 ;; live (Juniper, card ba754e77): 16 under its goal, the stairs climbed 8, then 4 (the depth of the first stair's own walled
 ;; cut), then a partial walk led back down and the third way out was spent 9 under the goal. Each stair climbs as far as
 ;; the goal is above (at most max-depth), and an escalation that got the body nearer than any before does not count
