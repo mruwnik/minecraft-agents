@@ -16,8 +16,8 @@
 
 (def shut
   "Floor, walls and roof of the pen at ws along -x (its cell [1 64 0]), the lectern's sides across it, the floor and roof
-  of the stand [3 64 0] behind it."
-  {"1,63,0" "stone" "1,64,1" "stone" "1,65,1" "stone" "1,66,1" "stone" "1,64,-1" "stone" "1,65,-1" "stone"
+  of the stand [3 64 0] behind it, the floors of its near end and of the box's entry."
+  {"0,63,0" "stone" "4,63,0" "stone" "1,63,0" "stone" "1,64,1" "stone" "1,65,1" "stone" "1,66,1" "stone" "1,64,-1" "stone" "1,65,-1" "stone"
    "1,66,-1" "stone" "1,66,0" "stone" "2,66,0" "stone" "2,64,1" "stone" "2,64,-1" "stone" "3,63,0" "stone" "3,66,0" "stone"})
 
 (def box "The stand's three other sides, feet and head." {"3,64,1" "stone" "3,65,1" "stone" "3,64,-1" "stone" "3,65,-1" "stone" "4,64,0" "stone" "4,65,0" "stone"})
@@ -129,6 +129,18 @@
           (is (= :done (:status result)) (pr-str result))
           (is (every? #(vp/solid? (block p %)) (concat (:shut lay) (:plug lay) (:box lay))))
           (is (= ["oak_slab" "top"] [(block p [2 65 0]) (get-in @(fake/state p) [:states [2 65 0] :type])])))))))
+
+(deftest a-pen-over-a-drop-floors-the-near-end-and-the-boxs-entry-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run (-> (world {} {:slab? false})
+                                         (update :blocks dissoc "4,63,0")
+                                         (assoc :entities [(jobless {:x 1 :y 64 :z 0})]
+                                                :inventory [{:name "cobblestone" :count 30} {:name "oak_slab" :count 1} {:name "torch" :count 2}]))
+                                     {} 400))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (every? #(vp/solid? (block p %)) [[0 63 0] [4 63 0]]) "the plug and the entry are placed against a floor"))))))
 
 (deftest a-boxed-body-that-never-saw-the-pen-walls-digs-out-to-look-and-fetches-or-places-nothing-for-walls-that-stand
   (async done

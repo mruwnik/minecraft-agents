@@ -16,19 +16,23 @@
 
 (defn layout
   "The cells of the pen at workstation cell [x y z] along side [dx dz]: :cell V, :shut (V's floor, walls and roof, W's
-  roof, W's sides across d, S's floor and roof: built first), :slab (the cell above W), :plug (O, feet and head), :stand
+  roof, W's sides across d, S's floor and roof, and the floors of O and the entry, which the plug and the box's entry are
+  placed against over a drop: built first), :slab (the cell above W), :plug (O, feet and head), :stand
   S, :box (S's three other sides, feet and head: shut round the body), :entry (the box's side away from W)."
   [[x y z] [dx dz :as side]]
   (let [[vx vz] [(+ x dx) (+ z dz)]
         [sx sz] [(- x dx) (- z dz)]
         across (fn [cx cz dys] (for [s [1 -1] dy dys] [(+ cx (* s dz)) (+ y dy) (+ cz (* s dx))]))
-        entry [[(- sx dx) y (- sz dz)] [(- sx dx) (inc y) (- sz dz)]]]
+        entry [[(- sx dx) y (- sz dz)] [(- sx dx) (inc y) (- sz dz)]]
+        plug [[(+ vx dx) y (+ vz dz)] [(+ vx dx) (inc y) (+ vz dz)]]
+        below (fn [[cx cy cz]] [cx (dec cy) cz])]
     {:side side
      :cell [vx y vz]
      :shut (vec (concat [[vx (dec y) vz]] (across vx vz [0 1 2]) [[vx (+ y 2) vz] [x (+ y 2) z]]
-                        (across x z [0]) [[sx (dec y) sz] [sx (+ y 2) sz]]))
+                        (across x z [0]) [[sx (dec y) sz] [sx (+ y 2) sz]]
+                        [(below (first plug)) (below (first entry))]))
      :slab [x (inc y) z]
-     :plug [[(+ vx dx) y (+ vz dz)] [(+ vx dx) (inc y) (+ vz dz)]]
+     :plug plug
      :stand [sx y sz]
      :box (vec (concat (across sx sz [0 1]) entry))
      :entry entry}))
