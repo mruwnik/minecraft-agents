@@ -261,12 +261,13 @@
         (is (empty? (filterv #(and (= :child_started (:kind %)) (= :need (:slot %))) @@seen-events)))))))
 
 (deftest bed-down-beside-an-open-bed-is-condition-failed-bed-open
-  ;; at a spawn rate of one meet in 200 s: at the measured one (0.0012) an open bed is the cheapest night and is slept in
+  ;; at a spawn rate of one meet in 20 s the shelter is cheaper than the open bed (and than a log-out stint, which still
+  ;; costs the cheapest night unless it skips); at the measured one (0.0012) an open bed is the cheapest night and is slept in
   (async done
     (tu/run-async done
       (fn ^:async t []
         (await
-         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 20}}
            (fn ^:async inner []
              (let [e (await (call! (spawn-world {:blocks {"2,64,0" "red_bed"} :players ["Alex"] :inventory st/wall-stack}) 'jobs.survival.bed-down {}
                                    (fn [eng] (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 3} nil))))]
