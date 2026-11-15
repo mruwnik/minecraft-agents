@@ -1,9 +1,9 @@
-;; Card 438bd3d8 (Q196): a fed body prices the points its pack lacks past the bar's hunger at what carrying them saves
-;; on the trip (cost.food/reserve-worth: the drop in run-out-s; the trip is get-food's job-time left, 1800 s at most).
-;; Should-succeed: fed (food 20), 6 bread (30 of :carry 60, 30 points last 1800 s): no search pays, get-food ends
-;; :no-carry with no explore child (before the card it searched for the 30 points at 30 s each).
-;; Should-fail (no search skipped wrongly): fed with an empty pack the trip runs out (30 points at field-point-s, about
-;; 419 s): the explore child starts.
+;; Card 438bd3d8 (Q196): a fed body prices the points its pack lacks past the bar's hunger at the chance each is eaten
+;; before the next easy food (cost.food/reserve-worth over the caller's :trip-s, here a 300 s trip: 5 points eaten on
+;; average, the k-th at e^(-k/5)).
+;; Should-succeed: fed (food 20), 6 bread (30 of :carry 60): the rest is worth under a second, get-food ends :no-carry
+;; with no explore child (before the card it searched for the 30 points at 30 s each).
+;; Should-fail (no search skipped wrongly): fed with an empty pack on the same trip (about 150 s): the explore child starts.
 {:defaults
  {:time :day
   :time-why :sunlit-ground ; get-food's search roams only under a light sky (ready/safe-roaming): at night neither case would search
@@ -14,10 +14,10 @@
  :cases
  [{:name "fed-with-half-the-reserve-does-not-search"
    :body {:inventory [["bread" 6]]}
-   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 60})]]
+   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 60 :trip-s 300})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-carry}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :explore}} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:item "bread" 6] [:body-near [4.5 0 16.5] 3]]}
   {:name "fed-with-an-empty-pack-still-searches"
-   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 60})]]
+   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 60 :trip-s 300})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :explore}} :within-s 40}]}]}

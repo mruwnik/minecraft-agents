@@ -26,9 +26,21 @@
 
 (a/defargs settings
   {::field-point-s {:default 13.96 :spec (a/num-in 0 nil)
-                    :doc "Seconds a hunger point of food got in the field takes (a hunt, crops, a cook): 15444.7 s of 612 hungry get-food calls of the trial bodies that took nothing from a chest, cut and fruitless ones counted, over the 1106 points their food gave, 2026-11-07. Recount: node tools/event-counts.mjs food-gets (:point-s)."}})
+                    :doc "Seconds a hunger point of food got in the field takes (a hunt, crops, a cook): 15444.7 s of 612 hungry get-food calls of the trial bodies that took nothing from a chest, cut and fruitless ones counted, over the 1106 points their food gave, 2026-11-07. Recount: node tools/event-counts.mjs food-gets (:point-s)."}
+   ::home-away-s {:default 2745 :spec (a/num-in 0 nil)
+                  :doc "Mean online seconds a body that knows home food spends between takes of food from a chest (takes 60 s apart): Sorrel's 70 stretches, 75152 s, and the 2 its logs cut, 116973 s, an exponential's mean with the cut ones counted, 2026-11-15 (median 601 s)."}
+   ::field-away-s {:default 137857 :spec (a/num-in 0 nil)
+                   :doc "Mean online seconds a body that knows no home food spends between takes of food from a chest: the other 11 trial bodies' 7 stretches, 190546 s, and the 22 their logs cut, 774445 s, an exponential's mean with the cut ones counted, 2026-11-15."}})
 
 (defn field-point-s [] (settings/get settings ::field-point-s))
+
+(defn away-s
+  "Mean seconds a body is away from easy food: trip-s, the trip its food is carried for, when given; else the walk to the
+  nearest home food (back-s, nil: none known) past ::home-away-s; else ::field-away-s."
+  [trip-s back-s]
+  (cond trip-s trip-s
+        back-s (+ back-s (settings/get settings ::home-away-s))
+        :else (settings/get settings ::field-away-s)))
 
 (defn trip-spread
   "{:tail :beyond} of a trip whose time is the figure [least mean most]: (tail t) the chance it lasts more than t seconds,
@@ -142,12 +154,15 @@
     (min (value/chance-times p death-s) (value/chance-times p walk-out) (* (field-point-s) points-per-s (beyond t)))))
 
 (defn reserve-worth
-  "Seconds carrying k points instead of had saves on trip (priced-trip): the drop in run-out-s. A trip no line bounds yet
-  (nil figure) is taken to last the reserve's days, the span the 3-day reserve is carried for."
-  [trip had k]
-  (let [s (/ reserve-points points-per-s)
-        sp (trip-spread (or (:figure trip) [s s s]))]
-    (max 0 (- (run-out-s trip sp had) (run-out-s trip sp k)))))
+  "Seconds the reserve food points past had up to k (those above the body's hunger) are worth: each point
+  value/food-point-worth times the chance it is eaten before the next easy food, the chance the time away (an exponential
+  of mean away-s seconds) outlasts eating it at points-per-s, so the j-th is worth e^(-j/(points-per-s away-s)), summed."
+  [away-s had k]
+  (let [m (* points-per-s away-s)]
+    (cond (<= k had) 0
+          (not (js/isFinite m)) (* (value/food-point-worth) (- k had))
+          (pos? m) (* (value/food-point-worth) m (- (js/Math.exp (- (/ had m))) (js/Math.exp (- (/ k m)))))
+          :else 0)))
 
 (defn trip-cost
   "Expected seconds carrying k food points on trip (priced-trip) costs: getting them (acquire-s), their slots (slot-s), the

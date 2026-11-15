@@ -82,6 +82,7 @@
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (a search priced by what food is worth the body now, at most the walk to the cheapest noted animal: a find saves no more) or a map of the search's options over it (:max-distance, :spend; not :radius)" :spec (a/or-of boolean? map?) :default true}
    :carry {:doc "carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default nil}
+   :trip-s {:doc "mean seconds the carried food must last (the caller's trip): the reserve points past the hunger are worth the chance each is eaten in it (cost.food/reserve-worth); nil: the body's mean time away from easy food (home-food/away-s)" :spec (a/num-in 0 nil) :default nil}
    :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :carry food points" :spec boolean? :default true}
    :ignore-zones? :shared})
 

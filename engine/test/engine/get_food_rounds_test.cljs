@@ -1396,18 +1396,17 @@
           (is (= :no-carry (:reason (first (ended seen))))))))))
 
 (deftest a-search-for-food-is-worth-what-reaching-food-is-to-the-body
-  (let [benefit (fn [food carry & [bread left]]
+  (let [benefit (fn [food carry & [bread trip-s]]
                   (let [{:keys [p]} (setup {:self {:food food} :inventory (if bread [{:name "bread" :count bread}] [])})]
-                    (animals/search-benefit {:primitives p :view (fn [] {:now 0 :data {}}) :args {:carry carry}
-                                             :left (when left (fn [] {:spend {:job-time left}}))})))
+                    (animals/search-benefit {:primitives p :view (fn [] {:now 0 :data {}}) :args {:carry carry :trip-s trip-s}})))
         back #(- % (:cost (cost/walk-cost {:distance (cost/search-radius % (cost/leg-spacing))})))]
     (is (zero? (benefit 20 0)) "fed and asked to carry nothing: no walk is worth it")
     (is (pos? (benefit 20 60)) "fed but short of the 3-day reserve")
     (is (< (benefit 8 0) (benefit 2 0)) "the hungrier, the more a walk to food is worth")
     (is (< (benefit 13 60) (back (cost/food-search-worth 60)))
-        "the reserve past the bar's hunger is worth what running out on the trip costs, less than hunger")
-    (is (zero? (benefit 20 60 6 1800)) "fed with half the reserve on a trip it outlasts: the rest saves nothing, no search pays")
-    (is (pos? (benefit 20 60 6 3600)) "the same pack on a trip of an hour runs out: the rest is worth a search")
+        "the reserve past the bar's hunger is worth less than hunger")
+    (is (< (benefit 20 60 6 3600) (benefit 20 60 0 3600)) "the fuller the pack, the less the rest is worth")
+    (is (< (benefit 20 60 6 1800) (benefit 20 60 6 3600)) "the caller's trip prices the reserve: a shorter one eats less of it")
     (is (< (benefit 20 1) (cost/food-search-worth 1)) "a reserve point is worth less than a hunger point")))
 
 (deftest the-meat-of-a-kill-is-worth-more-hunted-than-from-a-working-pen

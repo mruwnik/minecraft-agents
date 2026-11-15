@@ -591,7 +591,7 @@
 
 (defn food-search-worth
   "Seconds a search for food is worth while the pack lacks `short` hunger points, food-point-worth each, and reserve
-  points whose carrying saves reserve-s (cost.food/reserve-worth); less one trip."
+  points worth reserve-s (cost.food/reserve-worth); less one trip."
   ([short] (food-search-worth short 0))
   ([short reserve-s] (max 0 (- (+ (* (food-point-worth) short) reserve-s) (trip)))))
 

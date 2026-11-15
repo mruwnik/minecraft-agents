@@ -185,14 +185,18 @@
     (is (<= (food-cost/trip-cost t k) (food-cost/trip-cost t (inc k))))
     (is (= 82 (:walk-out t)) "the walk home and out again: a trip of 10 s and 240 blocks at 0.3")))
 
-(deftest a-reserve-point-is-worth-what-running-out-on-the-trip-costs
-  (let [w (fn [home fig had k] (food-cost/reserve-worth (food-cost/priced-trip home (assoc trip :figure fig)) had k))
-        hour [3600 3600 3600]]
-    (is (zero? (w [] [1800 1800 1800] 30 60)) "a trip the carried food outlasts: more saves nothing")
-    (is (> 1e-9 (abs (- (* 30 (food-cost/field-point-s)) (w [] [1800 1800 1800] 0 30))))
-        "far from home food, each point the trip eats saves getting it in the field")
-    (is (< (w [(chest 320)] hour 0 60) (w [] hour 0 60)) "by its chests, running out costs only the walk home and out")
-    (is (= (w [] hour 30 60) (w [] nil 30 60)) "no trip yet: the reserve's 3 days")))
+(deftest a-reserve-point-is-worth-the-chance-it-is-eaten-before-the-next-easy-food
+  (let [w food-cost/reserve-worth
+        pt (cost/food-point-worth)]
+    (is (> 1e-9 (abs (- (* pt 60 (- 1 (js/Math.exp -1))) (w 3600 0 60))))
+        "an hour away eats 60 points on average: the k-th is eaten at e^(-k/60)")
+    (is (< (w 3600 30 31) (w 3600 0 1) pt) "each point is worth less than a hunger point, and less as the pack fills")
+    (is (< (w 1800 0 60) (w 3600 0 60)) "the shorter the time away, the less the reserve is eaten")
+    (is (zero? (w 3600 60 60)) "no points past had: nothing")
+    (is (= (* pt 60) (w ##Inf 0 60)) "never back at easy food: every point is eaten")
+    (is (= 900 (food-cost/away-s 900 30)) "a caller's trip is the time away")
+    (is (< (food-cost/away-s nil 0) (food-cost/away-s nil 600) (food-cost/away-s nil nil))
+        "home food known: its measured mean past the walk there, shorter than a body's that knows none")))
 
 (deftest home-food-is-taken-by-one-rule-only-while-cheaper-than-the-field
   (let [dear (chest 100 :fetch-s 2000)

@@ -521,6 +521,19 @@
         (is (= [:no-carry] (:no-food (await (stocked-home-kit 5 kit/iron-kit))))
             "25 points do not: the kit asks get-food for bread from the chest (this fake chest holds none)")))))
 
+(deftest the-kits-get-food-child-prices-its-reserve-over-the-kits-trip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args (atom [])
+              s (start (hungry-world [{:name "bread" :count 5}] 16) {:items kit/iron-kit :explore false} f/sight-opts
+                       {'jobs.survival.get-food (assoc (get registry/jobs 'jobs.survival.get-food) :round
+                                                       (fn ^:async stub-round [c]
+                                                         (swap! args conj (:args c))
+                                                         (ctx/end c :nothing-possible {:reason :no-carry :why "stub"})))})]
+          (await (f/run-ticks s 80))
+          (is (= [960] (distinct (map :trip-s @args))) "get-food sees the eight-piece kit's 960 s quote, not its own job-time"))))))
+
 (deftest a-fed-body-with-an-empty-pack-and-no-source-warns-and-goes-on
   (async done
     (tu/run-async done
