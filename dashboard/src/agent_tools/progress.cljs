@@ -381,6 +381,12 @@
                                                                   :danger-below danger-below}))
           get! signal identity)))
 
+(defn empty-body?
+  "Whether the body is online with no job current or listed: the engine tells body.idle once per stretch, so a body
+  emptied by a reflex's end never says it again."
+  [{s :status}]
+  (and (not (:offline s)) (empty? (job-rows s))))
+
 (defn ^:async wait-progress!
   "Wait until the agent is needed: a promise of {:wake :text :line :items}. r is the request (with :wait-ms,
   :stall-ms, :goal, :want; :slice-ms for tests); get! as for observe/wait-observe."
@@ -400,6 +406,8 @@
                           {:done (finish {:wake :goal-ended :text (str goal " " (word (get-in view [:goal-job :status])))} view items)}
                           (and (:stall-ms r) (>= (- (now) since) (:stall-ms r)))
                           {:done (finish {:wake :stall :text (str "no progress for " (js/Math.round (/ (- (now) since) 60000)) " min")} view items)}
+                          (empty-body? view)
+                          {:done (finish {:wake :needs-you :text "body idle: no jobs"} view items)}
                           (>= (now) deadline)
                           {:done (finish {:wake :timeout :text "no news"} view items)}
                           :else

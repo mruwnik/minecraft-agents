@@ -250,6 +250,14 @@
           (.then (fn [result]
                    (is (= :timeout (:wake result)) (pr-str (dissoc result :view)))))))))
 
+(deftest an-empty-body-wakes-the-wait-though-no-idle-event-follows
+  (with-fixture (assoc working-status :current nil :jobs {:total 0 :items []}) {:wait-ms 2000}
+    (fn [f]
+      (-> (wait! f)
+          (.then (fn [result]
+                   (is (= :needs-you (:wake result)))
+                   (is (= "body idle: no jobs" (:text result)))))))))
+
 (deftest a-death-wakes-with-a-few-short-lines
   (with-fixture working-status {:wait-ms 2000}
     (fn [f]
