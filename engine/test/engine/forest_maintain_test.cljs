@@ -646,3 +646,14 @@
               left (warns seen :forest.left)]
           (is (= [:no-sapling] (map :reason left)))
           (is (some? (:because (first left))) "the child's cause rides on the note"))))))
+
+(deftest logs-carried-are-stored-in-the-chest-though-the-trees-are-not-worth-felling
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> oak-world (update :inventory conj (item "oak_log" 400)) (assoc :containers {"10,64,0" []})
+                        (update :blocks assoc "10,64,0" "chest"))
+              {:keys [p]} (await (run world {"forest" oak-cell} {:plan "forest" :chest {:x 10 :y 64 :z 0}} 60))]
+          (is (= [] (digs p)) "no tree is felled")
+          (is (= 0 (get (h/inv p) "oak_log" 0)) "the logs went into the chest")
+          (is (= 400 (transduce (map :count) + 0 (get-in @(fake/state p) [:containers [10 64 0]])))))))))

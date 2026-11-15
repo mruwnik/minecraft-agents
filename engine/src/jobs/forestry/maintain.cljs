@@ -54,7 +54,10 @@
   :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. {:reason :plan-trouble :why text}
   a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
   has no tree cells, also later in the call.
-  Ends :done with data {:felled :planted :left :bare} when it felled or planted a tree. With none of
+  With a :chest, the logs carried are stored in it once the trees are done (jobs.storage.deposit, :items the carried log names; the
+  call also starts for that alone, whatever the held logs make the trees worth); a store that gives up ends condition-failed :not-stored
+  when nothing else was done.
+  Ends :done with data {:felled :planted :left :bare} when it felled or planted a tree or stored logs. With none of
   those it ends nothing-possible :left when it left trees standing, else condition-failed :nothing-to-do.")
 
 (a/defargs args
@@ -62,6 +65,7 @@
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
+   :chest {:doc "chest position {:x :y :z} the logs carried are stored in (jobs.storage.deposit); nil: not stored" :spec ::a/pos :default nil}
    :ignore-zones? :shared})
 
 (defn fetching?
@@ -229,6 +233,16 @@
 
 (declare worth-of)
 
+(defn carried-logs
+  "The names of the log stacks carried, each once."
+  [c]
+  (vec (distinct (filter #(str/ends-with? % "_log") (map :name (u/inventory (:primitives c)))))))
+
+(defn storing?
+  "Whether the logs carried are still to be stored: a :chest is given, logs are carried and this call has not stored yet."
+  [c]
+  (boolean (and (:chest (:args c)) (seq (carried-logs c)) (not (:stored (ctx/mem c))))))
+
 (defn not-ready
   "Whether the job may start: ok while a grown tree is ripe on a planned cell or a bare one has its sapling carried; else
   later with the cells that hold it back, a look first while one was never seen. The cells are read once per
@@ -247,6 +261,11 @@
             (contract/ok :work "a tree is ripe, a sapling can be planted or a cell wants readying"))
           (checks/cause-status (if (and unseen? (not (look/surveyed? c :near))) :look :later)
                                (or (blocked-reason c classes) {:reason :nothing-to-do})))))))
+
+(defn ready-or-storing
+  "ok while logs wait to be stored, else not-ready."
+  [c]
+  (if (storing? c) (contract/ok :storing "logs are carried to store") (not-ready c)))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -395,8 +414,21 @@
         :continue
         (do (ctx/update-mem! c assoc :prepared true) :again)))))
 
+(defn ^:async store!
+  "Step 5: put the carried logs in :chest, once per call. :again, :continue while the deposit child waits, or nil."
+  [c]
+  (when (storing? c)
+    (let [{:keys [chest ignore-zones?]} (:args c)
+          r (waits/waiting-out c (await (ctx/call c :store 'jobs.storage.deposit
+                                                  (cond-> {:chest chest :items (carried-logs c)}
+                                                    (some? ignore-zones?) (assoc :ignore-zones? ignore-zones?)))))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c assoc :stored (if (= :done (:kind r)) :done :gave-up))
+            :again)))))
+
 (defn finish!
-  "Step 5: say what was done and end: done when it felled or planted, else nothing-possible :left or condition-failed."
+  "Step 6: say what was done and end: done when it felled or planted, else nothing-possible :left or condition-failed."
   [c classes]
   (let [m (ctx/mem c)
         bare (vec (keep (fn [[pos [kind _]]] (when (= :bare kind) pos)) classes))
@@ -405,7 +437,8 @@
         done-text (str "forest done: felled " (:felled m 0) ", planted " (:planted m 0)
                        ", left " (count left) ", bare " (count bare))]
     (cond
-      (pos? (+ (:felled result) (:planted result))) (ctx/end c :done nil (assoc result :text done-text))
+      (or (pos? (+ (:felled result) (:planted result))) (= :done (:stored m))) (ctx/end c :done nil (assoc result :text done-text))
+      (and (= :gave-up (:stored m)) (empty? left)) (ctx/end c :condition-failed {:reason :not-stored} result)
       (seq left) (ctx/end c :nothing-possible :left result)
       :else (ctx/end c :condition-failed (or (blocked-reason c classes) {:reason :nothing-to-do}) result))))
 
@@ -416,14 +449,17 @@
       (let [trees (:trees field)]
         (or (await (survey-field! c field))
             (do (when-not (:begun (ctx/mem c))
-                  (ctx/update-mem! c assoc :begun true))
+                  (ctx/update-mem! c assoc :begun true :store-only (and (storing? c) (not= :ok (first (not-ready c))))))
                 (let [classes (classes-of c trees)]
                   (note-cells! c classes)
-                  (or (when (:cut (ctx/mem c)) (await (fell! c trees classes)))
-                      (await (plant! c classes))
-                      (await (fell! c trees classes))
-                      (await (prepare! c classes))
-                      (finish! c classes)))))))))
+                  (if (:store-only (ctx/mem c))
+                    (or (await (store! c)) (finish! c classes))
+                    (or (when (:cut (ctx/mem c)) (await (fell! c trees classes)))
+                        (await (plant! c classes))
+                        (await (fell! c trees classes))
+                        (await (prepare! c classes))
+                        (await (store! c))
+                        (finish! c classes))))))))))
 
 (defn ^:async round [c]
   (await (pace/steps! c #(step c))))
@@ -486,7 +522,7 @@
 
 (defn can-run? [c] (trouble-status (planned c)))
 
-(def can-start? (cond/and can-run? not-ready))
+(def can-start? (cond/and can-run? ready-or-storing))
 
 (defn done?
   "Ok once the forest is in order: no tree to fell or plant, no cell blocked or left, the field seen and no
@@ -504,6 +540,7 @@
                   (:trouble field) :plan-trouble
                   (and (not (:begun m)) (look/unseen? (:primitives c) (field-cells field))) :looking
                   (:cut m) :working
+                  (storing? c) :storing
                   (seq (ripe-cells c classes)) :ripe
                   (seq (plantable c (owed-cells c classes))) :planting
                   (and (not (:prepared m)) (seq (unplantable-cells classes))) :preparing

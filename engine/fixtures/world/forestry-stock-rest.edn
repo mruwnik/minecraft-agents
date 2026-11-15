@@ -1,6 +1,6 @@
 ;; Card 3dbb7102: forest maintain rests while the logs held (carried, or in known chests) cover three days of the expected demand
 ;; (cost/log-share), as farm tend rests on a pass not worth its walk; a body with no logs fells the same tree.
-;; Should-succeed: no logs carried, the ripe tree 6 blocks away is felled. Should-fail: 400 logs carried, the same tree stands and the job waits :not-worth.
+;; Should-succeed: no logs carried, the ripe tree 6 blocks away is felled; 400 logs carried and a :chest given, the logs are stored and the tree stands. Should-fail: 400 logs carried, the same tree stands and the job waits :not-worth.
 {:defaults
  {:tags [:forestry :maintain :worth] :time :any
   :plot {:height 12 :floor "stone"}
@@ -10,14 +10,21 @@
   :plans [{:id "forest" :metadata {:by "$body"}
            :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
   :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1] ["oak_sapling" 1]] :effects [["resistance" 600 4]]}
-  :act [[:job (jobs.forestry.maintain {:worth 1200 :plan "$plan:forest"})]]
   :limit-s 120}
  :cases
  [{:name "no-logs-held-the-ripe-tree-is-felled"
+   :act [[:job (jobs.forestry.maintain {:worth 1200 :plan "$plan:forest"})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
    :after [[:not-block [16 0 16] "oak_log"]]}
   {:name "four-hundred-logs-held-the-tree-stands"
+   :act [[:job (jobs.forestry.maintain {:worth 1200 :plan "$plan:forest"})]]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1] ["oak_log" 400]]}
    :expect [{:event {:kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}
             {:no-event {:kind #{:completed :stopped}} :for-s 20 :of-job true}]
-   :after [[:block [16 0 16] "oak_log"] [:item "oak_log" 400]]}]}
+   :after [[:block [16 0 16] "oak_log"] [:item "oak_log" 400]]}
+  {:name "four-hundred-logs-held-with-a-chest-are-stored-the-tree-stands"
+   :blocks [[:set [20 0 22] "chest[facing=west]"]]
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1] ["oak_log" 400]]}
+   :act [[:job (jobs.forestry.maintain {:worth 1200 :plan "$plan:forest" :chest #xyz [20 0 22]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:block [16 0 16] "oak_log"] [:item "oak_log" 0]]}]}
