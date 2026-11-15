@@ -12,8 +12,8 @@
             [jobs.lib.watch :as watch]))
 
 (def default-weapons
-  "Item name substrings that count as weapons; _axe does not match pickaxes."
-  ["_sword" "_axe"])
+  "The items that count as weapons: each one that hits harder than a fist (cost.weapon/weapon-damage-by-name)."
+  (vec (keys weapon/weapon-damage-by-name)))
 
 (defn ranged?
   "Whether e shoots or throws: a ranged mob, or a drowned holding a trident."
@@ -60,7 +60,7 @@
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 
 (defn weapons
-  "The weapons of the call: its :use :tools, else the default substrings."
+  "The weapons of the call: its :use :tools, else default-weapons."
   [c]
   (or (ctx/use c :tools) default-weapons))
 

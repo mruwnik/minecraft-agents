@@ -42,11 +42,6 @@
   [item-name]
   (get-in tool-material [(material-of item-name) :rank] 0))
 
-(defn weapon-score
-  "Higher is better: the material, and swords over axes of the same material."
-  [item-name]
-  (+ (weapon-rank item-name)
-     (if (str/ends-with? item-name "_sword") 0.5 0)))
 
 (defn cheap-rank
   "Position of the tool's material in cheapness (past the end for an unknown one)."
@@ -64,6 +59,8 @@
     (nil? item-name) 4
     (str/ends-with? item-name "_sword") 1.6
     (str/ends-with? item-name "_axe") (get axe-attack-speed (material-of item-name) 4)
+    (str/ends-with? item-name "_pickaxe") 1.2
+    (str/ends-with? item-name "_shovel") 1
     (= item-name "trident") 1.1
     (= item-name "mace") 0.6
     :else 4))
@@ -88,13 +85,21 @@
   {"cow" 10 "pig" 10 "sheep" 8 "chicken" 4 "rabbit" 3 "cod" 3 "salmon" 3 "squid" 10})
 
 (def weapon-damage-by-name
+  "Vanilla damage of one hit with each item that hits harder than a fist (hoes hit as a fist)."
   {"wooden_sword" 4 "golden_sword" 4 "stone_sword" 5 "copper_sword" 5 "iron_sword" 6 "diamond_sword" 7 "netherite_sword" 8
-   "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "copper_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10 "trident" 9 "mace" 6})
+   "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "copper_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10 "trident" 9 "mace" 6
+   "wooden_pickaxe" 2 "golden_pickaxe" 2 "stone_pickaxe" 3 "copper_pickaxe" 3 "iron_pickaxe" 4 "diamond_pickaxe" 5 "netherite_pickaxe" 6
+   "wooden_shovel" 2.5 "golden_shovel" 2.5 "stone_shovel" 3.5 "copper_shovel" 3.5 "iron_shovel" 4.5 "diamond_shovel" 5.5 "netherite_shovel" 6.5})
 
 (defn weapon-damage
   "Damage of one hit with item-name (a fist, 1, for nil or an unknown item)."
   [item-name]
   (get weapon-damage-by-name item-name 1))
+
+(defn weapon-score
+  "Higher is better: the damage a second of item-name's hits (weapon-damage over attack-gap-ms)."
+  [item-name]
+  (/ (weapon-damage item-name) (attack-gap-ms item-name)))
 
 (defn kill-seconds
   "Seconds the hits of item-name (a fist for nil) take to kill a mob of hp, one every attack gap."

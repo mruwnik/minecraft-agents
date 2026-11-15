@@ -458,6 +458,8 @@
     {:inventory [] :entities [far-husk]} :later
     (assoc walled-in-husk :inventory []) :ok
     {:inventory sword :entities [far-husk]} :ok
+    {:inventory [{:name "stone_pickaxe" :count 1}] :entities [far-husk]} :ok
+    {:inventory [{:name "wooden_hoe" :count 1}] :entities [far-husk]} :later
     {:inventory []} :ok))
 
 (deftest get-kit-binds-the-unarmed-hostile-wait

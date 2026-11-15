@@ -264,6 +264,17 @@
             {:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:item "stone_sword" 0]]
    :limit-s 50}
+  ;; card e2400093: a carried stone pickaxe is a weapon (it hits for 3, a fist for 1), so a known hostile with a way (a husk 12 away, NoAI) does not hold the kit: the stone sword is made.
+  ;; Should-fail partner: unarmed-waits-while-a-hostile-is-known-near (nothing carried that hits harder than a fist: held).
+  {:name "a-carried-pickaxe-is-a-weapon-so-a-known-hostile-does-not-hold-the-kit"
+   :time :any
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 2] ["stick" 1] ["cooked_beef" 3]]}
+   :act [[:summon "husk" [28.5 0 12.5] "{UUID:[I;2006103,2,1,4],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["stone_sword"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :hostile-near}} :for-s 60 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:item "stone_sword" 1]]
+   :limit-s 80}
   ;; e8d5608e: a hostile with no way to the body (a husk, NoAI, shut in a lit glass cell 13 blocks off) does not hold the unarmed job: the wooden sword is made and the job completes.
   ;; The cell is glass and lit, the body faces it (yaw 270), so it has seen every wall: a cell it has not seen counts as a way (reach/mob-lookup), so a stone box seen from outside never proves a mob closed in.
   ;; Should-fail partner: unarmed-waits-while-a-hostile-is-known-near (the husk has a way).
