@@ -209,6 +209,14 @@
     (is (= (:value (cost/goal-value [(item "oak_log" (forestry/logs-per-tree))]))
            (forestry {:blocks {"3,63,0" "dirt"} :inventory [(item "oak_sapling" 1)]})) "a sapling to plant: the mean grown tree")))
 
+(deftest a-forest-pass-with-a-chest-is-worth-the-logs-it-stores
+  (let [forestry (fn [args] (worth 'jobs.forestry.maintain (tu/seeing-all (tu/fake-on-floor (update oak-world :inventory conj (item "oak_log" 20))))
+                                   (merge {:plan "forest" :accept #{:fluid-adjacent}} args)
+                                   {:engine {:world (world/of-data {"forest" forest} {} []) :warned (atom #{})}}))
+        chest {:chest {:x 10 :y 64 :z 0}}]
+    (is (< (Math/abs (- (:value (cost/goal-value [(item "oak_log" 20)])) (- (forestry chest) (forestry {})))) 1e-6) "the carried logs a store would put away")
+    (is (< (Math/abs (- (:value (cost/goal-value [(item "oak_log" 5)])) (- (forestry (assoc chest :carry {"oak_log" 15})) (forestry {})))) 1e-6) "less the logs the carry keeps")))
+
 (deftest a-forest-pass-prices-readying-and-unseen-cells
   (let [forestry #(worth 'jobs.forestry.maintain % {:plan "forest" :accept #{:fluid-adjacent}} {:engine {:world (world/of-data {"forest" forest} {} []) :warned (atom #{})}})
         tree (:value (cost/goal-value [(item "oak_log" (forestry/logs-per-tree))]))]

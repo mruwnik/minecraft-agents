@@ -20,6 +20,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.stock :as stock]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.tidy-rules :as tidy]
             [jobs.lib.tools :as tools]
@@ -54,7 +55,7 @@
   :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. {:reason :plan-trouble :why text}
   a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
   has no tree cells, also later in the call.
-  With a :chest, the logs carried are stored in it once the trees are done (jobs.storage.deposit, :items the carried log names; the
+  With a :chest, the logs carried are stored in it once the trees are done (jobs.storage.deposit, :items the carried log names above the reserve and :carry, priced by goal-value in the worth; the
   call also starts for that alone, whatever the held logs make the trees worth); a store that gives up ends condition-failed :not-stored
   when nothing else was done.
   Ends :done with data {:felled :planted :left :bare} when it felled or planted a tree or stored logs. With none of
@@ -66,6 +67,7 @@
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :chest {:doc "chest position {:x :y :z} the logs carried are stored in (jobs.storage.deposit); nil: not stored" :spec ::a/pos :default nil}
+   :carry {:doc "{item-name count}: how many of a log name storing leaves carried, at least the reserve register's deposit holds" :spec (a/map-of string? number?) :default {}}
    :ignore-zones? :shared})
 
 (defn fetching?
@@ -233,10 +235,23 @@
 
 (declare worth-of)
 
-(defn carried-logs
-  "The names of the log stacks carried, each once."
+(defn keep-carried
+  "{name n} the store step leaves carried: the reserve register's deposit holds and :carry."
   [c]
-  (vec (distinct (filter #(str/ends-with? % "_log") (map :name (u/inventory (:primitives c)))))))
+  (merge-with max (reserve/held c :deposit) (:carry (:args c))))
+
+(defn spare-logs
+  "{log-name n} the carried logs above the keep."
+  [c]
+  (let [kept (keep-carried c)
+        totals (reduce (fn [m {:keys [name count]}] (cond-> m (str/ends-with? name "_log") (update name (fnil + 0) count)))
+                       {} (u/inventory (:primitives c)))]
+    (into {} (keep (fn [[n k]] (let [s (- k (get kept n 0))] (when (pos? s) [n s])))) totals)))
+
+(defn carried-logs
+  "The names of the carried logs above the keep."
+  [c]
+  (vec (keys (spare-logs c))))
 
 (defn storing?
   "Whether the logs carried are still to be stored: a :chest is given, logs are carried and this call has not stored yet."
@@ -263,9 +278,13 @@
                                (or (blocked-reason c classes) {:reason :nothing-to-do})))))))
 
 (defn ready-or-storing
-  "ok while logs wait to be stored, else not-ready."
+  "While logs wait to be stored: ok, or later :not-worth when the walk to the chest costs more than storing them is worth; else not-ready."
   [c]
-  (if (storing? c) (contract/ok :storing "logs are carried to store") (not-ready c)))
+  (if-not (storing? c)
+    (not-ready c)
+    (if-let [cause (pick/not-worth c {:pos (:chest (:args c))} #(worth-of c))]
+      (checks/cause-status :later cause)
+      (contract/ok :storing "logs are carried to store"))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -419,12 +438,16 @@
   [c]
   (when (storing? c)
     (let [{:keys [chest ignore-zones?]} (:args c)
+          before (reduce + 0 (vals (spare-logs c)))
           r (waits/waiting-out c (await (ctx/call c :store 'jobs.storage.deposit
-                                                  (cond-> {:chest chest :items (carried-logs c)}
+                                                  (cond-> {:chest chest :items (carried-logs c) :carry (keep-carried c)}
                                                     (some? ignore-zones?) (assoc :ignore-zones? ignore-zones?)))))]
       (if (= :continue r)
         :continue
-        (do (ctx/update-mem! c assoc :stored (if (= :done (:kind r)) :done :gave-up))
+        (do (ctx/update-mem! c assoc :stored (cond (< (reduce + 0 (vals (spare-logs c))) before) :done
+                                                  (= :done (:kind r)) :none
+                                                  :else :gave-up)
+                             :store-reason (contract/cause-key r))
             :again)))))
 
 (defn finish!
@@ -438,8 +461,8 @@
                        ", left " (count left) ", bare " (count bare))]
     (cond
       (or (pos? (+ (:felled result) (:planted result))) (= :done (:stored m))) (ctx/end c :done nil (assoc result :text done-text))
-      (and (= :gave-up (:stored m)) (empty? left)) (ctx/end c :condition-failed {:reason :not-stored} result)
-      (seq left) (ctx/end c :nothing-possible :left result)
+      (and (= :gave-up (:stored m)) (empty? left)) (ctx/end c :condition-failed {:reason (or (:store-reason m) :not-stored)} result)
+      (seq left) (ctx/end c :nothing-possible :left (cond-> result (= :gave-up (:stored m)) (assoc :store-gave-up (:store-reason m))))
       :else (ctx/end c :condition-failed (or (blocked-reason c classes) {:reason :nothing-to-do}) result))))
 
 (defn ^:async step [c]
@@ -489,7 +512,7 @@
        (transduce (comp (mapcat identity) (filter (comp log? key)) (map val)) + 0 (vals (stock/stock-of (ctx/view c)))))))
 
 (defn worth-of
-  "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell; a sapling it
+  "Seconds a root call is worth: the cost/goal-value of the logs standing on the grown trees it would fell, plus with a :chest that of the carried logs it would store; a sapling it
   would plant on a bare cell it can plant, or on one prepare readies, planting-worth; a planned cell never seen one tree at
   the ripe share (cost/field-share, as farm tend prices unseen cells) of the cells seen. Only the logs the held stock
   (carried and in known chests) leaves wanted count (cost/log-share)."
@@ -510,7 +533,10 @@
         guessed (map (fn [pos] [(* share (tree-worth ((:trees field) pos))) (* share per-tree)]) unseen)
         terms (concat ripe planted guessed)
         logs (reduce + 0 (map second terms))]
-    (* (cost/log-share (held-logs c) logs) (reduce + 0 (map first terms)))))
+    (+ (* (cost/log-share (held-logs c) logs) (reduce + 0 (map first terms)))
+       (if (and (:chest (:args c)) (storing? c))
+         (:value (cost/goal-value (mapv (fn [[n k]] {:name n :count k}) (spare-logs c))))
+         0))))
 
 (defn plan-place "A tree cell of the plan, nil when it cannot be worked." [c] (some-> (planned c) :trees keys first))
 
