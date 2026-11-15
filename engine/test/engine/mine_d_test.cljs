@@ -69,6 +69,18 @@
           (await (run-ticks s 10))
           (is (= "stone_pickaxe" (.-held (.self (:p s))))))))))
 
+(deftest the-digging-job-holds-the-enchanted-netherite-pickaxe-not-the-wooden-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "stone"}
+                                :inventory [{:name "wooden_pickaxe" :count 1 :durability 50 :maxDurability 59}
+                                            {:name "netherite_pickaxe" :count 1 :durability 2000 :maxDurability 2031
+                                             :enchants [{:name "efficiency" :level 5} {:name "unbreaking" :level 3}]}]}})]
+          (core/submit! (:eng s) (tu/order (spec {:block "stone" :count 1})) {})
+          (await (run-ticks s 10))
+          (is (= "netherite_pickaxe" (.-held (.self (:p s))))))))))
+
 (deftest ore-across-a-wide-trench-in-view-is-dug-from-the-cut-end
   (async done
     (tu/run-async done

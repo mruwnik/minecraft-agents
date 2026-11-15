@@ -424,6 +424,24 @@
 
 ;; ---------------------------------------------------------------- the cost
 
+(defn enchant-level
+  "The level of enchantment ench-name on a carried item entry's :enchants [{:name :level}] (0 without it)."
+  [{:keys [enchants]} ench-name]
+  (or (some #(when (= ench-name (:name %)) (or (:level %) (:lvl %) 1)) enchants) 0))
+
+(defn dig-use-price
+  "Seconds one cut costs with the carried tool entry {:name :enchants}, dig-s being the plain tool's time on the block: that time
+  as Efficiency shortens it (speed over speed + level squared + 1) plus the tool's wear, its whole item-value over its
+  maxDurability, a use wearing with chance 1/(Unbreaking level + 1). Lower is better. The tool's own tier and kind are the caller's."
+  [{:keys [name] :as entry} dig-s]
+  (let [max-durability (some-> (aget (.-itemsByName (facts/data @game/version)) (or name "")) .-maxDurability)
+        eff (enchant-level entry "efficiency")
+        speed (weapon/tool-speed name)
+        wear (if (pos? max-durability)
+               (/ (:value (item-value [{:name name :count 1}])) max-durability (inc (enchant-level entry "unbreaking")))
+               0)]
+    (+ (* dig-s (/ speed (+ speed (if (pos? eff) (inc (* eff eff)) 0)))) wear)))
+
 (defn weapon-price
   "Seconds a fight with one mob (at 3 blocks; a zombie unless mob-name is given) costs with item-name (nil a fist): the
   fight's seconds, the hp it loses (health/hp-cost) and the wear on the weapon, its whole item-value over its maxDurability

@@ -178,10 +178,11 @@
     (<= (+ (* (d :x) (d :x)) (* (d :y) (d :y)) (* (d :z) (d :z))) (* range range))))
 
 (defn inventory
-  "The carried items as cljs maps {:name :count :slot}, with :durability (left) and :max for tools."
+  "The carried items as cljs maps {:name :count :slot}, with :durability (left) and :max for tools, :enchants [{:name :level}] when enchanted."
   [p]
   (mapv (fn [i] (cond-> {:name (.-name i) :count (.-count i) :slot (.-slot i)}
-                  (some? (.-durability i)) (assoc :durability (.-durability i) :max (.-maxDurability i))))
+                  (some? (.-durability i)) (assoc :durability (.-durability i) :max (.-maxDurability i))
+                  (seq (.-enchants i)) (assoc :enchants (mapv (fn [e] {:name (.-name e) :level (or (.-level e) (.-lvl e) 1)}) (.-enchants i)))))
         (some-> (.self p) .-inventory array-seq)))
 
 (defn carried-count

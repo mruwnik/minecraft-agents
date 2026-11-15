@@ -24,6 +24,13 @@
     192 0
     200 8))
 
+(def eff5-unb3 [{:name "efficiency" :level 5} {:name "unbreaking" :level 3} {:name "mending" :level 1}])
+
+(deftest a-tool-is-priced-by-its-cut-time-and-wear-so-an-enchanted-netherite-pickaxe-beats-a-wooden-one
+  (is (= ["netherite_pickaxe" "wooden_pickaxe"]
+         (map :item (:list (choose/tools-for (body [(tool "wooden_pickaxe" 50 59) (assoc (tool "netherite_pickaxe" 2000 2031) :enchants eff5-unb3)])
+                                             [:dig "stone"] 40))))))
+
 (deftest fast-puts-the-best-material-first
   (is (= ["iron_pickaxe" "stone_pickaxe"]
          (map :item (:list (choose/tools-for (body stone-and-iron) [:dig "stone"] 40 {:fast true}))))))
