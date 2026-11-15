@@ -61,6 +61,21 @@
           (is (seq (mt/dug-cells s)))
           (is (every? (fn [[x]] (<= x 2)) (mt/dug-cells s)) (pr-str (mt/dug-cells s))))))))
 
+(deftest a-strip-tunnel-in-the-dark-with-no-torch-gets-them-from-a-chest-instead-of-stopping
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [chest "1,64,0"
+              w (-> (mt/torch-world mt/bare-pickaxe)
+                    (update :blocks #(merge % (mt/cells "air" [0] [64 65] [0]) {chest "chest"}))
+                    (assoc :containers {chest [{:name "torch" :count 20}]}))
+              s (mt/start-lit w [0 0])]
+          (core/submit! (:eng s) (tu/order (list 'jobs.gather.strip-tunnel {:heading "north" :limit 3 :stay-level true})) {})
+          (await (mt/run-ticks s 300))
+          (is (seq (mt/events-of s :torch.stocked)) "the chest's torches were got")
+          (is (pos? (get (mt/inv s) "torch" 0)))
+          (is (not-any? #(= :no-torches (:reason %)) (mt/events-of s :stopped))))))))
+
 (deftest the-line-a-dig-cuts-next-is-two-cells-ahead-at-three-heights
   (let [p (tu/fake {:self {:pos {:x 5.5 :y 64 :z 2.5}}})]
     (is (= [[6 63 2] [6 64 2] [6 65 2] [7 63 2] [7 64 2] [7 65 2]] (trip/line-ahead {:args {:heading :east} :primitives p})))

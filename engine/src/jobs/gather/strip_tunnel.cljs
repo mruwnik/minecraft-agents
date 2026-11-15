@@ -10,6 +10,7 @@
             [jobs.gather.mine.expect :as expect]
             [jobs.gather.mine.targets :as targets :refer [rules-in step-cell within-own-zone]]
             [jobs.gather.mine.torches :as torches]
+            [jobs.lib.torch :as torch]
             [jobs.lib.torch-stock :as stock]
             [jobs.gather.mine.tunnel :as tunnel :refer [passable open-start result-of walk-of back-on-line!]]
             [jobs.lib.waits :as waits]
@@ -37,7 +38,7 @@
   Ends when the stretch is done: :done with data {:stop :tunnel-length} at :limit, or {:stop :watch} when a block of :watch-kinds with
   a seen air face is in view that was not when the call began, or a step dug one (the caller digs it, then calls again). Any other
   stop ends the call with data {:stop reason :at :next-cell :walk} (the stair's stops, :own-zone, :walk-failed, :breach-sealed,
-  :breach-open): condition-failed for facts, else nothing-possible. No torch to hang and none to craft ends condition-failed
+  :breach-open): condition-failed for facts, else nothing-possible. No torch to hang and none to craft or get (jobs.lib.torch-stock/torches!, the ways allowing :gather) ends condition-failed
   :no-torches. The data always carries :origin :heading :steps :hung :dug [{:cell :block}] :behind. Needs a pickaxe as the
   stair does (ways passed on).")
 
@@ -131,6 +132,14 @@
       (#{:tunnel-length :watch} stop) (ctx/end c :done nil data)
       (or (atool/facts stop) (#{:own-zone :no-torches} stop)) (ctx/end c :condition-failed {:reason stop} data)
       :else (ctx/end c :nothing-possible {:reason stop} data))))
+
+(defn ^:async stock-torches!
+  "A torch round that found none to hang: get them once (jobs.lib.torch-stock/torches!, the ways allowing; not after the round's own craft failed, which the get would only repeat), :again with some carried, else the :no-torches end."
+  [c]
+  (let [r (when-not (:craft-failed (ctx/mem c)) (await (stock/torches! c)))]
+    (cond (= :continue r) :continue
+          (pos? (torch/torches-held (:primitives c))) :again
+          :else (finish! c :no-torches nil))))
 
 (defn step-accept [{:keys [accept wet]}]
   (cond-> [] (some #{:falling-block} accept) (conj :falling-block) wet (conj :fluid-adjacent)))
@@ -246,7 +255,7 @@
               (await (glance! c [(headings heading)]))
               :again)
           (torches/torch-due? c) (let [r (await (torches/torch-round! c false))]
-                                   (if (= :no-torches r) (finish! c :no-torches nil) r))
+                                   (if (= :no-torches r) (await (stock-torches! c)) r))
           :else (await (stair-step! c from next cut)))))))
 
 (defn done?
