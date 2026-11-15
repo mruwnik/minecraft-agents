@@ -85,10 +85,12 @@
   "Seconds of skipped night the other players online lose while the body stays awake, left seconds of night still to run:
   each waits it out, in the chance the body's own sleep skips the night (value/skip-chance of the players not known
   asleep, sleepers-short: each lies down at the measured share); none when tonight's latest count says the night
-  skips anyway."
+  skips anyway, which it does not when the count counts the body's own sleep (getting up forfeits that skip)."
   [p view left]
-  (let [{:keys [skipping]} (:data (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view)))]
-    (if skipping 0 (* (others-online p) left (value/skip-chance (sleepers-short p view))))))
+  (let [status (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view))]
+    (if (and (:skipping (:data status)) (not (counts-self? p view status)))
+      0
+      (* (others-online p) left (value/skip-chance (sleepers-short p view))))))
 
 (defn sleepers-known
   "How many other players are known asleep tonight: the larger of those in sight and tonight's latest count less the

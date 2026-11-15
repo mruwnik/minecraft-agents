@@ -345,6 +345,24 @@
           (is (< (- awake alone) (/ (- asleep alone) 10)) "three players awake and none known asleep: the night skips only if all three lie down (a 1 in 200 chance), little is charged")
           (is (> asleep alone) "the one other player asleep: the night skips if the body lies down, so staying awake holds it up"))))))
 
+(deftest a-count-that-skips-the-night-only-for-the-bodys-own-sleep-holds-it-in-bed
+  ;; Fenwick death 4: asleep, the count said skipping, so every awake answer was priced 0 for the skip; up, the count no
+  ;; longer did and they cost the skip, so the body lay down again, and so on all night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [skipping {:entries {:sleep-status [{:t 0 :data {:skipping true}}]}}
+              exposed (fn [self]
+                        (let [c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night :players ["Alex"] :self self})) {}
+                                           {:view (fn [] {:now 0 :data skipping})
+                                            ::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})]
+                          (js/Promise.all #js [(bed-down/answers c {}) (js/Promise.resolve (second (get-in (sh-clock/night-left-quote c) [:uses :job-time])))])))
+              [awake left] (await (exposed {}))
+              [asleep _] (await (exposed {:isSleeping true}))]
+          (is (pos? left))
+          (is (>= (- (:exposed asleep) (:exposed awake)) left) "asleep, getting up forfeits the skip the one other player waits for")
+          (is (>= (- (:shelter asleep) (:shelter awake)) left) "so does sheltering"))))))
+
 (deftest a-flee-off-the-ground-owes-the-walk-back-by-day
   (async done
     (tu/run-async done
