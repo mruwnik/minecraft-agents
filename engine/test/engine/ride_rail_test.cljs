@@ -18,9 +18,10 @@
 (defn cart [extra] (merge {:id 50 :uuid "u-50" :name "minecart" :kind "other" :health 1 :pos [0.5 64.0625 0.5]
                            :drops [{:name "minecart" :count 1}]} extra))
 
-(defn ^:async ride! [blocks entities inventory]
+(defn ^:async ride! [blocks entities inventory & [setup]]
   (let [{:keys [eng p]} (b/start {:inventory inventory :blocks blocks :entities entities :self {:pos {:x 0 :y 64 :z 3}}}
                                  {"line" plan} [])
+        _ (when setup (setup p))
         e (await (ending-of {:eng eng} job {:plan "line"} 400))]
     {:e e :p p}))
 
@@ -58,3 +59,14 @@
           (is (= [:condition-failed :not-sound] [(:kind e) (contract/cause-key e)]) (pr-str e))
           (is (some #(= {:pos [12 64 0] :why :gap} %) (:breaks (:cause e))) (pr-str e))
           (is (not (vehicle/mounted? p))))))))
+
+(deftest a-line-the-body-has-not-yet-seen-is-looked-at-before-it-is-judged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shown (atom false)
+              unseen (fn [p]
+                       (aset p "sensedAt" (fn [pos] (if @shown (.blockAt p pos) #js {:unknown true})))
+                       (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a))))
+              {:keys [e]} (await (ride! (rlt/built-world plan "stone") [(cart {:rollsTo [29.5 64.0625 0.5]})] [] unseen))]
+          (is (= :done (:kind e)) (pr-str e)))))))

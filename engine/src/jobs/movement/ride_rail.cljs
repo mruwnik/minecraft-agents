@@ -13,6 +13,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
+            [jobs.lib.sense :as sense]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]
@@ -124,10 +125,12 @@
   "Later :plan / never :not-a-line for a plan that is no line; later :not-sound while the line known has breaks."
   [c]
   (let [{:keys [trouble cells]} (line c)
-        bs (when cells (breaks c cells))]
+        bs (when cells (breaks c cells))
+        unseen (when (every? #(= :unloaded (:why %)) bs) (distinct (map :pos bs)))]
     (cond
       (= :never (:kind trouble)) (contract/never (:reason trouble) (:text trouble) :why (:why trouble))
       trouble (contract/later (:reason trouble) (:text trouble))
+      (seq unseen) (sense/look-or-later c :not-sound (str "cells of the line were not seen: " (pr-str (take 4 unseen))) unseen)
       (seq bs) (contract/later :not-sound (str "the line is not sound: " (pr-str (take 4 bs))) :breaks bs
                                :hint "build and judge it with build.rail-line")
       :else (contract/ok :line "a sound line"))))
