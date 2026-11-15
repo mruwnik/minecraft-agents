@@ -607,7 +607,7 @@
               foot {:x 2 :y 64 :z 0}
               slept (atom [])]
           (with-redefs [bed-down/put-down-bed! (fn ^:async pd [_] foot)
-                        bed-down/open-sleep-ok? (fn ^:async o [_ _] true)
+                        bed-down/bed-answer (fn ^:async o [_ _] :bed)
                         bed-down/sleep! (fn ^:async s [_ bed _] (swap! slept conj bed) :continue)
                         sh-beds/place-wanted? (fn pw ([_] (empty? @slept)) ([_ _] (empty? @slept)))]
             (await (bed-down/round c))

@@ -28,6 +28,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-pick :as pick]
             [jobs.movement.go-to.preview :as pv]
+            [jobs.survival.bed-down :as bed-down]
             [jobs.survival.night :as night]))
 
 (def far-bed {:x 40 :y 64 :z 0})
@@ -713,3 +714,26 @@
           (await (st/tick-n eng 12))
           (is (seq (st/calls raw "look")) "looked round the room")
           (is (seq (st/calls raw "sleep")) "then lay down in the closed room"))))))
+
+(def placed-open-bed
+  "A bed already put down in the open at x 6..7, the body at its stand (x 5) with blocks to shut it in."
+  (assoc on-open-ground :blocks {"6,64,0" "red_bed" "7,64,0" "red_bed"} :inventory [{:name "cobblestone" :count 32}]))
+
+(deftest a-placed-open-bed-the-body-stands-at-has-a-sealed-answer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock seen]} (setup placed-open-bed)]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
+          (await (st/tick-n eng 12))
+          (is (number? (:sealed (:prices (first (st/emitted seen :night.answers)))))
+              "old code priced :sealed for a carried bed only, so a placed open bed had no answer that shuts it in"))))))
+
+(deftest a-placed-bed-has-a-row-only-for-a-body-standing-beyond-one-end
+  (let [{:keys [p]} (lit-fake placed-open-bed)
+        at (fn [x] (with-redefs [sh-sense/feet (constantly {:x x :y 64 :z 0})] (bed-down/placed-layout p {:x 6 :y 64 :z 0})))]
+    (is (= {:stand {:x 5 :y 64 :z 0} :foot {:x 6 :y 64 :z 0} :head {:x 7 :y 64 :z 0}} (at 5)))
+    (is (= {:stand {:x 8 :y 64 :z 0} :foot {:x 7 :y 64 :z 0} :head {:x 6 :y 64 :z 0}} (at 8)))
+    (is (nil? (at 3)))))

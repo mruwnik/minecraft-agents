@@ -101,15 +101,33 @@
 
 (defn night-c [c] (assoc-in c [:args :for] :night))
 
+(defn placed-layout
+  "{:stand :foot :head} of the bed placed at bed (a map) when the body stands in the cell beyond one end of its row (its
+  stand: a sleeper there is shut in with it); nil when the bed has no second half seen or the body stands elsewhere."
+  [p bed]
+  (let [at (fn [c [dx dz]] (-> c (update :x + dx) (update :z + dz)))
+        bed? #(some-> (u/seen-name p %) (.endsWith "_bed"))
+        feet (sh-sense/feet p)
+        other (first (filter #(bed? (at bed %)) [[1 0] [-1 0] [0 1] [0 -1]]))]
+    (when other
+      (let [far (at bed other)
+            same? #(and (= (:x %) (:x feet)) (= (:y %) (:y feet)) (= (:z %) (:z feet)))
+            behind (at bed (mapv - other))
+            beyond (at far other)]
+        (cond
+          (same? behind) {:stand behind :foot bed :head far}
+          (same? beyond) {:stand beyond :foot far :head bed})))))
+
 (defn seal-plan
-  "{:layout :cells :seconds} to put the carried bed down here and shut its row in (seal-cells, each at cost.ways/place-s
-  for the night), when a row fits in the open and the shelter blocks carried cover every cell; else nil."
-  [c]
-  (let [layout (sh-beds/bed-layout c false)
-        cells (when layout (seal-cells (:primitives c) layout))
-        have (reduce + 0 (map :count (lb/carried c (sin/blocks (night-c c)))))]
-    (when (and (seq cells) (<= (count cells) have))
-      {:layout layout :cells cells :seconds (* (count cells) (way/place-s (night-c c)))})))
+  "{:layout :cells :seconds} to shut a bed's row in (seal-cells, each at cost.ways/place-s for the night), when the shelter
+  blocks carried cover every cell, else nil. layout: the row of a bed placed (placed-layout), default the carried bed put down
+  here, when a row fits in the open."
+  ([c] (seal-plan c (sh-beds/bed-layout c false)))
+  ([c layout]
+   (let [cells (when layout (seal-cells (:primitives c) layout))
+         have (reduce + 0 (map :count (lb/carried c (sin/blocks (night-c c)))))]
+     (when (and (seq cells) (<= (count cells) have))
+       {:layout layout :cells cells :seconds (* (count cells) (way/place-s (night-c c)))}))))
 
 (defn exposed-price
   "Seconds secs in the open at `at` cost (price/stay-risk-s): the hp the spawns at chance hurt (price/stay-parts) and the fight with
@@ -206,7 +224,7 @@
   the body's sleep skips it (sh-sleepers/sleepers-short 0) and no known hostile is near the bed (sh-sleepers/monsters-near-bed?:
   the server refuses the sleep; with none known, the refusal is the chance one spawns and arrives while the bed is placed and lain in, arrival-chance, its price mixed with the night left in the open), open (not sh-beds/bed-sheltered?) all that time or at least the time to place the bed and lie
   asleep (sh-sleepers/sleep-start-s), all of it from the walk's end (walk-secs, the walk's seconds: a walk that outlasts the night skips
-  none of it), plus walk-s (the walk there and back by day, priced by the caller), the night it walks lost and the skip the others wait meanwhile. :sealed (a carried bed in the open, seal-plan): the bed's row shut in first, its seconds
+  none of it), plus walk-s (the walk there and back by day, priced by the caller), the night it walks lost and the skip the others wait meanwhile. :sealed (a carried bed in the open, or a placed one the body stands beyond one end of, seal-plan): the bed's row shut in first, its seconds
   exposed, then lain in. :shelter sheltering here (dig-in-quote, when shut-in quotes a way) and :niche (niche, the caller's shelter-quote
   of a pocket dug nearby) alike: busy their time (time-s), the toll their quote names, that time exposed from the worst of the cells the bed
   is got up to (wake-cells) when asleep, and their :morning-s. :flee and :home (flee, home: the caller's target with go-to's :seconds and
@@ -250,7 +268,9 @@
         into-home? (some? (sh-beds/closed-home c))
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) into-home?))
         body (respawn-body c)
-        sealed (when (and carried? (not sheltered?)) (seal-plan c))
+        sealed (cond sheltered? nil
+                     carried? (seal-plan c)
+                     (and bed (not asleep?)) (when-let [l (placed-layout p bed)] (seal-plan c l)))
         out-s (when log-out? (let [{:keys [uses death]} (await (ctx/quote c 'jobs.survival.log-out {}))]
                                (+ (get-in uses [:job-time 1]) (* (:chance death 0) (:death death 0)))))
         here (await (dig-in-quote c))]
@@ -314,11 +334,11 @@
     :bed
     (cheapest-priced prices)))
 
-(defn ^:async open-sleep-ok?
-  "Whether to lie in a bed at bed that is not shut in: overdue, or lying there is the cheapest of answers (no walk: the
-  body is there)."
+(defn ^:async bed-answer
+  "The cheapest of answers for the bed at bed (no walk: the body is there): :bed to lie in it as it is when overdue or that is the
+  cheapest, :sealed to shut its row in first."
   [c bed]
-  (= :bed (cheapest c (await (answers c {:bed bed :log-out? (log-out-open? c)})))))
+  (cheapest c (await (answers c {:bed bed :log-out? (log-out-open? c)}))))
 
 (defn bed-to-use
   "The :bed argument, else the bed sh-beds/bed-to-use picks."
@@ -377,7 +397,7 @@
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async sleep!
-  "jobs.survival.sleep on bed (open-ok?: also one not shut in a roofed room, open-sleep-ok?)."
+  "jobs.survival.sleep on bed (open-ok?: also one not shut in a roofed room, bed-answer: :bed)."
   [c bed open-ok?]
   (let [p (:primitives c)
         started (ctx/now c)
@@ -531,7 +551,12 @@
         answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c chosen?)) (await (carried-answer c)))]
     (cond
       (:seal (ctx/mem c)) (await (seal-and-sleep! c))
-      bed (await (sleep! c bed (await (open-sleep-ok? c bed))))
+      bed (let [a (await (bed-answer c bed))
+                l (when (= :sealed a) (placed-layout p bed))]
+            (if l
+              (do (ctx/update-mem! c assoc :seal {:bed bed :cells (seal-cells p l)})
+                  (await (seal-and-sleep! c)))
+              (await (sleep! c bed (= :bed a)))))
       (#{:bed :sealed} answer) (await (place-bed-and-sleep! c answer))
       answer (ctx/end c :condition-failed :bed-open {:slept false :bed-open true :answer answer
                                                      :text (str "the carried bed would lie in the open on a night it does not end; " (name answer) " is cheaper; not putting it down")})
