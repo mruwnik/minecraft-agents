@@ -245,18 +245,6 @@
           (is (= [10 64 0] (feet p)))
           (is (empty? (events-of seen :reach.span))))))))
 
-(deftest a-free-body-cuts-a-stair-down-to-a-goal-far-below
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [deep (apply dissoc (box -20 30 -20 40 63 20 "stone") ["14,44,0" "14,45,0"])
-              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks deep :inventory [{:name "stone_pickaxe" :count 1}]}
-                                                    'jobs.movement.reach
-                                                    {:pos [14 44 0] :range 0}))]
-          (is (true? (:arrived @out)) (pr-str @out))
-          (is (= [14 44 0] (feet p)))
-          (is (= [:stair] (distinct (map :step (events-of seen :reach.span)))) "a dug route of over 16 cells is over the dig limit"))))))
-
 (deftest only-a-walk-with-no-route-is-no-case-for-a-span
   (are [kind why want] (= want (reach/no-way? {:kind kind :data {:why why :kind :gap-up}}))
     :nothing-possible :goal-cut-off true

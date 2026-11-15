@@ -384,11 +384,13 @@
   (pos? (escape/pit-depth (escape/block-at-of p) (escape/unseen-of p) cell)))
 
 (defn sealed?
-  "Whether the cell is solid on all four sides, every side seen: no walk leads out of it."
+  "Whether the cell is solid on all four sides, every side seen, and no side has a one-block step up out of it: no walk leads out of it."
   [p cell]
   (let [block-at (escape/block-at-of p)
-        unseen? (escape/unseen-of p)]
-    (every? #(and (not (unseen? %)) (escape/solid? (block-at %))) (map #(escape/ahead cell % 1) escape/cardinals))))
+        unseen? (escape/unseen-of p)
+        free? #(or (unseen? %) (not (escape/solid? (block-at %))))
+        step-up? (fn [side] (and (free? (escape/up side 1)) (free? (escape/up side 2)) (free? (escape/up cell 2))))]
+    (every? #(and (not (unseen? %)) (escape/solid? (block-at %)) (not (step-up? %))) (map #(escape/ahead cell % 1) escape/cardinals))))
 
 (defn one-way-priced?
   "Whether the one-way step from `rim` landing at `at` is worth taking (jobs.lib.walk.one-way/taken?): the EV of its landing against the goal's worth

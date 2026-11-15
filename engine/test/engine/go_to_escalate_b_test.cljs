@@ -902,10 +902,11 @@
   (into {} (for [[x z] [[2 0] [4 0] [3 -1] [3 1]] y [64 65 66]] [(str x "," y "," z) "dirt"])))
 
 (deftest a-walk-only-call-takes-no-drop-into-a-pit-it-may-not-dig-out-of
-  (let [priced? (fn [args] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar dirt-pit)}) :args args :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
+  (let [priced? (fn [args & [pit]] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar (or pit dirt-pit))}) :args args :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
                                                   [8 60 0] [2 67 0] [3 64 0] false true))]
     (is (true? (priced? {})) "a call that may dig stairs out of dirt walls takes the drop")
-    (is (false? (priced? {:ways [:walk :clear-seal]})) "a walk-only call has no way out of the pit: a certain trap")))
+    (is (false? (priced? {:ways [:walk :clear-seal]})) "a walk-only call has no way out of the pit: a certain trap")
+    (is (true? (priced? {:ways [:walk :clear-seal]} (apply dissoc dirt-pit ["2,65,0" "2,66,0"]))) "a pit with a one-block step up out of it (a stair's foot) is no trap")))
 
 (deftest a-drop-of-a-plan-that-stops-short-of-the-goal-is-not-deeper-than-the-speculative-cap-whatever-the-goal-is-worth
   (let [priced? (fn [spec?] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :floor [-10 -10 10 10] :blocks {}}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}

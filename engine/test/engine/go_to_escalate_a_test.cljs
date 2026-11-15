@@ -526,16 +526,16 @@
           (is (false? (:arrived @out)))
           (is (nil? (:shut-in @out))))))))
 
-(deftest a-dig-s-walk-does-not-escalate
+(deftest a-dig-s-walk-from-a-pit-it-is-walled-in-takes-go-to-s-priced-way-out
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "10,64,0" "dirt")
                                                                :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.blocks.dig {:pos [10 64 0]}))]
-          (is (= {:status :stopped :reason :unreachable} (select-keys @out [:status :reason])) "the dig cannot reach the cell")
-          (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :ways #{:walk :clear-seal}")
-          (is (empty? (calls p "jumpPlace"))))))))
+          (is (= :dug (:reason @out)) "walled in, the walk's ways add :pillar and :dig-out: it leaves the pit and digs the cell")
+          (is (= [:pillar] (distinct (map :step (events-of seen :go-to.escalated)))))
+          (is (seq (calls p "jumpPlace"))))))))
 
 (deftest go-to-sealed-in-its-own-shelter-by-night-does-not-dig-out-for-a-goal-worth-less-than-the-dark-outside
   (async done
