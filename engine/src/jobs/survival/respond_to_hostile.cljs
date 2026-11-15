@@ -83,6 +83,12 @@
   [c]
   (body/mob-hit-since? (ctx/view c) (- (ctx/now c) (hit-window-ms))))
 
+(defn killer?
+  "Whether mob e dealt a blow of the body's latest death (its damage packets name the attacker): after the respawn it is
+  the danger the body knows is near, heard or seen."
+  [c e]
+  (boolean (some #(= (.-id e) (get-in % [:attacker :id])) (:damages (:data (mem/latest (ctx/view c) :died))))))
+
 (defn stay-under-roof?
   "Whether the body keeps its roof: ::stay-inside on, a roof over the feet, and every danger near either only heard
   or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. The fight then holds and the flight does not run."
@@ -198,6 +204,7 @@
   [c hs]
   (and (not-any? danger-q/seen-only? hs)
        (not-any? combat/creeper? hs)
+       (not-any? #(killer? c %) hs)
        (empty? (:hits (ctx/mem c)))
        (not (hurt-lately? c))))
 
@@ -207,6 +214,7 @@
   [c hs]
   (boolean (and (seq hs)
                 (not-any? danger-q/seen-only? hs)
+                (not-any? #(killer? c %) hs)
                 (not (hurt-lately? c))
                 (not (look/surveyed? c)))))
 
@@ -437,7 +445,7 @@
         look-in (when (in-time? :look-in 0) (building-look-answer c near now now-of caught fight felt))
         weighed (when-not @acted (some-> (hostile/weigh c near (cond-> now look (assoc :look (:answer look)) look-in (assoc :look-in (:answer look-in))))
                         (assoc :way-scan (:way-scan caught) :refuge-s (:refuge-s caught) :way (:chance caught)) (eating-answer c)))
-        stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
+        stay? (and (not (hurt-lately? c)) (not-any? #(killer? c %) near) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
         creeper (first (get-in weighed [:answers :fight :creepers]))

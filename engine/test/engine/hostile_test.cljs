@@ -643,6 +643,23 @@
             (is (= held? (boolean (seq (filter #(= :hostile.sealed-hold (:kind %)) @seen)))) why)
             (is (not-any? #(= :no-response (:reason %)) @seen) "the reflex does not end as if nothing could be done")))))))
 
+(deftest a-body-that-respawns-beside-its-killer-heard-only-neither-stays-in-nor-leaves-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[died killer? why] [[{:damages []} false "another zombie killed it: the heard one is left as before"]
+                                    [{:damages [{:attacker {:id 7 :name "zombie"}}]} true "the heard zombie dealt the fatal blow"]]]
+          (let [{:keys [eng p seen]} (setup-seeing (assoc {:time 14000 :blocks roofed-passage :entities [(zombie 7 0.5 -5.5)]} :self {:health 20} :inventory sword :pitch -80) nil 1000)]
+            (perception/pass! (aget p "perception"))
+            (swap! (fake/state p) assoc :pitch 0)
+            (let [store (:store eng) now ((:now @store)) entry (fn [t d] {:t t :wt ((:world-time @store)) :data d})]
+              (swap! store update :data #(-> % (mem/add-entry :died (entry (- now 5000) died) nil)
+                                             (mem/add-entry :respawned (entry (- now 3000) {:pos {:x 0 :y 64 :z 0}}) nil))))
+            (core/submit! eng (tu/order respond) {})
+            (await (core/tick! eng))
+            (is (= (not killer?) (boolean (seq (filter #(= :hostile.sealed-hold (:kind %)) @seen)))) why)
+            (is (= (not killer?) (boolean (seq (mem/entries (mem/view (:store eng)) :heard-mute)))) why)))))))
+
 (deftest a-body-looks-toward-a-heard-mob-before-leaving-it
   (async done
     (tu/run-async done
