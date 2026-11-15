@@ -3,6 +3,8 @@
   a call overrides it with its :settings."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.game :as game]
+            [engine.primitive :as primitive]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
@@ -41,6 +43,16 @@
      :hint (str "no such villager in view within " (search-radius) " blocks (out of sight, not known dead"
                 (when night? "; it is night and villagers sleep behind walls out of sight, try by day")
                 ")")}))
+
+(defn readable?
+  "Whether the villager entity e can be traded with from where the body stands: the act's own test (the eye to the
+  villager's middle within prim/attack-reach, engine/js/trade.mjs), so a villager on a bed or a slab one block off needs
+  no walk."
+  [c e]
+  (let [me (u/self-pos c)
+        at (u/pos-of (.-pos e))
+        d (js/Math.hypot (- (:x at) (:x me)) (- (+ (:y at) (/ (or (.-height e) 1.95) 2)) (+ (:y me) game/eye-height)) (- (:z at) (:z me)))]
+    (<= d (primitive/js-setting "prim/attack-reach"))))
 
 (defn adult? [e] (not (.-baby e)))
 

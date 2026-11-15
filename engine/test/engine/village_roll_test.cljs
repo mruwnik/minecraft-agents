@@ -451,6 +451,14 @@
                                          (swap! s update-in [:entities (v1)] assoc :profession "librarian" :offers offers)))))))
       env)))
 
+(deftest a-villager-two-blocks-above-and-one-aside-is-read-from-where-the-body-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "enchanted_book")] {:pos {:x 2.5 :y 66 :z 1.5}})]} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
+          (is (= [1.5 64 0.5] (:pos (:self @(fake/state p)))) "the eye reaches the villager's middle: no walk"))))))
+
 (deftest a-roll-with-no-villager-named-rolls-the-one-that-walked-into-the-pen-not-the-one-picked
   (async done
     (tu/run-async done

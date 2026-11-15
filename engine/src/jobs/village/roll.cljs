@@ -267,7 +267,7 @@
       (= :continue r) :continue
       (let [res (:data r)] (or (:arrived res) (:nearer res) (:leg res))) :again
       (let [now (villager/find-by-uuid (:primitives c) (villager/chosen c))]
-        (and now (u/within? (u/self-pos c) (u/pos-of (.-pos now)) (reach)))) :again
+        (and now (villager/readable? c now))) :again
       :else (stop! c :unreachable))))
 
 (defn ^:async approach!
@@ -742,7 +742,7 @@
       (= "unemployed" profession) (if (penned? c e) (await (wait-take-job! c)) (await (pen! c)))
       ;; offers missed: the pen child owns the body (its stand walk is out of reach by design) until the villager is shut in
       (and (:pen-after-miss (ctx/mem c)) (not (penned? c e))) (await (pen! c))
-      (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (or (await (leave-box! c)) (await (walk! c e)))
+      (not (villager/readable? c e)) (or (await (leave-box! c)) (await (walk! c e)))
       :else
       (let [r (await (read-offers! c))]
         (cond

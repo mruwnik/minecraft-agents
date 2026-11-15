@@ -96,11 +96,9 @@
     (mapv #(js/Math.floor %) [x y z])))
 
 (defn in-reach?
-  "Whether the body is within reach of villager e and a line from its eye to the villager's feet, middle or head clears
-  the collision boxes between (`hittable`: a player aims through the gap over a lectern or under a top slab; a glass wall blocks)."
+  "Whether the act can reach villager e from here (villager/readable?: eye to its middle within the act's reach, and a line from the eye to its feet, middle or head clears the collision boxes between: a player aims through the gap over a lectern or under a top slab; a glass wall blocks)."
   [c e]
-  (and (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))
-       (not (false? (.-hittable e)))))
+  (and (villager/readable? c e) (not (false? (.-hittable e)))))
 
 (defn ^:async choose-cheapest!
   "Without :villager and before one is kept: the adult villager ok? accepts whose walk into reach costs least (go-to's
