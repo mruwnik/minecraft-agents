@@ -796,7 +796,8 @@
   choose (with opts, the flight's own) takes none of the ends and no unseen cell is left to look at (unseen-ahead, glanced
   the cells the flight looked at: the flight would be the cornered step, no walk away); with one, or headings a cut
   search left unplanned (cut?), a way may be there at way-on-chance: the chance is that of an unseen way
-  (flight-caught-chance), with :look the cells to look at. Nothing routed:
+  (flight-caught-chance), with :look the cells to look at. Nothing planned (starved?): the chance a search judges on
+  average (flight-caught-chance :starved?). Nothing routed:
   the prior with the unseen worse case, unless every route was exhausted (boxed?): cornered. A flight that takes the preferred end (a safe home) uncaught
   is a known route to a refuge: {:chance 0 :refuge-s seconds of the route up to its door}, priced as a cover (cost/refuge-answer)."
   [ends counts opts glanced]
@@ -812,6 +813,7 @@
       best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (runs-on? best) :counts counts :dead-chance (:dead-chance best)})}
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught)))
              (some :blast-d caught) (assoc :blast-d (reduce min (keep :blast-d caught))))
+      (starved? ends) {:chance (cost/flight-caught-chance {:starved? true})}
       (and (empty? ring) (boxed? ends)) {:chance 1 :cornered? true}
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
       :else (let [timed (or (seq ways) (seq (filter runs-on? ring)))

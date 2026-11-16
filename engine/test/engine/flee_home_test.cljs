@@ -21,6 +21,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.caught :as caught-prior]
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -1104,3 +1105,17 @@
           (is (pos? (rooms/flee-hold-s c)))
           (is (pos? (:nodes (meta (:ends judged)))) "the flee search plans on its held share")
           (is (nil? (:home-why judged)) "the home is judged, not left :unjudged"))))))
+
+(deftest a-flee-search-that-planned-nothing-prices-its-way-at-the-mean-a-search-judges
+  ;; Sorrel skeleton death (card 7915bb83): every flee search planned 0 nodes, yet the flee was priced as if a way into
+  ;; the unseen were there (1 - way-on-chance, 0.004), below what a search judges on average
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:home false :entities [(zombie 6.5 0.5 nil)]})
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              _ (rooms/new-step! c)
+              _ (ctx/update-mem! c assoc :search-s (cost/search-budget-s))
+              r (await (cover/caught-chance! c nil))]
+          (is (= (caught-prior/judged-way-chance) (:chance r)) "the step's search spent: the flee is priced at the measured mean, not as a way found"))))))

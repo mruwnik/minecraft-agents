@@ -773,7 +773,7 @@
 
 (deftest headings-a-cut-search-left-unplanned-are-priced-as-an-unseen-way-not-cornered
   (let [caught (end-of 4 0 1 :found? false :caught? true :caught-s 0.6)
-        cut (search/caught-chance (with-meta [caught] {:cut? true}) {:k 10 :n 10} {} nil)]
+        cut (search/caught-chance (with-meta [caught] {:cut? true :planned 1}) {:k 10 :n 10} {} nil)]
     (is (not (:cornered? cut)) (pr-str cut))
     (is (< (js/Math.abs (- (- 1 (/ 11 12)) (:chance cut))) 1e-9) "a way may be there at (k+1)/(n+2), as an unseen one")
     (is (:cornered? (search/caught-chance [caught] {:k 10 :n 10} {} nil)) "the same ways planned whole: cornered")))

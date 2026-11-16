@@ -42,6 +42,7 @@
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.averted :as averted]
+            [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.stock :as stock]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.danger :as danger]
@@ -474,11 +475,13 @@
 
 (defn flight-caught-chance
   "The chance a flight is caught by the way its search found (flee-answer :caught; jobs.lib.cost.caught/prior is added there,
-  whatever the way): 1 with no way left (way? false: every way it planned is cut); 0 on a way the race calls free; when
+  whatever the way): with starved? (the search planned nothing) the mean a search judges (cost.caught/judged-way-chance);
+  1 with no way left (way? false: every way it planned is cut); 0 on a way the race calls free; when
   the way runs on into cells the body has not seen (unseen?), the chance its dead end catches it: :dead-chance, the
   :chance of dead-end-race of the end (its search's backs), else that of a dead end with no way back (counts)."
-  [{:keys [way? unseen? counts dead-chance]}]
-  (cond (not way?) 1
+  [{:keys [starved? way? unseen? counts dead-chance]}]
+  (cond starved? (caught/judged-way-chance)
+        (not way?) 1
         unseen? (or dead-chance (:chance (dead-end-race counts 0 nil)))
         :else 0))
 

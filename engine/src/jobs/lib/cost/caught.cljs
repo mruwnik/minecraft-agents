@@ -50,6 +50,8 @@
                :doc "Per group, per matchup (matchup), the trial fights with it, n, and k of them that died, as counted for ::fights; a fight with a matchup not counted is priced by the pooled ::fights alone. Recount: node tools/event-counts.mjs caught-flights :fight-matchups, 2026-11-04."}
    ::matchup-weight {:default 77 :spec (a/num-in 0 nil)
                      :doc "The pseudo-fights the pooled chance of a fight gone bad counts for against a matchup's own (shrinkage towards the pooled rate). Measured from ::matchups: the deaths of the three kit tiers differ by less than their binomial spread (method of moments: no between-matchup variance), so the pooled rate counts as the 77 fights that make it. Recount with ::matchups."}
+   ::judged-ways {:default {:k 31.68 :n 238} :spec (a/map-with {:k (a/num-in 0 nil) :n (a/num-in 0 nil)})
+                  :doc "The trial bodies' respond decisions (hostile.decided with :way, Brindle, Fenwick, Sorrel, Tamsin): n of them, k the sum of their flee searches' judged catch chances (:way), the expected catches by the way. Decisions whose search was starved are in it (their :way the unseen-way prior), so it runs low. Recount: 2026-11-16, the :way of hostile.decided in those bodies' events.edn logs."}
    ::counted-difficulty {:default 1 :spec (a/int-in 1 3) :doc "The server difficulty ::flights and ::fights were counted at."}})
 
 (def groups
@@ -140,6 +142,11 @@
     (fn [counts health]
       (let [{:keys [points]} (posterior counts) x (- health 10)]
         (areduce points i acc 0 (let [p (aget points i)] (+ acc (* (aget p 3) (sigmoid (+ (aget p 0) (* (aget p 1) x)))))))))))
+
+(defn judged-way-chance
+  "The mean catch chance a flee search judges a flight's way (::judged-ways): a flight priced with no search of its own."
+  []
+  (let [{:keys [k n]} (settings/get settings ::judged-ways)] (/ k n)))
 
 (defn catch-blasts
   "The hp a creeper's catch may land (::catch-blasts, equally likely) at the cost difficulty: each measured one scaled from the counted difficulty's damage."
