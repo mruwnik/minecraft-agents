@@ -43,7 +43,7 @@
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      With a real danger near (jobs.lib.danger, the hostile-near radii) it ends :condition-failed :hostile-near instead, never standing still beside it.
      Otherwise it holds still (:burning-wait): eats (a jobs.survival.eat child) when food is under 18 and food is carried
-     (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends :limit-reached :still-burning.
+     (to keep regenerating), and waits a second per pass until the fire is out (the job-time budget, ::job-time-s, ends it :still-burning).
   A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
   out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) end :nothing-possible :stuck.
   Still burning after max-passes passes ends :limit-reached :still-burning. Never yields :continue (only a cut round returns it, unseen).
@@ -67,7 +67,6 @@
    ::max-hazards-per-round {:default 16 :doc "Hazard cells costed per round, the nearest first." :spec (a/int-in 0 nil)}
    ::hazard-reach {:default 4 :doc "Blocks around the body in which hazards are scanned." :spec (a/int-in 0 nil)}
    ::hazard-touch {:default 1.5 :doc "Distance from the feet at which a hazard counts as touching." :spec (a/num-in 0 nil)}
-   ::max-stand-waits {:default 20 :doc "One-second waits standing still before the run stops :still-burning." :spec (a/int-in 0 nil)}
    ::stand-wait-ms {:default 1000 :doc "One wait while standing still off the fire, in ms." :spec (a/int-in 0 nil)}
    ::eat-below {:default 18 :doc "Food level below which the body eats while it burns." :spec (a/int-in 0 nil)}
    ::max-covers {:default 3 :doc "Lava cells covered per run." :spec (a/int-in 0 nil)}
@@ -81,7 +80,6 @@
 (defn hazard-reach [] (settings/get settings ::hazard-reach))
 (defn hazard-touch [] (settings/get settings ::hazard-touch))
 
-(defn max-stand-waits [] (settings/get settings ::max-stand-waits))
 (defn stand-wait-ms [] (settings/get settings ::stand-wait-ms))
 (defn eat-below [] (settings/get settings ::eat-below))
 (def water-like ["water" "powder_snow"])
@@ -371,19 +369,14 @@
   (ctx/end c :limit-reached {:line :job-time :reason :still-burning} {:text text}))
 
 (defn ^:async stand-wait!
-  "One wait off the fire: eat to keep regenerating, tell the agent once, wait a second. Stopped :still-burning after
-  max-stand-waits."
+  "One wait off the fire: eat to keep regenerating, wait a second. The fire (15 s of game time at most) is waited out within
+  the job-time budget, not a count of waits: a slow server makes game time slower than the clock."
   [c]
-  (let [p (:primitives c)
-        waits (inc (:stand-waits (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :stand-waits waits)
+  (let [p (:primitives c)]
     (when (and (eat/carried-best c) (< (.-food (.self p)) (eat-below)))
       (await (child/run!* c :eat 'jobs.survival.eat {:until (eat-below) :max-bites 1 :get-food? false})))
     (await (burning-wait! c (stand-wait-ms)))
-    (cond
-      (clear? c) :done
-      (>= waits (max-stand-waits)) (still-burning c "still burning after standing still off the fire")
-      :else :again)))
+    (if (clear? c) :done :again)))
 
 (defn ^:async stand-pass!
   "On fire, nothing to do but wait it out off the fire (stand-wait!). Never beside a real danger: that ends stopped

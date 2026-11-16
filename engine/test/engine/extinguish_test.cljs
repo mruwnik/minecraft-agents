@@ -387,16 +387,17 @@
           (is (<= (count (calls p "moveTo")) 1) "the other cell is no better: it does not walk back and forth")
           (is (= [:burning-wait :burning-wait :burning-wait :burning-wait] @holds)))))))
 
-(deftest standing-still-gives-up-after-the-wait-cap
+(deftest standing-still-waits-the-fire-out-however-many-waits-it-takes
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:onFire true} :blocks (floor 8)})]
+          (on-wait! p (fn [n _] (when (= n 30) (swap! (fake/state p) assoc-in [:self :onFire] false))))
           (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= (extinguish/max-stand-waits) (count (calls p "wait"))))
-          (is (= :still-burning (stopped-reason seen)) "still burning is stopped, not completed"))))))
+          (is (= 30 (count (calls p "wait"))) "a slow server's fire outlasts twenty seconds of the clock")
+          (is (nil? (stopped-reason seen))))))))
 
 (deftest standing-still-eats-to-keep-regenerating
   (async done
@@ -620,7 +621,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :still-burning (stopped-reason seen)))
-          (is (= (extinguish/max-stand-waits) (count (calls p "wait"))) "one wait per stand pass"))))))
+          (is (= (extinguish/max-passes) (count (calls p "wait"))) "one wait per stand pass"))))))
 
 (deftest a-body-with-no-safe-cell-ends-stopped-stuck-after-three-failed-walks
   (async done
