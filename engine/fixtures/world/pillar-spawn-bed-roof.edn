@@ -5,12 +5,12 @@
   :time :any
   :plot {:height 24}
   :blocks [[:fill [2 0 8] [30 14 24] "stone"] [:fill [16 5 16] [16 6 16] "air"] [:fill [16 9 16] [16 12 16] "air"]]
-  :body {:at [16.5 5 16.5] :inventory [["dirt" 8]]}}
+  :body {:spawnpoint :far :at [16.5 5 16.5] :inventory [["dirt" 8]]}}
  :cases
  [{:name "spawn-bed-roof-stays-and-pillar-ends-ceiling"
    :blocks [[:set [16 7 16] "red_bed[facing=east,part=foot]"] [:set [17 7 16] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :spawn-bed :data {:pos #xyz [16 7 16]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.access.pillar {:worth 300 :height 4})]]
+   :act [[:job (jobs.access.pillar {:worth 265 :height 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 60 :of-job true}]
    :after [[:block [16 7 16] "red_bed"]]
    :limit-s 70}]}
