@@ -166,26 +166,38 @@
 (defn drop-edges
   "The floor cells [x y z] a body would drop off by 2 or more (or into a pit with no floor) when it leaves the region it
   can step back into (level, or one up or down) from the first of starts and that the body at feet can step onto once
-  filled, nearest to the [x _ z] target first; nil when the region is not closed within the room cells."
+  filled, nearest to the [x _ z] target first; nil when the region is not closed within the room cells. The body's own
+  flood runs only when an edge passes the open-air tests, and ends once every such edge has a cell it can step from."
   [p starts feet]
   (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
         level (fn [x y z] (.filter (reach/forward kind-at x y z) (fn [n] (>= (aget n 1) (dec y)))))
         {:keys [cells closed?]} (reach-room/flood-visit level (first starts) reach-room/room-cells)
         open? (fn [x y z] (keyword-identical? :open (kind-at x y z)))
-        [tx _ tz] feet
-        mine (into #{} (map vec) (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) feet reach-room/room-cells)))
-        steps-on? (fn [nx y nz] (some (fn [[dx dz dy]] (contains? mine [(+ nx dx) (+ y dy) (+ nz dz)]))
-                                      (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [dx dz dy])))]
+        [tx _ tz] feet]
     (when closed?
-      (->> (for [c cells
-                 :let [x (aget c 0) y (aget c 1) z (aget c 2)]
-                 [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                 :let [nx (+ x dx) nz (+ z dz)]
-                 :when (and (open? nx y nz) (open? nx (inc y) nz) (open? nx (dec y) nz) (open? nx (- y 2) nz)
-                              (steps-on? nx y nz))]
-             [nx (dec y) nz])
-           distinct
-           (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz)))))))))
+      (let [key (reach/keyer (first feet) (nth feet 2))
+            sides [[1 0] [-1 0] [0 1] [0 -1]]
+            near (for [[dx dz] sides dy [-1 0 1]] [dx dz dy])
+            edges (->> (for [c cells
+                             :let [x (aget c 0) y (aget c 1) z (aget c 2)]
+                             [dx dz] sides
+                             :let [nx (+ x dx) nz (+ z dz)]
+                             :when (and (open? nx y nz) (open? nx (inc y) nz) (open? nx (dec y) nz) (open? nx (- y 2) nz))]
+                         [nx y nz])
+                       distinct)
+            pending (js/Set. (clj->js (map (fn [[nx y nz]] (key nx y nz)) edges)))
+            mine (when (seq edges)
+                   (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) feet reach-room/room-cells
+                                                   (fn [^js h]
+                                                     (doseq [[dx dz dy] near]
+                                                       (.delete pending (key (- (aget h 0) dx) (- (aget h 1) dy) (- (aget h 2) dz))))
+                                                     (zero? (.-size pending))))))
+            stood (js/Set.)
+            _ (doseq [^js c mine] (.add stood (key (aget c 0) (aget c 1) (aget c 2))))
+            steps-on? (fn [nx y nz] (some (fn [[dx dz dy]] (.has stood (key (+ nx dx) (+ y dy) (+ nz dz)))) near))]
+        (->> (for [[nx y nz] edges :when (steps-on? nx y nz)] [nx (dec y) nz])
+             distinct
+             (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz))))))))))
 
 (defn late-flood
   "The result of the planner's late goal flood (wider than its early one: no sealed test) toward the goal within range of to

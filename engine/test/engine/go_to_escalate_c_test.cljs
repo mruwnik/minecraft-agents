@@ -17,7 +17,7 @@
             [engine.perception.store :as store]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [jobs.lib.cost :as cost]
+            [jobs.lib.cost :as cost] [jobs.lib.reach.room :as rr]
             [jobs.lib.cost.value :as value]
             [jobs.lib.threat-field :as threat-field]
             [jobs.lib.need :as need]
@@ -2411,3 +2411,16 @@
           (is (= :spent (get-in out [:escalation :step])) (pr-str out))
           (is (< 1 (count (dig-routes seen))) "taken again while under its price"))))))
 
+
+(deftest drop-edges-floods-the-bodys-region-only-for-a-closed-goal-region
+  ;; Old drop-edges flooded the body's region before knowing the goal's region closed: a deck past the room cells
+  ;; (40 by 40) is no closed region, so only its own flood is needed; the 10 by 10 deck closes and needs both.
+  (let [floods (atom 0)
+        visit rr/flood-visit
+        edges (fn [deck]
+                (let [{:keys [p]} (gt/setup {:self {:pos [-3.5 64 15.5]} :inventory [{:name "dirt" :count 9}] :light [15 15] :seen [[-40 60 -40 70 80 70]]
+                                             :blocks (merge (box -40 63 -40 70 63 70 "stone") (box 0 69 0 (dec deck) 69 (dec deck) "stone"))})]
+                  (with-redefs [rr/flood-visit (fn ([a b c] (visit a b c)) ([a b c d] (swap! floods inc) (visit a b c d)))]
+                    (reset! floods 0)
+                    [(vec (choose/drop-edges p [[2 70 2]] [-4 64 15])) @floods])))]
+    (is (= [[[] 1] [[] 2]] [(edges 40) (edges 10)]))))
