@@ -32,6 +32,19 @@
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [4 4 12] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :length [:> 20]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [15.5 4 12.5] 1.5]]}
+  ;; the first case's walk with the pond walled off (glass 3 high over it: light and sight pass): the quote is the way round alone, priced under
+  ;; the 5.9 s the swim was quoted at (sweep 744d), so the first case's choice is the price of the way round
+  {:name "walled-pond-way-round-quotes-under-the-swim"
+   :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 7] [13 3 17] "water"] [:fill [7 4 7] [13 6 17] "glass"]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [5 4 23] :range 0})]
+         [:until-pos {:z-min 22} 30]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [15 4 23] :range 0}) [:alongside]]
+         [:until-pos {:x-min 14} 30]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [15 4 12] :range 0}) [:alongside]]
+         [:until-pos {:z-max 13} 30]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [4 4 12] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :length [:> 20] :priced [:< 5.8]}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 2}]
+   :after [[:body-near [15.5 4 12.5] 1.5]]}
   {:name "unseen-deep-pond-costs-the-drowned-share"
    :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 7] [13 3 17] "water"]]
    :body {:yaw 90 :pitch -60}
