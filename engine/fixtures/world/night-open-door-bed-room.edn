@@ -13,6 +13,7 @@
   :limit-s 150}
  :cases
  [{:name "open-door-with-a-bed-in-the-room-is-shut-and-the-bed-slept-in"
+   :sleep-skip true
    :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
    :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 120]]

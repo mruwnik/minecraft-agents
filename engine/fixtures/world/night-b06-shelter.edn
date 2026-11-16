@@ -44,7 +44,7 @@
    :sleep-skip true
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :body {:inventory [["oak_log" 24]]}
-   :act [[:job (jobs.survival.night {:worth 1200})]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:walls} :for :night})]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
@@ -225,6 +225,7 @@
   ;; 2fa2eba6: a remembered bed 100 blocks off in a closed lit hut is walked to and slept in (no bed radius: go-to prices the walk)
   {:name "body-walks-to-a-hut-bed-100-blocks-away"
    :time :night-exclusive :time-why :sleep
+   :sleep-skip true
    :plot {:length 120 :width 32}
    :blocks [[:fill [94 0 10] [106 3 22] "stone" :hollow] [:fill [95 0 11] [105 2 21] "air"]
             [:set [95 1 11] "torch"] [:set [105 1 21] "torch"]
@@ -248,6 +249,7 @@
   ;; 8e4c3127: a small room walled in stone (a bed needs three cells in a row beyond any one-wide gap, which counts as a doorway), a carried bed: go-to digs in, the bed goes down in the room and is slept in, no walk loop
   {:name "walled-in-home-with-a-carried-bed-sleeps"
    :time :night-exclusive :time-why :sleep
+   :sleep-skip true
    :blocks [[:fill [10 0 10] [17 3 14] "stone"] [:fill [12 0 11] [15 1 13] "air"]]
    :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1] ["red_bed" 1]]}
    :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [12 0 12]})]
