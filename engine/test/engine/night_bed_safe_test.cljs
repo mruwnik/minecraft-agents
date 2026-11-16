@@ -563,6 +563,12 @@
     (mem/write! (:store eng) :bed-walk-unsafe {:pos far :state {}} sh-beds/walk-unsafe-policy)
     (is (false? (look?)) "a bed whose walk the night refused is none to look for")))
 
+(deftest a-sealed-body-walks-only-to-a-bed-its-seen-room-holds
+  (let [{:keys [p]} (setup (lit-tunnel))]
+    (is (true? (sh-sense/sealed? p)) "the lit tunnel is sealed from the sky")
+    (is (true? (sh/bed-by-room? p {:x 10 :y 64 :z 0})) "a bed in the room it sees")
+    (is (false? (sh/bed-by-room? p {:x 130 :y 64 :z 0})) "a bed beyond the seen, closed room is a dig, no reason to look")))
+
 (def three-high-room
   "A stone room x 10..12, z 10..11, air y 64..66 under a roof at 67, a bed at 10..11 64 10 with a stone at 11 65 10 over its head."
   (let [inside? (fn [k] (let [[x y z] (map js/Number (.split k ","))] (and (<= 10 x 12) (<= 64 y 66) (<= 10 z 11))))]

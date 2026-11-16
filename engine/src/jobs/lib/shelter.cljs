@@ -42,9 +42,19 @@
                   (or (<= (u/dist self cell) 2)
                       (contains? (:cells (reach-room/room p self)) [(:x cell) (:y cell) (:z cell)]))))))
 
+(defn bed-by-room?
+  "Whether a sealed body (in rock, no way out but digging) can walk to the bed at pos: it lies in the body's room, or the
+  room has cells never seen (reach-room/unseen-room?) that a look may show reaching it. A bed beyond a seen, closed room is
+  a dig the walk prices dearer than the work it stops (cost/commute-s), so it is no reason to look."
+  [p pos]
+  (let [self (sh-sense/feet p)]
+    (or (not (sh-sense/sealed? p))
+        (contains? (:cells (reach-room/room p self)) [(:x pos) (:y pos) (:z pos)])
+        (reach-room/unseen-room? p self))))
+
 (defn unlooked-for-bed?
   "Night, awake, not looked from here (looked-here?), and either a bed carried or remembered (sh-spawn/known-beds, at any distance: a closed room such as a tunnel may
-  reach it) and not refused lately (sh-beds/refused-lately?) with a cell beside the feet
+  reach it, bed-by-room?) and not refused lately (sh-beds/refused-lately?) with a cell beside the feet
   (floor, feet or head) never seen (the room checks, shut-in-hut? and walk-leaves-shelter?, would read the room smaller
   than it is), or the body shut in a hut with no sleep tonight and no :sleep-failed entry (a bed may stand where it has
   not looked, or have been set down since it saw the cell): look before deciding."
@@ -52,7 +62,7 @@
   (let [{:keys [x y z]} (sh-sense/feet p)]
     (boolean (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
                   (not (looked-here? p view))
-                  (or (and (or (some? (sh-beds/carried-bed p)) (some #(not (sh-beds/refused-lately? view %)) (sh-spawn/known-beds p view)))
+                  (or (and (or (some? (sh-beds/carried-bed p)) (some #(and (not (sh-beds/refused-lately? view %)) (bed-by-room? p %)) (sh-spawn/known-beds p view)))
                            (look/unseen? p (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
                       (and (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms))
                            (empty? (mem/entries view :sleep-failed))
