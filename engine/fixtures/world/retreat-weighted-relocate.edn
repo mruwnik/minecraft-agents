@@ -23,10 +23,10 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]
          [:summon "zombie" [10.5 0 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "zombie" [23.5 0 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 25]] ; hold: the flight takes this long to show its distance
+         [:wait-s 25]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:kind :failed} :for-s 20}]
-   :after [[:body-far [16.5 0 16.5] 25]]
+   :after [[:body-far [10.5 0 14.5] 7] [:body-far [23.5 0 14.5] 7]] ; the zombies stand still, so the flight ends once out of their reach (still-s): farther from each than the start (6)
    :limit-s 50}
   {:name "flee-two-zombies-north-south-east-ahead"
    :time :any
