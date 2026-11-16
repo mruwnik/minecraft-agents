@@ -253,6 +253,15 @@
           (is (= {:status :stopped :reason :not-walked-in} (select-keys result [:status :reason])) (pr-str result))
           (is (nil? (block p [0 64 0]))))))))
 
+(deftest another-villager-employed-in-the-cell-ends-workstation-taken-early
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box)) :entities [(jobless {:x 6 :y 64 :z 3}) (assoc (vt/villager nil {:profession "librarian" :level 1 :pos {:x 1.5 :y 64 :z 0.5}}) :id 2 :uuid "v-2")])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 400))]
+          (is (= {:status :stopped :reason :workstation-taken} (select-keys result [:status :reason])) (pr-str result))
+          (is (nil? (block p [0 64 0]))))))))
+
 (deftest a-call-that-ends-not-walked-in-with-the-body-boxed-in-digs-the-boxs-entry-open
   (async done
     (tu/run-async done

@@ -51,7 +51,7 @@
   With the body boxed in its stand of a built pen whose near end is open (jobs.lib.villager-pen/luring) it sees out only
   through the pen, so a villager out of view is waited for to walk in like one in view.
   Ends done when the pen holds the villager (jobs.lib.villager-pen/penned; result {:side [dx dz] :cell [x y z]}), else condition-failed
-  :villager-out-of-view (never in view this call and not luring), :occupied (another block at :pos), :need (blocks not carried and no fetch allowed); nothing-possible
+  :villager-out-of-view (never in view this call and not luring), :occupied (another block at :pos), :workstation-taken (another villager employed in the cell or its near end; :villager), :need (blocks not carried and no fetch allowed); nothing-possible
   :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :unseen (:cells), :dark, :not-walked-in (the villager
   stayed out for the whole wait; :sites names the other job sites seen), or a child's ending. What it built stays: the
   next call finds the pen standing, but a call that ends other than done with the body boxed in its stand digs the box's
@@ -334,6 +334,8 @@
       (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
       (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/with-floors p lay (:box lay)) {:in-place true}))
       (or (nil? block) (bs/air block)) (await (workstation! c ws))
+      (and (not in?) (seq (vp/employed-in p lay (some-> e villager/ident))))
+      (stop! c :condition-failed :workstation-taken {:villager (villager/ident (first (vp/employed-in p lay (some-> e villager/ident))))})
       (not in?) (await (wait-walk-in! c :villager-not-in-pen))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c (:stand lay)))
       (vp/dark? p lay) (await (dark! c lay))

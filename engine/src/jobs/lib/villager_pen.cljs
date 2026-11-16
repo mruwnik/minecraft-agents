@@ -81,6 +81,11 @@
   (let [cells (set (cons (:cell lay) (:plug lay)))]
     (filterv #(and (not= id (villager/ident %)) (cells (feet-cell %))) (villager/seen p))))
 
+(defn employed-in
+  "The villagers in sight other than id standing in the pen's cell or its open end whose profession reads as a job."
+  [p lay id]
+  (filterv #(not (#{"unemployed" "nitwit" "none"} (.-profession %))) (others-in p lay id)))
+
 (defn dark? [p lay] (torch/perceived-dark? p (:cell lay)))
 
 (def tall
