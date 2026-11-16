@@ -19,15 +19,15 @@
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 180 :of-job true}]
    :after [[:block [50 0 16] "cobblestone"] [:block [51 0 16] "cobblestone"]]}
-  ;; the kit a death far from the world spawn would lose: the site's dark stay costs more than the dawn wait at the default worth (a bare body's short stay goes ahead)
+  ;; the 64 diamonds a death would put at risk make the 2-cell job's dark stay (6 s) cost 27 s (a bare body's 3.5 s): a job worth more goes ahead, as a player's would, so this one is worth 5 s
   {:name "no-torch-source-keeps-the-named-wait"
-   :body {:spawnpoint :far :inventory [["cobblestone" 4] ["diamond" 64]]}
-   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
+   :body {:inventory [["cobblestone" 4] ["diamond" 64]]}
+   :act [[:job (jobs.build.from-plan {:worth 5 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}
   {:name "torches-given-while-it-waits-for-light-end-the-wait"
    :body {:inventory [["cobblestone" 4] ["diamond" 64]]}
-   :act [[:job (seq (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"}))] [:wait-s 20] [:rcon "give $BODY torch 8"]]
+   :act [[:job (seq (jobs.build.from-plan {:worth 5 :plan "$plan:floor"}))] [:wait-s 20] [:rcon "give $BODY torch 8"]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed :item "torch"}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [50 0 16] "cobblestone"] [:block [51 0 16] "cobblestone"]]}]}
