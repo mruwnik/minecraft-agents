@@ -16,8 +16,8 @@
 
 (def shut
   "Floor, walls and roof of the pen at ws along -x (its cell [1 64 0]), the lectern's sides across it, the floor and roof
-  of the stand [3 64 0] behind it, the floors of its near end and of the box's entry."
-  {"0,63,0" "stone" "4,63,0" "stone" "1,63,0" "stone" "1,64,1" "stone" "1,65,1" "stone" "1,66,1" "stone" "1,64,-1" "stone" "1,65,-1" "stone"
+  of the stand [3 64 0] behind it."
+  {"1,63,0" "stone" "1,64,1" "stone" "1,65,1" "stone" "1,66,1" "stone" "1,64,-1" "stone" "1,65,-1" "stone"
    "1,66,-1" "stone" "1,66,0" "stone" "2,66,0" "stone" "2,64,1" "stone" "2,64,-1" "stone" "3,63,0" "stone" "3,66,0" "stone"})
 
 (def box "The stand's three other sides, feet and head." {"3,64,1" "stone" "3,65,1" "stone" "3,64,-1" "stone" "3,65,-1" "stone" "4,64,0" "stone" "4,65,0" "stone"})
@@ -55,6 +55,16 @@
     {"0,64,0" "stone" "0,66,0" "stone"} true
     {"0,64,0" "stone"} false
     {} false))
+
+(deftest a-pen-whose-plug-and-entry-stand-solid-is-built-though-the-floors-under-them-were-never-seen
+  (let [p (tu/fake (merge {:self at-stand} (world (merge shut plug box))))
+        sensed (.-sensedAt p)
+        lay (vp/layout ws [-1 0])]
+    (tu/set-sensed! p (fn [q] (if (#{[0 63 0] [4 63 0]} [(.-x q) (.-y q) (.-z q)]) #js {:unknown true :pos q} (sensed q))))
+    (is (= lay (vp/boxed p ws)) "buried floors are no part of the pen's shut cells")
+    (is (= [] (vp/with-floors p lay (:plug lay)) (vp/with-floors p lay (:box lay))))
+    (is (= [[0 63 0] [0 64 0] [0 65 0]] (vp/with-floors (tu/fake (world shut)) lay (:plug lay)))
+        "an open near end is laid on its floor first")))
 
 (deftest the-side-chosen-is-the-one-the-villager-stands-in-else-the-pen-already-standing
   (let [along-z {"2,63,1" "stone" "1,64,1" "stone" "1,65,1" "stone" "1,66,1" "stone" "3,64,1" "stone" "3,65,1" "stone"

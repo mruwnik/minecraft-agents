@@ -16,9 +16,9 @@
 
 (defn layout
   "The cells of the pen at workstation cell [x y z] along side [dx dz]: :cell V, :shut (V's floor, walls and roof, W's
-  roof, W's sides across d, S's floor and roof, and the floors of O and the entry, which the plug and the box's entry are
-  placed against over a drop: built first), :slab (the cell above W), :plug (O, feet and head), :stand
-  S, :box (S's three other sides, feet and head: shut round the body), :entry (the box's side away from W)."
+  roof, W's sides across d, S's floor and roof: built first), :slab (the cell above W), :plug (O, feet and head), :stand
+  S, :box (S's three other sides, feet and head: shut round the body), :entry (the box's side away from W), :floors
+  {cell floor}: the floors of O and the entry, which the plug and the box's entry are placed against over a drop."
   [[x y z] [dx dz :as side]]
   (let [[vx vz] [(+ x dx) (+ z dz)]
         [sx sz] [(- x dx) (- z dz)]
@@ -29,8 +29,8 @@
     {:side side
      :cell [vx y vz]
      :shut (vec (concat [[vx (dec y) vz]] (across vx vz [0 1 2]) [[vx (+ y 2) vz] [x (+ y 2) z]]
-                        (across x z [0]) [[sx (dec y) sz] [sx (+ y 2) sz]]
-                        [(below (first plug)) (below (first entry))]))
+                        (across x z [0]) [[sx (dec y) sz] [sx (+ y 2) sz]]))
+     :floors {(first plug) (below (first plug)) (first entry) (below (first entry))}
      :slab [x (inc y) z]
      :plug plug
      :stand [sx y sz]
@@ -48,6 +48,13 @@
   "The cells of cells not seen solid (unseen ones are owed: the worse case)."
   [p cells]
   (filterv #(not (solid? (name-at p %))) cells))
+
+(defn with-floors
+  "Cells owed (owed) with the floor under each first, while that floor is not seen solid. A floor under a cell standing
+  solid is never owed: buried, it is never seen and holds nothing up."
+  [p lay cells]
+  (let [cells (owed p cells)]
+    (into (filterv #(not (solid? (name-at p %))) (keep (:floors lay) cells)) cells)))
 
 (defn top-slab?
   "Whether the cell holds a slab in its upper half, seen."
@@ -149,7 +156,7 @@
 (defn cells
   "Every cell of the pen layout lay: what a fetch for the pen's own blocks must never dig."
   [lay]
-  (vec (concat [(:cell lay) (:slab lay) (:stand lay)] (:shut lay) (:plug lay) (:box lay))))
+  (vec (concat [(:cell lay) (:slab lay) (:stand lay)] (:shut lay) (:plug lay) (:box lay) (vals (:floors lay)))))
 
 (defn solids
   "The cells standing solid (to dig: a plug of an empty pen, the box's entry)."
