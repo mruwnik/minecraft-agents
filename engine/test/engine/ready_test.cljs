@@ -22,6 +22,7 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
+            [engine.triggers :as triggers]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.explore.look :as look]
@@ -478,6 +479,12 @@
      (are [dir expected] (= expected (first (stair/fit? (assoc (ctx-of (assoc at-origin :self {:pos {:x 0 :y 64 :z 0} :health 0.5})) :args {:dir dir}))))
        :up :ok
        :down :later))))
+
+;; a far bed alone does not make 1.5 hp too hurt (a death costs 1.7 ks, the work's death chance over the heal wait is 3%); the kit lost with it does
+(deftest a-hurt-body-far-from-its-bed-heals-first-only-with-a-kit-to-lose
+  (let [fires? (fn [inventory] (boolean ((:when (get triggers/all :low-health))
+                                         (tu/with-light-data (tu/fake {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 20 :worldSpawn [5000 250 0]} :inventory inventory})) {} {})))]
+    (is (= [false true] [(fires? [{:name "dirt" :count 32}]) (fires? [{:name "dirt" :count 32} {:name "iron_ingot" :count 16}])]))))
 
 ;; Q145: no load, no xp, its bed beside it: a death refills more than it costs, so a hurt body works on
 (deftest a-hurt-body-with-nothing-to-lose-near-its-bed-works-on

@@ -4,6 +4,7 @@
 ;; fire again within its retry time and the walk runs. On open bedrock under the sky (a lit, skyless plot reads as a sealed hall, safe already) with no blocks the shut-in fails; a zombie seen in a glass box
 ;; then keeps the body from calm, and the rest goes for food at once instead of waiting in the open: bread in view is fetched and
 ;; the body heals where it stands (should-succeed); with none it ends :no-food (should-fail).
+;; Every body carries 16 iron ingots: the :far respawn lies 5000 blocks off, and at 1.5 hp a body with little to lose there works on (a death there costs ~1.7 ks, the heal wait 74 s buys 40 s of risk); with the ingots a death costs ~5.3 ks and healing first pays.
 {:defaults
  {:tags [:survival :readiness]
   :time :any
@@ -13,7 +14,7 @@
   :limit-s 200}
  :cases
  [{:name "hurt-fed-body-rests-before-its-walk"
-   :body {:inventory [["dirt" 32] ["bread" 8]]}
+   :body {:inventory [["dirt" 32] ["bread" 8] ["iron_ingot" 16]]}
    :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
@@ -24,7 +25,7 @@
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "hurt-fed-body-short-of-blocks-digs-more-then-shuts-in"
    :blocks [[:fill [3 0 14] [3 1 18] "dirt"]]
-   :body {:inventory [["dirt" 16] ["bread" 8]]}
+   :body {:inventory [["dirt" 16] ["bread" 8] ["iron_ingot" 16]]}
    :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
@@ -34,7 +35,7 @@
    :after [[:body-near [22.5 0 16.5] 2]]
    :limit-s 230}
   {:name "hurt-hungry-body-picks-up-food-then-rests"
-   :body {:inventory [["dirt" 32]] :effects [["hunger" 120 49]]}
+   :body {:inventory [["dirt" 32] ["iron_ingot" 16]] :effects [["hunger" 120 49]]}
    :act [[:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:summon "item" [10.5 0 16.5] "{Item:{id:\"minecraft:bread\",count:8}}"]
@@ -48,7 +49,7 @@
    :limit-s 290}
   {:name "hurt-hungry-body-with-no-food-gives-up-and-walks-on"
    :time :day :time-why :dawn-decision :plot {:light :sky}
-   :body {:inventory [["dirt" 32]] :effects [["hunger" 120 49]]}
+   :body {:inventory [["dirt" 32] ["iron_ingot" 16]] :effects [["hunger" 120 49]]}
    :act [[:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
@@ -61,7 +62,7 @@
   {:name "unsheltered-hurt-hungry-body-with-zombie-in-view-fetches-food-and-heals"
    :plot {:floor "bedrock" :light :sky}
    :blocks [[:fill [15 -1 14] [19 3 18] "glass" :hollow]]
-   :body {:inventory [] :effects [["hunger" 120 49]]}
+   :body {:inventory [["iron_ingot" 16]] :effects [["hunger" 120 49]]}
    :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
@@ -75,7 +76,7 @@
   {:name "unsheltered-hurt-hungry-body-with-zombie-in-view-and-no-food-ends-no-food"
    :plot {:floor "bedrock" :light :sky}
    :blocks [[:fill [15 -1 14] [19 3 18] "glass" :hollow]]
-   :body {:inventory [] :effects [["hunger" 120 49]]}
+   :body {:inventory [["iron_ingot" 16]] :effects [["hunger" 120 49]]}
    :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
@@ -87,7 +88,7 @@
   ;; rest's time is up (the old code held "shut in until calm" for its 900 s): the bread is fetched and the body heals.
   {:name "hurt-hungry-body-above-fragile-with-zombie-in-view-fetches-food-without-waiting"
    :blocks [[:fill [15 -1 14] [19 3 18] "glass" :hollow]]
-   :body {:inventory [["dirt" 32]] :effects [["hunger" 120 49]]}
+   :body {:inventory [["dirt" 32] ["iron_ingot" 16]] :effects [["hunger" 120 49]]}
    :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
