@@ -237,6 +237,7 @@
  :jobs.lib.shut-gates/open-s
  :jobs.lib.shut-walked/unrecorded?
  :jobs.lib.swim/air-radius
+ :jobs.lib.villager/search-radius
  :jobs.movement.boat-launch/radius
  :jobs.movement.cross-water/min-cross
  :jobs.survival.breathe/search-radius
