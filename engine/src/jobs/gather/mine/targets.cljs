@@ -148,10 +148,20 @@
           (recur (into found more) (into (pop todo) more)))
         found))))
 
-(defn joined-to
-  "The cells of targets joined by touching sides, edges or corners, through other targets, to a cell of stranded."
-  [stranded targets]
-  (into #{} (mapcat #(disj (cluster-of % targets) %)) stranded))
+(def air-names #{"air" "cave_air" "void_air" "light"})
+
+(defn floating?
+  "Whether the cluster hangs in the air as far as the body has seen: every cell round it that it has seen is air or more of its ore (and some are air),
+  so no dig has a block to start from and no stand lies beside it."
+  [c cluster]
+  (let [p (:primitives c)
+        cells (set cluster)
+        ring (distinct (for [cell cluster dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]
+                             :let [n (merge-with + cell {:x dx :y dy :z dz})]
+                             :when (not (contains? cells n))]
+                         n))
+        names (keep #(u/seen-name p %) ring)]
+    (and (some air-names names) (every? #(or (air-names %) (str/ends-with? % "_ore")) names))))
 
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near; next-target! prices the walks, a death or hide spot's mob on the way
@@ -170,7 +180,7 @@
                   (map :pos)
                   (remove skipped)
                   (remove #(too-deep? c %))
-                  (#(remove (joined-to (:stranded (ctx/mem c)) %) %)))
+                  (remove #(and (seq (:stranded (ctx/mem c))) (floating? c [%]))))
         cells (filter #(or (not stay?) (stay/beside-body? (cell-of here) %)) seen)
         heading (headings (:heading (ctx/mem c)))
         side (when (and stay? heading)
@@ -308,21 +318,6 @@
     (give-up! c pos cluster)
     (walk-skip! c pos)
     (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) (map access/cell cluster)))))
-
-(def air-names #{"air" "cave_air" "void_air" "light"})
-
-(defn floating?
-  "Whether the cluster hangs in the air as far as the body has seen: every cell round it that it has seen is air or more of its ore (and some are air),
-  so no dig has a block to start from and no stand lies beside it."
-  [c cluster]
-  (let [p (:primitives c)
-        cells (set cluster)
-        ring (distinct (for [cell cluster dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]
-                             :let [n (merge-with + cell {:x dx :y dy :z dz})]
-                             :when (not (contains? cells n))]
-                         n))
-        names (keep #(u/seen-name p %) ring)]
-    (and (some air-names names) (every? #(or (air-names %) (str/ends-with? % "_ore")) names))))
 
 (defn stall-rounds [] (settings/get settings ::stall-rounds))
 

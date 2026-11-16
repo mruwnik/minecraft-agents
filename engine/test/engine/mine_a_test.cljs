@@ -31,7 +31,7 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit start-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
 
 ;; ------------------------------------------------------------------ the job
 (deftest mines-a-patch-and-leaves-the-ground-alone
@@ -284,10 +284,22 @@
           (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
           (is (finished? s)))))))
 
-(deftest ore-seen-later-touching-a-stranded-cell-is-stranded-too
-  (let [at (fn [x z] {:x x :y 64 :z z})]
-    (is (= #{(at 1 0) (at 2 0)} (mine-targets/joined-to #{(at 0 0)} [(at 1 0) (at 2 0) (at 5 0)])) "joined through the chain, not the far one")
-    (is (= #{} (mine-targets/joined-to #{} [(at 1 0)])))))
+(defn scan-targets
+  "The :targets of mine-targets/scan over a world of blocks south of the body, memory :stranded as given."
+  [blocks stranded]
+  (let [s (start-lit {:blocks blocks} [15 15])
+        c {:primitives (:p s) :view (fn [] {:data {} :now 1000}) :args {:block "iron_ore" :radius 16 :ways #{:seen} :ignore-zones? true}}]
+    (dotimes [_ 6] (perception/pass! (aget (:p s) "perception")))
+    (with-redefs [ctx/mem (constantly {:stranded stranded}) mine-targets/risky-now (constantly nil)]
+      (set (:targets (mine-targets/scan c))))))
+
+(deftest ore-seen-later-is-dropped-only-when-no-stand-lies-beside-it-once-a-cluster-is-stranded
+  (let [at (fn [x] {:x x :y 65 :z 5})
+        ores (cells "iron_ore" [0 1] [65] [5])
+        stone (cells "stone" [2] [65] [5])]
+    (is (= #{(at 0) (at 1)} (scan-targets ores #{})) "nothing stranded: both stay")
+    (is (= #{} (scan-targets ores #{(at 9)})) "stranded: ore with only air and ore round it is dropped")
+    (is (= #{(at 1)} (scan-targets (merge ores stone) #{(at 9)})) "the one with stone beside it stays, the other is dropped")))
 
 (deftest seen-ore-behind-a-wall-the-walk-cannot-pass-is-cut-to-once-then-skipped
   (async done
