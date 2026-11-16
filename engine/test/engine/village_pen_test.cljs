@@ -100,7 +100,7 @@
     (is (not (penned? (assoc (world full) :time 1000 :light {} :light-default [0 0]))) "the cell dark")
     (is (not (penned? (world (merge shut plug (dissoc box "3,64,1" "3,65,1"))))) "the stand open: another villager reaches it, next to the lectern")
     (is (not (penned? (world (merge full {"2,64,1" "air"})))) "a side of the lectern open")
-    (is (not (penned? (assoc (world full) :self {:pos {:x 6.5 :y 64 :z 0.5}}))) "the body outside its stand")))
+    (is (not (penned? (assoc (world full) :self {:pos {:x 4.5 :y 64 :z 0.5}}))) "the body outside its stand")))
 
 (defn ^:async child-outcome
   "Run the pen for villager v-1 as the child of a recording parent, the clock moving 700 ms a tick, until the list is
@@ -217,6 +217,28 @@
                                              {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 villager-leaves-view-at-the-stand))]
           (is (= :not-walked-in (:reason result)) (pr-str result))
           (is (every? #(vp/solid? (block p %)) (:shut (vp/layout ws [-1 0])))))))))
+
+(defn plug-hides-villager
+  "While the near end's head cell is solid and the stand's entry still open, the villager in the cell is out of view (the
+  plug is in the way); with the box shut round the body it shows again."
+  [{:keys [p]}]
+  (let [hidden (atom false)]
+    (add-watch (fake/state p) :hide
+               (fn [_ s _ w]
+                 (let [hide? (boolean (and (get-in w [:blocks [0 65 0]]) (not (get-in w [:blocks [4 65 0]]))))]
+                   (when (not= hide? @hidden)
+                     (reset! hidden hide?)
+                     (swap! s assoc-in [:entities 0 :pos] (if hide? [60 64 3] [1.5 64 0.5]))))))))
+
+(deftest a-villager-hidden-by-the-plug-just-placed-is-still-in-the-pen-and-the-plug-is-not-dug-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world shut) :entities [(jobless {:x 1.5 :y 64 :z 0.5})]
+                                                    :inventory [{:name "cobblestone" :count 10}])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 plug-hides-villager))]
+          (is (not= :no-tool (:reason result)) (pr-str result))
+          (is (every? #(vp/solid? (block p %)) (:plug (vp/layout ws [-1 0]))) "the plug is not dug open"))))))
 
 (deftest a-second-villager-in-the-cell-keeps-the-near-end-open
   (async done

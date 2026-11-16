@@ -294,9 +294,12 @@
         e (the-villager c)
         lay (lay-of c)
         block (vp/name-at p ws)
-        in? (boolean (and e lay (vp/inside? lay e)))
+        in? (boolean (if e
+                       (and lay (vp/inside? lay e))
+                       (and lay (:in-cell (ctx/mem c)) (vp/plug-shut? p lay))))
         shut (when lay (if in? (vp/owed-with-villager-in p lay) (vp/owed p (:shut lay))))]
     (when lay (ctx/update-mem! c assoc :side (:side lay)))
+    (when e (ctx/update-mem! c assoc :in-cell in?))
     (cond
       (and (nil? e) (nil? lay)) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})
@@ -305,7 +308,7 @@
       (not (vp/top-slab? p (:slab lay))) (await (slab! c (:slab lay)))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c))) (not (and in? (vp/plug-shut? p lay)))) (await (light! c (:cell lay)))
       (and (not in?) (seq (vp/solids p (:plug lay)))) (await (dig-open! c :reopen lay :plug))
-      (and in? (seq (vp/others-in p lay (villager/ident e)))) (await (wait-walk-in! c :other-villager-in-pen))
+      (and in? e (seq (vp/others-in p lay (villager/ident e)))) (await (wait-walk-in! c :other-villager-in-pen))
       (and in? (not (vp/plug-shut? p lay)))
       (if (and (vp/at-stand? p lay) (not (vp/way-in? p lay)))
         (await (dig-open! c :exit lay :entry))
