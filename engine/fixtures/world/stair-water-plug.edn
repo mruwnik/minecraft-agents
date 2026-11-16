@@ -3,7 +3,8 @@
 ;; Stone mass x 8..24, z 8..24, y 0..9; the stair goes down east from (10 10 16): step k lands on feet (10+k, 10-k) and cuts feet..feet+2.
 ;; Should-succeed: water in a sealed pocket beside step 3's cut ((13 7 17)) is met: stair.plugged, the cut cell is not left open;
 ;; mine, put in a water-filled shaft beside coal, ends :flooded and digs nothing.
-;; The plug of a later run: the water behind it is filled first, then the plug is dug.
+;; The plug of a later run (Q209): the water behind it is filled first, then the plug is dug. The water must have a face the body can
+;; place against, so it has air above (a block beside water enclosed in solid stone is out of reach); the enclosed one stays plugged.
 ;; Should-fail (control): the same stair without the water runs to the end (job completed, no plug).
 {:defaults
  {:tags [:access :mining :water]
@@ -32,11 +33,20 @@
    :after [[:block [17 0 16] "coal_ore"] [:block [17 1 16] "coal_ore"]]}
   ;; card 1c4a1521: the plug the first run set is dug by a second run once the water behind it is filled (the fill is the second stair.plugged)
   {:name "second-run-fills-the-water-behind-the-plug-and-digs-it"
-   :blocks [[:set [13 7 17] "water"]]
+   :blocks [[:set [13 7 17] "water"] [:set [13 8 17] "air"]]
    :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :stair.plugged} 120]
          [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :stair.plugged} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :plugged}} :for-s 170 :until {:source :job :kind :completed}}]
    :after [[:block [13 7 17] "cobblestone"] [:block [13 7 16] "air"]]
+   :limit-s 200}
+  ;; the same, with the water enclosed in solid stone: no face to place against, so the plug stays and the run stops :plugged
+  {:name "second-run-stops-plugged-when-the-water-behind-the-plug-is-out-of-reach"
+   :blocks [[:set [13 7 17] "water"]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]
+         [:await {:source :job :kind :stair.plugged} 120]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :plugged}} :within-s 170 :of-job true}]
+   :after [[:block [13 7 17] "water"] [:block [13 7 16] "cobblestone"]]
    :limit-s 200}]}
