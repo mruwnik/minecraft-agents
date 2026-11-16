@@ -1,0 +1,17 @@
+;; Card 9556441b (run4 H10: a sprint along a corner slid the body into a shaft 14 deep, 11 hp). A stone mass x 4..16, z 4..16,
+;; y 0..8; the body at [10.5 9 10.5], a pillar [10 9..10 11] beside it, a goal [11 9 11] diagonal across the pillar's corner, and the
+;; column [11 0..8 10] dug out under the open side: a slide over it is the short way, the planner prices it, the way round the
+;; pillar costs less. Should-succeed: arrived, no hurt, the body never down the shaft. Would also pass on the old code unless the
+;; sprint slips in: the unit test pins the price; this case checks the walk in the world.
+{:defaults
+ {:tags [:movement] :time :any
+  :plot {:height 16}
+  :blocks [[:fill [4 0 4] [16 8 16] "stone"] [:fill [10 9 11] [10 10 11] "stone"] [:fill [11 0 10] [11 8 10] "air"]]
+  :body {:at [10.5 9 10.5] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "a-corner-slide-over-a-deep-shaft-goes-round-instead"
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [11 9 11] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 45 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 45 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-far [11.5 0 10.5] 5]]}]}

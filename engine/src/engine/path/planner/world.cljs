@@ -294,12 +294,13 @@
 
   ;; 1 when the side column x z of a corner slide whose body's feet are at lo (1/16 absolute) has no floor and lava or a
   ;; block to avoid or that hurts to stand on (fire, powder snow, cobweb, magma, a lit campfire) under the hole within a
-  ;; safe drop, else 0. A floor (collision), water, unloaded land or an unseen cell ends the look.
+  ;; safe drop, or nothing to stand on within it (a fall beyond a safe drop), else 0. A floor (collision), water,
+  ;; unloaded land or an unseen cell ends the look.
   (slideHoleRisk [s x z lo]
     (let [top-y (bit-shift-right (dec lo) 4)]
       (loop [k 0]
         (if (> k FREE-FALL)
-          0
+          1
           (let [id (.stateAt s x (- top-y k) z)]
             (cond
               (or (== id UNLOADED) (== id (.-unk-id s))) 0

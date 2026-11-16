@@ -149,6 +149,15 @@
     ;; a plain hole (stone one further down) is no danger: the slide stays the short way
     "air" true))
 
+;; The open side over a shaft deeper than a safe drop: a sprint slides the body into it (run4 H10: 14 blocks, 11 hp).
+(deftest a-corner-slide-over-a-deep-shaft-is-avoided-when-there-is-a-way-round
+  (let [r (pf/run (pf/world {:fill [[2 64 3 2 65 3 "stone"]
+                                    [3 60 2 3 63 2 "air"]]})
+                  (pf/near 3 64 3))]
+    (is (= "found" (:status r)))
+    (is (= [3 64 3] (pf/last-cell r)))
+    (is (not (slid? r)) (str "path " (pf/cells r)))))
+
 (deftest a-rim-cell-beside-the-pocket-is-reached-without-sliding-over-the-lava
   ;; [122 -54 53] lies beside the pocket's mouth: the walk along the rim reaches it with no slide over the lava (the
   ;; live fixture's along-the-rim-no-slide case)
