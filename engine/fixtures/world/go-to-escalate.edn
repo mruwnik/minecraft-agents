@@ -220,16 +220,17 @@
   {:name "trapped-again-digs-its-own-cobble"
    ;; the first stair out, through another's plan, is put back with cobblestone (what stone drops); the body is moved
    ;; into the shaft again and the second go-to digs those own cobble cells (not natural, but go-to put them there)
+   ;; :ways #{:walk :stair} like pit-stair-arrives: free to choose, a stair up the natural rock beside the plan was as cheap, and leaves no put-back
    :plans [{:id "other" :parts [{:id "stair" :cells [#at [17 1 16] #at [17 2 16] #at [17 3 16] #at [18 1 16] #at [18 2 16] #at [18 3 16]
                                                      #at [19 1 16] #at [19 2 16] #at [19 3 16]]
                                  :want [:any "stone"]}]}]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [20 4 16] :range 1 :ignore-zones? true})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [20 4 16] :range 1 :ignore-zones? true :ways #{:walk :stair}})]
          [:await {:source :job :kind :completed :data {:arrived true}} 150]
          [:await {:source :job :kind :go-to.restored} 40]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:until-pos {:x-min 15 :x-max 18 :z-min 15 :z-max 18} 10]
-         [:job (jobs.movement.go-to {:worth 1200 :pos #at [20 4 17] :range 1 :ignore-zones? true})]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [20 4 17] :range 1 :ignore-zones? true :ways #{:walk :stair}})]
          [:wait-s 60]] ; hold: arrival comes after the restored event
    :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}]
    :after [[:body-near [20.5 4 17.5] 2]]
@@ -264,8 +265,8 @@
             {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [16 0 16] "air"] [:block [17 1 16] "stone"] [:body-near [16.5 0 16.5] 1]]}
   {:name "open-ground-tower-never-escalates"
-   :plot {:height 12 :length 64} ; a cell this small is under the sealed-start drain, which would make the body shut in
-   ;; open plot (the unseen goal above the feet would wait for light by night, so only threats are checked), a 5-high stone column whose top no walk reaches: the body is not shut in, so nothing is built or dug
+   :plot {:height 12 :light :sky}
+   ;; open sky plot, not an underground cell (a buried body's long mostly-unseen detour digs: b6e853ee) (the unseen goal above the feet would wait for light by night, so only threats are checked), a 5-high stone column whose top no walk reaches: the body is not shut in, so nothing is built or dug
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [24 0 16] [24 4 16] "stone"]]
    :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 5 16] :range 0 :checks {:safe? (not (threatened))}})]]
