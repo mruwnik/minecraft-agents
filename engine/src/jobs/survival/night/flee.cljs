@@ -21,6 +21,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.walk-pick :as pick]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -131,45 +132,83 @@
         (when k (.set site-lists st {:k k :sites v}))
         v))))
 
+(defn- site-key [{:keys [kind pos]}] (str (name kind) (:x pos) "," (:y pos) "," (:z pos)))
+
+(defn- carried-of [p] (mapv (juxt :name :count) (u/inventory p)))
+
 (defonce ^:private rejections (js/WeakMap.))
 
 (defn- rejections-of
   "The atom of the sites flee-target's searches picked and passed over (a site's own test failed, or go-to priced no
-  walk) of the body p: {[kind pos] {:memory :until}}, each counting while what the body remembers near the site (sense/site-memory)
-  holds, for wsearch/search-max-age-ms (the land it read may have changed)."
+  walk) of the body p: {site-key {:reads :carried :until}}, each counting while what the site's test read answers the
+  same (sense/reads-hold?) and the body carries the same, for wsearch/search-max-age-ms (what no read shows, a mob, may
+  have moved)."
   [p]
   (or (.get rejections p) (let [a (atom {})] (.set rejections p a) a)))
 
-(defn rejected?
-  "Whether flee-target's search passed over site {:kind :pos} and that still counts (rejections-of)."
-  [c {:keys [kind pos]}]
+(defn rejected-fn
+  "A fn of site {:kind :pos}: whether flee-target's search passed over it and that still counts (rejections-of)."
+  [c]
   (let [p (:primitives c)
-        r (get @(rejections-of p) [kind pos])]
-    (boolean (and r (= (:memory r) (sense/site-memory p pos)) (expiry/current? (ctx/now c) r)))))
+        a (rejections-of p)
+        now (ctx/now c)
+        carried (carried-of p)]
+    (fn [x]
+      (let [r (get @a (site-key x))]
+        (boolean (and r (expiry/current? now r) (= carried (:carried r)) (or (nil? (:reads r)) (sense/reads-hold? p (:reads r)))))))))
 
 (defn reject!
-  "Pass over site {:kind :pos} in flee-target's searches while what the body remembers near it holds, for
-  wsearch/search-max-age-ms; drops the rejections that ran out."
-  [c {:keys [kind pos]}]
+  "Pass over site {:kind :pos} in flee-target's searches while what its test read (sense/reading's reads; nil: nothing)
+  answers the same, for wsearch/search-max-age-ms; drops the rejections that ran out."
+  [c x reads]
   (let [p (:primitives c)
         now (ctx/now c)]
     (swap! (rejections-of p) #(assoc (into {} (filter (fn [[_ r]] (expiry/current? now r))) %)
-                                     [kind pos] (expiry/stamp {:memory (sense/site-memory p pos)} now wsearch/search-max-age-ms)))))
+                                     (site-key x) (expiry/stamp {:reads reads :carried (carried-of p)} now wsearch/search-max-age-ms)))))
 
-(defonce ^:private searches (js/WeakMap.))
+(defonce ^:private listings (js/WeakMap.))
 
-(defn- search-state
-  "The atom of walk-pick/searched!'s progress over the sites of the body p, kept while sites-key holds, for
-  wsearch/search-max-age-ms."
-  [c p]
-  (let [k (sites-key p look/memory-radius)
+(defn- listing-key
+  "What a listing of the flee sites within radius rests on besides what the body remembers: where it stands and what it
+  carries."
+  [p radius]
+  [(aget p "seenBlocks") (some-> ^js (:st (aget p "perception")) .-dim) (sh-sense/feet p) radius (sh-sense/roof-height)
+   (into #{} (map :name) (u/inventory p))])
+
+(defn- listing
+  "The atom of the body's listing of its flee sites, kept while listing-key holds, for wsearch/search-max-age-ms:
+  {:raw (sites) :open? (its site-open) :i (tested so far) :open (those it passes) :state (walk-pick/searched!'s) :reads
+  (site-key -> the reads of its last test)}."
+  [c radius]
+  (let [p (:primitives c)
+        k (listing-key p radius)
         now (ctx/now c)
-        hit (.get searches p)]
-    (if (and k (= k (:k hit)) (expiry/current? now hit))
-      (:state hit)
-      (let [a (atom {})]
-        (when k (.set searches p (expiry/stamp {:k k :state a} now wsearch/search-max-age-ms)))
+        hit (.get listings p)]
+    (if (and hit (= k (:k @hit)) (expiry/current? now @hit))
+      hit
+      (let [a (atom (expiry/stamp {:k k :i 0 :open [] :state (atom {}) :reads (js/Map.)} now wsearch/search-max-age-ms))]
+        (.set listings p a)
         a))))
+
+(defn ^:async list-sites!
+  "The sites of listing l that site-open passes, once each is tested; :searching when the call begun at t0 (clock/now)
+  would go past cost/search-budget-s with the next test, at the mean of these (search-pays?; one always runs): the
+  tests go on at the next call. The event loop runs after the listing and between the tests (walk-pick/tick-slice!).
+  What the body remembers meanwhile does not begin them again: the pick's own tests read it."
+  [c l radius t0]
+  (let [p (:primitives c)
+        raw (or (:raw @l) (let [v (sites p radius)] (swap! l assoc :raw v :open? (site-open c)) (await (wplan/yield!)) (wplan/stop-if-cut! c) v))
+        open? (:open? @l)]
+    (loop [n 0]
+      (let [{:keys [i open]} @l
+            now (clock/now)]
+        (cond
+          (>= i (count raw)) open
+          (and (pos? n) (not (cost/search-pays? (/ (- now t0) 1000) (/ (- now t0) n 1000) (cost/search-budget-s)))) :searching
+          :else (let [x (nth raw i)]
+                  (swap! l #(cond-> (assoc % :i (inc i)) (open? x) (update :open conj x)))
+                  (await (pick/tick-slice! c))
+                  (recur (inc n))))))))
 
 (defn cave-needed
   "The wall cells dig-in's :enclose still has to fill to wall in the cave cell f (an unseen cell counts open), when they
@@ -207,20 +246,26 @@
       (let [here (sh-sense/feet p)
             untried (partial remove #(contains? tried (:pos %)))
             places (untried (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c [:home] ##Inf)))
-            needed (atom {})
+            t0 (clock/now)
+            l (listing c look/memory-radius)
+            listed (await (list-sites! c l look/memory-radius t0))
+            ^js reads (:reads @l)
+            ^js needed (js/Map.)
+            tested (fn [x f] (let [[v r] (sense/reading p f)] (.set reads (site-key x) r) v))
             ok? (fn [{:keys [kind pos] :as x}]
                   (case kind
-                    :ground (ground-ok? c x)
-                    :cave (some? (get (swap! needed #(if (contains? % pos) % (assoc % pos (cave-needed c pos)))) pos))
+                    :ground (tested x #(ground-ok? c x))
+                    :cave (let [k (site-key x)]
+                            (when-not (.has needed k) (.set needed k (tested x #(cave-needed c pos))))
+                            (some? (.get needed k)))
                     true))
             target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
             walk #(assoc (flee-args %) :floor cost-health/spend-down)
-            listed (filterv (site-open c) (untried (sites p look/memory-radius)))
-            ;; the listing is every call's, not the search's: inside the budget it left none for the home's quote (card cee023a9)
-            t0 (clock/now)
-            site (await (pick/searched! c listed
-                                        {:target target :walk walk :ok? ok? :quote pick/quote-once! :state (search-state c p)
-                                         :rejected? #(rejected? c %) :reject! #(reject! c %)}))
+            site (if (= :searching listed)
+                   :searching
+                   (await (pick/searched! c (vec (untried listed))
+                                          {:target target :walk walk :ok? ok? :quote pick/quote-once! :state (:state @l) :t0 t0
+                                           :rejected? (rejected-fn c) :reject! #(reject! c % (.get reads (site-key %)))})))
             ;; the home at any distance is quoted on its own (past a search's nodes go-to still plans the long walk), in
             ;; this call when a quote's round still fits its budget (Q141)
             limit-s (if (map? site) (:price site) ##Inf)
@@ -235,10 +280,11 @@
         (cond
           (map? best) (let [{:keys [kind pos] :as t} (:pick best)]
                         (cond-> (assoc t :distance (u/dist here pos) :cost (:price best) :route (get-in best [:quote :route]))
-                          (= :cave kind) (assoc :needed (get @needed pos))))
+                          (= :cave kind) (assoc :needed (.get needed (site-key t)))))
           best best
           (and survey? (not (look/surveyed? c))) (do (await (look/survey! c)) ; a cave or roofed place behind the body is not seen until it looks
-                                       :searching))))))
+                                                     (.delete listings p) ; listed again from what the look saw
+                                                     :searching))))))
 
 (defn ^:async flee!
   "Walk (go-to :flee) to target t, a flee-target; :again. Resumes after a cut (:fleeing). The walk spends at most t's

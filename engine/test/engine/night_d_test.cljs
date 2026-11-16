@@ -37,6 +37,7 @@
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.sites :as sites]
             [jobs.lib.clock :as clock]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home with-walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
 
@@ -217,31 +218,33 @@
                 (is (<= @quotes (* 2 (count (filter #(= :flee (first %)) log)))) "the home and one site a flee")))
             (finally (set! flee/flee-target real-target) (set! pick/quote! real-quote) (set! clock/now stopped))))))))
 
-(deftest a-passed-over-flee-site-stays-so-while-memory-near-it-holds-not-past-its-time
+(deftest a-passed-over-flee-site-stays-so-while-what-its-test-read-holds-not-past-its-time
+  ;; card 72b694f6: a rejection lapsed with any write in the 7 memory sections round the site
   (let [now (atom 0)
         p (tu/blind (tu/fake {:blocks {"3,63,0" "stone"}}))
         per (perception/create (fake-raw/create p) {:now (constantly 0) :rand (constantly 0.5)})
         w (perception/wrap p per)
         c {:primitives w :view (fn [] {:data mem/empty-data :now @now})}
         site {:kind :ground :pos {:x 3 :y 64 :z 0}}
-        see! (fn [pos] (swap! (fake/state p) assoc-in [:blocks pos] "stone") (perception/pass! per))]
+        see! (fn [pos] (swap! (fake/state p) assoc-in [:blocks pos] "stone") (perception/pass! per))
+        ^js st (:st per)
+        stamp #(store/section-stamp st (.-dim st) 0 4 0)]
     (swap! (fake/state p) assoc-in [:self :pos] [1 64 0])
     (perception/pass! per)
-    (flee/reject! c site)
+    (let [[_ reads] (sense/reading w #(mapv (fn [cell] (u/seen-name w cell)) [{:x 3 :y 64 :z 0} {:x 2 :y 65 :z 4}]))]
+      (flee/reject! c site reads))
     (perception/pass! per)
-    (is (flee/rejected? c site) "the body moved: the site's own test does not rest on where it stands")
-    (is (not (flee/rejected? c (assoc site :kind :cave))))
-    (let [st (:st (aget w "perception"))
-          far-stamp #(store/section-stamp st (.-dim st) 0 4 2)]
-      (let [before (far-stamp)]
-        (see! [0 64 40])
-        (is (> (far-stamp) before) "the far cell was written, in a section outside the site's 7"))
-      (is (flee/rejected? c site) "the body saw new land far from the site: its rejection holds"))
+    (is ((flee/rejected-fn c) site) "the body moved: the site's own test does not rest on where it stands")
+    (is (not ((flee/rejected-fn c) (assoc site :kind :cave))))
+    (let [before (stamp)]
+      (store/record! st (store/store-of st (.-dim st)) 5 70 5 (.stateAt (:raw per) 3 63 0) 0)
+      (is (> (stamp) before) "a cell of the site's own section was written")
+      (is ((flee/rejected-fn c) site) "a cell near the site its test did not read changed: the rejection holds"))
     (see! [2 65 4])
-    (is (not (flee/rejected? c site)) "a block seen near the site changed what it remembers there")
-    (flee/reject! c site)
+    (is (not ((flee/rejected-fn c) site)) "a cell its test read changed")
+    (flee/reject! c site nil)
     (reset! now wsearch/search-max-age-ms)
-    (is (not (flee/rejected? c site)) "past its time it is tried again")))
+    (is (not ((flee/rejected-fn c) site)) "past its time it is tried again")))
 
 (deftest flee-ground-sites-skip-powder-snow-and-keep-other-seen-ground
   (let [p (tu/fake {})
@@ -509,8 +512,9 @@
             (is (= 2 @asked) "a failed site now remembered: asked again")
             (finally (set! ctx/quote quote) (set! ctx/entries entries))))))))
 
-(deftest a-flee-site-is-judged-again-only-once-the-land-near-it-is-written
+(deftest a-flee-site-is-judged-once-a-listing-and-again-after-a-move-only-once-the-land-near-it-is-written
   ;; card 0ed400bc: each flee-target call judged every seen site again (pit-site/pit-site?, ~2300 sites: 240 ms), moved or not
+  ;; card 72b694f6: a write anywhere listed every site again
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -546,7 +550,7 @@
             (is (pos? first-pass))
             (is (zero? again) "nothing written: no site judged again")
             (is (< moved first-pass) "a step aside: only the sites newly in sight are judged")
-            (is (<= first-pass rewritten) "the land near every site written: each judged again")))))))
+            (is (zero? rewritten) "the land near every site written: the listing is not begun again, a pick's own tests read the land")))))))
 
 (deftest a-night-pass-past-its-tick-stops-at-each-step-once-and-the-next-takes-on-its-answers
   ;; card 0ed400bc: a pass after a move priced the bed walk, the home walk and the shelter ways in one go (200-400 ms, Q202: one tick)
@@ -826,38 +830,61 @@
   (merge (into {} (for [x (range 10 18) y (range 64 68) z (range 10 15)] [(str x "," y "," z) "stone"]))
          (into {} (for [x (range 12 16) y [64 65] z (range 11 14)] [(str x "," y "," z) "air"]))))
 
-(deftest a-slow-flee-listing-and-a-field-of-failing-sites-still-let-the-night-act
-  ;; card cee023a9: with a live clock the site listing ate the 100 ms budget, so each pass turned down one site by a
-  ;; whole search and the home was never quoted: 1000+ passes, no act. Here the clock moves only by the costs below.
+(deftest a-slow-flee-listing-and-a-field-of-failing-sites-let-the-night-flee-in-tick-slices-while-memory-is-rewritten
+  ;; cards cee023a9, 72b694f6: with a live clock the listing took 150-270 ms in one turn, and a write near the sites each
+  ;; pass (any cell of their memory sections) lapsed every rejection and listed them all again: the same nearest sites
+  ;; were tested every pass and the flee search never answered. Here the clock moves only by the costs below, and
+  ;; memory near the sites (cells no site test reads) is written before every pass.
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [ms (atom 0)
+        (let [ms (atom 1000)
+              stretch (atom 0) ; ms on the clock since the event loop last ran
+              longest (atom 0)
+              cost! (fn [d] (swap! ms + d) (swap! longest max (swap! stretch + d)))
               now clock/now
+              yield! wplan/yield!
               sites flee/sites
               looks flee/site-looks-open?
               ground-ok? flee/ground-ok?
+              flee-target flee/flee-target
               pass night/pass
-              passes (atom [])
-              {:keys [eng p]} (st/setup {:time night :inventory [{:name "stone_pickaxe" :count 1}] :blocks walled-room
-                                         :floor [-2 8 20 16] :self {:pos {:x 4.5 :y 64 :z 12.5}}})]
+              passes (atom 0)
+              answers (atom [])
+              memories (atom [])
+              {:keys [eng p]} (st/setup {:time night :inventory [{:name "stone_pickaxe" :count 1}] :blocks (assoc walled-room "0,100,1" "cave_air")
+                                         :floor [-2 8 20 16] :self {:pos {:x 4.5 :y 64 :z 12.5}}})
+              raw (.-rawWorld p)
+              per (perception/create raw {:now (constantly 1000000)}) ; its memory only: the body sees all (seeing-all)
+              ^js st (:st per)
+              air-ids [(.stateAt raw 0 100 0) (.stateAt raw 0 100 1)]
+              rewrite! (fn [n] (doseq [cx [-1 0 1] cz [0 1]]
+                                 (store/record! st (store/store-of st (.-dim st)) (+ 8 (* 16 cx)) 78 (+ 8 (* 16 cz)) (nth air-ids (mod n 2)) 1000000)))]
           (tu/seeing-all p)
+          (aset p "perception" per)
+          (set! (.-mobSource st) p)
           (know-home! eng {:x 12 :y 64 :z 12})
           (set! clock/now #(deref ms))
-          (set! flee/sites (fn [p r] (swap! ms + 150) (sites p r))) ; the listing alone past the budget
-          (set! flee/site-looks-open? (fn [p x] (swap! ms + 0.5) (looks p x)))
-          (set! flee/ground-ok? (fn [c x] (swap! ms + 3) (ground-ok? c x))) ; no pit fits a one-block floor: every ground site fails
+          (set! wplan/yield! (fn [] (reset! stretch 0) (yield!)))
+          (set! flee/sites (fn [p r] (cost! 20) (sites p r)))
+          (set! flee/site-looks-open? (fn [p x] (cost! 0.5) (looks p x)))
+          (set! flee/ground-ok? (fn [c x] (cost! 3) (ground-ok? c x))) ; no pit fits a one-block floor: every ground site fails
+          (set! flee/flee-target (fn ^:async f [c survey?] (let [r (await (flee-target c survey?))] (swap! answers conj [@passes r]) r)))
           (set! night/pass (fn ^:async g [c]
-                             (let [calls (count (.-calls (.-world p)))
-                                   r (if (< (count @passes) 60) (await (pass c)) (ctx/end c :done nil {}))]
-                               (swap! passes conj (some #(not= "look" (.-name %)) (drop calls (.-calls (.-world p)))))
-                               r)))
+                             (rewrite! @passes)
+                             (swap! memories conj (sense/site-memory p {:x 4 :y 64 :z 9}))
+                             (reset! stretch 0)
+                             (let [r (await (pass c))] (swap! passes inc) r)))
           (try
             (core/submit! eng (tu/order '(jobs.survival.night {:worth 1200})) {})
             (await (tu/run-until-empty eng 120))
             (finally (set! clock/now now)
+                     (set! wplan/yield! yield!)
                      (set! flee/sites sites)
                      (set! flee/site-looks-open? looks)
                      (set! flee/ground-ok? ground-ok?)
+                     (set! flee/flee-target flee-target)
                      (set! night/pass pass)))
-          (is (some true? (take 40 @passes)) "the night acts (walks home) within 40 passes; one failing site a pass took hundreds"))))))
+          (is (apply distinct? (take 4 @memories)) "memory near the sites was rewritten every pass")
+          (is (some true? (map (fn [[n r]] (and (< n 20) (not= :searching r))) @answers)) "the flee search answers (the home) within 20 passes")
+          (is (<= @longest (+ (settings/ticks->ms 1) 6)) "no stretch between event-loop turns over a tick and two site tests"))))))

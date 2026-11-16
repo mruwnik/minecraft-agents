@@ -32,6 +32,25 @@
   [pos]
   (mapv js/Math.floor (if (map? pos) [(:x pos) (:y pos) (:z pos)] [(.-x pos) (.-y pos) (.-z pos)])))
 
+(def ^:dynamic *answers*
+  "Bound by jobs.lib.sense/reading to a js/Map of the cells read (block-at, sensed) and what each first answered:
+  \"x,y,z\" -> #js [x y z answer-token sensed?]; nil otherwise."
+  nil)
+
+(defn answer-token
+  "What a cell read's answer b says, as a string: its name and properties, \"?\" when unknown, \"\" when unloaded."
+  [^js b]
+  (cond
+    (nil? b) ""
+    (true? (.-unknown b)) "?"
+    :else (str (.-name b) (some-> (.-properties b) js/JSON.stringify))))
+
+(defn- note-answer! [pos b sensed?]
+  (when-let [^js m *answers*]
+    (let [[x y z] (cell-vec pos)
+          k (str x "," y "," z)]
+      (when-not (.has m k) (.set m k #js [x y z (answer-token b) sensed?])))))
+
 (defn cell-pos [[x y z]] {:x x :y y :z z})
 
 (defn block-at
@@ -39,8 +58,10 @@
   :name), or nil when the chunk is not loaded. With perception p.blockAt is p.sensedAt: no job reads the world raw; a
   remembered cell likelier changed than not reads unknown (as sensed)."
   [p pos]
-  (let [b (.blockAt p (clj->js pos))]
-    (if (memory-age/reads-changed? (aget p "perception") b) #js {:unknown true :pos (.-pos b)} b)))
+  (let [b (.blockAt p (clj->js pos))
+        b (if (memory-age/reads-changed? (aget p "perception") b) #js {:unknown true :pos (.-pos b)} b)]
+    (note-answer! pos b false)
+    b))
 
 (defn block-name
   "The block name at cell pos, or nil when the chunk is not loaded."
@@ -79,6 +100,7 @@
     (let [b (.sensedAt p (if (map? pos) #js {:x (:x pos) :y (:y pos) :z (:z pos)} (clj->js pos)))
           b (if (memory-age/reads-changed? (aget p "perception") b) #js {:unknown true :pos (.-pos b)} b)]
       (when (and *reads* b (true? (.-unknown b))) (note-read! :cells (cell-vec pos)))
+      (note-answer! pos b true)
       b)))
 
 (defn seen-block

@@ -10,6 +10,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.perception :as perception]
+            [engine.perception.store :as store]
             [jobs.lib.clock :as clock]
             [jobs.lib.memory-age :as memory-age]
             [engine.settings :as settings]
@@ -223,6 +224,33 @@
   the body sees anywhere); nil without a perception."
   [p {:keys [x y z]}]
   (some-> ^js (:st (aget p "perception")) (memory-age/writes-around x y z)))
+
+(defn reading
+  "[v reads]: (f)'s value and what it read (u/*answers*: the cells and what each answered), with the memory sections
+  those lie in as they stood (store/section-stamp); reads-hold? asks whether they still answer so."
+  [p f]
+  (let [^js m (js/Map.)
+        v (binding [u/*answers* m] (f))
+        ^js st (some-> (aget p "perception") :st)
+        ^js secs (js/Map.)]
+    (when st
+      (.forEach m (fn [^js r]
+                    (let [cx (bit-shift-right (aget r 0) 4) sy (bit-shift-right (aget r 1) 4) cz (bit-shift-right (aget r 2) 4)]
+                      (.set secs (str cx "," sy "," cz) #js [cx sy cz (store/section-stamp st (.-dim st) cx sy cz)])))))
+    [v {:cells (vec (.values m)) :sections (when st (vec (.values secs))) :dim (some-> st .-dim)}]))
+
+(defn reads-hold?
+  "Whether every cell of reads (reading's) answers as it did: at once while none of their memory sections was written
+  since, else each read again."
+  [p {:keys [cells sections dim]}]
+  (let [^js st (some-> (aget p "perception") :st)]
+    (or (and st sections (identical? dim (.-dim st))
+             (every? (fn [^js s] (== (aget s 3) (store/section-stamp st dim (aget s 0) (aget s 1) (aget s 2)))) sections))
+        (binding [u/*answers* nil]
+          (every? (fn [^js r]
+                    (let [pos {:x (aget r 0) :y (aget r 1) :z (aget r 2)}]
+                      (= (aget r 3) (u/answer-token (if (aget r 4) (u/sensed p pos) (u/block-at p pos))))))
+                  cells)))))
 
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."

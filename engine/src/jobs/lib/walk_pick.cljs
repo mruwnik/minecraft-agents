@@ -5,6 +5,7 @@
   left. Danger has no straight-line bound: it comes from the quote alone."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
@@ -253,11 +254,22 @@
       (and best (or (nil? @reaching) (<= (:price best) @reaching))) best
       (or @reaching @searching) :searching)))
 
-(defn first-ok
+(defonce ^:private turned (volatile! 0))
+
+(defn ^:async tick-slice!
+  "Let the event loop run (wplan/yield!) once a tick has passed since tick-slice! last did (Q202: the body reacts each
+  tick), between the items of a long sync loop."
+  [c]
+  (when-not (<= 0 (- (clock/now) @turned) (settings/ticks->ms 1)) ; a clock set back cannot tell: let it run
+    (await (wplan/yield!))
+    (wplan/stop-if-cut! c)
+    (vreset! turned (clock/now))))
+
+(defn ^:async first-ok
   "Ask ok? of xs nearest first by walk-s from feet to (target x), reject! each that fails, up to the first that passes:
   true; false when none does; :searching when the next test, at the mean of these, would take the call begun at t0 (clock/now)
-  past cost/search-budget-s (cost/search-pays?; the first always runs)."
-  [feet xs target ok? reject! t0]
+  past cost/search-budget-s (cost/search-pays?; the first always runs). In tick slices (tick-slice!)."
+  [c feet xs target ok? reject! t0]
   (let [t1 (clock/now)]
     (loop [[x & more] (sort-by #(walk-s feet (target %)) xs) n 1]
       (cond
@@ -265,7 +277,9 @@
         (ok? x) true
         :else (let [now (clock/now)]
                 (reject! x)
-                (if (cost/search-pays? (/ (- now t0) 1000) (/ (- now t1) n 1000) (cost/search-budget-s)) (recur more (inc n)) :searching))))))
+                (if (cost/search-pays? (/ (- now t0) 1000) (/ (- now t1) n 1000) (cost/search-budget-s))
+                  (do (await (tick-slice! c)) (recur more (inc n)))
+                  :searching))))))
 
 (defn ^:async searched!
   "{:pick x :price seconds :quote q} of the one of xs the body walks to soonest by one search over all their targets
@@ -280,9 +294,9 @@
   search or a quote goes on, or when this call's next step (a search, a test or a quote, at the mean of those so far)
   would take it past cost/search-budget-s (Q141): the first step of a call always runs, a search stops at what the
   budget has left; nil when no target is reached. price (fn [x s]), default s, adds to a walk's seconds s what x costs
-  besides; quote as best!."
-  [c xs {:keys [target walk ok? quote price state rejected? reject!] :or {price (fn [_ s] s)}}]
-  (let [t0 (clock/now)
+  besides; quote as best!. t0 (default now): the clock/now the call's budget runs from, when the caller spent some of it first."
+  [c xs {:keys [target walk ok? quote price state rejected? reject! t0] :or {price (fn [_ s] s)}}]
+  (let [t0 (or t0 (clock/now))
         goal (fn [x] (let [{:keys [pos range]} (target x)] (assoc (update-vals (select-keys pos [:x :y :z]) js/Math.floor) :range (or range 0))))
         quote-pick! (fn ^:async quote-pick [x]
                       (let [q (await ((or quote quote!) c (walk x)))
@@ -303,7 +317,7 @@
                 (contains? @state :answer) :done
                 pending (await (quote-pick! pending))
                 :else (let [left (vec (remove rejected? xs))
-                            open (if ok? (first-ok (u/self-pos c) left target ok? reject! t0) true)
+                            open (if ok? (await (first-ok c (u/self-pos c) left target ok? reject! t0)) true)
                             left (if (true? open) (vec (remove rejected? left)) [])
                             goals (mapv goal left)
                             unknown (wworld/with-seeds (wworld/unknown-spec c) nil (-> (mapv (juxt :x :y :z) goals) (into (ledger/stair-stands c)) (into (ledger/tunnel-stands c))))
@@ -317,6 +331,7 @@
                           (and ok? (not (ok? x))) (do (reject! x) :again)
                           :else (await (quote-pick! x)))))]
         (swap! state #(-> % (update :ms (fnil + 0) (- (clock/now) t)) (update :steps (fnil inc 0))))
+        (await (tick-slice! c))
         (case r
           :again (let [{:keys [ms steps]} @state]
                    (if (cost/search-pays? (/ (- (clock/now) t0) 1000) (/ ms steps 1000) (cost/search-budget-s)) (recur) :searching))
