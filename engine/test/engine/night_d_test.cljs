@@ -585,6 +585,41 @@
             (is (:acted decided) "the pass after the stops acts")
             (is (= 1 (count (distinct (map :memo stopped)))) "the passes of one decision share one pass memo: nothing asked twice")))))))
 
+(deftest a-night-pass-whose-dig-in-quote-spent-its-tick-leaves-the-home-walk-quote-to-the-next
+  ;; card f0fe27c7: the home step asked the dig-in quote and the home's walk quote in one pass (85-150 ms, Q202: one tick)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (flee-home-night (with-walled-home dark-world) {}))
+              pass-ms night/pass-ms
+              pass night/pass
+              spent? night/tick-spent?
+              walk night/cheapest-walk!
+              kept pick/kept-job-quote!
+              this-pass (atom nil)
+              passes (atom [])]
+          (st/dawn-after! p 6)
+          (set! night/pass-ms (constantly ##Inf))
+          (set! night/tick-spent? (fn [c k] (let [r (spent? c k)] (when r (swap! this-pass update :stopped conj k)) r)))
+          (set! night/cheapest-walk! (fn ^:async w [c xs opts] (swap! this-pass assoc :walk true) (await (walk c xs opts))))
+          (set! pick/kept-job-quote! (fn ^:async k [c sym args]
+                                       (when (= #{:walls :pit} (:ways args)) (swap! this-pass update :dig-in (fnil inc 0)))
+                                       (await (kept c sym args))))
+          (set! night/pass (fn ^:async g [c] (reset! this-pass {}) (let [r (await (pass c))] (swap! passes conj @this-pass) r)))
+          (try
+            (core/submit! eng (tu/order '(jobs.survival.night {})) {})
+            (await (tu/run-until-empty eng 80))
+            (finally (set! night/pass-ms pass-ms)
+                     (set! night/pass pass)
+                     (set! night/tick-spent? spent?)
+                     (set! night/cheapest-walk! walk)
+                     (set! pick/kept-job-quote! kept)))
+          (let [[stopped next-pass] (drop-while #(not (some #{:home-walk} (:stopped %))) @passes)]
+            (is (= 1 (:dig-in stopped)) "the pass that stops asked the dig-in quote")
+            (is (not (:walk stopped)) "and no walk quote")
+            (is (:walk next-pass) "the next pass quotes the home walk")
+            (is (nil? (:dig-in next-pass)) "on the dig-in quote the stopped pass got")))))))
+
 (deftest with-nothing-seen-the-night-looks-around-and-then-flees-to-the-ground-it-saw
   (async done
     (tu/run-async done

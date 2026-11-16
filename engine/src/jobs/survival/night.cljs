@@ -304,6 +304,17 @@
   [c]
   (remove #(enter-room/unclosable? (:primitives c) (:pos %)) (room-lib/roofed-places-in c [:home] ##Inf)))
 
+(defn pass-ms "Ms of the clock since the pass began." [c] (- (clock/now) (::t0 c)))
+
+(defn tick-spent?
+  "Whether the pass stops at step k to go on at the next (Q202: a decision fits one tick): it has run past one tick since
+  it began (pass-ms), and has not stopped at k yet in this decision. The next pass takes on its answers (its walk-pick
+  pass memo): a pass that stops has moved and built nothing, so they are as fresh as those of one long pass."
+  [c k]
+  (let [carry (::carry c)]
+    (boolean (when (and carry (> (pass-ms c) (settings/ticks->ms 1)) (not (contains? (:stopped @carry) k)))
+               (swap! carry #(-> % (update :stopped conj k) (assoc :memo (::pick/pass c))))))))
+
 (defn ^:async walkable-home
   "Where the night may walk in to now, within the time left before the dark plus a margin (night.sites home-walk-*) and the seconds
   (limit-s!) resolves to (bed-down/home-bound-s: no walk longer could be the cheapest answer), asked only with somewhere to walk to: the remembered roofed place (roofed-places) whose walk
@@ -311,15 +322,17 @@
   seen-room? true, the room the body has seen whose walk plus the chance it is open (seen-room!) costs least. Either as
   {:name :pos :cost :route :walkable?} (cost: the walk's price, its risk in, a seen room's chance open too; route: go-to's;
   walkable?: go-to found a whole route whose quoted seconds fit that time, so it is bed-down/answers' :home; a seen room only
-  then). :searching while a quote's search goes on. Else nil."
+  then). :searching while a quote's search goes on, or when the dig-in quote spent the pass's tick (tick-spent? :home-walk). Else nil."
   [c seen-room? limit-s!]
   (let [p (:primitives c)
         places (roofed-places c)
         budget (sites/home-walk-budget-s p)
         best (cond
                (seq places) (let [dig-s (await (bed-down/dig-in-s c))]
-                              (await (cheapest-walk! c places {:target place-walk-target :walk (partial walk-against dig-s) :limit-s (min budget (await (limit-s!)))
-                                                               :price (fn [place s] (+ s (open-room-cost (or (room-chance p (:pos place)) 1) dig-s)))})))
+                              (if (tick-spent? c :home-walk)
+                                :searching
+                                (await (cheapest-walk! c places {:target place-walk-target :walk (partial walk-against dig-s) :limit-s (min budget (await (limit-s!)))
+                                                                 :price (fn [place s] (+ s (open-room-cost (or (room-chance p (:pos place)) 1) dig-s)))}))))
                (and seen-room? (seq (enter-room/seen-poses c))) (await (seen-room! c (min budget (await (limit-s!))))))
         route (get-in best [:quote :route])
         walkable? (boolean (and (:found route) (<= (second (get-in best [:quote :uses :job-time])) budget)))]
@@ -678,17 +691,6 @@
     (cond
       (= :searching picked) :searching
       (and bed (or (:bed-down (ctx/mem c)) set-safe? (await (bed-walk-safe? c bed)))) bed)))
-
-(defn pass-ms "Ms of the clock since the pass began." [c] (- (clock/now) (::t0 c)))
-
-(defn tick-spent?
-  "Whether the pass stops at step k to go on at the next (Q202: a decision fits one tick): it has run past one tick since
-  it began (pass-ms), and has not stopped at k yet in this decision. The next pass takes on its answers (its walk-pick
-  pass memo): a pass that stops has moved and built nothing, so they are as fresh as those of one long pass."
-  [c k]
-  (let [carry (::carry c)]
-    (boolean (when (and carry (> (pass-ms c) (settings/ticks->ms 1)) (not (contains? (:stopped @carry) k)))
-               (swap! carry #(-> % (update :stopped conj k) (assoc :memo (::pick/pass c))))))))
 
 (defn emit-answers! [c pick prices]
   (let [shown (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)]
