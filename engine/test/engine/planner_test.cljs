@@ -359,6 +359,11 @@
     (is (> (count (get-in r [:path :steps])) 1))
     (is (< (distance-to-goal r [35 2]) 33))))
 
+(deftest no-node-budget-ends-at-once-with-budget
+  (are [n] (= "budget" (:reason (run (world {}) (near 35 64 2) {:maxNodes n})))
+    0
+    -5))
+
 (deftest same-snapshot-and-query-give-identical-path
   (let [w (world {:fill [[5 64 -2 5 65 30 "stone"] [12 64 5 12 64 40 "oak_fence"]]})
         a (run w (near 20 64 20))

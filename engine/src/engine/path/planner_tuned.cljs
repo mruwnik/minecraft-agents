@@ -312,7 +312,7 @@
                         :else (false? (.hasColumn snapshot (bit-shift-right (.-x goal) 4) (bit-shift-right (.-z goal) 4))))
         y-low (aget bounds 4)
         y-high (aget bounds 5)
-        cap (js/Math.min max-nodes 1024)
+        cap (js/Math.max 0 (js/Math.min max-nodes 1024))
         slots (next-pow2 (* cap 2))
         risk-scale (let [rw (option options "riskWeight" 2)]
                      (if (zero? rw) 1 (/ (option options "damageWeight" rw) rw)))

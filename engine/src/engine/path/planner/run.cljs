@@ -123,6 +123,8 @@
     (set! (.-t0 s) (js/performance.now))
     (let [problem (cond
                     (neg? (.-start-h s)) "start-not-standable"
+                    ;; no node fits: the start is not stored and the search would pop an empty heap
+                    (< (.-max-nodes s) 1) "budget"
                     ;; a near goal with a NaN coordinate has no standable cell, but a masked snapshot's nodeH spins on it
                     (and ^boolean (.-near s) (not ^boolean (js/Number.isFinite (+ (.-goal-x s) (.-goal-y s) (.-goal-z s)))))
                     "goal-not-standable"
