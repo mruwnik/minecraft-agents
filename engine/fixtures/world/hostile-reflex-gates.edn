@@ -11,12 +11,12 @@
   :body {:spawnpoint :far :at [16.5 0 16.5]}
   :limit-s 70}
  :cases
-  ;; The gate holds only while the zombie is within 8: the flight soon passes 8 and burning rightly fires then, so the window is short.
+  ;; The gate holds only while a zombie is within 8. A NoAI zombie is left behind in under a second (burning then rightly fires), so this one chases (speed IV) and stays in reach.
  [{:name "set-alight-by-a-zombie-hostile-near-keeps-the-body"
    :register [{:trigger :burning}
               {:trigger :hostile-near}]
    :body {:effects [["resistance" 900 2]]}
-   :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "zombie" [20.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:speed\",amplifier:3b,duration:2400}]}"]
          [:until-seen {:entity "zombie"} 10]
          [:rcon "execute at $BODY run summon small_fireball ~ ~2.5 ~ {Motion:[0.0,-1.0,0.0],power:[0.0,-0.1,0.0]}"]]
    :expect [{:event {:source :body :kind :hurt :data {:causes [:has "fire"]}} :within-s 30}
@@ -61,10 +61,12 @@
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
    :after [[:body-near [21.5 0 16.5] 2]]
    :limit-s 40}
+  ;; No blocks: the walls cost about what a hold under the roof does (a hold is priced with the walls that may follow it, so with blocks
+  ;; either may win on the walls' quote), so the roof is the one way a player has.
   {:name "provoked-enderman-roof-gap-body-walks-under"
    :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 16 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16}})}]
    :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
-   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :body {:effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [11.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
          [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
@@ -130,7 +132,7 @@
    :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 16 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16}})}
               {:trigger :suffocating}]
    :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
-   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :body {:effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [11.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
          [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
