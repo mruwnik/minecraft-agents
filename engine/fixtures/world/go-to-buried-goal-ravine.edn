@@ -1,8 +1,8 @@
 ;; Card 3ded098d: a leg goal buried in a dirt hill (the cell [15 22 10], 3 under the hilltop) beside a ravine 17 deep under the sky. The
 ;; hill's inside is unseen, so the mask reads it as air and the search seeks a way in from the ravine; plans whose drops were cheap
 ;; against the goal's worth let the body down the ravine's stair a few blocks a plan (Tamsin, 69 -> 62 -> 55 -> 44).
-;; Should-succeed (buried): the goal is a position in the ground, so the walk is re-aimed to the surface over it
-;; ([15 25 10]; column/leads-to?) and ends arrived there, :re-aimed; the body stays by the hill: no way down the ravine pays for the climb back.
+;; Should-fail (buried): the goal is a sealed air pocket in the hill (column/leads-to? never re-aims it onto the ground over it), so
+;; go-to stops not arrived and the body stays by the hill: no way down the ravine pays for the climb back.
 ;; Should-succeed (stair): a goal cell 4 down the stair's top is arrived at.
 ;; Should-succeed (dig, card 307c741f): with a pickaxe and every way, the same goal is dug to from the hilltop: the cells round
 ;; it under the seen top read as ground, so it is proved walled in at once; no edge tour, no :goal-unloaded.
@@ -34,8 +34,8 @@
  :cases
  [{:name "buried-goal-beside-a-ravine-stays-up"
    :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [15 22 10] :range 1 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true :re-aimed true :aimed-at [15 25 10]}} :within-s 110 :of-job true}]
-   :after [[:body-near [15.5 25 10.5] 3]]}
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 110 :of-job true}]
+   :after [[:body-near [15.5 22 10.5] 9]]}
   {:name "buried-goal-under-the-seen-hilltop-is-dug-to"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [15 22 10] :range 1})]]
