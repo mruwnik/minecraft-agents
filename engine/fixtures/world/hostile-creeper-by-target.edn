@@ -63,7 +63,10 @@
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee :mob "creeper"}} :within-s 20}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 10}]
    :limit-s 40}
+  ;; The harness seeds the respawn at the start block, which makes a death nearly free (fight 74 / flee 68); :spawnpoint :far prices it
+  ;; as a real loss (fight 88 / flee 108), so the skeleton is fought.
   {:name "a-lone-skeleton-is-fought"
+   :body {:spawnpoint :far}
    :act [[:summon "skeleton" [15.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :fight :mob "skeleton"}} :within-s 20}]
    :limit-s 40}]}
