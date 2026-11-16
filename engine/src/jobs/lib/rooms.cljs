@@ -315,6 +315,13 @@
   (let [m (step-meter c)]
     (cond-> m (:deadline m) (update :deadline max (+ (clock/now) (* 1000 (flee-hold-s c)))))))
 
+(defn survey-deadline-meter
+  "A reach/meter with no budget of its own whose searches stop at the deadline of the decision's stages before the flee
+  search (survey-over?); nil out of a decision."
+  [c]
+  (when-let [d (decision-deadline c (* 1000 (flee-hold-s c)))]
+    (assoc (reach/meter ##Inf 0 (cost/room-read-ceiling-s) (cost/walk-cell-ceiling-s) (cost/search-cell-ceiling-s)) :deadline d)))
+
 (defn survey-meter
   "step-meter for the searches that run before the flee search: less what it is to keep (flee-hold-s), and its deadline the decision's less that."
   [c]

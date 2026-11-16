@@ -3,6 +3,7 @@
   door shut, kept per body), the floods under them and the unseen-edge reads that say 'look first'.
   See jobs.lib.reach for the block reads and walk searches."
   (:require [clojure.string :as str]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost.look :as glance]
             [jobs.lib.memory-age :as memory-age]
             [engine.perception.rays :as rays]
@@ -34,15 +35,17 @@
 
 (defn flood-step!
   "Go on with flood f (flood-begin) until it ends, its flood-visit answer, or, after a cell at least, until due? (nil:
-  never) is true: nil."
+  never) is true: nil. Past its meter's :deadline, after a cell at least, it ends cut."
   [{:keys [next-cells key ^js seen ^js queue head budget abort? meter cap]} due?]
-  (let [end (fn [closed? cut?]
+  (let [deadline (:deadline meter)
+        end (fn [closed? cut?]
               (when meter (reach/spend! meter (* (min (.-size seen) cap) (:read-s meter)) cut?))
               {:cells queue :closed? closed?})]
     (loop [h @head first? true]
       (cond
         (== h (.-length queue)) (end true false)
         (and due? (not first?) (due?)) (do (vreset! head h) nil)
+        (and deadline (not first?) (<= deadline (clock/now))) (end false true)
         (>= (.-size seen) cap) (end false (< cap budget))
         (and abort? (abort? (aget queue h))) (end false false)
         :else (let [c (aget queue h)

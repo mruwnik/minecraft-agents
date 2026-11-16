@@ -29,7 +29,8 @@
 
 (defn metered-cap
   "budget cells, at most those *search* has left at its price-k (:read-s, :cell-s or :node-s) a cell; none once its :deadline
-  (jobs.lib.clock ms, when the meter has one) has passed, so a search that began in time stops at its next part."
+  (jobs.lib.clock ms, when the meter has one) has passed, so a search that began in time stops at its next part (a
+  flood at its next cell)."
   [budget price-k]
   (if-let [m *search*]
     (if (some-> (:deadline m) (<= (clock/now)))

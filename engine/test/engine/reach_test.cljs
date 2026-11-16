@@ -392,3 +392,14 @@
         cap-at (fn [ms] (with-redefs [clock/now (constantly ms)] (binding [reach/*search* m] (reach/metered-cap 50 :read-s))))]
     (is (= 50 (cap-at 999)) "before the deadline the meter's own cells")
     (is (= 0 (cap-at 1000)) "at it the search is cut at its next part")))
+
+(deftest a-flood-begun-in-time-stops-at-its-meters-deadline
+  ;; card ca4845ec: the sealing flood began in a decision's time and ran 36-54 ms past its deadline
+  (let [ground (fn [_ y _] (if (< y 64) :solid :open))
+        m (assoc (reach/meter ##Inf 0 0.01 0.1 0.1) :deadline 1000)
+        ms (atom 990)
+        flood (with-redefs [clock/now #(swap! ms inc)]
+                (binding [reach/*search* m] (reach-room/flood-visit (partial reach/forward ground) [0 64 0] reach-room/room-cells)))]
+    (is (false? (:closed? flood)))
+    (is (< (count (:cells flood)) reach-room/room-cells) "stopped at the deadline, not at its own budget")
+    (is (= 1 @(:cuts m)) "counted cut: an answer it may have missed is not kept")))

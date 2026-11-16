@@ -28,6 +28,7 @@
             [jobs.survival.recover-drops.danger :as recover-drops-danger]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
             [jobs.survival.shut-in :as shut-in]
+            [jobs.survival.respond.doors :as doors]
             [jobs.lib.shore :as shore]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
@@ -446,7 +447,7 @@
               slow (await (slow-clock-round respond world))
               quick (await (flight-round respond world))]
           (is (fought? slow) "the body acts at once")
-          (is (= [:covers :look-in] (:stages (decision-cut slow))) "an answer the body already acted on is not priced further: no fight walk is asked")
+          (is (= [:sealing :covers :look-in] (:stages (decision-cut slow))) "the sealing flood stops at the deadline too; an answer the body already acted on is not priced further: no fight walk is asked")
           (is (nil? (decision-cut quick)) "a decision within its budget leaves nothing out"))))))
 
 ;; Sorrel skeleton death (card bfd4ed60): the covers' quotes ran ~190 ms with no meter, past the decision's deadline
@@ -465,6 +466,22 @@
                           (finally (set! clock/now orig-now) (set! shut-in/covers-of orig-ways)))]
             (is (= [:walls] @asked) "the walls' quote took the stages' time: the pit and the pocket are not quoted")
             (is (= [:pit :pocket :pillar] (take 3 (:stages (decision-cut slow)))) "the ways left out are named")))))))
+
+(deftest the-sealing-flood-stops-where-the-covers-do
+  ;; card ca4845ec: the room flood of sealing-doors ran 36-54 ms with no deadline before the covers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bound (atom nil)
+              orig doors/sealing-doors]
+          (set! doors/sealing-doors (fn [c _] (reset! bound [(:deadline reach/*search*) (room-lib/decision-deadline c (* 1000 (room-lib/flee-hold-s c)))])
+                                      (reach/charge! 1 :read-s true)
+                                      nil))
+          (let [r (try (await (flight-round respond {:self {:health 20} :inventory sword :entities [(zombie 3 0)]}))
+                       (finally (set! doors/sealing-doors orig)))]
+            (is (number? (first @bound)))
+            (is (apply = @bound) "its meter stops at the survey's deadline")
+            (is (some #{:sealing} (:stages (decision-cut r))) "a cut flood is named")))))))
 
 (deftest a-decision-that-outlasts-a-tick-swings-or-steps-away-first-and-never-fights-a-creeper
   (async done

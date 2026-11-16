@@ -22,6 +22,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.pace :as pace]
             [jobs.lib.rooms :as room-lib]
+            [jobs.lib.reach :as reach]
             [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
@@ -433,7 +434,11 @@
         _ (room-lib/home-room! c (cover/home-pos c) (options/close-radius))
         felt (walk-felt c)
         target (when-not (some combat/enderman? near) (first (hostile/fought p near)))
-        sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
+        sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near)
+                  (binding [reach/*search* (room-lib/survey-deadline-meter c)]
+                    (let [s (doors/sealing-doors c near)]
+                      (when (pos? (reach/cuts)) (vswap! cut conj :sealing))
+                      s)))
         specs (when-not (some combat/enderman? near) (when (in-time? :covers (room-lib/flee-hold-s c)) (cover-specs c near sealing)))
         _ (vswap! cut into (:cut (cljs.core/meta specs)))
         _ (when (>= (- (clock/now) t0) (settings/physics-ms p)) (vreset! acted (boolean (await (first-act/act! c near (struck-policy))))))
