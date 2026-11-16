@@ -45,7 +45,7 @@
   (let [data (dissoc result :status :reason)]
     (cond
       (not= :stopped status) (ctx/end c :done nil data)
-      (waits/wait-reasons reason) (ctx/end c :condition-failed {:reason reason :text (:text result)} data)
+      (waits/wait-reasons reason) (ctx/end c :condition-failed (cond-> {:reason reason :text (:text result)} (:worth-s result) (assoc :worth-s (:worth-s result))) data)
       (not= :unreachable reason) (ctx/end c (refusal-kinds reason :condition-failed) reason data)
       :else (ctx/end c (why-kinds why :nothing-possible)
                      (cond-> {:reason :unreachable :why why} (why-lines why) (assoc :line (why-lines why)))
@@ -202,21 +202,10 @@
   (let [kept (:seal-kept (ctx/mem c))]
     (boolean (and (shut-in-give-up? fields) (seq kept) (escape/walls-room? c (set kept))))))
 
-(defn kept-wait-spent?
-  "Books this kept-shut wait on the call's memory; whether the body has waited more seconds than the goal is worth (the
-  call's :worth): past that the wait costs more than arriving gains. A wait not asked again within the full-pack gap
-  starts over."
-  [c]
-  (let [now (ctx/now c)
-        {:keys [since last]} (:kept-wait (ctx/mem c))
-        since (if (and last (< (- now last) waits/full-pack-gap-ms)) since now)]
-    (ctx/update-mem! c assoc :kept-wait {:since since :last now})
-    (>= (/ (- now since) 1000) (ctx/worth c))))
-
 (defn give-up!
   "End the call not having arrived: :unreachable with result's why, or a :hostile-near wait (condition-failed) when the
-  body is shut in by its own shelter kept for a hostile (kept-shut?) and has not yet waited the goal's worth
-  (kept-wait-spent?)."
+  body is shut in by its own shelter kept for a hostile (kept-shut?). That wait's cause carries the call's :worth-s so
+  the caller can end it (waits/waiting-out)."
   ([c pos result] (give-up! c pos result nil))
   ([c pos result extra]
    (let [{:keys [why] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
@@ -229,9 +218,10 @@
                   (shut-in-give-up? fields)
                   (merge (some->> (escape/shut-in-blockers c (when pos (if (map? pos) pos (zipmap [:x :y :z] pos)))) (hash-map :blocked-by))))
          text (give-up-words pos fields)
-         reason (if (and (kept-shut? c fields) (not (kept-wait-spent? c))) :hostile-near :unreachable)
+         reason (if (kept-shut? c fields) :hostile-near :unreachable)
          text (cond->> text (= :hostile-near reason) (str "waiting for the hostile to go: its own shelter, kept against it, shuts the body in; "))]
-     (finish! c (merge {:status :stopped :arrived false :reason reason :text text} fields)))))
+     (finish! c (merge {:status :stopped :arrived false :reason reason :text text} fields
+                        (when (= :hostile-near reason) {:worth-s (ctx/worth c)}))))))
 
 (defn refuse! [c {:keys [reason message]}]
   (finish! c {:status :stopped :arrived false :reason reason :text message}))

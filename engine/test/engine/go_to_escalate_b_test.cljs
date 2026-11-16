@@ -1040,11 +1040,3 @@
             (is (seq digs) "it cuts its own wall")
             (is (= (count digs) (count (set digs))) (str "a cell dug twice: " (pr-str (frequencies digs)))))
           (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure, with its reason"))))))
-
-(deftest a-kept-seal-wait-ends-unreachable-once-it-has-lasted-the-goal-s-worth
-  (let [mem (atom {:seal-kept #{[3 64 1]}})
-        now (atom 0)
-        spent? #(with-redefs [ctx/mem (fn [_] @mem) ctx/update-mem! (fn [_ f & a] (apply swap! mem f a))
-                              ctx/now (fn [_] @now) ctx/worth (fn [_] 60)]
-                  (result/kept-wait-spent? {}))]
-    (is (= [false false true] (mapv (fn [t] (reset! now t) (spent?)) [0 30000 60000])))))

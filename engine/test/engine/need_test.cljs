@@ -336,3 +336,17 @@
 (deftest a-refused-child-is-passed-through-waiting-out
   (let [refused (contract/ending :condition-failed {:reason :refused} nil)]
     (is (= refused (waits/waiting-out {} refused)))))
+
+(deftest a-kept-seal-wait-is-waited-out-until-it-has-lasted-the-goal-s-worth
+  ;; go-to's call memory goes with each ending, so the wait is booked on the caller, which asks again each round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wait (contract/ending :condition-failed {:reason :hostile-near :text "shut in" :worth-s 60} nil)
+              r (setup #(waits/waiting-out % wait) nil)]
+          (dotimes [_ 3]
+            (await (core/tick! (:eng r)))
+            (swap! clock + 30000))
+          (is (= [:continue :continue [:unreachable :kept-wait]]
+                 (mapv #(if (map? %) ((juxt (comp :reason :cause) (comp :why :cause)) %) %) @got))
+              "waits while the goal is still worth it, ends :unreachable once the wait lasted its worth"))))))

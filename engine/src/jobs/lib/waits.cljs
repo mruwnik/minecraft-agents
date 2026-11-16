@@ -26,13 +26,31 @@
                         :text (str "the pack stayed full for " (quot (- now since) 1000) " s: nothing could be put away or tossed to make room")}
                        nil))))
 
+(defn kept-wait-ending
+  "Books a wait that says its :worth-s (a body shut in by its own kept shelter, go-to's :hostile-near) on c's memory, the
+  caller's, which outlives the child's calls; the :unreachable ending once it has lasted that many seconds, else nil.
+  A wait not asked again within full-pack-gap-ms starts over."
+  [c {:keys [worth-s text]}]
+  (let [now (ctx/now c)
+        {:keys [since last]} (:kept-wait (ctx/mem c))
+        since (if (and last (< (- now last) full-pack-gap-ms)) since now)]
+    (ctx/update-mem! c assoc :kept-wait {:since since :last now})
+    (when (>= (- now since) (* 1000 worth-s))
+      (contract/ending :nothing-possible
+                       {:reason :unreachable :why :kept-wait
+                        :text (str "waited " (quot (- now since) 1000) " s for the hostile to go, more than the goal is worth: " text)}
+                       nil))))
+
 (defn waiting-out
   "r, a called child's answer, but :continue (the caller waits with the reason) when the child ended condition-failed for
   a reason in wait-reasons: the world's wait,
   not a failed child. A caller opts in by passing the answer through here."
   [c r]
   (let [cause (when (= :condition-failed (:kind r)) (:cause r))
-        ended (when (= :no-free-slot (:reason cause)) (full-pack-ending c))]
+        ended (case (:reason cause)
+                :no-free-slot (full-pack-ending c)
+                :hostile-near (when (:worth-s cause) (kept-wait-ending c cause))
+                nil)]
     (cond
       (not (contains? wait-reasons (:reason cause))) r
       ended ended
