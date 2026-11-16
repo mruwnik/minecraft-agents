@@ -629,6 +629,18 @@
             (is (= :stair (:step e)))
             (is (not= :east (:heading e)) "the heading with no tool is ruled out, the others stay")))))))
 
+(deftest a-stair-whose-pickaxe-fetch-walk-is-shut-in-by-a-kept-seal-digs-by-hand-instead-of-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (merge in-pit {:blocks pit}))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [10 64 0] :range 1 :worth tu/order-worth} :round 1})]
+          (.setOwner (:primitives eng) "tx")
+          (ctx/update-mem! c assoc :fruitless 1 :escalations 1 :give-up {:tries 0 :status :no-path}
+                           :escalation {:step :stair :heading :east :steps 3} :escalation-from [0 61 0] :holes-before 0)
+          (is (= :again (await (esc/escalation-failed! c {:x 10 :y 64 :z 0} {:step :stair :reason :dig-waits :wait {:reason :hostile-near}}))))
+          (is (true? (:by-hand (ctx/mem c)))))))))
+
 (deftest a-failed-approach-marks-its-cell-approached-so-it-is-not-chosen-again
   (async done
     (tu/run-async done

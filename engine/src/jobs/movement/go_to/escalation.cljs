@@ -653,6 +653,12 @@
   [detail]
   (or (= :no-tool (:reason detail)) (= :no-tool (:reason (:wait detail)))))
 
+(defn fetch-shut-in?
+  "Whether a stair's or dig route's stop or wait (detail) is its tool fetch's walk shut in by a kept seal (:hostile-near): no tool can be got, a dig by hand needs no walk."
+  [{:keys [step] :as detail}]
+  (boolean (and (#{:stair :dig-route} step)
+                (or (= :hostile-near (:reason detail)) (= :hostile-near (:reason (:wait detail)))))))
+
 (defn by-hand!
   "From now on this go-to digs what no carried tool clears bare-handed (memory :by-hand): the last resort before giving
   up, as go-to fetches no tool. A go-to.by-hand warn says so once."
@@ -702,13 +708,14 @@
   "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool
   and has not dug by hand yet, take another stair heading clear of that block when there is one (other-heading?; the
   detail passed on says :other-heading), else
-  run it again by hand (by-hand!); else try the next method (escalation-next!), or after the body's own stair walk
+  (also when its tool fetch's walk was shut in, fetch-shut-in?) run it again by hand (by-hand!); else try the next method (escalation-next!), or after the body's own stair walk
   again (own-failed!)."
   [c pos detail]
   (let [e (:escalation (ctx/mem c))
-        no-tool (and (no-tool? detail) (not (:by-hand (ctx/mem c))))
+        fresh? (not (:by-hand (ctx/mem c)))
+        no-tool (and fresh? (no-tool? detail))
         other? (and no-tool (other-heading? c pos e))
-        hand? (and no-tool (not other?))]
+        hand? (or (and no-tool (not other?)) (and fresh? (fetch-shut-in? detail)))]
     (when other? (skip-step! c e (:escalation-from (ctx/mem c))))
     (when hand? (by-hand! c detail))
     (cond
