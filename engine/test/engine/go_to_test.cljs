@@ -298,6 +298,18 @@
               {:keys [p]} (await (go! {:blocks cliff} {:pos [120 61 0] :one-way :closed :ways #{:walk :clear-seal}}))]
           (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau"))))))
 
+(deftest go-to-one-way-closed-takes-no-drop-to-a-goal-it-reaches-by-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the goal lies on loaded, seen floor two below the plateau: a found plan, not a partial one
+        (let [steps (merge (floor -2 -3 10 3) (floor 61 11 -3 47 3))
+              open (await (go! {:blocks steps} {:pos [30 62 0] :ways #{:walk :clear-seal}}))
+              closed (await (go! {:blocks steps} {:pos [30 62 0] :one-way :closed :ways #{:walk}}))]
+          (is (= 62 (js/Math.floor (second (at (:p open))))) "open: it drops to the goal")
+          (is (= 64 (js/Math.floor (second (at (:p closed))))) "closed: still on the plateau")
+          (is (= :one-way (:why @(:out closed)))))))))
+
 (deftest go-to-drop-cost-false-takes-no-drop-and-a-number-keeps-it
   (async done
     (tu/run-async done

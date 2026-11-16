@@ -248,7 +248,7 @@
      :dangers (wworld/dangers?)
      :dark (wworld/dark?)
      :timeout-s (min near/walk-timeout-s (max 0.1 (get-in (ctx/left c) [:spend :job-time] ##Inf)))
-     :one-way (when-not closed? :open)
+     :one-way (if closed? :closed :open)
      :shut-also (shut-foreign c)
      :budget wsearch/round-budget
      :avoid (set (:fault-cells (ctx/mem c)))

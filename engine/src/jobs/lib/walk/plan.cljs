@@ -524,9 +524,10 @@
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         {:keys [steps refused kind]} (let [all (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)]
                                   (let [speculative? (or (:unknown c) (not= "found" (.-status r)))
-                                        cut (if (and (= :open one-way) speculative?)
-                                              (cut-refused all #(one-way-priced? c to %1 %2 %3 speculative?))
-                                              {:steps all})]
+                                        cut (cond
+                                              (= :closed one-way) (cut-refused all (constantly false))
+                                              (and (= :open one-way) speculative?) (cut-refused all #(one-way-priced? c to %1 %2 %3 speculative?))
+                                              :else {:steps all})]
                                     (if (and speculative? (not (:refused cut))) (descent-cut c to (:steps cut)) cut)))
         step (or (one-way-of r) (when refused {:kind (or kind :drop) :at refused}))
         [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))

@@ -117,7 +117,7 @@
                      (not= :never doors) (update :moves conj :open))
             spec (when unknown (torch/round-unknown (assoc c :unknown (wworld/with-seeds (wworld/unknown-spec c) [(:x pos) (:y pos) (:z pos)] nil))))
             plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
-                                    (when-not (= :closed one-way) :open) wsearch/round-budget false
+                                    (if (= :closed one-way) :closed :open) wsearch/round-budget false
                                     (wworld/dangers?) (set (:fault-cells (ctx/mem c))) (wworld/dark?)
                                     (cond-> tolls (wworld/zone-tolls?) (-> vec (into (tc/zone-walk-tolls c pos)))) spec true))
             goal [(:x pos) (:y pos) (:z pos)]]
