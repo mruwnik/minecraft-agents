@@ -27,6 +27,7 @@
             [jobs.lib.patch :as patch]
             [jobs.lib.pace :as pace]
             [jobs.lib.walk-pick :as pick]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.util :as u]
             [jobs.lib.vantage :as vantage]
             [engine.notes :as notes]))
@@ -63,6 +64,7 @@
   yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead, once the ground under it is loaded. A walk go-to gives up on is recorded :unreachable. The next walk after
   such failures in a row (a step that arrives with its column still unseen breaks no row: it showed nothing new) is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck; until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
+  A leg whose ground lies under the feet is priced with the climb back up to them (one-way/climb-back-fn).
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
 
@@ -611,6 +613,15 @@
      (forage? c) (->> (ready/forage-walk c))
      (and (not dig?) (< (u/failures c) 2)) (assoc :ways #{:walk :clear-seal}))))
 
+;; a leg's walk up from a stand under the body's feet is one more cost of going there: the quote prices the way down only
+(defn climb-back-s
+  "Seconds getting back up from the leg's stand to the body's level cost (0 for a leg level with or above the feet): one-way/climb-back-fn."
+  [c [x y z]]
+  (let [level (second (here c))]
+    (if (< y level)
+      ((one-way/climb-back-fn (:primitives c) {:x x :y y :z z} level) (- level y))
+      0)))
+
 (defn ^:async price-leg!
   "The price of a walk toward leg before it starts (jobs.lib.walk-pick/quoted-s of go-to's quote: its time
   and the hp its plan risks, its walk risk): nil when it is affordable (or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
@@ -622,7 +633,7 @@
     (let [p (:primitives c)
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg (:dig-out? (ctx/mem c)) step?)))
-          price (pick/quoted-s c q)
+          price (+ (pick/quoted-s c q) (climb-back-s c leg))
           chance (if sure? 1 (cost/chance-of (or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c)) (ledger/own-cells c)) 1) 0))]
       (cond
         (:estimate q) :continue

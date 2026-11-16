@@ -1,0 +1,17 @@
+;; A search with a low worth on a platform in a dark ravine 12 deep: every leg's ground lies at the ravine floor, so the walk down
+;; is priced with the climb back up (a stair or pillar, dark, kit-priced) and is not worth the find; the body stays on the platform.
+;; Should-succeed: the search ends without a leg walked, no fall hurt, body still on the platform.
+{:defaults
+ {:tags [:explore :search :movement]
+  :time :any
+  :plot {:light :lit :height 6 :length 100 :width 32}
+  :blocks [[:fill [0 -12 0] [99 -1 31] "air"] [:fill [5 -1 15] [7 -1 17] "stone"]]
+  :body {:at [6.5 0 16.5] :spawnpoint [6 0 16] :settle-s 2}
+  :act [[:wait-s 2]
+        [:job (jobs.explore.search {:worth 40 :target "emerald_block" :scan-radius 30 :use-notes false})]]
+  :expect [{:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}
+           {:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+  :after [[:body-near [6.5 0 16.5] 3]]
+  :limit-s 70}
+ :cases
+ [{:name "a-leg-down-a-dark-ravine-pays-its-climb-back-and-is-not-walked"}]}

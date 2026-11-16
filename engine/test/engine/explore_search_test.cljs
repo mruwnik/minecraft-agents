@@ -493,12 +493,12 @@
 
 (defn ^:async search-quoted!
   "A priced search whose go-to quotes are answered by (quote-for n args) for the nth quote asked; {:state s :asked [args ...]}."
-  [quote-for]
+  [quote-for & [blocks]]
   (let [asked (atom [])
         arity "cljs$core$IFn$_invoke$arity$3"
         real (aget ctx/quote arity)]
     (aset ctx/quote arity (fn [_ _ args] (js/Promise.resolve (quote-for (count (swap! asked conj args)) args))))
-    (let [state (try (await (search! {:target "diamond_block" :worth 12 :max-distance 20} {}))
+    (let [state (try (await (search! {:target "diamond_block" :worth 12 :max-distance 20} {:blocks blocks}))
                      (finally (aset ctx/quote arity real)))]
       {:state state :asked @asked})))
 
@@ -1280,3 +1280,14 @@
       (fn ^:async t []
         (let [{:keys [state]} (await (search-quoted! (fn [_ _] {:uses {:job-time [3 3 9]} :risk {:death-chance 0.9 :dark-s 4}})))]
           (is (re-find #"costs \d+ s \(\d+ s of it risk, 4 s walked in the dark\), more than the 12 s" (:text (not-found-of state)))))))))
+
+(deftest a-leg-down-a-ravine-pays-the-climb-back-up-with-its-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit (merge (tu/box -40 63 -40 40 63 40 "air") (tu/box -40 53 -40 40 53 40 "grass_block") {"0,63,0" "grass_block"})
+              legs (fn ^:async l [blocks]
+                     (let [{:keys [state]} (await (search-quoted! (fn [_ _] {:uses {:job-time [3 3 9]}}) blocks))]
+                       ((juxt :why #(get-in % [:coverage :legs])) (not-found-of state))))]
+          (is (not= [:price 0] (await (legs {}))) "a 3 s walk over level ground is under the 12 s worth")
+          (is (= [:price 0] (await (legs pit))) "the same walk to a floor 10 blocks down costs its climb back as well"))))))
