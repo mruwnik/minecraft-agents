@@ -199,10 +199,13 @@
                                          :rejected? #(rejected? c %) :reject! #(reject! c %)}))
             ;; the home at any distance is quoted on its own (past a search's nodes go-to still plans the long walk), in
             ;; this call when a quote's round still fits its budget (Q141)
+            limit-s (if (map? site) (:price site) ##Inf)
+            ;; a home whose straight walk alone is dearer than the priced site cannot beat it: the first good-enough site stands (Q147)
+            homes (filter #(<= (pick/walk-s (u/self-pos c) (target %)) limit-s) places)
             home (cond
-                   (or (= :searching site) (empty? places)) nil
+                   (or (= :searching site) (empty? homes)) nil
                    (cost/search-pays? (/ (- (clock/now) t0) 1000) (/ wsearch/round-ms 1000) (cost/search-budget-s))
-                   (await (pick/cheapest! c places {:target target :walk walk :quote pick/quote-once!}))
+                   (await (pick/cheapest! c homes {:target target :walk walk :quote pick/quote-once! :limit-s limit-s}))
                    :else :searching)
             best (if (some #{:searching} [home site]) :searching (first (sort-by :price (filter map? [home site]))))]
         (cond

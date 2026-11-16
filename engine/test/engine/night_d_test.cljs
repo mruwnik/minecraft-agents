@@ -613,3 +613,27 @@
             (await (bed-down/round c))
             (await (bed-down/round c)))
           (is (= [foot foot] @slept) "the second round sleeps in the bed the first put down"))))))
+
+(deftest a-priced-site-that-the-home-cannot-undercut-leaves-the-home-unquoted
+  ;; Q147: the first good-enough site stands; the home's own quote is asked only when its straight walk is under the site's price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ground (into-array (for [x (range -3 -5 -1) z (range -2 3)] #js {:name "dirt" :pos #js {:x x :y 63 :z z}}))
+              asked (atom [])
+              quote! pick/quote!
+              out (atom nil)
+              {:keys [eng p]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))
+              probe (tu/job (fn ^:async probe-round [c]
+                              (reset! out (await (flee/flee-target (assoc c ::pick/pass (atom {})) false)))
+                              (ctx/end c :done nil)))
+              eng (assoc eng :jobs (assoc registry/jobs 'flee-probe probe))]
+          (aset p "seenBlocks" (fn [_] ground))
+          (set! pick/quote! (fn [_ a] (when (:floor a) (swap! asked conj a)) (js/Promise.resolve {:uses {:job-time [0 0.5 0]}})))
+          (try
+            (core/submit! eng (tu/order '(flee-probe)) {})
+            (await (tu/run-until-empty eng 20))
+            (finally (set! pick/quote! quote!)))
+          (is (= :ground (:kind @out)) "the ground site is the answer")
+          (is (seq @asked) "the site was quoted")
+          (is (not-any? :place @asked) "the home's straight walk costs more than the site's price: not quoted"))))))
