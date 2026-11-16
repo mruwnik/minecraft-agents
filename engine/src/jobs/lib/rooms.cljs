@@ -297,6 +297,11 @@
   [c]
   (boolean (some-> (decision-deadline c 0) (<= (clock/now)))))
 
+(defn survey-over?
+  "Whether a decision is running and the deadline of the stages before the flee search (survey-meter's, its hold kept back) has passed."
+  [c]
+  (boolean (some-> (decision-deadline c (* 1000 (flee-hold-s c))) (<= (clock/now)))))
+
 (defn step-meter
   "The flight step's search-meter, from what its searches have run (step-spent-s); in a decision it stops at the decision's deadline,
   the flee search's held share (flee-hold-s) being what the surveys before it leave of that box."

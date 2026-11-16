@@ -1154,7 +1154,7 @@
         behind? (fn [pos] (and (= 64 (aget pos "y")) (= 2 (js/Math.abs (aget pos "x")))))]
     (tu/set-sensed! p (fn [pos] (if (behind? pos) #js {:unknown true :pos pos} (sensed pos))))
     (is (true? (respond.pillar/pillar-fits? p [0 64 0])) "the ground the walls hide, near where sight was cut, reads open")
-    (is (< 0 (with-redefs [sight/frontier-value-fn (constantly (constantly (+ 1 (* 2 3))))] (respond.pillar/pillar-climb p [0 64 0])) 1)
+    (is (< 0 (with-redefs [sight/frontier-value-fn (constantly (constantly (+ 1 (* 2 3))))] (respond.pillar/pillar-climb p [0 64 0] (constantly false))) 1)
         "read more likely solid, it is a step from the open ground outside onto the wall beside the top: a chance the pillar fails, priced, not a certainty")))
 
 (deftest a-ledge-a-mob-reaches-by-walking-round-far-outside-the-slot-is-a-climb
@@ -1168,8 +1168,10 @@
                                (for [x [-2 2] z [-2 9] y [64 65 66]] [(key-of x y z) "stone"])))
         p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge slot-walls plateau shell)
                              :entities [(zombie 0.5 64 4.5)]})]
-    (is (zero? (respond.pillar/pillar-climb p [0 64 0]))
-        "a 1-high ledge beside the walls, shut in by higher walls: neither the zombie in the slot nor one outside gets onto it")))
+    (is (zero? (respond.pillar/pillar-climb p [0 64 0] (constantly false)))
+        "a 1-high ledge beside the walls, shut in by higher walls: neither the zombie in the slot nor one outside gets onto it")
+    (is (nil? (respond.pillar/pillar-climb p [0 64 0] (constantly true)))
+        "a search stopped before it saw the walls (the decision's time ran out) reads the wall tops as reached from the world: no pillar")))
 
 (def ledge-yard
   "A 3x3 yard (x, z -1..1) in 3-high walls, a 2-high ledge on its east side (x 1, z 0) and a 1-high bump at its north east corner."
@@ -1182,7 +1184,7 @@
         p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks ledge-yard :entities zombies})]
     (is (false? (respond.pillar/pillar-fits? p [0 64 0]))
         "from the yard floor a zombie takes the bump, the ledge and the wall top beside the pillar's top")
-    (is (zero? (respond.pillar/pillar-climb p [1 65 -1]))
+    (is (zero? (respond.pillar/pillar-climb p [1 65 -1] (constantly false)))
         "on the bump the pillar stands in the zombies' only way up the ledge: nothing climbs to its top")))
 
 (deftest a-pillar-in-an-open-field-at-night-is-not-priced-out-by-the-dark-round-it
@@ -1192,13 +1194,13 @@
     (tu/set-sensed! p (fn [pos] (if (pos? (off (aget pos "x") (aget pos "y") (aget pos "z"))) #js {:unknown true :pos pos} (sensed pos))))
     (is (> 0.05 (with-redefs [sight/frontier-value-fn (fn [_] (fn [[x y z]] (+ 1 (* 2 (off x y z)))))
                               sight/unseen-solid-fn (fn [_] (fn [cell-y d & _] (base-rates/unseen-solid 64 (- cell-y 64) d false nil)))]
-                  (respond.pillar/pillar-climb p [0 64 0])))
+                  (respond.pillar/pillar-climb p [0 64 0] (constantly false))))
         "only the cells beside the body seen, the dark beyond is a measured guess: no likely ledge beside the top")))
 
 (deftest an-unseen-step-up-to-a-wall-beside-the-pillars-top-is-a-ledge-by-the-chance-it-is-rock
   (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (wall-cells [[1 0]])})
         sensed (tu/sensed-by p)
-        climb (fn [d] (with-redefs [sight/frontier-value-fn (constantly (constantly (+ 1 (* 2 d))))] (respond.pillar/pillar-climb p [0 64 0])))]
+        climb (fn [d] (with-redefs [sight/frontier-value-fn (constantly (constantly (+ 1 (* 2 d))))] (respond.pillar/pillar-climb p [0 64 0] (constantly false))))]
     (tu/set-sensed! p (fn [pos] (if (= [2 64 0] [(aget pos "x") (aget pos "y") (aget pos "z")]) #js {:unknown true :pos pos} (sensed pos))))
     (is (< 0 (climb 1) (climb 3) 1)
         "a mob walks round to the step and up onto the wall by the chance it is rock, likelier far from where sight was cut")))
@@ -2453,13 +2455,14 @@
         mobs (atom #{[3 64 0]})]
     (with-stub-mem
       (fn []
-        (with-redefs [respond.pillar/pillar-climb (fn [_ _] (swap! asked inc) 0.25)
+        (with-redefs [respond.pillar/pillar-climb (fn [_ _ _] (swap! asked inc) 0.25)
                       respond.pillar/mob-cells (fn [_] @mobs)
                       ctx/now (constantly 1000)]
-          (is (= 0.25 (respond.pillar/climb-of c)))
+          (is (= 0.25 (respond.pillar/climb-of c (constantly true))))
+          (is (= 0.25 (respond.pillar/climb-of c (constantly false))) "a chance the decision's deadline may have cut is not kept: asked again")
           (reset! mobs #{[2 64 0]})
           (is (true? (respond.pillar/fits-after-look? c (lpl/feet-cell c))) "the kept chance stands after the look, the mobs closer")
-          (is (= 1 @asked) "the cold frontier search is paid once, not again after the look's memory write"))))))
+          (is (= 2 @asked) "the cold frontier search is paid once uncut, not again after the look's memory write"))))))
 
 (deftest the-covers-are-priced-once-while-what-they-read-stays
   (let [m (atom {})
@@ -2473,11 +2476,11 @@
           (let [first-walls (cornered/covers c [:walls :pit :pocket])]
             (is (= first-walls (cornered/covers c [:walls :pit :pocket])))
             (cornered/covers c [:walls])
-            (is (= [[:walls :pit :pocket]] @asked) "asked once: the answers, the dead end and the cornered step share them")
+            (is (= [[:walls] [:pit] [:pocket]] @asked) "each asked once, way by way: the answers, the dead end and the cornered step share them")
             (swap! (fake/state p) assoc :entities [])
             (fake/add-entity! p (zombie 2 64 0))
             (cornered/covers c [:walls])
-            (is (= [[:walls :pit :pocket] [:walls]] @asked) "a hostile came nearer: priced again")))))))
+            (is (= [[:walls] [:pit] [:pocket] [:walls]] @asked) "a hostile came nearer: priced again")))))))
 
 (deftest a-cover-that-failed-here-is-dearer-here-in-this-flight-and-the-next
   (let [data (atom mem/empty-data)

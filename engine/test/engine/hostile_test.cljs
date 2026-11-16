@@ -449,6 +449,23 @@
           (is (= [:covers :look-in] (:stages (decision-cut slow))) "an answer the body already acted on is not priced further: no fight walk is asked")
           (is (nil? (decision-cut quick)) "a decision within its budget leaves nothing out"))))))
 
+;; Sorrel skeleton death (card bfd4ed60): the covers' quotes ran ~190 ms with no meter, past the decision's deadline
+(deftest the-covers-quotes-stop-where-the-flee-searchs-hold-begins
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ms (atom 0)
+              asked (atom [])
+              orig-now clock/now
+              orig-ways shut-in/covers-of
+              world {:self {:health 20} :inventory [{:name "dirt" :count 32} {:name "stone_pickaxe" :count 1}] :entities [(zombie 6.5 0.5)]}]
+          (set! clock/now #(deref ms))
+          (set! shut-in/covers-of (into {} (map (fn [[w f]] [w (fn [c] (swap! asked conj w) (when (= :walls w) (swap! ms + 1000)) (f c))])) orig-ways))
+          (let [slow (try (await (flight-round respond world))
+                          (finally (set! clock/now orig-now) (set! shut-in/covers-of orig-ways)))]
+            (is (= [:walls] @asked) "the walls' quote took the stages' time: the pit and the pocket are not quoted")
+            (is (= [:pit :pocket :pillar] (take 3 (:stages (decision-cut slow)))) "the ways left out are named")))))))
+
 (deftest a-decision-that-outlasts-a-tick-swings-or-steps-away-first-and-never-fights-a-creeper
   (async done
     (tu/run-async done

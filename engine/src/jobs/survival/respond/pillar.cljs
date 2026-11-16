@@ -51,9 +51,9 @@
   "The chance a mob climbs by steps of one block to stand beside the top of a pillar-height pillar at feet (levels 2 to 4
   above it: its hitbox then overlaps the body's): that of the likeliest way (the product of its cells' chances) down from
   there to a cell in mobs (where a mob stands) or to where the search runs out of ::climb-cells, likeliest first (the
-  ground beyond joins the world mobs roam); 0 when the ground round the top is walled off from both. chance-of: cell ->
-  [chance it is a floor, chance it is clear]."
-  [chance-of feet mobs]
+  ground beyond joins the world mobs roam, as it does once stop? (fn []) holds); 0 when the ground round
+  the top is walled off from both. chance-of: cell -> [chance it is a floor, chance it is clear]."
+  [chance-of feet mobs stop?]
   (let [[x y z] feet
         standable (fn [cell] (if (mobs cell)
                                1
@@ -66,7 +66,7 @@
         (let [q (- minus-q) todo (disj todo e)]
           (cond
             (< q (best cell)) (recur [best todo] n)
-            (or (mobs cell) (>= n (climb-cells))) q
+            (or (mobs cell) (>= n (climb-cells)) (stop?)) q
             :else (recur (reduce #(push %1 %2 (* q (standable %2)))
                                  [best todo]
                                  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]
@@ -97,7 +97,7 @@
   "Whether a pillar-height pillar fits here, every cell read as block-at gives it: room? and no way up for a mob from
   the open world (climb-chance)."
   [block-at feet]
-  (and (room? block-at feet) (zero? (climb-chance (seen-chance block-at) feet #{}))))
+  (and (room? block-at feet) (zero? (climb-chance (seen-chance block-at) feet #{} (constantly false)))))
 
 (defn mob-cells
   "The cells the hostiles the body at primitives p knows of stand in."
@@ -128,8 +128,8 @@
 (defn pillar-climb
   "The chance a mob climbs to the top of a pillar where the body at primitives p stands at feet (climb-chance from the
   hostiles it knows, a cell it has not sensed solid by lk/unseen-solid-at-fn), nil when the pillar has no room? there
-  (a cell it has not sensed read open: plan! looks at the rise first) or a mob surely climbs to its top."
-  [p feet]
+  (a cell it has not sensed read open: plan! looks at the rise first) or a mob surely climbs to its top. stop?: as climb-chance's."
+  [p feet stop?]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
         seen (seen-chance block-at)
@@ -139,7 +139,7 @@
                                          (rise cell) [0 1]
                                          :else (let [s (solid-at cell)] [s (- 1 s)]))))]
     (when (room-unseen-open? p feet)
-      (let [q (climb-chance chance-of feet (mob-cells p))]
+      (let [q (climb-chance chance-of feet (mob-cells p) stop?)]
         (when (< q 1) q)))))
 
 (declare pillar-fits?)
@@ -147,14 +147,14 @@
 (defn climb-of
   "pillar-climb at the body's feet, kept in the job's memory for check-cache/ttl-ms while its feet and the cells the hostiles
   near fill stay: the first cold ask pays for the frontier field and light, which the next write to the memory (a look)
-  drops."
-  [c]
+  drops. stop? (fn []) ends the search early (climb-chance); a chance it may have cut is not kept."
+  [c stop?]
   (let [p (:primitives c) feet (pl/feet-cell c) key [feet (mob-cells p)] now (ctx/now c)
         kept (::climb (ctx/mem c))]
     (if (and (= key (:key kept)) (<= 0 (- now (:t kept)) (check-cache/ttl-ms)))
       (:q kept)
-      (let [q (pillar-climb p feet)]
-        (ctx/update-mem! c assoc ::climb {:key key :t now :q q})
+      (let [q (pillar-climb p feet stop?)]
+        (when-not (stop?) (ctx/update-mem! c assoc ::climb {:key key :t now :q q}))
         q))))
 
 (defn fits-after-look?
@@ -170,7 +170,7 @@
 (defn pillar-fits?
   "Whether a pillar fits where the body at primitives p stands at feet (pillar-climb)."
   [p feet]
-  (some? (pillar-climb p feet)))
+  (some? (pillar-climb p feet (constantly false))))
 
 (defn note-base!
   "Remember the feet cell a flight's first pillar here began from (lifted reads the rise from it); a new column starts over."
