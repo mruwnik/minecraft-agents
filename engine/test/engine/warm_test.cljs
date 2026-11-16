@@ -46,3 +46,11 @@
       (let [built (map (fn [step] (let [n (.-n table/builds)] (step) (- (.-n table/builds) n))) (warm/steps))]
         (is (pos? (reduce + built)) "the settings give fresh tables, so the steps build some")
         (is (every? #(<= % 1) built) "a table pass is the most one turn holds, so the body's timers run between passes")))))
+
+(deftest the-pass-memo-keeps-one-table-per-key
+  (settings/with-settings {::table/craft-step 0.78 ::value/gather-prior-items 1.78}
+    (fn []
+      (warm-now!)
+      (let [mine (filter (fn [[key _]] (= 0.78 (nth (peek key) 2))) @table/passes-held)]
+        (is (seq mine))
+        (is (every? (fn [[_ [k _]]] (= 2 k)) mine) "each key holds its latest pass only: pass 0 and 1 are inputs to the next, not kept beside it")))))

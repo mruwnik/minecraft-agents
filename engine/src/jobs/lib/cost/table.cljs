@@ -295,7 +295,7 @@
     (update basis :gear assoc :ref-hardness (.-hardness b) :ref-material (.-material b) :ref-tier (block-tier md b))))
 
 (def version-facts
-  "What build-table reads of minecraft-data version alone, the same for every basis and pass (memoised). The fixpoint
+  "What table-builder reads of minecraft-data version alone, the same for every basis and pass (memoised). The fixpoint
   works on item indices (names' order): :recipes-ix holds each item's recipes as #js [count #js [ingredient index]], :smelts-ix its smelt
   inputs, :dependents-ix the items whose recipe or smelt reads it; a name outside names is index -1, worth nothing found."
   (memoize
@@ -324,7 +324,7 @@
 (defn worth-at [t i] (if (neg? i) js/Infinity (aget t i)))
 
 (defn table-builder
-  "(fn [tool-price]) -> build-table's table, the blocks priced with tool-price (tier -> seconds, see block-sources); all
+  "(fn [tool-price]) -> the table, the blocks priced with tool-price (tier -> seconds, see block-sources); all
   that the tool prices leave alone is worked out once."
   [version overrides basis]
   (let [{:keys [md items names by-result smelts crafted ingredients recipes-ix smelts-ix dependents-ix smelting-ix fuels-ix tools]} (version-facts version)
@@ -406,25 +406,30 @@
   "How many passes table-for runs: 3 settles the table; warm runs one per turn."
   3)
 
+(def passes-held
+  "Tables table-pass memoizes: {[version overrides basis settings] [k table]}, the latest pass per key."
+  (atom {}))
+
 (def table-pass
   "(fn [k version overrides basis]) -> the table after pass k (0-based), memoized on what it reads: its arguments and the
   settings the hp prices come from. Pass 0 prices blocks with no tool price, each next with the pickaxes' prices of the pass
   before, once per harvest tier above the default (a diamond pickaxe is made of ore an iron pickaxe digs, so one pass would
-  price it without the iron pickaxe; three passes settle the diamond tier). The builder (what no tool price changes) is shared by the passes."
-  (let [builder (memoize (fn [version overrides basis _] (table-builder version overrides basis)))
-        passes (atom {})]
+  price it without the iron pickaxe; three passes settle the diamond tier). A key holds one table: its latest pass, replaced
+  when the next is built (a lower pass asked after a higher one is rebuilt, not kept). The builder (what no tool price changes) is shared by the passes."
+  (let [builder (memoize (fn [version overrides basis _] (table-builder version overrides basis)))]
     (fn pass [k version overrides basis]
       (let [settings [(health/hp-seconds) (health/heal-s-per-hp) (craft-step) (smelt-step)]
-            args [k version overrides basis settings]]
-        (if-let [hit (get @passes args)]
-          hit
+            key [version overrides basis settings]
+            [held table] (get @passes-held key)]
+        (if (= held k)
+          table
           (let [before (when (pos? k) (pass (dec k) version overrides basis))
                 t0 (js/performance.now)
                 build (builder version overrides basis settings)
                 table (build (if before (tool-price-fn (facts/data version) (full-basis basis) before) (constantly 0)))]
             (set! (.-ms builds) (+ (.-ms builds) (- (js/performance.now) t0)))
             (set! (.-n builds) (inc (.-n builds)))
-            (swap! passes assoc args table)
+            (when (< (or held -1) k) (swap! passes-held assoc key [k table]))
             table))))))
 
 (defn table-for
