@@ -191,17 +191,15 @@
   "Whether the room seen at pos can be closed by nothing the job does: a seen room with an unroofed cell, no doorway that
   shuts it and, for a closed room, more than the one unroofed cell a plug mends (a roof on open sides, or walls under the
   sky). An unroofed cell whose roof column is unseen is walked to and looked at, but only while the room is closed: a flood
-  that leaks through seen open cells is a roof on open sides, whatever its unseen roof. Read-only; kept per body while nothing near pos is written (sense/kept-at-site)."
+  that leaks through seen open cells is a roof on open sides, whatever its unseen roof. Read-only."
   [p pos]
-  (sense/kept-at-site
-   p :unclosable pos
-   #(let [{:keys [cell closed?]} (reach-room/unroofed-cell p pos)
-          hidden? (and cell (look-edge/unseen-roof? p cell) closed?)]
-      (boolean (and (not (reach-room/unseen-room? p pos))
-                    cell (not hidden?) (nil? (room-lib/shut-by p pos cell any?))
-                    (or (not (room-lib/refuge-room? p pos))
-                        (< 1 (count (remove (fn [[x y z]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x x :y y :z z}))
-                                            (:cells (reach-room/room p pos)))))))))))
+  (let [{:keys [cell closed?]} (reach-room/unroofed-cell p pos)
+        hidden? (and cell (look-edge/unseen-roof? p cell) closed?)]
+    (boolean (and (not (reach-room/unseen-room? p pos))
+                  cell (not hidden?) (nil? (room-lib/shut-by p pos cell any?))
+                  (or (not (room-lib/refuge-room? p pos))
+                      (< 1 (count (remove (fn [[x y z]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x x :y y :z z}))
+                                          (:cells (reach-room/room p pos))))))))))
 
 (defn target-of
   "{:name :pos} of the room to enter: the call's :place, else the home, else (no :place, and no home remembered or the home
