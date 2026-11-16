@@ -18,7 +18,8 @@
   "Floor, walls and roof of the pen at ws along -x (its cell [1 64 0]), the lectern's sides across it, the floor and roof
   of the stand [3 64 0] behind it."
   {"1,63,0" "stone" "1,64,1" "stone" "1,65,1" "stone" "1,66,1" "stone" "1,64,-1" "stone" "1,65,-1" "stone"
-   "1,66,-1" "stone" "1,66,0" "stone" "2,66,0" "stone" "2,64,1" "stone" "2,64,-1" "stone" "3,63,0" "stone" "3,66,0" "stone"})
+   "1,66,-1" "stone" "1,66,0" "stone" "2,66,0" "stone"
+   "2,64,1" "stone" "2,65,1" "stone" "2,64,-1" "stone" "2,65,-1" "stone" "3,63,0" "stone" "3,66,0" "stone"})
 
 (def box "The stand's three other sides, feet and head." {"3,64,1" "stone" "3,65,1" "stone" "3,64,-1" "stone" "3,65,-1" "stone" "4,64,0" "stone" "4,65,0" "stone"})
 

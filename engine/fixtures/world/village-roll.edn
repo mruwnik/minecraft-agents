@@ -32,7 +32,7 @@
  :cases
  [{:name "roll-librarian"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270}
@@ -44,7 +44,7 @@
   {:name "roll-librarian-at-its-lectern-is-rolled-at-once-though-an-old-pen-stands-round-it"
    ;; card c66943dc: the pen stands but its near end is open (no plug) and the librarian works the lectern from the open near end, outside the cell; the roll starts at once, no pen child (one inside the cell is plugged in first, village.roll/held?)
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270}
@@ -58,7 +58,7 @@
   {:name "roll-librarian-in-an-open-ended-pen-cell-is-plugged-in-then-rolled"
    ;; card 889f5a1f: as above with the librarian in the cell [16 0 17]: the pen child plugs the near end behind it (digging out of the box to place it) without walking off to see the cell's floor and roof the stand cannot see, then the roll rolls
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270 :inventory [["cobblestone" 8]]}
@@ -71,7 +71,7 @@
    :after [[:block [16 0 16] "lectern"] [:block [16 1 18] "cobblestone"]]}
   {:name "roll-librarian-boxed-in-never-seen-pen-walls-digs-out-to-look"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [16.5 0 15.5] :yaw 0}
@@ -82,7 +82,7 @@
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-with-carried-ways-places-the-workstation-it-broke"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270}
@@ -93,7 +93,7 @@
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-with-a-book-map-stops-on-any-listed-book"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270}
@@ -104,7 +104,7 @@
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-three-times-in-one-call"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270}
@@ -189,7 +189,7 @@
    :blocks [[:fill [12 -1 12] [20 3 20] "stone" :hollow] [:fill [13 0 13] [19 2 19] "air"]
             [:set [13 1 13] "torch"] [:set [19 1 19] "torch"] [:set [16 0 16] "lectern"]
             [:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270 :settle-s 2}
@@ -257,7 +257,7 @@
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-cell-behind-the-body-is-looked-at"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]]
    :body {:at [8.5 0 16.5] :yaw 90 :inventory [["cobblestone" 4]]}
    :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,5],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
@@ -287,7 +287,7 @@
   {:name "roll-with-a-spare-places-it-before-the-pickup-with-a-free-composter-near"
    :blocks [[:set [26 0 16] "composter"]
             [:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [16 0 18] [16 1 18] "cobblestone"] [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [13.5 0 16.5] :yaw 270 :inventory [["lectern" 1]]}
@@ -304,7 +304,7 @@
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-with-no-villager-named-rolls-the-one-that-walked-into-the-pen"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"] [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2]]}
    :act [[:summon "villager" [15.5 0 19.5] "{NoAI:1b,UUID:[I;20260,7,5,46],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
@@ -315,7 +315,7 @@
    :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}
   {:name "roll-named-villager-ends-not-walked-in-when-another-walks-into-the-pen"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
-            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"] [:fill [16 0 14] [16 1 14] "cobblestone"]]
    :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2]]}
    :act [[:summon "villager" [15.5 0 19.5] "{NoAI:1b,UUID:[I;20260,7,5,48],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]

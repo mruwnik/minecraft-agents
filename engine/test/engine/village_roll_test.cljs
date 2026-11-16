@@ -75,7 +75,7 @@
   a top slab over the lectern, its near end [4 64 0] plugged, the lectern's sides walled; the body boxed in behind it."
   {:blocks {"3,63,0" "stone" "3,64,1" "stone" "3,65,1" "stone" "3,66,1" "stone" "3,64,-1" "stone" "3,65,-1" "stone"
             "3,66,-1" "stone" "3,66,0" "stone" "2,66,0" "stone" "2,65,0" "oak_slab" "4,64,0" "stone" "4,65,0" "stone"
-            "2,64,1" "stone" "2,64,-1" "stone" "1,63,0" "stone" "1,66,0" "stone" "1,64,1" "stone" "1,65,1" "stone"
+            "2,64,1" "stone" "2,65,1" "stone" "2,64,-1" "stone" "2,65,-1" "stone" "1,63,0" "stone" "1,66,0" "stone" "1,64,1" "stone" "1,65,1" "stone"
             "1,64,-1" "stone" "1,65,-1" "stone" "0,64,0" "stone" "0,65,0" "stone"
             "0,63,0" "stone" "1,63,1" "stone" "1,63,-1" "stone"}
    :states {"2,65,0" {:type "top"}}

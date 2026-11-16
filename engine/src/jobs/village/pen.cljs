@@ -26,7 +26,7 @@
   (jobs.lib.villager-pen): the cell floored, walled three high, roofed over it and the workstation, a top slab over the
   workstation (a broken workstation leaves a gap a villager cannot pass and a sneaking body reaches through), its near
   end plugged once the villager stands in it. No other villager may path to a cell next to the workstation (the game's
-  rule for claiming a job site): its sides across the pen are walled and the body's stand behind it is boxed in with
+  rule for claiming a job site): its sides across the pen are walled two high and the body's stand behind it is boxed in with
   the body inside. The side is the one the villager stands in, else the one with the fewest blocks to place or dig
   among those whose cell, stand and near end are seen open (a pen already standing costs least).
   Each step re-reads the world and does the first owed: get

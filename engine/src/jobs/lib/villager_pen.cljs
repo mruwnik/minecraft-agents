@@ -4,8 +4,8 @@
   roof; W plugs V's far end with a top slab above it, so a broken W leaves a gap 1.5 high, too low for a villager (1.95)
   and room for a sneaking body (1.5) to reach in. The near end O (the cell beyond V, feet and head) stays open until the
   villager stands in V, then it is plugged. A villager claims a job site it can path to a cell next to (the game's
-  AcquirePoi: reach 1, by Manhattan distance), so W's other sides are shut too: the two across d walled at feet height,
-  and the body's stand S behind W (opposite V) boxed in, floor, roof and both cells of its three other sides, with the
+  AcquirePoi: reach 1, by Manhattan distance), so W's other sides are shut too: the two across d walled feet and head
+  high (one high, a villager stepped onto it, within the 2 blocks of W that give it the job, and on to the roof), and the body's stand S behind W (opposite V) boxed in, floor, roof and both cells of its three other sides, with the
   body in it. V must hold no other villager and read lit."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.torch :as torch]
@@ -29,7 +29,7 @@
     {:side side
      :cell [vx y vz]
      :shut (vec (concat [[vx (dec y) vz]] (across vx vz [0 1 2]) [[vx (+ y 2) vz] [x (+ y 2) z]]
-                        (across x z [0]) [[sx (dec y) sz] [sx (+ y 2) sz]]))
+                        (across x z [0 1]) [[sx (dec y) sz] [sx (+ y 2) sz]]))
      :floors {(first plug) (below (first plug)) (first entry) (below (first entry))}
      :slab [x (inc y) z]
      :plug plug

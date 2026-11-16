@@ -29,7 +29,7 @@
    :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"] [:block [16 2 16] "cobblestone"]
            [:block [16 2 17] "cobblestone"] [:block [15 0 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
            [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]
-           [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [16 2 15] "cobblestone"]
+           [:block [15 0 16] "cobblestone"] [:block [15 1 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [17 1 16] "cobblestone"] [:block [16 2 15] "cobblestone"]
            [:block [15 1 15] "cobblestone"] [:block [17 1 15] "cobblestone"] [:block [16 1 14] "cobblestone"]]}
   {:name "pen-at-a-lectern-one-above-the-ground-floors-the-near-end-and-the-boxs-entry"
    ;; card 41317cb8: the lectern stands on a stone block, so the cells round it have air below: the plug and the box's entry are placed against floors the pen lays first
