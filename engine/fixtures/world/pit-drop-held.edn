@@ -1,0 +1,24 @@
+;; Card ff8f5109: a danger pit (jobs.survival.dig-pit) on flat stone; once its second drop's column is opened under the
+;; anchor (tidy.dug [16 -1 16]), a skeleton stands in it. A walk never enters a seen mob's cell, so the old pit's go-to
+;; into that drop held "searching" until the body died. Now the pit strikes the mob out of the drop, and stops
+;; :hostile-near when blows cannot clear it.
+{:defaults
+ {:tags [:survival :cornered]
+  :time :any
+  :register []
+  :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 8]]}
+  :limit-s 90}
+ :cases
+ [{:name "a-skeleton-in-the-drop-is-struck-out-and-the-pit-finished"
+   :act [[:job (jobs.survival.dig-pit {:for :danger :worth 1200})]
+         [:await {:source :job :kind :tidy.dug :data {:cell #at [16 -1 16]}} 40]
+         ;; an rcon summon: the fixture check reads [16 -1 16] as the :blocks stone, but the pit has dug it by now
+         [:rcon "execute positioned $X $Y $Z run summon minecraft:skeleton ~16 ~-1 ~16 {NoAI:1b,Health:1f,PersistenceRequired:1b,Tags:[\"wt\"],UUID:[I;81085109,1,1,1]}"]]
+   :expect [{:event {:source :action :kind :done :data {:name "attack"}} :within-s 60}
+            {:event {:source :job :kind :completed} :within-s 70 :of-job true}]}
+  {:name "a-skeleton-blows-cannot-clear-ends-the-pit-hostile-near"
+   :act [[:job (jobs.survival.dig-pit {:for :danger :worth 1200})]
+         [:await {:source :job :kind :tidy.dug :data {:cell #at [16 -1 16]}} 40]
+         [:rcon "execute positioned $X $Y $Z run summon minecraft:skeleton ~16 ~-1 ~16 {NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Tags:[\"wt\"],UUID:[I;81085109,1,1,2]}"]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hostile-near}} :within-s 70 :of-job true}]}]}

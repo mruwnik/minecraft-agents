@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.registry :as registry]
             [plan.shape :as shape]
             [jobs.lib.world-files :as world]
@@ -169,3 +170,50 @@
               (recur (inc i))))
           (is (empty? (seen/digs p)) "no dig into the plan's cells (old code: :spared applied to :for :night only, so the pit was dug)")
           (is (= :spared (some #(when (= :stopped (:kind %)) (:reason %)) @log))))))))
+
+(defn ^:async run-pit-with-mob-in-the-drop!
+  "A danger pit on flat rock; after its third dig (the zigzag's second drop opened: [0 64 0] and [0 63 0]) a skeleton
+  stands in that column while the body is still at the first drop [1 64 0]."
+  [skeleton]
+  (let [p (await (seen/see-surface! (seen/sensing {:blocks seen/ground})))
+        n (atom 0)
+        clock (atom 1000000)
+        [log sink] (tu/legacy-capture-sink)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world/of-data {} {} [])
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (.override (.-world p) "dig"
+               (fn ^:async f [token a impl]
+                 (let [pos (.-pos (.self p))
+                       at [(.-x pos) (.-y pos) (.-z pos)]
+                       r (await (impl token a))]
+                   (fake/swap-self! p assoc :pos at)
+                   (when (= 3 (swap! n inc)) (fake/add-entity! p skeleton))
+                   r)))
+    (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :danger})) {})
+    (loop [i 0]
+      (when (and (< i 200) (seq (:list (core/state eng))))
+        (swap! clock + 500)
+        (await (core/tick! eng))
+        (recur (inc i))))
+    {:p p :log @log}))
+
+(def skeleton {:id 7 :uuid "u7" :name "skeleton" :kind "hostile" :pos {:x 0.5 :y 64 :z 0.5}})
+
+(deftest a-hostile-in-the-pits-next-drop-is-struck-out-of-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p log]} (await (run-pit-with-mob-in-the-drop! skeleton))]
+          (is (seq (seen/calls p "attack")) "struck (old code: a go-to into the mob's cell, which no plan enters, searched on)")
+          (is (= 62 (seen/feet-y p)) "the pit dug to its bottom once the skeleton was gone")
+          (is (not-any? #(= :stopped (:kind %)) log)))))))
+
+(deftest a-hostile-that-blows-do-not-move-out-of-the-drop-ends-the-pit-hostile-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p log]} (await (run-pit-with-mob-in-the-drop! (assoc skeleton :invulnerable true)))]
+          (is (= 64 (seen/feet-y p)) "never stepped into the held drop")
+          (is (= :hostile-near (some #(when (= :stopped (:kind %)) (:reason %)) log))
+              "old code: the go-to held searching, the pit never ended"))))))

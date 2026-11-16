@@ -482,10 +482,20 @@
     (when (some #(look/unknown? (:primitives c) %) cells)
       (await (look/look-at! c [x y z])))))
 
+(defn drop-holder
+  "The seen hostile that holds the cell to (a drop's feet cell): one whose cell is to or a cell over or under it, as the
+  planner's dangers :block reads a seen mob, so no walk ends there. nil when none."
+  [c to]
+  (first (filter (fn [{:keys [kind pos]}]
+                   (let [[x y z] (u/cell-vec pos)]
+                     (and (= "hostile" kind) (= x (:x to)) (= z (:z to)) (<= (abs (- y (:y to))) 1))))
+                 (sight/seen-entities (:primitives c) {:radius 4}))))
+
 (defn ^:async pit-round!
   "One step of the pit (pit-plan): dig the next drop's cells, then drop into it once its floor is seen solid, or at the
   bottom plug. The body never digs where it sees fluid, a hazard or open air, never digs the cell under its feet unless it
-  knows the floor under that, nor drops onto a floor it has not seen solid: a stop instead (stop). :again, :hidden, or plug!'s result."
+  knows the floor under that, nor drops onto a floor it has not seen solid: a stop instead (stop). A seen hostile holding the
+  drop (drop-holder) is struck out of it (pillar/strike-out!), and once the knocks are used the pit stops :hostile-near. :again, :hidden, or plug!'s result."
   [c {:keys [anchor steps roof prep] :as refuge}]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -499,6 +509,7 @@
       @early-stop @early-stop
       :else
       (let [{:keys [dig to floor]} (nth steps at)
+            holder (drop-holder c to)
             cell (first (remove #(dig-cells/open-cell? p %) (if (zero? at) (concat prep dig) dig)))
             cell-stop* (delay (cell-stop p cell))
             under? (= cell (update feet :y dec))
@@ -511,8 +522,12 @@
           cell (await (dig-pit-cell! c cell keep))
           :else
           (do (when (look/unknown? p (lb/cell floor)) (await (look/look-at! c (lb/cell floor))))
-              (if-not (dig-cells/known-solid? p floor)
+              (cond
+                (not (dig-cells/known-solid? p floor))
                 (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
+                (and holder (await (pillar/strike-out! c [(u/cell-vec (:pos holder))]))) :again
+                holder (stop :hostile-near (str (:name holder) " stands in the pit's next drop at " (pr-str (lb/cell to)) "; not stepping into it"))
+                :else
                 (let [r (await (step-to! c to))]
                   (if (= to (sh-sense/feet p))
                     (do (u/progress! c) (ctx/update-mem! c dissoc :refills) :again)

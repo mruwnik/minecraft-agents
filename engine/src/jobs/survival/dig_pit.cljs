@@ -24,7 +24,7 @@
   block to plug with, carried or dug (a block the tools cannot harvest is dug by hand once one is in hand and the hand breaks it within pit-cells's ::night-hand-clear-ms for :night, else jobs.lib.tools quick-clear-ms).
   One call is a whole attempt: :done {:pos :way :pit :roof :start} once enclosed, at once when it already is; nothing-possible :failed
   {:reason :text :needs} when a pit fails, the reason a stop of jobs.survival.pit-cells: :no-floor, :fluid-here, :fluid-adjacent,
-  :fluid-above, :hazard-below, :no-tool (:needs the block), :hostile-near (a melee hostile stands in the way), :no-blocks, :dig-failed, :descent-stalled, :roof-failed, :lays-open (a dig
+  :fluid-above, :hazard-below, :no-tool (:needs the block), :hostile-near (a melee hostile stands in the way, or holds a drop the blows do not clear), :no-blocks, :dig-failed, :descent-stalled, :roof-failed, :lays-open (a dig
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
