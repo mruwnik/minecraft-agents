@@ -16,6 +16,7 @@
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [jobs.lib.near :as near]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.preview :as pv]))
@@ -152,6 +153,24 @@
             (finally (set! pv/route! route!)
                      (set! choose/dig-price dig-price)
                      (set! choose/rest-dig-s rest-dig-s))))))))
+
+(deftest a-quote-whose-walk-search-spent-the-tick-leaves-the-dig-search-to-the-next-ask
+  ;; card 57c252ab: a walled home's quote ran its walk search and its whole dig search in one ask, ~190 ms in the fake (Q202)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut-in (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1")
+              route! pv/route!
+              now clock/now
+              ms (atom 0)]
+          (set! clock/now (fn [] @ms))
+          (set! pv/route! (fn ^:async rt [c] (let [r (await (route! c))] (swap! ms + 1000) r)))
+          (try
+            (let [{:keys [quote]} (await (preview shut-in {:pos [10 64 1] :range 0}))]
+              (is (= :searching (get-in quote [:route :reason])) (pr-str (:route quote)))
+              (is (true? (:estimate quote)) "priced as a search still going on: asked again, not kept"))
+            (finally (set! pv/route! route!)
+                     (set! clock/now now))))))))
 
 (deftest a-dig-dearer-than-the-calls-worth-is-no-dig-price
   (async done

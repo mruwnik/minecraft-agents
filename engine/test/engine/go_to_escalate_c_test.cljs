@@ -26,6 +26,7 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.clock :as clock]
             [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.util :as u]
             [jobs.lib.escape :as escape]
@@ -2036,21 +2037,42 @@
           (is (seq dug))
           (is (every? #(>= (get-in % [:pos :y]) 64) dug) "no cell under the tunnel's floor is dug"))))))
 
-(deftest a-dig-quote-of-no-running-call-keeps-no-search
+(deftest a-dig-quote-of-no-running-call-spends-one-slice-over-all-its-asks
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})]
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
+        searched #(reduce + 0 (vals @choose/searched-cells))]
     (.setOwner (:primitives eng) "tx")
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
       (fn []
-        (is (= :budget (choose/dig-price c [38 64 0] nil)) "a slice spent: not known, no estimate to wait on")
-        (is (= :budget (choose/dig-price c [38 64 0] nil)))
-        (is (empty? @choose/kept-routes) "nothing is kept: asked at no time cost, a kept search would grow with every quote")))))
+        (is (= :budget (choose/dig-price c [38 64 0] nil ##Inf)) "a slice spent: not known, no estimate to wait on")
+        (is (= :budget (choose/dig-price c [38 64 0] nil ##Inf)))
+        (is (= 5 (searched)) "asked again, the spent search is not begun anew: a quote's search does not grow with its asks")))))
+
+(deftest a-dig-quote-past-its-tick-goes-on-at-the-next-ask
+  ;; card 57c252ab: a walled home's quote searched its whole dig slice in one ask (~120 ms of a ~190 ms quote in the fake)
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
+        searched #(reduce + 0 (vals @choose/searched-cells))
+        ask #(let [a (choose/dig-price c [38 64 0] nil 0)] [a (searched)])]
+    (.setOwner (:primitives eng) "tx")
+    ;; the clock is past the deadline at every ask; a tick buys a few nodes
+    (with-redefs [clock/now (constantly 1)
+                  settings/ticks->ms (constantly 1)]
+      (settings/with-settings {:jobs.lib.dig-route/max-nodes 20}
+        (fn []
+          (let [asks (vec (repeatedly 8 ask))
+                searching (take-while #(= :searching (first %)) asks)]
+            (is (= [:searching 0] (first asks)) "the walk spent the tick: the new dig search waits for the next ask")
+            (is (< 2 (count searching)) "each later ask runs one tick of it")
+            (is (apply < (map second searching)) "each goes on from where the last stopped")
+            (is (= [:budget 20] (nth asks (count searching))) "one slice over all the asks, then not known")
+            (is (= [:budget 20] (peek asks)))))))))
 
 (deftest a-dig-quote-bounded-by-the-walk-on-ends-nil-when-every-dig-costs-more
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})]
     (.setOwner (:primitives eng) "tx")
-    (is (nil? (choose/dig-price c [38 64 0] 0.1)) "dearer than walking on: priced and dropped, not :budget")))
+    (is (nil? (choose/dig-price c [38 64 0] 0.1 ##Inf)) "dearer than walking on: priced and dropped, not :budget")))
 
 (deftest a-dig-quote-whose-walk-on-alone-passes-the-worth-searches-nothing
   ;; run4 F2: a quote to a bed 17.5 km off searched a dig route no worth could pay for, and its setup ran the body out of heap
@@ -2060,7 +2082,7 @@
         real choose/dig-way]
     (.setOwner (:primitives eng) "tx")
     (with-redefs [choose/dig-way (fn [& args] (swap! searched inc) (apply real args))]
-      (is (nil? (choose/dig-price c [20000 64 0] nil)))
+      (is (nil? (choose/dig-price c [20000 64 0] nil ##Inf)))
       (is (zero? @searched)))
     (let [priced (atom 0)
           real choose/route-s]
@@ -2073,17 +2095,19 @@
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
         _ (.setOwner (:primitives eng) "tx")
-        dug (choose/dig-price c [4 64 0] nil)]
+        dug (choose/dig-price c [4 64 0] nil ##Inf)]
     (is (number? dug) "the dig is found with no bound")
-    (is (= dug (choose/dig-price c [4 64 0] (* 1.5 dug))) "a walk-on dearer than the dig leaves the dig found")
-    (is (nil? (choose/dig-price c [4 64 0] (* 0.75 dug))) "a walk-on cheaper than the dig ends the search")))
+    (is (= dug (choose/dig-price c [4 64 0] (* 1.5 dug) ##Inf)) "a walk-on dearer than the dig leaves the dig found")
+    (is (nil? (choose/dig-price c [4 64 0] (* 0.75 dug) ##Inf)) "a walk-on cheaper than the dig ends the search")))
 
-(deftest a-dig-quote-of-no-running-call-that-ended-keeps-no-search
+(deftest a-dig-quote-of-no-running-call-that-ended-keeps-its-answer-not-its-search
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})]
     (.setOwner (:primitives eng) "tx")
-    (is (not= :budget (choose/dig-price c [4 64 0] nil)) "the search ended within its slice")
-    (is (empty? @choose/kept-routes) "an ended quote's answer is not kept under the job's quote key")))
+    (let [dug (choose/dig-price c [4 64 0] nil ##Inf)]
+      (is (number? dug) "the search ended within its slice")
+      (is (= [true] (map :ended? (mapcat vals (vals @choose/kept-routes)))) "kept as its answer alone, the search's cells freed")
+      (is (= dug (choose/dig-price c [4 64 0] nil ##Inf)) "asked again, the kept answer"))))
 
 (deftest a-dig-quote-of-a-running-call-goes-on-searching
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
@@ -2092,7 +2116,7 @@
     (ctx/update-mem! c assoc :route-owner "j9")
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
       (fn []
-        (is (= :searching (choose/dig-price c [38 64 0] nil)) "the call's search goes on at its next quote")
+        (is (= :searching (choose/dig-price c [38 64 0] nil ##Inf)) "the call's search goes on at its next quote")
         (is (seq (get @choose/kept-routes "j9")))
         (choose/forget-routes! "j9")))))
 
@@ -2104,7 +2128,7 @@
     (.setOwner (:primitives eng) "tx")
     (ctx/update-mem! c assoc :guess-looks {:placed {:all 3 :bad 3}} :spent-routes #{[1 2]})
     (with-redefs [choose/dig-way (fn [p from goal may-dig? opts] (reset! seen opts) (real p from goal may-dig? opts))]
-      (choose/dig-price c [10 64 0] nil))
+      (choose/dig-price c [10 64 0] nil ##Inf))
     (let [feet (vec (map #(js/Math.floor %) [0 64 0]))
           way (choose/way-opts c feet false nil)]
       (is (every? #(contains? @seen %) [:spent :own-s :risk-s :guess-risk :worth-s]) (pr-str (keys @seen)))

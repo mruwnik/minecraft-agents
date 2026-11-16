@@ -21,6 +21,7 @@
             [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.clock :as clock]
             [jobs.lib.column-kinds :as kinds]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
@@ -1141,33 +1142,70 @@
             (let [e (escape-way/choose p feet goal may-dig? opts)]
               (when (= :stair (:step e)) e)))))))
 
+(defonce ^{:doc "The dig searches go-to quotes keep (dig-price with no running call): {id route-epoch at its last ask}, oldest
+  first, the oldest dropped past dig-route/kept-max."}
+  quote-searches (js/Map.))
+
+(per-body/store! ::quote-searches #(.clear quote-searches))
+
+(defn quote-search!
+  "[id new?]: the kept-routes id of body p's quote dig search from feet to goal, made the newest of quote-searches; one that
+  spent its nodes at another route-epoch than epoch begins again (what it read may have changed)."
+  [p feet goal epoch nodes]
+  (let [id (str "quote " (goog/getUid p) " " feet " " goal)
+        asked? (.has quote-searches id)]
+    (when (and asked? (not= epoch (.get quote-searches id)) (>= (searched-cells-of id) nodes)) (end-searches! id))
+    (.delete quote-searches id)
+    (.set quote-searches id epoch)
+    (when (> (.-size quote-searches) dig-route/kept-max)
+      (let [old (.-value (.next (.keys quote-searches)))]
+        (.delete quote-searches old)
+        (end-searches! old)))
+    [id (not asked?)]))
+
 (defn dig-price
   "Seconds the fewest cells dug (dig-way) from the feet to the stand cell goal ([x y z]) cost go-to call c, the rest of the
   way walked as a quote prices it, and no more than the call's worth; nil when the call may not dig a route or none is found.
-  A running call (route-owner) has its search go on, :searching, at its next quote; a quote of no running call asks one
-  slice and gets :budget when that spent its nodes (no search is kept: each quote ask would otherwise grow it for ever, at
-  no time spent). A quote asks this when the walk's planner found no walk. walk-s, given when that walk was cut by its
-  budget (a partial to walk on): a dig route dearer than walking on is no use, so the search ends by that price (nil). The
-  walk on alone past the worth is nil unsearched."
-  [c goal walk-s]
+  A running call (route-owner) has its search go on, :searching, at its next quote. A quote of no running call keeps its
+  search (quote-search!) and runs it on while the clock is short of deadline (jobs.lib.clock ms; past it already, the
+  nodes one tick buys at cost/search-cell-ceiling-s, or none when the search is new: the walk's search spent the tick),
+  :searching till the next ask; its nodes over all asks are one slice's, then :budget. A quote asks this when the walk's
+  planner found no walk. walk-s, given when that walk was cut by its budget (a partial to walk on): a dig route dearer
+  than walking on is no use, so the search ends by that price (nil). The walk on alone past the worth is nil unsearched."
+  [c goal walk-s deadline]
   (when-let [[feet rest-s] (when (ways/way? c :dig-route)
                              (let [feet (end/feet-cell c)
                                    rest-s (cost-planner/rest-s (js/Math.round (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal))))]
                                (when (cost/affords? rest-s (ctx/worth c)) [feet rest-s])))]
     (let [p (:primitives c)
           owner (:route-owner (ctx/mem c))
-          quote-id (str (:id c) "/quote")
-          slice (route-slice (or owner quote-id))
-          opts (cond-> (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :read-s (cost/search-read-s))
-                 walk-s (update :bound-s min walk-s))
-          e (dig-way p feet goal (may-dig-fn c) opts)]
-      (keep-routes! slice)
-      (when-not owner (forget-routes! quote-id))
-      (case (:step e)
-        :searching (if owner :searching :budget)
-        :dig-route (let [s (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts)) rest-s)]
-                     (when (cost/affords? s (ctx/worth c)) s))
-        nil))))
+          nodes (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes)
+          [id new?] (if owner [owner false] (quote-search! p feet goal (route-epoch p) nodes))]
+      (cond
+        (and new? (>= (clock/now) deadline)) :searching
+        (and (not owner) (>= (searched-cells-of id) nodes) (not-any? :ended? (vals (get @kept-routes id)))) :budget
+        :else
+        (let [opts (cond-> (assoc (merge (way-opts c feet (fetch-tool? c) nil) (range-opts c (zipmap [:x :y :z] goal))) :read-s (cost/search-read-s))
+                     walk-s (update :bound-s min walk-s))
+              search (fn [slice] (let [e (dig-way p feet goal (may-dig-fn c) (assoc opts :slice slice))] (keep-routes! slice) e))
+              tick-nodes #(js/Math.ceil (/ % 1000 (cost/search-cell-ceiling-s)))
+              e (if owner
+                  (search (route-slice owner))
+                  (loop []
+                    (let [used (searched-cells-of id)
+                          ms (- deadline (clock/now))
+                          slice (route-slice id)]
+                      ;; a node at least: an ended search answers only from a slice with some left
+                      (vreset! (:left slice) (max 1 (min (- nodes used) (tick-nodes (if (pos? ms) ms (settings/ticks->ms 1))))))
+                      (let [e (search slice)]
+                        (if (and (= :searching (:step e)) (< (clock/now) deadline) (< used (searched-cells-of id) nodes))
+                          (recur)
+                          e)))))]
+          (case (:step e)
+            :searching (if (or owner (< (searched-cells-of id) nodes)) :searching :budget)
+            :dig-route (let [s (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts)) rest-s)]
+                         (when (cost/affords? s (ctx/worth c)) s))
+            nil))))))
 
 (def stair-first-rise
   "How far above the feet a goal is for a found plan to be weighed against a stair up."
