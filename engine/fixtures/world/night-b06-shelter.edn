@@ -143,13 +143,12 @@
    :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :walls}} :within-s 90}]
    :limit-s 100}
-  ;; 1fbd292f: the same cave (sealed from the sky, so no night reaches it and the night job rightly waits: shut-in is submitted directly) with a pickaxe and a deep stone floor: a player digs a pit into the floor, so the body does not wall in (a 1-thick floor over void gave a 1-deep pit ringed with walls)
+  ;; 1fbd292f: a dark hall reaching beyond the spawn-free radius (a 25-wide cave is safe from the night by Q345) with a pickaxe and a deep stone floor: a player digs a pit into the floor, so the body does not wall in (a 1-thick floor over void gave a 1-deep pit ringed with walls)
   {:name "open-cave-with-a-pickaxe-digs-in-where-it-stands"
-   :time :any
-   :blocks [[:fill [2 -6 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
-   :plot {:height 12 :light :dark}
-   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 20]]}
-   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
+   :blocks [[:fill [2 -6 2] [60 9 30] "stone"] [:fill [4 0 4] [58 6 28] "air"]]
+   :plot {:height 12 :length 64}
+   :body {:at [31.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 20]]}
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :pit}} :within-s 90}]
    :limit-s 100}
   ;; 1fbd292f, b0e3b890, 49c6d276: in a dark 1-wide tunnel it cut itself the body keeps working; the night reflex does not fire (it saw each wall close up as it cut, a tunnel it never walked is not known shut)
