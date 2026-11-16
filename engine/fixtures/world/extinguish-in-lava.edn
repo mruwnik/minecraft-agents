@@ -13,4 +13,10 @@
   :limit-s 60}
  :cases
  [{:name "pool-of-lava-steps-out"
+   :after [[:body-far [16.5 0 16.5] 0.9]]}
+  ;; the feet cell is an open fence gate (no flow into it) beside the lava, the hitbox 0.05 over its edge: the server burns the body
+  ;; though the physics inLava flag (box 0.1 narrower each side) is false; the job must still step out (old code: it looked and stood)
+  {:name "hitbox-overlaps-lava-beside-feet"
+   :blocks [[:set [17 0 16] "oak_fence_gate[open=true,facing=north]"]]
+   :body {:at [17.25 0 16.5]}
    :after [[:body-far [16.5 0 16.5] 0.9]]}]}

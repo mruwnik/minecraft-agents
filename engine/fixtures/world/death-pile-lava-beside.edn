@@ -1,0 +1,18 @@
+;; jobs.survival.recover-drops: a death by lava gives the pile up only where the items burned (feet cell or the one under it held lava
+;; or fire). The body is killed by lava damage at [26 0 26] on stone, a walled lava cell two blocks west at [24 0 24..26]; the pile fell
+;; on the floor, and the body respawns at [4 0 4] and fetches it. Should-succeed: the pile is collected. Should-fail (old code): cause
+;; "lava" alone made the pile cost infinite and the job skipped it.
+{:defaults
+ {:tags [:survival :death :jobs :lava]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :inventory [["raw_iron" 24]]}
+  :blocks [[:set [24 0 26] "lava"] [:set [23 0 26] "stone"] [:set [25 0 26] "stone"] [:set [24 0 25] "stone"] [:set [24 0 27] "stone"]]
+  :act [[:rcon "damage $BODY 100 minecraft:lava"]
+        [:await {:source :body :kind :respawned} 30]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any] :cause "lava"}}]}}] 15]
+        [:job (jobs.survival.recover-drops {:worth 1200})]]
+  :limit-s 150}
+ :cases
+ [{:name "pile-beside-the-lava-is-fetched"
+   :expect [{:no-event {:source :job :kind :stopped :data {:decision :skip}} :for-s 40 :until {:source :job :kind :child_started :data {:slot :go}}}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}
