@@ -38,6 +38,7 @@
 (defn moves [r] (mapv :move (steps r)))
 (defn summary [r] (get-in r [:path :summary]))
 (defn cost [r k] (get-in r [:path :cost k]))
+(defn about [expected actual] (< (js/Math.abs (- expected actual)) 0.01))
 (defn plan-course
   ([name] (plan-course name {}))
   ([name options] (pf/course-plan name options)))
@@ -328,13 +329,13 @@
 (deftest a-plan-to-air-from-under-water-prices-drowning-not-refuses
   (let [r (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})]
     (is (found? r) "the swim to air is planned")
-    (is (< 7 (cost r :drown) 12) "2 hp a second past the supply (about 3 s: 6 hp) and the expected overrun of a slower swim")
+    (is (about 10.02 (cost r :drown)) "2 hp a second past the supply (3 s: 6 hp) and 4.02 hp of expected overrun of a slower swim")
     (is (zero? (cost r :risk)) "drowning is its own cost, not risk")))
 
 (deftest a-plan-to-air-quoted-just-within-the-supply-prices-the-chance-of-overrunning
   (let [drown-at (fn [used] (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed used}}) :drown))]
-    (is (pos? (drown-at 11)) "the swim may run slower than quoted")
-    (is (< (drown-at 9) (drown-at 11)) "the nearer the supply, the dearer")))
+    (is (about 1.79 (drown-at 9)) "quoted 14 of 15 s (old code: 0): the chance of a swim up to 25% slower")
+    (is (about 6 (drown-at 11)) "quoted 16 s: 1 s past plus the expected overrun")))
 
 (deftest a-plan-to-air-has-no-drowning-with-the-air-to-spare
   (is (zero? (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 2}}) :drown))))
@@ -445,7 +446,7 @@
   (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) at-health-10)]
     (is (found? r))
     (is (>= (cost r :drown) 10) "it drowns: still the only way")
-    (is (< (cost r :drown) 30) "the least drowning: a breath at the top first")))
+    (is (about 25.1 (cost r :drown)) "the least drowning: a breath at the top first, 14 hp quoted and the expected overrun")))
 
 (deftest a-lethal-way-to-air-is-refused-unless-the-caller-allows-it
   (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) (assoc-in at-health-10 [:costs :lethalAir] 0))]
@@ -474,7 +475,7 @@
   ;; a 30-block tunnel: about 3.75 s past the supply, counted as ceil(3.75 + 1) = 5 hits (10 hp)
   (let [r (run (lethal-dive false 42) dive-start (near 43 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 12)))]
     (is (found? r))
-    (is (pos? (cost r :drown)) "it drowns some")))
+    (is (about 13.85 (cost r :drown)) "it drowns some: the quoted hp and the expected overrun (more than the counted 10 hp, which keeps the quoted seconds only)")))
 
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)
@@ -874,7 +875,7 @@
 (deftest each-air-out-counts-its-own-hits
   (let [r (run-air-outs 13 1)]
     (is (found? r))
-    (is (< 3 (cost r :drown) 6) "three air-outs of 1 hp, and the expected overrun of each"))
+    (is (about 5.625 (cost r :drown)) "three air-outs of 1 hp, and the expected overrun of each"))
   (is (= "air-lethal" (:reason (run-air-outs 12 1))) "3 x ceil(0.5 + 1) hits = 12 hp")
   (is (= "air-lethal" (:reason (run-air-outs 6 0))) "3 x ceil(0.5) hits = 6 hp")
   (is (found? (run-air-outs 7 0))))
@@ -978,3 +979,4 @@
         sprinting (plan {:goalFlood 0})
         paddling (plan {:goalFlood 0 :costs paddle-costs})]
     (is (< sprinting (* 0.6 paddling)) (str sprinting " vs " paddling))))
+
