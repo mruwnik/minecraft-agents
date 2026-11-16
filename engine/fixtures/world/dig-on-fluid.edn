@@ -9,17 +9,17 @@
            [:set [19 0 15] "stone"] [:set [19 0 17] "stone"] [:set [19 0 16] "water"]]
   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1]]}}
  :cases
- [{:name "default-waits-on-hazard"
+ [{:name "wait-waits-on-hazard"
    :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
    :body {:at [17.5 2 16.5]}
-   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 16] :on-fluid :wait})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hazard}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :hazard}}}]
    :after [[:block [18 0 16] "stone"]]}
-  {:name "fail-ends-at-once-with-hint"
+  {:name "default-ends-at-once-with-hint"
    :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
    :body {:at [17.5 2 16.5]}
-   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 16] :on-fluid :fail})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:dug false :reason :fluid-adjacent}} :within-s 30 :of-job true}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-with-accept-digs"

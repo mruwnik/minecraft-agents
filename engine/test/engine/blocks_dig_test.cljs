@@ -238,7 +238,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (zone-on-first-step (setup {:self body :blocks {"12,64,0" "dirt"}}))
-              r (await (ending-cause (:eng env) job {:pos [12 64 0]} 6))]
+              r (await (ending-cause (:eng env) job {:pos [12 64 0] :on-fluid :wait} 6))]
           (is (= {:reason :not-allowed :by :zone :zone "farm"} (select-keys r [:reason :by :zone])))
           (is (empty? (calls (:p env) "dig")))
           (is (= "dirt" (block-at (:p env) {:x 12 :y 64 :z 0}))))))))
@@ -362,12 +362,16 @@
           (is (= {:dug true :collected 0} (select-keys result [:dug :collected])))
           (is (= "air" (block-at p at))))))))
 
-(deftest a-hazard-not-accepted-waits-hazard
+(deftest a-hazard-not-accepted-ends-fluid-adjacent-and-on-fluid-wait-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})
+              r (await (tu/child-outcome eng job {:pos at} 5))]
+          (is (= {:dug false :reason :fluid-adjacent :hazards [:fluid-adjacent]} (select-keys r [:dug :reason :hazards])))
+          (is (empty? (calls p "dig"))))
         (let [env (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
-          (is (= {:reason :hazard :pos at :hazards [:fluid-adjacent]} (wait-cause (await (waiting-after env (list job {:pos at}) 3))))))
+          (is (= {:reason :hazard :pos at :hazards [:fluid-adjacent]} (wait-cause (await (waiting-after env (list job {:pos at :on-fluid :wait}) 3))))))
         (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
           (is (:dug (await (tu/child-outcome eng job {:pos at :accept #{:fluid-adjacent}} 5)))))))))
 
@@ -395,20 +399,6 @@
             (swap! clock + 700)
             (await (core/tick! eng)))
           (is (= "air" (block-at p at))))))))
-
-(deftest on-fluid-fail-ends-at-once-with-a-hint-instead-of-waiting
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})
-              r (await (tu/child-outcome eng job {:pos at :on-fluid :fail} 5))]
-          (is (= {:dug false :reason :fluid-adjacent :hazards [:fluid-adjacent]} (select-keys r [:dug :reason :hazards])))
-          (is (string? (:hint r)))
-          (is (empty? (calls p "dig"))))
-        (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
-          (is (:dug (await (tu/child-outcome eng job {:pos at :on-fluid :fail :accept #{:fluid-adjacent}} 5)))))
-        (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt"}})]
-          (is (:dug (await (tu/child-outcome eng job {:pos at :on-fluid :fail} 5)))))))))
 
 (deftest a-block-the-walk-cannot-reach-waits-unreachable
   ;; at the foot of a 1x1 shaft, deeper than any fall the walk takes
@@ -730,7 +720,7 @@
       (fn ^:async t []
         (let [env (after-walks (setup {:self body :blocks {"12,64,0" "dirt"}})
                                #(fake/set-block! % [12 65 0] "lava"))
-              r (await (ending-cause (:eng env) job {:pos [12 64 0]} 6))]
+              r (await (ending-cause (:eng env) job {:pos [12 64 0] :on-fluid :wait} 6))]
           (is (= {:reason :hazard :pos {:x 12 :y 64 :z 0}} (select-keys r [:reason :pos])))
           (is (some #{:lava-adjacent} (:hazards r)))
           (is (empty? (calls (:p env) "dig")) "walked, then refused: nothing dug"))))))
@@ -1260,7 +1250,7 @@
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava"}})]
           (is (= {:reason :hazard :pos at :hazards [:lava-adjacent]}
-                 (wait-cause (await (waiting-after env (list job {:pos [2 64 0] :accept #{:fluid-adjacent}}) 2)))))
+                 (wait-cause (await (waiting-after env (list job {:pos [2 64 0] :accept #{:fluid-adjacent} :on-fluid :wait}) 2)))))
           (is (empty? (calls (:p env) "dig"))))))))
 
 (deftest seen-lava-taken-with-lava-adjacent-is-sealed-after-the-dig

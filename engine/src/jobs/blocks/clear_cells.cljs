@@ -395,6 +395,7 @@
             :already-clear (ctx/update-mem! c update :cell-tries dissoc t)
             (:cannot :fluid) (skip! c t :cannot)
             :unreachable (defer! c t)
+            :fluid-adjacent (bump! c t :hazard)
             (bump! c t (contract/cause-key e)))
           :again))))
 

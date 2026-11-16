@@ -41,7 +41,7 @@
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the dig (jobs.lib.access). :for-plan's own footprint does not. :ignore-zones? skips the rule.
   - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent water, :lava-adjacent seen
-    lava, :falling-block). With :on-fluid :fail a fluid hazard ends the job :fluid-adjacent instead.
+    lava, :falling-block). By default (:on-fluid :fail) a fluid hazard ends the job :fluid-adjacent instead; :on-fluid :wait waits.
   - {:reason :dark :pos}: before the start, while the sky is dark, the block is the body's own night shelter's and opens onto the dark (shelter-kept).
   - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to grow.
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
@@ -80,7 +80,7 @@
    :clear-seal {:doc "false: the walk into reach is :walk only (a seal cleanup's own dig must not start another cleanup)" :spec boolean? :default true}
    :walk {:doc "false: a block out of reach (or out of sight with :see) ends :unreachable :no-walk at once, the body takes no step to it (a pick on the way)" :spec boolean? :default true}
    :on-lava {:doc ":seal: seen lava beside the dug cell is filled with a building block (jobs.lib.lava); :leave: the caller deals with it (stair, tunnel)" :spec #{:seal :leave} :default :seal}
-   :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
+   :on-fluid {:doc ":fail: a block beside a fluid that :accept does not take ends the job at once, reason :fluid-adjacent, with a :hint; :wait: it waits :hazard" :spec #{:wait :fail} :default :fail}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :not-protected? {:doc "true (go-to's escalation): the block, seen before it is dug, must not be protected (jobs.lib.escape/diggable?); else ends :not-diggable" :spec boolean? :default false}
    :ignore-zones? :shared})
@@ -180,13 +180,13 @@
     {:how (set how)}))
 
 (defn fluid-hazard
-  "With :on-fluid :fail, the problem r when it is a hazard of a block beside a fluid, else nil."
+  "Unless :on-fluid :wait, the problem r when it is a hazard of a block beside a fluid, else nil."
   [c r]
-  (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent :lava-adjacent} (:hazards r)))
+  (when (and (not= :wait (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent :lava-adjacent} (:hazards r)))
     r))
 
 (defn fluid-refusal
-  "With :on-fluid :fail, the hazard of a block beside a fluid, else nil."
+  "Unless :on-fluid :wait, the hazard of a block beside a fluid, else nil."
   [c]
   (fluid-hazard c (problem c)))
 
