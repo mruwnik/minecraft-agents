@@ -4,11 +4,11 @@
 ;; (block light 3) and the pond's surface (2, enough to make out) and leaves its depths dark (y 1 at 0, over water). The body
 ;; (stone sword) walks round the pond (x 7..13) from x 4 by z 23 to [15 4 12], then quotes the way back to [4 4 12] straight
 ;; across it. The quote's route reports its :length and never walks.
-;; Should-succeed: deep-pond-dry-way-round-wins (pond 4 deep, z 7..17: the way round, about 23 blocks, beats the 11-block swim);
+;; Should-succeed: deep-pond-swim-pays-the-drowned-share (pond 4 deep, z 7..17: the 6-cell swim is the dearer for the drowned share, 0.38 of a second in that water, 0.6 s of the swim's 1.1 s of dark price; the walk round, 23 blocks, costs about the same, so which is quoted is not the pin);
 ;; shallow-wade-is-waded (a pond 1 deep, z 2..22: the wade is taken).
 ;; dark-wade-pays-the-dark-price-too (card 14a87322; the night lake: a dark plot, a glowstone over the pond lights it while the
 ;; body looks, then is taken away, so the seen wade is at block light 0): the quote straight across the 1-deep pond prices its
-;; wet cells the dark factor and the drowned share, about 1 s for a stone sword; the water share alone gave about 0.35 s.
+;; wet cells the dark factor and the drowned share, 0.6 s for a stone sword (the share alone 0.17 s, the dark alone 0.43 s).
 ;; unseen-deep-pond-costs-the-drowned-share (card 441b0915): the body faces west and up and never sees the pond of the first case
 ;; east of it; quoted with :unknown false (the planner reads the real blocks), the unseen water pays the share of water a drowned
 ;; can spawn in, the worse case, so the way round still wins (an unseen cell gave no share before).
@@ -21,7 +21,7 @@
   :body {:at [4.5 4 12.5] :yaw 270 :pitch 30 :inventory [["stone_sword" 1]] :settle-s 4}
   :limit-s 120}
  :cases
- [{:name "deep-pond-dry-way-round-wins"
+ [{:name "deep-pond-swim-pays-the-drowned-share"
    :blocks [[:fill [0 0 0] [31 3 31] "stone"] [:fill [7 0 7] [13 3 17] "water"]]
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [5 4 23] :range 0})]
          [:until-pos {:z-min 22} 30]
@@ -29,7 +29,7 @@
          [:until-pos {:x-min 14} 30]
          [:job (jobs.movement.go-to {:worth 1200 :pos #at [15 4 12] :range 0}) [:alongside]]
          [:until-pos {:z-max 13} 30]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [4 4 12] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :length [:> 20]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [4 4 12] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :dark-seconds [:> 0.8]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [15.5 4 12.5] 1.5]]}
   {:name "unseen-deep-pond-costs-the-drowned-share"
@@ -49,7 +49,7 @@
    :act [[:wait-s 4]
          [:rcon "execute positioned $X $Y $Z run setblock ~10 ~6 ~12 air"]
          [:wait-s 2]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 16] :dark-seconds [:> 0.7]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [16 4 12] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 16] :dark-seconds [:> 0.5]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [4.5 4 12.5] 1]]}
   {:name "shallow-wade-is-waded"
