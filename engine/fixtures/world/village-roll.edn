@@ -41,20 +41,20 @@
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
-  {:name "roll-librarian-at-its-lectern-is-rolled-at-once-though-an-old-pen-stands-round-it"
-   ;; card c66943dc: the pen stands but its near end is open (no plug) and the librarian works the lectern from the open near end, outside the cell; the roll starts at once, no pen child (one inside the cell is plugged in first, village.roll/held?)
+  {:name "roll-librarian-outside-an-old-pen-is-freed-and-penned-before-the-first-break"
+   ;; card c66943dc (Q208, pen first): the pen stands with its near end open and the librarian works the lectern from the open near end, outside the cell; an employed villager walks to no job site, so the pen child breaks the lectern once (slot :free), places it again, the jobless villager walks into the cell and is plugged in; only then the roll breaks
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
             [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
-   :body {:at [13.5 0 16.5] :yaw 270}
-   :act [[:summon "villager" [16.5 0 18.5] "{UUID:[I;20260,7,5,80],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :body {:at [13.5 0 16.5] :yaw 270 :inventory [["cobblestone" 8] ["oak_fence" 1]]}
+   :act [[:time-set 2000] [:summon "villager" [16.5 0 18.5] "{UUID:[I;20260,7,5,80],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~6 ~ ~ 90 0"] [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~-3 ~ ~-1 0 0"] [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000050" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 2}})]]
-   :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :child_started :data {:slot :pen}} :for-s 60 :until {:source :job :kind :roll.offers}}
-            {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
-   :after [[:block [16 0 16] "lectern"]]}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :pen}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :child_started :data {:slot :free}} :within-s 150 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 300 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 0 18] "oak_fence"]]}
   {:name "roll-librarian-in-an-open-ended-pen-cell-is-plugged-in-then-rolled"
    ;; card 889f5a1f: as above with the librarian in the cell [16 0 17]: the pen child plugs the near end behind it (digging out of the box to place it) without walking off to see the cell's floor and roof the stand cannot see, then the roll rolls
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]

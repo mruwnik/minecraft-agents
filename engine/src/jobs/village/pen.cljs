@@ -40,9 +40,10 @@
   stand does not see are not looked for: jobs.lib.villager-pen/owed-with-villager-in); then step
   into the stand (digging the entry when the box is shut), shut the box round the body from inside, place the
   workstation, if missing, from the stand (it is the lure: with the box shut the pen's cell is the only one next to it a
-  villager can path to, the game's rule for claiming it), wait for the villager to walk in (a jobless one to the free
-  workstation, one employed at it to work), and light a shut pen still dark from the stand (its light reaches the cell
-  under the top slab). A cell still dark after the light child ended done is looked at when unknown, then read each
+  villager can path to, the game's rule for claiming it); a villager reading the pen's profession outside the cell holds
+  a job site and walks to none, so the workstation is broken once a call (free!: an untraded villager loses the job,
+  another's claim on it goes) and placed again, a fresh lure; wait for the villager to walk in, and light a shut pen
+  still dark from the stand (its light reaches the cell under the top slab). A cell still dark after the light child ended done is looked at when unknown, then read each
   poll: the same light twice ends nothing-possible :dark.
   The wait counts game ticks of the villagers' walking hours (jobs.lib.villager/take-job-ticks, 1240); reason
   :villager-not-in-pen by day, :night-villager-not-in-pen at night (villagers walk to no job site then).
@@ -277,6 +278,13 @@
     (await (built! c slot (await (child! c slot 'jobs.blocks.dig (cond-> {:pos cell :collect true} (= :entry k) (assoc :need-drop false))))
                    #(vp/solid? (vp/name-at (:primitives c) cell))))))
 
+(defn ^:async free!
+  "Break the workstation once a call (the drop picked up), so the place that follows is a fresh lure."
+  [c ws]
+  (ctx/update-mem! c assoc :freed true)
+  (await (built! c :free (await (child! c :free 'jobs.blocks.dig {:pos ws :collect true}))
+                 #(= (item-of (:args c)) (vp/name-at (:primitives c) ws)))))
+
 (defn ^:async step-in!
   "Walk into the stand behind the workstation, where the roll is made from and the box is shut round the body."
   [c lay]
@@ -373,6 +381,7 @@
       (or (nil? block) (bs/air block)) (await (workstation! c ws))
       (and (not in?) (seq (vp/employed-in p lay (some-> e villager/ident))))
       (stop! c :condition-failed :workstation-taken {:villager (villager/ident (first (vp/employed-in p lay (some-> e villager/ident))))})
+      (and (not in?) e (= (:profession (:args c)) (.-profession e)) (not (:freed (ctx/mem c)))) (await (free! c ws))
       (not in?) (await (wait-walk-in! c :villager-not-in-pen))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c (:stand lay)))
       (vp/dark? p lay) (await (dark! c lay))

@@ -153,11 +153,6 @@
               lay)))
         sides))
 
-(defn built?
-  "Whether a pen stands at workstation cell ws: a top slab seen where one side's layout puts it."
-  [p ws]
-  (boolean (some #(top-slab? p (:slab (layout ws %))) sides)))
-
 (defn penned
   "The layout of the pen at workstation cell ws holding villager entity e (id its ident): shut (owed-with-villager-in),
   the slab on top, the near end plugged, no other villager in it, lit, the body boxed in its stand; nil when there is none."

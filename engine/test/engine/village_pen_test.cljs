@@ -397,6 +397,34 @@
           (is (= ["oak_fence" nil] [(block p [0 64 0]) (block p [0 65 0])]))
           (is (= "lectern" (block p ws))))))))
 
+(defn walks-in-once-freed
+  "The fake librarian loses its job while the lectern is gone and walks into the pen's cell once it stands again (an
+  employed villager walks to no job site; a jobless one paths to the free workstation)."
+  [{:keys [p]}]
+  (let [freed (atom false)]
+    (add-watch (fake/state p) :free
+               (fn [_ s _ w]
+                 (let [stands? (= "lectern" (get-in w [:blocks ws]))]
+                   (when (and (not stands?) (not @freed))
+                     (reset! freed true)
+                     (swap! s assoc-in [:entities 0 :profession] "unemployed"))
+                   (when (and stands? @freed)
+                     (remove-watch s :free)
+                     (swap! s assoc-in [:entities 0 :pos] [1.5 64 0.5])))))))
+
+(deftest a-librarian-outside-the-shut-pen-is-freed-by-one-break-and-walks-in-to-the-lectern-placed-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box))
+                                                    :entities [(vt/villager nil {:profession "librarian" :level 1 :pos {:x 6 :y 64 :z 3}})]
+                                                    :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 walks-in-once-freed))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= 1 (count (filter #(= [2 64 0] [(.-x (.-pos (.-args %))) (.-y (.-pos (.-args %))) (.-z (.-pos (.-args %)))]) (vt/calls p "dig")))))
+          (is (= "lectern" (block p ws)))
+          (is (= "oak_fence" (block p [0 64 0]))))))))
+
 (deftest a-second-villager-beside-an-open-stand-is-shut-out-of-the-cells-next-to-the-workstation
   (async done
     (tu/run-async done

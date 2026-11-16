@@ -149,28 +149,23 @@
   "A villager 3 blocks off the lectern with another lectern 1 block from it: it is nearer that job site than ours."
   {:pos {:x 3 :y 64 :z 3} :blocks {"3,64,4" "lectern"} :wrap #(do (tu/seeing-all (:p %)) %)})
 
-(deftest a-villager-at-its-lectern-is-rolled-without-a-pen
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :pen? false :wrap #(do (tu/seeing-all (:p %)) %)
-                                       :scripts [[(offer "enchanted_book")]]}
-                                      {}))]
-          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
-          (is (= 1 (digs p)))
-          (is (= 1 (count (vt/calls p "place"))) "only the lectern is placed: no pen")
-          (is (nil? (get-in @(fake/state p) [:blocks [4 64 0]])) "the near end is not plugged"))))))
+(defn pen-waits
+  "env whose pen child never ends (:continue each round)."
+  [env]
+  (let [j (get (:jobs (:eng env)) 'jobs.village.pen)]
+    (assoc-in env [:eng :jobs 'jobs.village.pen] (assoc j :round (fn ^:async waiting [c] :continue)))))
 
-(deftest a-villager-at-its-lectern-is-rolled-at-once-though-an-old-pen-stands-round-it
+(defn pen-started? [seen] (some #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen))
+
+(deftest a-villager-at-its-lectern-is-penned-before-the-first-break
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")] {:pos {:x 4 :y 64 :z 0}})] :blocks {"4,64,0" "air" "4,65,0" "air"}
-                                            :wrap #(do (tu/seeing-all (:p %)) %)
-                                            :scripts [[(offer "enchanted_book")]]}
-                                           {}))]
-          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
-          (is (not-any? #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "no pen child: the pen stands but is open"))))))
+        (let [[_ p seen] (await (roll {:entities [(librarian [(offer "paper")])] :pen? false
+                                       :wrap (comp pen-waits #(do (tu/seeing-all (:p %)) %))}
+                                      {:spend {:wall-time 30}}))]
+          (is (pen-started? seen))
+          (is (zero? (digs p)) "no break while no pen shuts the villager in"))))))
 
 (deftest a-villager-working-the-lectern-from-inside-an-open-pen-is-shut-in-before-the-break
   (async done
@@ -208,19 +203,6 @@
           (is (= 1 (digs p)))
           (is (not-any? #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen)
               "no pen child: the near end is plugged, so no walk out to see the roof"))))))
-
-(deftest a-villager-nearer-another-job-site-than-its-lectern-is-penned-before-the-first-break
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [pen-waits (fn [env]
-                          (let [j (get (:jobs (:eng env)) 'jobs.village.pen)]
-                            (assoc-in env [:eng :jobs 'jobs.village.pen] (assoc j :round (fn ^:async waiting [c] :continue)))))
-              [_ p seen] (await (roll {:entities [(librarian [(offer "paper")] {:pos (:pos wandered)})] :pen? false
-                                       :blocks (:blocks wandered) :wrap (comp pen-waits (:wrap wandered))}
-                                      {:spend {:wall-time 30}}))]
-          (is (some #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "the pen child runs")
-          (is (zero? (digs p)) "the lectern is not broken while the villager is not shut in"))))))
 
 (deftest an-enchant-skips-books-of-other-enchantments
   (async done
@@ -552,6 +534,59 @@
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
           (is (= ["v-2" "v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen))))
           (is (= ["oak_fence" "air"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
+
+(defn after-the-break
+  "On the first break v-1 loses its job; once the lectern stands again (f w i) gives the new world, i v-1's index."
+  [f]
+  (fn [{:keys [p] :as env}]
+    (let [broke (atom false)]
+      (add-watch (fake/state p) :after
+                 (fn [_ s _ w]
+                   (let [stands? (= "lectern" (get-in w [:blocks ws-pos]))
+                         i (first (keep-indexed #(when (= "v-1" (:uuid %2)) %1) (:entities w)))]
+                     (when (and (not stands?) (not @broke))
+                       (reset! broke true)
+                       (swap! s assoc-in [:entities i :profession] "unemployed"))
+                     (when (and stands? @broke)
+                       (remove-watch s :after)
+                       (swap! s f i))))))
+    env))
+
+(deftest after-a-roll-a-villager-reading-the-job-outside-the-pen-is-penned-again-before-its-offers-are-read
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (fn [w i] (update-in w [:entities i] assoc :profession "librarian" :offers [(offer "paper")] :pos [1.5 64 2.5]))
+              [result p seen] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true
+                                            :wrap (comp pen-waits (after-the-break out))}
+                                           {:spend {:wall-time 30}}))]
+          (is (= 1 (:rolls result)) (pr-str result))
+          (is (= 1 (count (filter #(= "offers" (.-op (.-args %))) (vt/calls p "trade")))) "no offers read outside the pen")
+          (is (pen-started? seen)))))))
+
+(deftest a-reroll-never-turns-to-another-villager-that-walked-into-the-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [swap-in (fn [w i] (-> w (assoc-in [:entities i :pos] [60 64 3])
+                                    (update :entities conj (fake/entity-in (librarian [(offer "enchanted_book")] {:id 2 :uuid "v-2"})))))
+              [result _ seen] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true
+                                            :wrap (after-the-break swap-in)}
+                                           {:villager nil :spend {:wall-time 30}}))]
+          (is (not (:found result)) (pr-str result))
+          (is (= ["v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen)))))))))
+
+(deftest a-villager-rolled-once-that-takes-another-job-ends-other-job-not-another-villager-rolled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [farmer (fn [w i] (assoc-in w [:entities i :profession] "farmer"))
+              other (librarian [(offer "enchanted_book")] {:id 2 :uuid "v-2" :pos {:x 1.5 :y 64 :z 2.5}})
+              [result] (await (roll {:entities [(librarian [(offer "paper")]) other] :keeps-job? true
+                                     :wrap (after-the-break farmer)}
+                                    {:villager nil :spend {:wall-time 30}}))]
+          (is (= {:found false :rolls 1 :status :stopped :reason :other-job} (select-keys result [:found :rolls :status :reason]))
+              (pr-str result)))))))
 
 (deftest a-villager-out-of-view-of-the-body-boxed-in-the-built-pen-is-waited-for-to-walk-in-not-looked-for
   (async done
