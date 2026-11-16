@@ -14,6 +14,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.world :as known]
+            [jobs.lib.world-files :as world-files]
             [plan.shape :as shape]))
 
 (def meta {:tags [:goal :build]})
@@ -25,10 +26,12 @@
   each would start (need/item-price); with the call's ways only :carried, a block not carried has no price. Ties go to the first listed.
   The site is a jobs.farm.find-spot child sized to the blueprint (it avoids other plans, zones and claims, and prices levelling
   and the walk); the blueprint's bottom layer stands on the ground the spot names. The placed plan
-  {:parts [{:id \"hut\" :blueprint :at}] :metadata {:by body}} is saved as a plan of the world (jobs.lib.world/save-plan!), so every
+  {:parts [{:id \"hut\" :blueprint :at}] :metadata {:by body}} is saved as a plan of the world (jobs.lib.world/create-plan!), so every
   job reads its cells as claimed, and a jobs.build.from-plan child builds it (with the call's ways: it fetches what is short).
   Resume: an existing plan :plan made by the body is built as it stands, with no new choice; one made by another is never
-  (:taken). The plan stays when the call ends, built or not, as a plan the agent made would.
+  (:taken); a plan id made by another meanwhile ends nothing-possible :taken. The plan stays when the call ends, built or not, as a plan the agent made would,
+  except that a build ending nothing-possible with no cell built removes it: the next round chooses a site again, and the call ends with that ending when the
+  search finds the same site (the :spend job-time prices the tries).
   can-start?: never :taken; without the plan, never :no-blueprint when no blueprint listed is readable, later
   :no-items {:needs} when no blueprint has a price (nothing to fetch with), later :not-worth {:price :worth} when the
   cheapest costs more than the call's worth. Done when the plan exists, is the body's and no cell of it is owed.
@@ -36,7 +39,7 @@
 
 (a/defargs args
   {:blueprints {:doc "ids of the blueprints to choose from" :spec (a/coll-of a/name?) :default ["starter-hut"]}
-   :plan {:doc "id of the plan the hut is placed as; nil: hut-<body>" :spec a/name? :default nil}
+   :plan {:doc "id of the plan the hut is placed as; nil: hut-<body>" :spec world-files/plan-id? :default nil}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -132,16 +135,45 @@
 (defn passed-up [c e]
   (contract/with-because (ctx/end c (:kind e) (:cause e) (assoc (:data e) :plan (plan-id c))) e))
 
-(defn ^:async build! [c]
+(defn nothing-built?
+  "Whether no cell of the call's plan holds its block yet."
+  [c]
+  (let [{:keys [cells trouble]} (built c)]
+    (and (not trouble) (not-any? #(and (= :match (:answer %)) (:item %) (not (:companion %))) cells))))
+
+(defn site-at [c] (some-> (own-plan c) :plan :parts first :at))
+
+(defn ^:async build!
+  "Build the placed plan. A site that ends nothing-possible with no cell built is given up: the plan is removed, the site
+  remembered, and the next round chooses again; the call's :spend job-time prices the tries."
+  [c]
   (let [e (await (ctx/call c :build 'jobs.build.from-plan {:plan (plan-id c) :ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (need/pass-ways c)}))]
     (cond
       (= :continue e) :continue
+      (and (= :nothing-possible (:kind e)) (not (:taken (own-plan c))) (nothing-built? c))
+      (do (ctx/update-mem! c assoc :failed {:at (site-at c) :end (select-keys e [:kind :cause :data])})
+          (known/delete-plan! c (plan-id c))
+          :continue)
       :else (passed-up c e))))
 
 (defn placed-plan
   "The plan of blueprint id with its bottom layer on the ground top spot {:x :y :z}."
   [c id {:keys [x y z]}]
   {:id (plan-id c) :note "hut" :parts [{:id "hut" :blueprint id :at [x (inc y) z]}] :metadata {:by (ctx/self-name c)}})
+
+(defn ^:async place!
+  "Save the plan of the spot the search found, unless the id was taken meanwhile, or the spot is the one that just failed."
+  [c id spot]
+  (let [plan (placed-plan c id spot)
+        failed (:failed (ctx/mem c))]
+    (cond
+      (= (:at failed) (get-in plan [:parts 0 :at]))
+      (let [{:keys [kind cause data]} (:end failed)] (ctx/end c kind cause (assoc data :plan (plan-id c))))
+      (= :exists (known/create-plan! c plan))
+      (if (:taken (own-plan c))
+        (ctx/end c :nothing-possible :taken {:plan (plan-id c) :by (:taken (own-plan c))})
+        (await (build! c)))
+      :else (await (build! c)))))
 
 (defn ^:async round
   "Place the plan when it is missing (blueprint, then a find-spot child), then build it."
@@ -154,5 +186,4 @@
       (cond
         (= :continue e) :continue
         (not= :done (:kind e)) (passed-up c e)
-        :else (do (known/save-plan! c (placed-plan c id (:spot (:data e))))
-                  (await (build! c)))))))
+        :else (await (place! c id (:spot (:data e))))))))

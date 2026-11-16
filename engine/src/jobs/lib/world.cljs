@@ -1,6 +1,6 @@
 (ns jobs.lib.world
   "What a job reads of its body's world (jobs.lib.world-files): plans, blueprints, zones, claims, shared markers, plan authors and
-  footprints; and save-plan!, the one write."
+  footprints; and create-plan!, delete-plan!, the writes."
   (:require [engine.ctx :as ctx]
             [jobs.lib.world-files :as world]))
 
@@ -16,10 +16,16 @@
   [ctx id]
   (world/blueprint (:world (:engine ctx)) id))
 
-(defn save-plan!
-  "Record plan (named by its :id) as a plan of the body's world (world-files/save-plan!): every job then reads it, its cells claimed."
+(defn create-plan!
+  "Record plan (named by its :id) as a plan of the body's world when no plan of that id exists (world-files/create-plan!): :saved, or :exists
+  with nothing written. Every job then reads it, its cells claimed."
   [ctx plan]
-  (world/save-plan! (:world (:engine ctx)) plan))
+  (world/create-plan! (:world (:engine ctx)) plan))
+
+(defn delete-plan!
+  "Remove a plan of the body's world that a job placed (world-files/delete-plan!)."
+  [ctx id]
+  (world/delete-plan! (:world (:engine ctx)) id))
 
 (defn unreadable?
   "Whether a plan answer is missing or broken: the plan may be saved or fixed later, so a job waits for it."

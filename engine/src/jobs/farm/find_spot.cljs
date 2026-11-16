@@ -21,7 +21,7 @@
   (the best score a farther ring could have, less its walk, is no more than the worst kept). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
   anything. A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
   parent does.
-  The search is one jobs.explore.search child with :patch, its walks priced against a 3-day food reserve (cost/food-search-worth): it looks round and scans the area round :center (or the body); while no patch
+  The search is one jobs.explore.search child with :patch, its walks priced against a 3-day food reserve (cost/food-search-worth), or the call's worth when the patch has no crops: it looks round and scans the area round :center (or the body); while no patch
   is found it walks that job's legs and scans where each ends (with :center, the centre again: spots stay within :range of it), and stops at the first patch.
   With a :plan or :blueprint the patch is as big as its cells in x and z, the farmland score counts only when it has crops or farmland, and
   a plan's own cells are not in the way.
@@ -117,12 +117,17 @@
       (merge fp (select-keys a [:plan :range :max-step]) (when-some [w (:patch-worth a)] {:worth w}) {:torches (torch/torches-held (:primitives c)) :bucket-s (bucket-s c)}
              {:depth (settings/get settings ::depth) :limit (settings/get settings ::limit)}))))
 
+(defn search-worth
+  "Seconds the search's walks are priced against: the call's inherited worth for a patch with no crops (a hut's site), else the 3-day food reserve."
+  [c patch]
+  (if (:farmland? patch) (cost/food-search-worth cost/food-reserve-points) (ctx/worth c)))
+
 (defn ^:async step
   "One search child call; its first patch ends the job."
   [c]
   (let [a (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))]
     (if-let [patch (patch-of c a)]
-      (let [e (await (child/run!* c :search 'jobs.explore.search (cond-> {:patch patch :worth (cost/food-search-worth cost/food-reserve-points)} (:center a) (assoc :center (:center a)))))]
+      (let [e (await (child/run!* c :search 'jobs.explore.search (cond-> {:patch patch :worth (search-worth c patch)} (:center a) (assoc :center (:center a)))))]
         (if (= :continue e)
           :continue
           (let [res (:data e)

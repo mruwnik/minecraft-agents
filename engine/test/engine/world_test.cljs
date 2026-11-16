@@ -131,11 +131,22 @@
 (deftest a-saved-plan-is-a-file-every-reader-sees-at-once
   (let [{:keys [plans bps w]} (reader)]
     (write! bps "hut" (pr-str hut-bp))
-    (world/save-plan! w huts)
+    (world/create-plan! w huts)
     (is (= huts (:plan (world/answer @(:state w) "huts"))) "read back without waiting for the interval")
     (is (= #{[5 64 5]} (set (keys @(:footprints @(:state w))))) "its cells are claimed")
     (is (= [["huts.edn"] huts] [(vec (fs/readdirSync plans)) (cljs.reader/read-string (fs/readFileSync (path/join plans "huts.edn") "utf8"))])
         "one whole file, no temp file left")))
+
+(deftest a-plan-is-never-created-over-another-and-its-id-is-a-file-name
+  (let [{:keys [plans w]} (reader)
+        other (assoc huts :note "theirs")]
+    (write! plans "huts" (pr-str other))
+    (is (= :exists (world/create-plan! w huts)))
+    (is (= other (cljs.reader/read-string (fs/readFileSync (path/join plans "huts.edn") "utf8"))) "the file is untouched")
+    (is (thrown? js/Error (world/create-plan! w (assoc huts :id "../escape"))))
+    (is (= :saved (world/create-plan! w (assoc huts :id "mine"))))
+    (world/delete-plan! w "mine")
+    (is (nil? (world/plan w "mine")) "a deleted plan is gone at once")))
 
 (deftest an-edit-of-the-asked-plan-is-seen-at-once-and-other-files-after-the-interval
   (let [{:keys [plans clock w]} (reader)]

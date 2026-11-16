@@ -1,5 +1,5 @@
 (ns jobs.lib.world-files
-  "The world's shared knowledge as a body reads it. Bodies read; the one write is save-plan!, a plan a job placed.
+  "The world's shared knowledge as a body reads it. Bodies read; the writes are create-plan! and delete-plan!, a plan a job placed and gives up.
   Files:
     worlds/<world>/plans/<id>.edn  plans, parsed with plan.parse and expanded with plan.shape
     blueprints/<id>.edn            the blueprints plans place (repo root)
@@ -405,18 +405,37 @@
     (refresh! w)
     (value (get-in @(:state w) [:blueprints id]))))
 
-(defn save-plan!
-  "Write plan (named by its :id) as the world's plan file, whole and at once (a temp file renamed over it), then read the
-  files again: a job recording a plan it placed. A world without files (of-data) keeps it in memory."
+(def plan-id?
+  "A plan id that names one file of the plans folder: letters, digits, dot, dash, underscore, not starting with a dot."
+  (a/pred "a plan id (letters, digits, - _ . ; no path)" #(and (string? %) (boolean (re-matches #"[A-Za-z0-9_-][A-Za-z0-9_.-]*" %)))))
+
+(defn create-plan!
+  "Write plan (named by its :id) as the world's plan file, whole and at once (a temp file linked in), only when no plan of
+  that id exists: :saved, or :exists (nothing written). Then read the files again. A world without files (of-data) keeps it
+  in memory."
   [w plan]
+  (let [id (:id plan)]
+    (when-not (plan-id? id) (throw (js/Error. (str "plan id " (pr-str id) " is not a plan id"))))
+    (if-let [dir (get-in w [:opts :plans-dir])]
+      (let [file (path/join dir (str id ".edn"))
+            temp (str file "." (.-pid js/process) ".tmp")]
+        (.mkdirSync fs dir #js {:recursive true})
+        (.writeFileSync fs temp (str (pr-str plan) "\n"))
+        (let [made? (try (.linkSync fs temp file) true (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))]
+          (.unlinkSync fs temp)
+          (when made? (refresh! w true))
+          (if made? :saved :exists)))
+      (let [[old _] (swap-vals! (:state w) #(if (get-in % [:plans id]) % (expand-all (assoc-in % [:plans id] {:value plan}) %)))]
+        (if (get-in old [:plans id]) :exists :saved)))))
+
+(defn delete-plan!
+  "Remove the plan file id (a plan a job placed and gives up), then read the files again; a world without files forgets it."
+  [w id]
+  (when-not (plan-id? id) (throw (js/Error. (str "plan id " (pr-str id) " is not a plan id"))))
   (if-let [dir (get-in w [:opts :plans-dir])]
-    (let [file (path/join dir (str (:id plan) ".edn"))
-          temp (str file "." (.-pid js/process) ".tmp")]
-      (.mkdirSync fs dir #js {:recursive true})
-      (.writeFileSync fs temp (str (pr-str plan) "\n"))
-      (.renameSync fs temp file)
-      (refresh! w true))
-    (swap! (:state w) #(expand-all (assoc-in % [:plans (:id plan)] {:value plan}) %))))
+    (do (try (.unlinkSync fs (path/join dir (str id ".edn"))) (catch :default e (when-not (= "ENOENT" (.-code e)) (throw e))))
+        (refresh! w true))
+    (swap! (:state w) #(expand-all (update % :plans dissoc id) %))))
 
 (defn first-time!
   "True the first time key is given to this world, false after: for warns said once per body process."

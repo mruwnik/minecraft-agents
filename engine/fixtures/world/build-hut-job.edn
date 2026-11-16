@@ -4,6 +4,8 @@
 ;; alone names none).
 ;; nothing-carried-no-fetch-waits-no-items (should-fail): empty bag, :ways #{:carried}: the job waits :no-items naming the blueprint
 ;; before any child starts, so no plan is saved and nothing is placed.
+;; placed-plan-in-others-zone-is-sited-again (should-succeed): the body's own plan sits where another's zone now lies, so its build ends
+;; nothing-possible with no cell built; the job drops the plan, finds a new site and ends done (the old code ended nothing-possible).
 ;; Glowstone lights the plot; the cases need no clock.
 {:defaults
  {:tags [:build] :time :any
@@ -22,4 +24,11 @@
    :act [[:job (jobs.build.hut {:worth 1200 :blueprints ["starter-hut"] :plan "$plan:hut" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-items :blueprint "starter-hut"}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :child_started} :for-s 20}]
-   :limit-s 60}]}
+   :limit-s 60}
+  {:name "placed-plan-in-others-zone-is-sited-again"
+   :body {:inventory [["stone_pickaxe" 1] ["torch" 4] ["cobblestone" 64] ["oak_planks" 64] ["oak_log" 16] ["glass_pane" 8]
+                      ["crafting_table" 1] ["oak_stairs" 2] ["chest" 1] ["white_bed" 1] ["oak_door" 1]]}
+   :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "hut" :blueprint "starter-hut" :at #at [4 0 4]}]}]
+   :zones [{:name "claimed" :min [2 -1 2] :max [11 8 11] :owner "Other"}]
+   :act [[:job (jobs.build.hut {:worth 1200 :blueprints ["starter-hut"] :plan "$plan:hut"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :plan "$plan:hut"}} :within-s 450 :of-job true}]}]}
