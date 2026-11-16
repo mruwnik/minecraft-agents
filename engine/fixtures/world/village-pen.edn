@@ -7,6 +7,7 @@
 ;; pen-lures-a-villager-from-outside-with-the-lectern (card 956f6431: AI villagers, no lectern at the start; the named
 ;; one stands 4 blocks off, a second jobless one farther. The lectern goes down once the pen and the body's box are shut,
 ;; its only free side the pen's cell, and the named villager walks in to it).
+;; Both lure cases set the clock to 2000 first: a jobless villager takes a job site only in its work hours (2000-9000), and a case started late in the day ran out of them before the lectern went down (sweep 2827: started at 7612, never walked in).
 ;; pen-lures-a-villager-out-of-view-of-the-boxed-body (card 3263645c: as above, the villager off the pen's axis, so the
 ;; boxed body loses sight of it; the pen waits for the walk-in instead of ending :villager-out-of-view).
 ;; pen-shuts-over-a-wall-torch-without-the-body-walking-into-the-ring (card 512e8f37): the shut fill digs a wall torch in the wall and leaves its drop.
@@ -59,7 +60,7 @@
   {:name "pen-lures-a-villager-from-outside-with-the-lectern"
    :blocks [[:fill [16 0 16] [16 0 16] "air"]]
    :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["lectern" 1]]}
-   :act [[:summon "villager" [16.5 0 20.5] "{UUID:[I;20260,7,5,44],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+   :act [[:time-set 2000] [:summon "villager" [16.5 0 20.5] "{UUID:[I;20260,7,5,44],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:summon "villager" [9.5 0 23.5] "{UUID:[I;20260,7,5,45],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000002c" :pos #at [16 0 16] :profession "librarian"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
@@ -67,7 +68,7 @@
   {:name "pen-lures-a-villager-out-of-view-of-the-boxed-body"
    :blocks [[:fill [16 0 16] [16 0 16] "air"]]
    :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["lectern" 1]]}
-   :act [[:summon "villager" [22.5 0 19.5] "{UUID:[I;20260,7,5,60],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+   :act [[:time-set 2000] [:summon "villager" [22.5 0 19.5] "{UUID:[I;20260,7,5,60],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000003c" :pos #at [16 0 16] :profession "librarian"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"] [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]]}
