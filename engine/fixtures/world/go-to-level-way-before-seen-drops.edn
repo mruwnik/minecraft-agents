@@ -1,0 +1,20 @@
+;; Card f95caff7: a body on a surface slab walking to a goal in unloaded land takes the level way (to the end of the slab) before a
+;; stair of seen drops of 2 down its south side: a drop of 2 cannot be stepped back up, so the stair has no way back like an unseen floor
+;; (Tamsin, a ravine floor walked 56 -> 40 by drops and gap jumps). The slab ends are far, the goal is 1000 blocks east and far south.
+;; A stone slab (feet y 10, x 0..50, z 8..16) with a seen stair of 2-block drops along its south side (z 17..24).
+;; Should-succeed: after 7 s of walking the body is on the slab near its east end, never down the stair.
+;; Should-fail: the old plan walked the drops (the body is on the stair, y 8 or lower).
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 16 :length 64}
+  :blocks [[:fill [0 0 8] [50 9 16] "stone"]
+           [:fill [0 0 17] [50 7 18] "stone"] [:fill [0 0 19] [50 5 20] "stone"]
+           [:fill [0 0 21] [50 3 22] "stone"] [:fill [0 0 23] [50 1 24] "stone"]]
+  :body {:at [3.5 10 12.5] :settle-s 3}
+  :limit-s 60}
+ :cases
+ [{:name "slab-end-before-a-stair-of-seen-drops-toward-an-unloaded-goal"
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [1000 10 400] :range 1 :spend {:job-time 7}})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 30 :of-job true}]
+   :after [[:body-near [40.5 10 10.5] 9.5]]}]}
