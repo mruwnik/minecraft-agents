@@ -24,7 +24,7 @@ Retune a default trigger rather than mute it: put it again under its own id with
 A changed entry applies from its next firing: a job it already started keeps running until it ends or is cancelled (jobs cancel).
 A --when is a condition over these words only (literals allowed; never evaluated):
   numbers: (health) (food) (inventory \"item\") (free-slots) (time-of-day) (since :kind) (distance-to (place :home)) (blocks-near \"name\" r) (outside-box [x y z] [x y z])
-  statuses: (daytime) (mounted) (in-water) (wearing \"item\") (hostile-near r) (burning) (suffocating) (night-unsafe) (known? x)
+  statuses: (daytime) (mounted) (in-water) (wearing \"item\") (hostile-near r) (burning) (hit) (suffocating) (night-unsafe) (known? x)
   combine: < > <= >= = (and ...) (or ...) (not a) (because :reason a)
   put low-bread --when '(< (inventory \"bread\") 8)' --job '(jobs.survival.get-food)' --persistence cooldown --cooldown-s 300
 A --when entry fires once unless --persistence says otherwise; show <id> gives an entry's job, args and current status.")
