@@ -491,6 +491,26 @@
           (is (and (:cut? (meta (:priced @looks))) (empty? (:priced @looks)) (zero? @gathered))
               "a flee price asked with its meter spent gathers nothing and answers a cut, empty set"))))))
 
+(deftest a-look-the-decision-waits-on-does-not-use-up-its-deadline
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup-seeing {:inventory sword :entities []} nil)
+              at (atom 0) seen (atom {}) orig clock/now
+              runner {:round (fn ^:async r [c]
+                               (ctx/update-mem! c assoc :decision-deadline 100)
+                               (set! clock/now #(deref at))
+                               (await (room-lib/waiting! c (fn ^:async w [] (reset! at 500) :looked)))
+                               (swap! seen assoc :deadline (:decision-deadline (ctx/mem c)) :over? (room-lib/decision-over? c))
+                               (room-lib/end-decision! c)
+                               (ctx/end c :done nil))}
+              eng (assoc-in eng [:jobs 'runner] runner)]
+          (try (core/submit! eng (tu/order '(runner)) {})
+               (await (core/tick! eng))
+               (finally (set! clock/now orig)))
+          (is (= 600 (:deadline @seen)) "the 500 ms the look waited move the 100 ms deadline to 600")
+          (is (false? (:over? @seen)) "the search after the look still has its budget"))))))
+
 (deftest a-flight-steps-flee-search-stops-at-the-steps-deadline
   (async done
     (tu/run-async done

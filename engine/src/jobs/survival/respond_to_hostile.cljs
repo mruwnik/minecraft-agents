@@ -413,7 +413,7 @@
         acted (volatile! false)
         _ (room-lib/start-decision! c)
         cut (volatile! [])
-        in-time? (fn [stage hold-s] (or (and (not @acted) (< (clock/now) (+ t0 (* 1000 (- (cost/search-budget-s) hold-s))))) (do (vswap! cut conj stage) false)))
+        in-time? (fn [stage hold-s] (or (and (not @acted) (< (clock/now) (room-lib/decision-deadline c (* 1000 hold-s)))) (do (vswap! cut conj stage) false)))
         p (:primitives c)
         self (.self p)
         m (ctx/mem c)

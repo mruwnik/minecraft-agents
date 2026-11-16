@@ -276,6 +276,15 @@
   [c]
   (ctx/update-mem! c assoc :decision-deadline (+ (clock/now) (* 1000 (cost/search-budget-s)))))
 
+(defn ^:async waiting!
+  "The async thunk f's result; the seconds it took waiting on the world (a look's turn of the head) move a running decision's
+  deadline later: the budget is of CPU, a physics tick of waiting is not a search's."
+  [c f]
+  (let [t (clock/now)
+        r (await (f))]
+    (ctx/update-mem! c #(cond-> % (:decision-deadline %) (update :decision-deadline + (- (clock/now) t))))
+    r))
+
 (defn end-decision! "The decision is made: its searches have no deadline now." [c] (ctx/update-mem! c dissoc :decision-deadline))
 
 (defn decision-deadline

@@ -115,7 +115,7 @@
               cell [gx y gz]]
           (when (and (not (some #{cell} (:glanced (ctx/mem c)))) (unseen-before-wall? p from d y))
             (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (conj (vec %) cell))))
-            (await (dig-look/look-at! c cell))
+            (await (room-lib/waiting! c #(dig-look/look-at! c cell)))
             (look/see! c))
           (recur more))))))
 
@@ -261,7 +261,7 @@
    (let [r (await (caught-chance-once! c specs))]
      (if-let [cells (when-not (room-lib/decision-over? c) (:look r))]
        (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
-           (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
+           (await (room-lib/waiting! c #(sense/look-at-unknown! c cells dig-look/max-floor-looks)))
            (await (caught-chance-once! c specs)))
        r))))
 

@@ -11,7 +11,7 @@
   :time :any
   :register [{:trigger :hostile-near}]
   :plot {:light :lit :length 64}
-  :body {:spawnpoint :far :at [16.5 0 16.5]}
+  :body {:spawnpoint :far :at [16.5 0 16.5] :yaw 90}
   :limit-s 60}
  :cases
  [{:name "blows-before-the-first-step-do-not-corner-the-flight"
