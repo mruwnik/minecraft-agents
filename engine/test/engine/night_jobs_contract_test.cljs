@@ -287,6 +287,14 @@
   (is (not (sleep/no-way-quote? {:found false :reason :partial :unseen-floors true})) "the search only spent its nodes over land never seen")
   (is (not (sleep/no-way-quote? {:found false :reason :partial :budget true})) "a search cut by its node budget proves no wall"))
 
+(deftest a-re-quote-with-a-whole-way-needing-more-time-widens-the-walks-bound
+  (let [route (fn [found hi] {:route {:found found} :uses {:job-time [0 hi hi]}})]
+    (is (= 6 (sleep/widened-hi (route true 6) 0.3)) "the way round the wall needs more than the first quote allowed")
+    (is (nil? (sleep/widened-hi (route true 0.3) 0.3)) "no more than the bound: nothing to widen")
+    (is (nil? (sleep/widened-hi (route false 6) 0.3)) "no whole way")
+    (is (nil? (sleep/widened-hi (route true ##Inf) 0.3)) "an infinite bound is no bound")
+    (is (nil? (sleep/widened-hi (route true 6) nil)) "no first bound taken")))
+
 (deftest a-walk-past-its-first-quotes-bound-without-a-whole-way-is-late
   (let [partial {:found false :reason :partial :unseen-floors true}]
     (is (true? (sleep/late-walk? partial 1 1001)) "more walking than the bound (1 s) with no whole way known")

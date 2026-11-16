@@ -31,7 +31,7 @@
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never builds or pillars, and digs only out of the shelter it is shut in (:dig-out; at night go-to leaves it when the call's worth buys the walk's night risk), so a bed behind someone's wall is :bed-unreachable. A walk go-to refuses on the dug-in night's price (:night-risk) ends nothing-possible :bed-unreachable at once but remembers nothing: the next call prices it again.
-  The time spent walking is bounded by the first quote's own upper bound (:job-time; go-to's :spend is that plus jobs.lib.walk/min-steer-s, as a walk with less left takes no step); a walk that outlasts it while the quote has no whole way ends it the same way. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, also ends it (over unseen land that search has no end); one that spent its node budget is not known yet: the round yields :continue and writes no entry (the walk's time bound ends it).
+  The time spent walking is bounded by the first quote's own upper bound (:job-time; go-to's :spend is that plus jobs.lib.walk/min-steer-s, as a walk with less left takes no step); a walk that outlasts it while the quote has no whole way ends it the same way. A re-quote after a walk that did not arrive that finds a whole way with a higher bound widens the bound and the round yields :continue. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, also ends it (over unseen land that search has no end); one that spent its node budget is not known yet: the round yields :continue and writes no entry (the walk's time bound ends it).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -188,6 +188,13 @@
   [route hi spent-ms]
   (boolean (and route hi (not (true? (:found route))) (< (* 1000 hi) spent-ms))))
 
+(defn widened-hi
+  "The upper bound (s) of a re-quote (go-to quote) that finds a whole way (hi, s: the walk's bound so far): a bound above it, else nil. A first quote of an optimistic stand (a bed seen from where the hut's wall hides it) bounds the walk too tightly for the way round."
+  [quote hi]
+  (let [new-hi (some-> quote (get-in [:uses :job-time]) last)]
+    (when (and (true? (:found (:route quote))) new-hi (js/isFinite new-hi) hi (> new-hi hi))
+      new-hi)))
+
 (defn remember-unreachable!
   "Write the :bed-unreachable entry with the cell the body gave up from: a body elsewhere asks again."
   [c bed]
@@ -291,8 +298,13 @@
       searching? :continue
       (= :continue walk) :continue
       (not= :done (:kind walk)) (let [_ (ctx/update-mem! c assoc :walk-failed true)
-                                  after (:route (await (ctx/quote c 'jobs.movement.go-to quote-args)))]
+                                  aq (await (ctx/quote c 'jobs.movement.go-to quote-args))
+                                  after (:route aq)]
                                   (cond
+                                    (and (widened-hi aq walk-hi) (not (priced-refusal? walk)))
+                                    (let [hi (widened-hi aq walk-hi)]
+                                      (ctx/update-mem! c assoc :walk-hi hi :walk-due (+ (ctx/now c) (* 1000 hi)))
+                                      :continue)
                                     (and (no-way-quote? after) (not (priced-refusal? walk))) (give-up-unreachable-now! c bed (no-walk-text after))
                                     (= :budget (some-> (:reason after) keyword)) :continue
                                     :else (give-up-unreachable! c bed walk)))
