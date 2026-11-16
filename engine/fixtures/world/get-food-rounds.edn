@@ -28,6 +28,8 @@
   ;; s3: the cow is killed and its raw beef eaten (a body that cannot cook is still hungry when the beef is gone), so the run
   ;; ends :stopped :no-food (it was reported :done before card ccd231df). Three cows: the last 2 adults are kept for breeding, one is hunted.
   {:name "s3-hunt-cow-a"
+   :register [{:trigger :hostile-near}
+              {:trigger :hungry :why "no exploring: at food 8 and 15 hp food is worth a search (43ebe0ad8), which runs past the case's window; the case checks the stop after the hunt" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [14.5 0 20.5] "{NoAI:1b}"] [:summon "cow" [14.5 0 12.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
