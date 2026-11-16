@@ -1,0 +1,21 @@
+;; Card d4d3c53d: animals.maintain on a box pen whose gate stands open but that the shut job gave up on (walled in, :gate-gave-up entry) does not mend it again.
+;; Pen: oak fence ring x 18..24, z 13..19, gate west at [18 0 16] open, walled outside by glass x 17; two cows inside, body outside.
+;; Should-succeed: maintain counts 2 adults, skips the mend (:sound) and leaves the gate open. Should-fail: none.
+{:defaults
+ {:tags [:animals :maintain :jobs]
+  :time :any
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]
+           [:fill [17 0 14] [17 2 18] "glass"]]
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "walled-open-gate-no-repeat-mend"
+   :memory [{:kind :gate-gave-up :data {:cell #at [18 0 16] :reason :unreachable} :policy {:cap 50 :ttl 600000}}]
+   :act [[:summon "cow" [21.5 0 16.5]]
+         [:summon "cow" [21.5 0 15.5]]
+         [:job (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :steps {:mend {:skipped :sound}}}} :within-s 100 :of-job true}]
+   :after [[:block [18 0 16] "oak_fence_gate[open=true]"]]}]}
