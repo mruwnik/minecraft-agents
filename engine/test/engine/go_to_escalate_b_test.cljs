@@ -12,6 +12,8 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [jobs.lib.access :as access]
+            [jobs.lib.tidy :as tidy]
+            [jobs.movement.go-to.holes :as gt-holes]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
             [jobs.access.stair :as stair]
@@ -466,7 +468,7 @@
         wall [1 62 0]]
     (with-redefs [access/in-own-area? (constantly true)
                   pen/check (fn [o] (swap! checks inc) (check o))]
-      (let [c (own-builds/with-own-pen c)
+      (let [c (own-builds/with-own-pen c nil)
             back (cw/put-back-cost 0)
             cut-s ((own-builds/own-cut-fn c) wall)]
         (is (false? ((own-builds/may-dig-fn c) wall)) "the wall is spared unless its cut is chosen")
@@ -494,8 +496,8 @@
               rounds (atom 0)
               read own-pen/shut-in
               with-pen own-builds/with-own-pen]
-          (with-redefs [own-pen/shut-in (fn [c f] (when (:own-pen c) (swap! reads inc)) (read c f))
-                        own-builds/with-own-pen (fn [c] (swap! rounds inc) (with-pen c))]
+          (with-redefs [own-pen/shut-in (fn [c f g] (when (:own-pen c) (swap! reads inc)) (read c f g))
+                        own-builds/with-own-pen (fn [c pos] (swap! rounds inc) (with-pen c pos))]
             (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks thick-pit-pen :entities [cow]
                                 :inventory [{:name "stone_pickaxe" :count 1}]}
                                'jobs.movement.go-to {:pos [10 64 0] :range 1} zones)))
@@ -939,6 +941,20 @@
           (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))))
           (is (= [[[3 64 0]]] (map :cells (events-of seen :go-to.restored))) "the cut fence is put back")
           (is (= "oak_fence" (block p [3 64 0]))))))))
+
+(deftest a-stair-aimed-into-a-stocked-pen-from-outside-spares-its-wall
+  (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 1.5 :y 64 :z 1.5}}
+        c (assoc (rt/ctx-of {:self {:pos {:x 8.5 :y 64 :z 0.5}} :blocks fence-pen :entities [cow]}) :args {})]
+    (with-redefs [access/in-own-area? (constantly true)]
+      (is (nil? ((own-builds/own-build-fn (own-builds/with-own-pen c nil)) [3 64 0])) "a pen the body is not in and aims nowhere at: not its wall")
+      (is (= :pen ((own-builds/own-build-fn (own-builds/with-own-pen c {:x 0.5 :y 64 :z 0.5})) [3 64 0])) "the goal inside it: the wall is spared and priced"))))
+
+(deftest a-restored-build-cell-s-ground-is-put-back-with-it
+  (let [{:keys [eng]} (gt/setup {:self {:pos {:x 8.5 :y 64 :z 0.5}} :blocks (box -10 60 -6 12 63 6 "dirt")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:range 0} :round 1})]
+    (.setOwner (:primitives eng) "tx")
+    (gt-holes/note-holes! c [{:cell [3 64 0] :block "oak_fence" :dug true} {:cell [3 63 0] :block "dirt" :dug true} {:cell [3 62 0] :block "dirt" :dug true} {:cell [5 63 0] :block "dirt" :dug true}])
+    (is (= #{[3 64 0] [3 63 0] [3 62 0]} (into #{} (map :cell) (tidy/entries c))) "the fence and the ground under it are owed; a cell beside is natural ground")))
 
 (def glow-room
   "own-plan-footprint/own-room-in-rock: a dirt shell x 8..12, y 61..65, z 8..12 (inside x 9..11, y 62..64, z 9..11) in

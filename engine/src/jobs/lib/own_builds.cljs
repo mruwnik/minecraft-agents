@@ -35,10 +35,10 @@
     (fn [cell] (some (fn [[id [lo hi]]] (when (every? true? (map <= lo cell hi)) id)) boxes))))
 
 (defn with-own-pen
-  "c with the own pen holding livestock the body stands in (jobs.lib.own-pen/shut-in, read on first use) as :own-pen: the
-  fns below built from it share one read."
-  [c]
-  (assoc c :own-pen (own-pen/shut-in c (feet-cell c))))
+  "c with the own pen holding livestock the body stands in, or that holds the goal pos (jobs.lib.own-pen/shut-in, read
+  on first use) as :own-pen: the fns below built from it share one read."
+  [c pos]
+  (assoc c :own-pen (own-pen/shut-in c (feet-cell c) (when (:y pos) (mapv #(js/Math.floor (% pos)) [:x :y :z])))))
 
 (defn pen-of [c] (or (:own-pen c) (own-pen/shut-in c (feet-cell c))))
 

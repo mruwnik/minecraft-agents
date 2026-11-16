@@ -81,13 +81,15 @@
   (walls-fn (stocked-pens c starts)))
 
 (defn shut-in
-  "The own pen holding livestock the body at feet stands in, read on first use: {:wall? (fn of a cell, walls-fn) :herd
-  (a delay of its livestock rows, [] when none)}."
-  [c feet]
-  (let [pens (delay (stocked-pens c [feet]))
+  "The own pen holding livestock the body at feet stands in, or that holds the cell goal (a call's goal inside a stocked
+  pen the body digs into from outside), read on first use: {:wall? (fn of a cell, walls-fn) :herd (a delay of its
+  livestock rows, [] when none)}."
+  ([c feet] (shut-in c feet nil))
+  ([c feet goal]
+  (let [pens (delay (stocked-pens c (cond-> [feet] goal (conj goal))))
         wall (delay (walls-fn @pens))]
     {:wall? (fn [cell] (@wall cell))
-     :herd (delay (vec (mapcat :animals @pens)))}))
+     :herd (delay (vec (mapcat :animals @pens)))})))
 
 (defn wall?
   "A fn of a cell [x y z]: whether it is the wall of the own pen holding livestock that the body at feet stands in,

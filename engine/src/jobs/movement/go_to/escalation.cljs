@@ -498,7 +498,7 @@
   "escalate!'s choice and start of the next way, or its give-up: to a column goal's stand the cheapest dig route
   reaches (column-target, memory :escalation-pos, which the escalation's rounds work toward), else to pos."
   [c pos failed]
-  (let [c (with-own-pen c)
+  (let [c (with-own-pen c pos)
         feet (end/feet-cell c)
         slice (route-slice (route-owner c))
         to (column-target c feet pos slice)]
@@ -849,7 +849,7 @@
   (climb-route) walks again instead, counted as a replan too: the climb is searched again, and past the count it fails
   :replans-spent, which skips dig routes for the rest of the call."
   [c pos cell]
-  (let [c (with-own-pen c)
+  (let [c (with-own-pen c pos)
         feet (end/feet-cell c)
         _ (when-not (:replan-budget (ctx/mem c))
             (ctx/update-mem! c assoc :replan-budget

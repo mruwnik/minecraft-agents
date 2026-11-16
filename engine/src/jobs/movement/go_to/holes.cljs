@@ -2,6 +2,7 @@
   "go-to's bookkeeping of the holes its escalations dig and the blocks it places: what the body may dig, what is its own,
   the cells a child planned to cut and the ledger entries that put them back."
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.cost :as cost]
             [engine.ctx :as ctx]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
@@ -57,12 +58,20 @@
 
 (defn note-holes!
   "Write every cell of dug ({:cell :block}, :dug true when a child reported digging it) that is air now or so dug and not yet noted to the ledger, as a :dig entry with
-  :escalation true and :any-of, the items that put it back (the block or what it drops). Body memory outlives the
+  :escalation true and :any-of, the items that put it back (the block or what it drops). A cell under a dug build cell
+  (a fence's ground) is a :mend too: the restored build must not hang over a hole. Body memory outlives the
   round, a cut, a cancel and a restart: jobs.survival.restore-broken puts back what go-to did not."
   [c dug]
-  (let [own-plan (own-plan-fn c)]
-    (doseq [{:keys [cell block] :as d} (distinct dug)]
-      (when-let [plan (own-plan cell)]
-        (ctx/warn-once! c [:dug-own cell] :go-to.dug-own-build
-                        {:cell (vec cell) :block block :plan plan :text (str "dug " block " at " (pr-str (vec cell)) " in its own plan " plan)}))
-      (escape/note-hole! c (hole-tag c) cell block (boolean (:dug d))))))
+  (let [own-plan (own-plan-fn c)
+        tag (hole-tag c)]
+    (reduce (fn [mends {:keys [cell block] :as d}]
+              (let [cell (vec cell)
+                    [x y z] cell
+                    mend? (or (contains? mends [x (inc y) z]) (pos? (cost/destroyed-s block nil nil false)))]
+                (when-let [plan (own-plan cell)]
+                  (ctx/warn-once! c [:dug-own cell] :go-to.dug-own-build
+                                  {:cell cell :block block :plan plan :text (str "dug " block " at " (pr-str cell) " in its own plan " plan)}))
+                (escape/note-hole! c (cond-> tag mend? (assoc :mend true)) cell block (boolean (:dug d)))
+                (cond-> mends mend? (conj cell))))
+            #{} (sort-by (comp - second :cell) (distinct dug)))
+    nil))
