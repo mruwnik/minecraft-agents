@@ -213,6 +213,14 @@
     (is (= 3 (count (filter #(= "hostile" (:kind %)) (look/seen-entities p {:max 1})))) "max is not applied to known")
     (is (= 4000 (:ageMs (first (filter #(= 10 (:id %)) (look/seen-entities p {}))))))))
 
+(deftest a-known-hostile-carries-the-box-entities-lists-for-it
+  (let [p (mob-stub [{:id 11 :name "enderman" :kind "hostile" :pos [0 64 0] :height 2.9 :width 0.6}]
+                    [{:id 11 :name "enderman" :kind "hostile" :pos [0 64 0] :distance 1 :seen true}
+                     {:id 12 :name "zombie" :kind "hostile" :pos [5 64 0] :distance 5 :heard true}])
+        [a b] (look/seen-entities p {})]
+    (is (= [2.9 0.6] [(:height a) (:width a)]))
+    (is (nil? (:height b)) "a mob entities() does not list has no box")))
+
 (deftest seen-blocks-properties-are-the-last-seen-ones
   (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})
         b (first (look/seen-blocks p {:names ["iron_ore"] :properties? true}))]

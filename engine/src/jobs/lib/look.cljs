@@ -427,7 +427,8 @@
 (defn seen-entities
   "The entities the body can place, as cljs maps of entities() (opts: its :radius :kind :names :max): players always;
   hostiles as perception's known mobs (seen or heard, nearest first) when it has them; every other kind only when
-  it is `visible`. Passive mobs are already sight-filtered by entities()."
+  it is `visible`. Passive mobs are already sight-filtered by entities(); a known hostile carries its box (width, height)
+  from entities() when that lists it, so a tall one (an enderman) is found in the cells it overlaps."
   [p opts]
   (u/note-read! :entities (select-keys opts [:radius :kind :names]))
   (let [raw (js->clj (.entities p (clj->js opts)) :keywordize-keys true)
@@ -440,7 +441,8 @@
         hostile? #(= "hostile" (:kind %))
         shown? #(or (= "player" (:kind %)) (not (contains? % :visible)) (:visible %))]
     (if known
-      (vec (concat (remove hostile? (filter shown? raw)) (filter hostile? known)))
+      (let [box (into {} (map (juxt :id #(select-keys % [:width :height]))) raw)]
+        (vec (concat (remove hostile? (filter shown? raw)) (map #(merge (box (:id %)) %) (filter hostile? known)))))
       (vec (filter shown? raw)))))
 
 (defn seen-objs
