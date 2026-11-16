@@ -402,8 +402,9 @@
      false false nil false false -1 -1
      ;; best-distance start-distance expanded t0 elapsed start-h start-slow
      js/Infinity 0 0 (js/performance.now) 0 -1 0
-     ;; returnable held replaying
+     ;; returnable held replaying closed-drops
      (true? (option options "returnable" false)) #js [] false
+     (or (true? (option options "oneWayClosed" false)) (true? (option options "closedDetour" false)))
      ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end cut-off limit-refused limit-probe
      nil nil 0 0 false false false false false false 0
      ;; known-cells known-new known-edges edges-new
@@ -637,10 +638,9 @@
     -1))
 
 (defn- detour-options
-  "The options of the returnable search for the way round search's one-way step (closed-node): no more nodes than the search itself made, as clean-options."
-  [^Search search options]
-  (js/Object.assign #js {} options #js {:returnable true :oneWayClosed false
-                                        :maxNodes (js/Math.min (option options "maxNodes" 200000) (js/Math.max 1 (.-n-nodes search)))}))
+  "The options of the returnable search for the way round search's one-way step (closed-node): the caller's own node budget (the first search stopped early through the shortcut, so its node count says nothing about the way round; the search is stepped in rounds, so a turn stays inside the tick), and no drop onto an unseen floor (closedDetour)."
+  [options]
+  (js/Object.assign #js {} options #js {:returnable true :oneWayClosed false :closedDetour true}))
 
 (defn- detour-result
   "The result of the returnable detour search; with no whole path, oneWay names node, the one-way step of search's path."
@@ -674,7 +674,7 @@
         closed (closed-node search options)]
     (with-rim
       (cond
-        (not (neg? closed)) (let [^Search detour (new-search snapshot query (detour-options search options))]
+        (not (neg? closed)) (let [^Search detour (new-search snapshot query (detour-options options))]
                               (.step detour js/Infinity)
                               (detour-result search closed detour))
         (neg? node) (.resultFrom search -1 nil)
@@ -736,7 +736,7 @@
                              (vreset! node (.oneWayNode search))
                              (vreset! closed (closed-node search options))
                              (cond
-                               (not (neg? @closed)) (do (vreset! clean (new-search snapshot query (detour-options search options))) false)
+                               (not (neg? @closed)) (do (vreset! clean (new-search snapshot query (detour-options options))) false)
                                (neg? @node) (vreset! ready true)
                                :else (let [^Search c (new-search snapshot query (clean-options search options))]
                                        (.init c)

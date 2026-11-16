@@ -374,8 +374,21 @@
     (is (some #(= DROP (:move %)) steps))
     (is (empty? (keep :oneWay steps)))))
 
-(deftest the-way-round-a-one-way-step-searches-no-more-nodes-than-the-search-made
-  (let [closed (run ledge-far plateau ledge-goal {:oneWayClosed true})
-        whole-land (run (conj ledge-far (stone 80 -2 90 6 70)) plateau (near 85 70 2))]
-    (is (= {:move DROP :x 61 :y 67 :z 2} (one-way-of closed)) "no way round")
-    (is (< (:expanded closed) (/ (:expanded whole-land) 2)))))
+(def long-way-round
+  [(stone -2 -2 60 60 70) (stone -2 61 57 62 70) (stone 58 61 58 62 69) (stone 59 61 59 62 68) (stone 60 61 62 62 67) (stone 61 -2 62 60 67)])
+
+(deftest a-way-round-that-needs-more-nodes-than-the-shortcut-search-is-found
+  (let [open (run long-way-round plateau ledge-goal)
+        closed (run long-way-round plateau ledge-goal {:oneWayClosed true})]
+    (is (= "found" (:status closed)))
+    (is (empty? (keep :oneWay (get-in closed [:path :steps]))))
+    (is (< (:expanded open) (/ (:expanded closed) 4)) "the shortcut search is small beside the way round")))
+
+(deftest a-drop-onto-an-unseen-floor-is-one-way-under-closed
+  (let [unseen-floor (conj [(stone -2 -2 10 6 70) (stone 11 -2 20 6 69)] [11 68 -2 20 68 6 "void_air"])
+        unknown {:unknown {:cell 0.4 :peekS 0.7 :aimS 0.1 :seeDepth 1}}
+        goal (near 18 69 2)
+        closed (run unseen-floor plateau goal (assoc unknown :oneWayClosed true))]
+    (is (= "found" (:status (run unseen-floor plateau goal unknown))) "open: the drop is taken")
+    (is (not= "found" (:status closed)))
+    (is (= {:move DROP :x 11 :y 69 :z 2} (one-way-of closed)))))

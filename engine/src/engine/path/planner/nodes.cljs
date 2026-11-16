@@ -343,6 +343,7 @@
     (cond
       ^boolean (.dragEntry s x y z parent-node) true
       (== move MOVE-GAP) (< (+ (* y 16) h) (.stand16 s parent-node))
+      (and (== move MOVE-DROP) ^boolean (.-closed-drops s) ^boolean (.phantomAt s x y z)) true
       (== move MOVE-DROP) (do (when-not (> (- (.stand16 s parent-node) (+ (* y 16) h)) JUMP-UP)
                                 (.push ^js (.-held s) #js [x y z h move parent-node dsec drisk slow-to corner shape (.-move-open s) (.-move-air s) (.-move-peak s) (.-move-water s) (.-move-dmg s)]))
                               true)

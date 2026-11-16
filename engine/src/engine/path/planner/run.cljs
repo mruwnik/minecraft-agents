@@ -282,7 +282,8 @@
         ^boolean (.dragEntry s (aget (.-xs s) node) (aget (.-ys s) node) (aget (.-zs s) node) p) true
         (== m MOVE-GAP) (< (.stand16 s node) (.stand16 s p))
         (not (== m MOVE-DROP)) false
-        :else (or (> (- (.stand16 s p) (.stand16 s node)) JUMP-UP)
+        :else (or (and ^boolean (.-closed-drops s) ^boolean (.phantomAt s (aget (.-xs s) node) (aget (.-ys s) node) (aget (.-zs s) node)))
+                  (> (- (.stand16 s p) (.stand16 s node)) JUMP-UP)
                   (not ^boolean (.canReturn s (aget (.-xs s) node) (aget (.-ys s) node) (aget (.-zs s) node) (aget (.-hs s) node) (aget (.-xs s) p) (aget (.-ys s) p) (aget (.-zs s) p)))))))
 
   ;; the first one-way step on the way to the node (nearest the start), or -1

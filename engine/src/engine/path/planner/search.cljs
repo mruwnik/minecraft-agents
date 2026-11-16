@@ -94,6 +94,8 @@
    ^:mutable start-h ^:mutable start-slow
    ;; the returnable search (options.returnable): no step the body cannot undo is planned; the drops it has not yet probed
    ^boolean returnable ^js held ^:mutable ^boolean replaying
+   ;; options.oneWayClosed or closedDetour: a drop onto an unseen floor is one the body cannot know it can climb back from
+   ^boolean closed-drops
    ;; the late flood, one backward flood continued by each late flood and the flood at the end (lateFloodBegin): its seen
    ;; keys, queue (x y z region per node) and the head of the queue, the budget of the run in progress, whether a run is in
    ;; progress, whether it met the start (lf-seed-open: among the goal's own cells), whether the run is the one at the end
