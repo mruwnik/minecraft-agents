@@ -29,10 +29,13 @@
       (when (and x y z) [x y z]))))
 
 (defn here?
-  "Whether the body is within range of pos (wplan/in-goal?: across for a column goal), by its position or by the cell it
-  stands on, and under :see sees pos's block."
+  "Whether the body is within range of pos (wplan/in-goal?: across for a column goal), by its position, by the cell it
+  stands on or by the cell a plan starts from (breath/start-y: a swimmer bobbing at the surface), and under :see sees
+  pos's block."
   [c pos range]
-  (and (or (wplan/in-goal? c (u/self-pos c) pos range) (wplan/in-goal? c (reach/standing-cell (:primitives c)) pos range))
+  (and (or (wplan/in-goal? c (u/self-pos c) pos range) (wplan/in-goal? c (reach/standing-cell (:primitives c)) pos range)
+           (let [{:keys [x z]} (u/self-pos c)]
+             (wplan/in-goal? c {:x x :y (breath/start-y (:primitives c)) :z z} pos range)))
        (if-let [cell (see-cell c)] (aim/body-sees? c cell) true)))
 
 (defn sight-end

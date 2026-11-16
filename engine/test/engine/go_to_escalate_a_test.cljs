@@ -182,6 +182,15 @@
           (is (= 2 (count (calls p "jumpPlace"))) "two blocks up, then a step onto the rim")
           (is (empty? (calls p "dig"))))))))
 
+(deftest go-to-a-goal-on-top-of-an-open-ground-column-pillars-up-beside-it-and-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge column-yard) :self {:pos {:x 4.5 :y 64 :z 0.5}} :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1}]}
+              {:keys [out seen]} (await (run-job! world {:pos [1 70 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (seq (events-of seen :go-to.escalated)) "the way in is made, not walked"))))))
+
 (deftest go-to-at-low-food-escalates-instead-of-giving-up-on-a-sprint-only-way
   (async done
     (tu/run-async done

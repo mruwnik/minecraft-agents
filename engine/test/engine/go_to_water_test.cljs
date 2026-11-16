@@ -454,3 +454,14 @@
     (with-redefs [jobs.movement.go-to.column/kind-at (fn [_ _] (stands-world (atom 0) #{[5 62 5]}))]
       (is (nil? (air/dry-stand nil goal 1 at ##Inf)) "the top stand 8 over the floor: no stand within range of it")
       (is (= {:x 5 :y 63 :z 5} (air/dry-stand nil [goal {:x 5 :y 63 :z 5}] 1 at ##Inf)) "the column's floor stand is a goal too"))))
+
+;; a swimmer bobbing at the surface of a 1x1 shaft has its feet a cell under the surface cell the plan starts from: that
+;; cell is the body's place, so the first air cell above the water is within range 1 of it
+(deftest a-swimmer-bobbing-in-a-shaft-is-within-range-of-the-air-cell-over-the-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shaft (merge (box -2 55 -2 2 66 2 "stone") (box 0 58 0 0 61 0 "water") (box 0 62 0 0 64 0 "air"))
+              {:keys [out p]} (await (gt/go! {:self {:pos [0.5 60.97 0.5] :inWater true} :blocks shaft}
+                                             {:pos [0 62 0] :range 1 :ways #{:walk :clear-seal}}))]
+          (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
