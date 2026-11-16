@@ -50,8 +50,9 @@
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 60}]
    :limit-s 70}
   {:name "armed-body-beside-a-lone-skeleton-fights-it"
-   ;; a sword in reach of a lone archer: closing is cheaper than a walk under its arrows (live: fight 155, flee 280)
-   :body {:yaw 270 :inventory [["iron_sword" 1]]}
+   ;; a sword in reach of a lone archer: closing is cheaper than a walk under its arrows when a death is dear. The default :far pad is 100 blocks off,
+   ;; a walk back inside the item despawn, so a death is nearly free and flee wins (fight 75 / flee 61); a respawn 5000 blocks off gives fight 90 / flee 105
+   :body {:yaw 270 :inventory [["iron_sword" 1]] :spawnpoint [4 0 5000]}
    :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 40}
