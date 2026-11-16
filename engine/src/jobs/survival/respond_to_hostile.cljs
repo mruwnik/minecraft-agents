@@ -279,22 +279,26 @@
   "The covers respond prices, each a way of jobs.survival.shut-in where the body stands (and :door, below)."
   [:walls :pit :pocket])
 
-(defn cover-specs
+(defn ^:async cover-specs
   "{way cover} of shutting the body in against near by each way shut-in/covers finds possible here (the seconds a side
   stays open, the quote, the hide-out's quiet), and :pillar the pillar up (options/pillar-cover) while not tried this
   flight. The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
-  None with a creeper near: its quotes are not asked for, they take seconds the fuse does not leave. The quotes stop
-  where the decision's stages before the flee search run out (options/covers, the pillar's): meta :cut the ways left out."
+  None with a creeper near: its quotes are not asked for, they take seconds the fuse does not leave. The quotes
+  (options/covers) go on where the last decision's left off and stop where the decision's stages before the flee search
+  run out; before and between them the event loop runs each tick (walk-pick/tick-slice!, its wait not the decision's CPU:
+  room-lib/waiting!). Meta :cut the ways left out."
   [c near sealing]
   (when-not (some combat/creeper? near)
-    (let [cs (options/covers c cover-ways)
-          tried? (state/tried? c :pillar)
-          late? (and (not tried?) (room-lib/survey-over? c))
-          pillar (when-not (or tried? late?) (options/pillar-cover c near))
-          cut (cond-> (:cut (cljs.core/meta cs)) late? (conj :pillar))]
+    (let [ways (cond-> cover-ways (not (state/tried? c :pillar)) (conj :pillar))
+          cs (loop []
+               (await (room-lib/waiting! c #(pick/tick-slice! c)))
+               (let [cs (options/covers c ways near #(zero? (pick/slice-left-ms)))]
+                 (if (and (seq (:cut (cljs.core/meta cs))) (not (room-lib/survey-over? c)))
+                   (recur)
+                   cs)))
+          cut (:cut (cljs.core/meta cs))]
       (when-not (or (:pit cs) (some #{:pit} cut)) (ctx/emit! c :hostile.pit-dropped :debug {:why (dig-pit/why-not c)}))
       (with-meta (update-vals (cond-> cs
-                                pillar (assoc :pillar pillar)
                                 sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing) (:walk-s sealing))))
                               #(merge (options/exits-of c) %))
         {:cut cut}))))
@@ -439,7 +443,7 @@
                     (let [s (doors/sealing-doors c near)]
                       (when (pos? (reach/cuts)) (vswap! cut conj :sealing))
                       s)))
-        specs (when-not (some combat/enderman? near) (when (in-time? :covers (room-lib/flee-hold-s c)) (cover-specs c near sealing)))
+        specs (when-not (some combat/enderman? near) (when (in-time? :covers (room-lib/flee-hold-s c)) (await (cover-specs c near sealing))))
         _ (vswap! cut into (:cut (cljs.core/meta specs)))
         _ (when (>= (- (clock/now) t0) (settings/physics-ms p)) (vreset! acted (boolean (await (first-act/act! c near (struck-policy))))))
         caught (when-not (or @acted (some combat/enderman? near)) (await (cover/caught-chance! c specs)))

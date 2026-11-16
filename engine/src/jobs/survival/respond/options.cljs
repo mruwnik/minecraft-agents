@@ -200,6 +200,17 @@
 
 (defn quiet-s "Seconds a hidden body keeps its refuge after the last danger (hide-out ::quiet-s), for the job that may not require hide-out itself." [] (hide-out/quiet-s))
 
+(defn pillar-open?
+  "Whether the body carries a pillar's blocks and no climber or flyer of hostiles is near (both reach its top)."
+  [c hostiles]
+  (boolean (and (pillar/pillar-item c) (not-any? #(or (combat/climber? %) (combat/flyer? %)) hostiles))))
+
+(defn pillar-climb
+  "pillar/climb-of while pillar-open?, its search stopping where the decision's stages before the flee search run out
+  (room-lib/survey-over?); nil when no pillar fits here or it is not open."
+  [c hostiles]
+  (when (pillar-open? c hostiles) (pillar/climb-of c #(room-lib/survey-over? c))))
+
 (defn pillar-cover
   "The cover {:open-s :seconds :fails :reached :rise :look-s :blocked} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire or a creeper's sight; it fails for a mob in its cell by
@@ -207,10 +218,11 @@
   flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb), and its
   failures here (flight/fails-here); begun by plan!'s look at the unsensed cells of its rise (cost/look-s), rock there by
   :blocked (respond.pillar/rise-look);
-  nil when no pillar fits here or a climber or a flyer is near (both reach its top). A shot felt within ::hurt-window-s keeps the whole of its seconds in the line of fire (cornered-covers prices the shooter)."
-  [c hostiles]
-  (when-let [climb (and (pillar/pillar-item c) (not-any? #(or (combat/climber? %) (combat/flyer? %)) hostiles)
-                        (pillar/climb-of c #(room-lib/survey-over? c)))]
+  nil when no pillar fits here or a climber or a flyer is near (both reach its top). A shot felt within ::hurt-window-s keeps the whole of its seconds in the line of fire (cornered-covers prices the shooter).
+  climb: the chance a mob climbs to its top (default pillar-climb)."
+  ([c hostiles] (pillar-cover c hostiles (pillar-climb c hostiles)))
+  ([c hostiles climb]
+  (when (and climb (pillar-open? c hostiles))
     (let [h (- (pillar/pillar-height) (pillar/lifted c))
           s (* (settings/get settings ::pillar-s) (/ h (pillar/pillar-height)))
           seconds (+ s (hide-out/quiet-s))
@@ -223,7 +235,7 @@
        :seconds seconds
        :fails (flight/fails-here c :pillar (- 1 (* (- 1 refused) (- 1 climb))))
        :reached (boolean (some combat/enderman? hostiles)) :rise [s h]
-       :look-s (cost/look-s looks) :blocked blocked})))
+       :look-s (cost/look-s looks) :blocked blocked}))))
 
 (defn covers-in
   "What shut-in/covers reads past the ways: the body's feet cell, the cells the hostiles near fill and their kinds, its
@@ -240,34 +252,64 @@
      :memory (some-> (aget p "perception") :st memory-age/epoch)
      :epoch (some-> (look/raw-of p) rays/epoch-of)}))
 
+(declare cover-price-fn)
+
 (defn covers
-  "shut-in/covers of ways where the body stands, each way's kept (memory ::covers) for check-cache/ttl-ms while what
-  they read stays the same (covers-in): one decision prices them once for its answers, its flee search's dead end and
-  its cornered step. Each way's :fails counts its failures where the body stands (flight/fails-here), and :dig-s the dig
-  away out of it from the nearest hostile (hide-out/dig-out-s; the pillar has none). A way not kept is quoted only
-  while the decision's stages before the flee search are in time (room-lib/survey-over?); the ways left (meta :cut)
-  are quoted by the next call."
-  [c ways]
+  "shut-in/covers of ways where the body stands (:pillar among them: pillar-cover against hostiles), each way's quote kept
+  (memory ::covers) for check-cache/ttl-ms while the body's feet, items, tries and args stay: one decision prices them
+  once for its answers, its flee search's dead end and its cornered step. A quote made before the rest of what it read
+  (covers-in: the hostiles' cells, the memory) changed is served and quoted again: first the ways with no quote, then
+  the likeliest cheapest by its last quote (cover-price-fn), while the decision's stages before the flee search are in
+  time (room-lib/survey-over?) and, after one, until pause? (fn []) holds; so a chase's decisions go on where the last
+  left off. Each way's :fails counts its failures where the body stands (flight/fails-here), and :dig-s the dig away out
+  of it from the nearest hostile (hide-out/dig-out-s; the pillar has none). Meta :left the ways not quoted this call,
+  :cut those of them with no quote served."
+  ([c ways] (covers c ways (danger-q/known-hostiles (:primitives c) (danger-q/hostile-radius) {}) (constantly false)))
+  ([c ways hostiles pause?]
   (let [p (:primitives c)
         in (covers-in c)
         now (ctx/now c)
+        place (select-keys in [:feet :items :tried :args])
         kept (::covers (ctx/mem c))
-        kept (if (and (= in (:in kept)) (<= 0 (- now (:t kept)) (check-cache/ttl-ms))) kept {:in in :t now :asked #{} :v {}})
-        missing (remove (:asked kept) ways)
-        [kept cut] (loop [kept kept [w & more :as left] missing]
-                     (if (or (nil? w) (room-lib/survey-over? c))
-                       [kept (vec left)]
-                       (recur (-> kept (update :v merge (shut-in/covers c [w])) (update :asked conj w)) more)))]
-    (when (not= (count cut) (count missing)) (ctx/update-mem! c assoc ::covers kept))
-    (let [nearest (some->> (seq (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (apply min-key #(danger-q/mob-distance p %)))
-          dig-s (hide-out/dig-out-s p (some->> nearest (danger-q/mob-pos p)))]
-      (with-meta (into {} (map (fn [[w spec]] [w (cond-> (update spec :fails #(flight/fails-here c w (or % 0))) dig-s (assoc :dig-s dig-s))])) (select-keys (:v kept) ways))
-        {:cut cut}))))
+        kept (if (= place (:place kept)) kept {:place place :q {}})
+        live? (fn [kept w] (some-> (get-in kept [:q w 2]) (as-> t (<= 0 (- now t) (check-cache/ttl-ms)))))
+        dig-s (delay (let [nearest (some->> (seq (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (apply min-key #(danger-q/mob-distance p %)))]
+                       (hide-out/dig-out-s p (some->> nearest (danger-q/mob-pos p)))))
+        spec-of (fn [kept w]
+                  (let [q (get-in kept [:q w 0])]
+                    (if (= :pillar w)
+                      (pillar-cover c hostiles q)
+                      (when q (cond-> (update q :fails #(flight/fails-here c w (or % 0))) @dig-s (assoc :dig-s @dig-s))))))
+        due (remove #(and (live? kept %) (= in (get-in kept [:q % 1]))) ways)
+        stale (filter #(live? kept %) due)
+        stale (if (next stale) (let [price (cover-price-fn c hostiles)] (sort-by #(or (some-> (spec-of kept %) price) ##Inf) stale)) stale)
+        [kept left] (loop [kept kept [w & more :as left] (concat (remove #(live? kept %) due) stale) n 0]
+                      (if (or (nil? w) (room-lib/survey-over? c) (and (pos? n) (pause?)))
+                        [kept (vec left)]
+                        (let [q (if (= :pillar w) (pillar-climb c hostiles) (get (shut-in/covers c [w]) w))]
+                          ;; a climb search the deadline stopped is no quote
+                          (if (and (= :pillar w) (room-lib/survey-over? c))
+                            [kept (vec left)]
+                            (recur (assoc-in kept [:q w] [q in now]) more (inc n))))))]
+    (when (< (count left) (count due)) (ctx/update-mem! c assoc ::covers kept))
+    (with-meta (into {} (keep (fn [w] (when (live? kept w) (some->> (spec-of kept w) (vector w))))) ways)
+      {:left left :cut (filterv #(not (live? kept %)) left)}))))
 
 (defn exits-of
   "{:dawn-s} every cover's spec carries (cost/cover-answer's exits): the mean seconds of night left."
   [c]
   {:dawn-s (second (get-in (clock/night-left-quote c) [:uses :job-time]))})
+
+(defn cover-price-fn
+  "The price (cost/answer-price*) of a cover spec against hostiles where the body stands: its cost/cover-answer with the
+  covers' exits (exits-of)."
+  [c hostiles]
+  (let [equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
+        mobs (hostile-loss/mobs-of (:primitives c) (ctx/view c) hostiles)
+        body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
+        at (u/self-pos c)
+        death (cost/meet-death-fn body at)]
+    #(cost/answer-price* body (cost/cover-answer {:equipment equipment :mobs mobs} (merge (exits-of c) %)) at death)))
 
 (defn cornered-covers
   "{option cover} of the cornered options not yet tried that shut the body in or lift it: :plug the walls, :plug-dig
@@ -277,14 +319,8 @@
   ([c hostiles home? given]
   (let [open? #(not (flight/tried? c %))
         ways (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options)
-        specs (if given (select-keys given ways) (covers c ways))
-        equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
-        mobs (hostile-loss/mobs-of (:primitives c) (ctx/view c) hostiles)
-        body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
-        at (u/self-pos c)
-        answer #(cost/cover-answer {:equipment equipment :mobs mobs} (merge (exits-of c) %))
-        death (cost/meet-death-fn body at)
-        price #(cost/answer-price* body (answer %) at death)
+        specs (if given (select-keys given ways) (covers c ways hostiles (constantly false)))
+        price (cover-price-fn c hostiles)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (if given (:pillar given) (pillar-cover c hostiles)))]
     (update-vals (cond-> {}

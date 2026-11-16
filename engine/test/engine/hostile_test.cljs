@@ -467,6 +467,22 @@
             (is (= [:walls] @asked) "the walls' quote took the stages' time: the pit and the pocket are not quoted")
             (is (= [:pit :pocket :pillar] (take 3 (:stages (decision-cut slow)))) "the ways left out are named")))))))
 
+(deftest the-covers-quotes-let-the-event-loop-run-each-tick
+  ;; card 3b354599 (Q202): the quotes held the decision past a tick with no turn of the event loop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [log (atom [])
+              orig-now clock/now orig-ways shut-in/covers-of orig-left pick/slice-left-ms orig-slice pick/tick-slice!
+              world {:self {:health 20} :inventory [{:name "dirt" :count 32} {:name "stone_pickaxe" :count 1}] :entities [(zombie 6.5 0.5)]}]
+          (set! clock/now (constantly 0))
+          (set! pick/slice-left-ms (constantly 0))
+          (set! pick/tick-slice! (fn [c] (swap! log conj :turn) (orig-slice c)))
+          (set! shut-in/covers-of (into {} (map (fn [[w f]] [w (fn [c] (swap! log conj w) (f c))])) orig-ways))
+          (try (await (flight-round respond world))
+               (finally (set! clock/now orig-now) (set! shut-in/covers-of orig-ways) (set! pick/slice-left-ms orig-left) (set! pick/tick-slice! orig-slice)))
+          (is (= [:walls :turn :pit :turn :pocket] (take 5 (drop-while #(not= :walls %) @log))) "a tick spent: the loop runs, then the next way"))))))
+
 (deftest the-sealing-flood-stops-where-the-covers-do
   ;; card ca4845ec: the room flood of sealing-doors ran 36-54 ms with no deadline before the covers
   (async done
@@ -1541,8 +1557,13 @@
 
 ;; Card ad8c1e8b: live, the walls/pit/pocket quotes held the decision 2.4 s while a creeper closed in and lit its fuse
 (deftest no-cover-is-quoted-with-a-creeper-near
-  (with-redefs [shut-in/covers (fn [& _] (throw (js/Error. "quoted")))]
-    (is (nil? (respond-to-hostile/cover-specs {} [#js {:name "creeper"} #js {:name "zombie"}] nil)))))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quote shut-in/covers]
+          (set! shut-in/covers (fn [& _] (throw (js/Error. "quoted"))))
+          (is (nil? (try (await (respond-to-hostile/cover-specs {} [#js {:name "creeper"} #js {:name "zombie"}] nil))
+                         (finally (set! shut-in/covers quote))))))))))
 
 ;; Card ad8c1e8b: a run-away call after the swing got going later than the fuse the swing began (10.7 hp lost live)
 (deftest a-creeper-hit-is-stepped-back-from-inside-its-fuse-by-one-move-with-no-job-round

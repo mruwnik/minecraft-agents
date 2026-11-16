@@ -45,7 +45,8 @@
             [jobs.lib.look :as sight]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.survival.respond.pillar :as respond.pillar]
-            [jobs.survival.wall-placer :as wall-placer]))
+            [jobs.survival.wall-placer :as wall-placer]
+            [jobs.lib.clock :as cpu-clock]))
 
 (defn setup
   "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time). The world's
@@ -2481,6 +2482,54 @@
             (fake/add-entity! p (zombie 2 64 0))
             (cornered/covers c [:walls])
             (is (= [[:walls] [:pit] [:pocket] [:walls]] @asked) "a hostile came nearer: priced again")))))))
+
+;; card 3b354599: in a chase each decision reset the kept quotes, so a walls quote past the stages' time left the pit
+;; and the pocket unquoted in every decision
+(deftest a-chases-cover-quotes-go-on-where-the-last-decision-left-off
+  (let [m (atom {})
+        p (tu/fake-on-floor {:blocks dead-end :inventory [{:name "dirt" :count 20}] :entities [(zombie 3 64 0)]})
+        c (assoc (stub-ctx p m) :view (constantly {:now 1000 :data {}}))
+        ms (atom 0)
+        asked (atom [])
+        covers shut-in/covers
+        decide! (fn [x]
+                  (swap! (fake/state p) assoc :entities [])
+                  (fake/add-entity! p (zombie x 64 0))
+                  (room-lib/start-decision! c)
+                  (let [cs (cornered/covers c [:walls :pit :pocket])]
+                    [(set (keys cs)) (:cut (meta cs))]))]
+    (with-redefs [cpu-clock/now #(deref ms)
+                  shut-in/covers (fn ([c] (covers c)) ([c ways] (swap! asked conj (first ways)) (swap! ms + 1000) (covers c ways)))]
+      (with-stub-mem
+        (fn []
+          (let [d1 (decide! 4) a1 @asked d2 (decide! 3) a2 @asked d3 (decide! 2)]
+            (is (= [#{:walls} [:pit :pocket]] d1))
+            (is (= [[:walls] [:walls :pit]] [a1 a2]) "the zombie came nearer: the next decision quotes the pit")
+            (is (contains? (first d2) :walls) "the walls' last quote served")
+            (is (= [[:walls :pit :pocket] []] [@asked (second d3)]) "then the pocket: every way quoted")))))))
+
+(deftest quotes-a-moved-hostile-made-stale-are-asked-again-likeliest-cheapest-first
+  (let [m (atom {})
+        p (tu/fake-on-floor {:blocks dead-end :inventory [{:name "dirt" :count 20}] :entities [(zombie 3 64 0)]})
+        c (assoc (stub-ctx p m) :view (constantly {:now 1000 :data {}}))
+        ms (atom 0)
+        slow? (atom false)
+        asked (atom [])
+        open-s {:walls 20 :pit 2 :pocket 10}]
+    (with-redefs [cpu-clock/now #(deref ms)
+                  shut-in/covers (fn ([_] {}) ([_ [w]] (swap! asked conj w) (when @slow? (swap! ms + 1000)) {w {:open-s (open-s w) :seconds 40 :fails 0}}))]
+      (with-stub-mem
+        (fn []
+          (room-lib/start-decision! c)
+          (cornered/covers c [:walls :pit :pocket])
+          (swap! (fake/state p) assoc :entities [])
+          (fake/add-entity! p (zombie 2 64 0))
+          (reset! slow? true)
+          (room-lib/start-decision! c)
+          (let [cs (cornered/covers c [:walls :pit :pocket])]
+            (is (= [:walls :pit :pocket :pit] @asked) "the pit, open the shortest, is asked again first")
+            (is (= #{:walls :pit :pocket} (set (keys cs))) "the others' last quotes served")
+            (is (= [:pocket :walls] (:left (meta cs))) "then by price: the pocket before the walls")))))))
 
 (deftest a-cover-that-failed-here-is-dearer-here-in-this-flight-and-the-next
   (let [data (atom mem/empty-data)
