@@ -467,6 +467,49 @@
           (is (= {:status :stopped :reason :kept-job} (select-keys result [:status :reason])) (pr-str result))
           (is (= "lectern" (block p ws)) "the lectern is placed back before the call ends"))))))
 
+(defn walks-in-through-the-near-end-once-freed
+  "As walks-in-once-freed, but as the game does on the walk in: the librarian takes the job back within 2 blocks of the
+  lectern, its feet still in the near end, and steps into the cell 10 s of clock later."
+  [{:keys [p clock]}]
+  (let [freed (atom false)]
+    (add-watch (fake/state p) :free
+               (fn [_ s _ w]
+                 (let [stands? (= "lectern" (get-in w [:blocks ws]))]
+                   (when (and (not stands?) (not @freed))
+                     (reset! freed true)
+                     (swap! s assoc-in [:entities 0 :profession] "unemployed"))
+                   (when (and stands? @freed)
+                     (remove-watch s :free)
+                     (swap! s update-in [:entities 0] assoc :pos [0.6 64 0.5] :profession "librarian")
+                     (let [at (+ @clock 10000)]
+                       (add-watch clock :walk-in
+                                  (fn [_ _ _ ms] (->> [ms] (filter #(>= % at))
+                                                      (run! (fn [_] (remove-watch clock :walk-in)
+                                                              (swap! s assoc-in [:entities 0 :pos] [1.5 64 0.5])))))))))))))
+
+(deftest a-freed-librarian-that-takes-the-job-back-in-the-near-end-on-its-walk-in-is-penned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box))
+                                                    :entities [(vt/villager nil {:profession "librarian" :level 1 :pos {:x 6 :y 64 :z 3}})]
+                                                    :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 walks-in-through-the-near-end-once-freed))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= "oak_fence" (block p [0 64 0]))))))))
+
+(deftest a-librarian-beyond-the-games-site-check-radius-is-not-freed-and-waited-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box))
+                                                    :entities [(vt/villager nil {:profession "librarian" :level 1 :pos {:x 20 :y 64 :z 3}})]
+                                                    :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600))]
+          (is (= {:status :stopped :reason :not-walked-in} (select-keys result [:status :reason])) (pr-str result))
+          (is (= [] (filter #(= [2 64 0] [(.-x (.-pos (.-args %))) (.-y (.-pos (.-args %))) (.-z (.-pos (.-args %)))]) (vt/calls p "dig"))) "the lectern is never broken")
+          (is (= "lectern" (block p ws))))))))
+
 (deftest a-second-villager-beside-an-open-stand-is-shut-out-of-the-cells-next-to-the-workstation
   (async done
     (tu/run-async done

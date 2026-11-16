@@ -30,6 +30,16 @@
 
 (defn search-radius [] (settings/get settings ::search-radius))
 
+(def site-check-radius
+  "The game's rule (ValidateNearbyPoi): only a villager within this many blocks of its job site's centre notices the site
+  is gone, so one farther off keeps its profession after the site is broken until it comes back."
+  16)
+
+(defn near-site?
+  "Villager e stands within site-check-radius of the centre of cell [x y z]."
+  [e [x y z]]
+  (< (u/dist (u/pos-of (.-pos e)) {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}) site-check-radius))
+
 (defn seen
   "The villager entities in sight within the search radius."
   [p]

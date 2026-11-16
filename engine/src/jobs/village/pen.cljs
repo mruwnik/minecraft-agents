@@ -42,9 +42,10 @@
   into the stand (digging the entry when the box is shut), shut the box round the body from inside, place the
   workstation, if missing, from the stand (it is the lure: with the box shut the pen's cell is the only one next to it a
   villager can path to, the game's rule for claiming it); a villager reading the pen's profession outside the cell holds
-  a job site and walks to none, so the workstation is broken once a call (free!: an untraded villager loses the job,
-  another's claim on it goes), its drop picked up (jobs.lib.workstation-drop), and placed again, a fresh lure (one
-  that still reads the profession then kept its job: :kept-job); wait for the villager to walk in, and light a shut pen
+  a job site and walks to none, so, once it is within the game's site-check radius (jobs.lib.villager/near-site?), the
+  workstation is broken once a call (free!: an untraded villager loses the job, another's claim on it goes), its drop
+  picked up (jobs.lib.workstation-drop), and placed again, a fresh lure (one still reading the profession a poll after
+  the break kept its job, judged once before the place: :kept-job); wait for the villager to walk in, and light a shut pen
   still dark from the stand (its light reaches the cell under the top slab). A cell still dark after the light child ended done is looked at when unknown, then read each
   poll: the same light twice ends nothing-possible :dark.
   The wait counts game ticks of the villagers' walking hours (jobs.lib.villager/take-job-ticks, 1240); reason
@@ -307,27 +308,41 @@
                            #(= item (vp/name-at (:primitives c) ws))))]
       (if (= :again r) (await (pick-up! c ws)) r))))
 
-(defn ^:async kept-job!
-  "The villager outside the cell still reads the pen's profession after free!: it holds another job site, or has
-  traded (the game keeps a traded villager's job). With the workstation still gone, look every game tick for one poll
-  for it to read jobless (the game takes an untraded villager's job a tick after the break); else place the
-  workstation back, then end condition-failed :kept-job (:villager, :sites the other job sites seen)."
-  [c ws block e]
+(defn ^:async judge-kept!
+  "Once, right after free!, with the workstation still gone: a villager outside the cell still reading the pen's
+  profession within the game's site-check radius (jobs.lib.villager/near-site?) is looked at every game tick for one
+  poll (the game takes an untraded villager's job a tick after the break); still employed, it holds another job site or
+  has traded: :kept. Farther off the game has not checked the site yet, so the free counts for nothing and is made again
+  once it is near. :again or :continue."
+  [c ws e in?]
   (let [p (:primitives c)
-        gone? (or (nil? block) (bs/air block))
-        id (villager/ident e)]
+        prof (:profession (:args c))
+        employed? #(and % (= prof (.-profession %)))
+        id (some-> e villager/ident)]
     (cond
-      (and gone? (not (:lose-polled (ctx/mem c))))
+      (or in? (not (employed? e))) (do (ctx/update-mem! c assoc :judged true) :again)
+      (not (villager/near-site? e ws)) (do (ctx/update-mem! c dissoc :freed) :again)
+      :else
       (let [tick-ms (settings/ticks->ms 1)
             r (await (child/poll! c #(some-> (villager/find-by-uuid p id) .-profession (= "unemployed"))
-                                  tick-ms (js/Math.ceil (/ (* 1000 (villager/poll-s)) tick-ms)) :villager-keeps-job))]
-        (if (= :continue r)
-          :continue
-          (do (ctx/update-mem! c assoc :lose-polled true) :again)))
-      gone? (await (workstation! c ws))
-      :else (stop! c :condition-failed :kept-job
-                   {:villager id :sites (villager/job-sites c (:pos (b/parse (:args c))))
-                    :text (str "villager " id " kept its " (:profession (:args c)) " job after its workstation was broken: it holds another job site or has traded")}))))
+                                  tick-ms (js/Math.ceil (/ (* 1000 (villager/poll-s)) tick-ms)) :villager-keeps-job))
+            now (villager/find-by-uuid p id)]
+        (cond
+          (= :continue r) :continue
+          r (do (ctx/update-mem! c assoc :judged true) :again)
+          (and (employed? now) (not (villager/near-site? now ws))) (do (ctx/update-mem! c dissoc :freed) :again)
+          :else (do (ctx/update-mem! c assoc :judged true :kept id) :again))))))
+
+(defn ^:async kept-job!
+  "The villager judged :kept (judge-kept!): place the workstation back, then end condition-failed :kept-job
+  (:villager, :sites the other job sites seen)."
+  [c ws block]
+  (if (or (nil? block) (bs/air block))
+    (await (workstation! c ws))
+    (let [id (:kept (ctx/mem c))]
+      (stop! c :condition-failed :kept-job
+             {:villager id :sites (villager/job-sites c (:pos (b/parse (:args c))))
+              :text (str "villager " id " kept its " (:profession (:args c)) " job after its workstation was broken: it holds another job site or has traded")}))))
 
 (defn ^:async step-in!
   "Walk into the stand behind the workstation, where the roll is made from and the box is shut round the body."
@@ -424,11 +439,12 @@
         (await (plug! c lay)))
       (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
       (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/with-floors p lay (:box lay)) {:in-place true :quick true}))
-      (and (not in?) e (:freed (ctx/mem c)) (= (:profession (:args c)) (.-profession e))) (await (kept-job! c ws block e))
+      (and (:freed (ctx/mem c)) (not (:judged (ctx/mem c)))) (await (judge-kept! c ws e in?))
+      (:kept (ctx/mem c)) (await (kept-job! c ws block))
       (or (nil? block) (bs/air block)) (await (workstation! c ws))
       (and (not in?) (seq (vp/employed-in p lay (some-> e villager/ident))))
       (stop! c :condition-failed :workstation-taken {:villager (villager/ident (first (vp/employed-in p lay (some-> e villager/ident))))})
-      (and (not in?) e (= (:profession (:args c)) (.-profession e)) (not (:freed (ctx/mem c)))) (await (free! c ws))
+      (and (not in?) e (= (:profession (:args c)) (.-profession e)) (not (:freed (ctx/mem c))) (villager/near-site? e ws)) (await (free! c ws))
       (not in?) (await (wait-walk-in! c :villager-not-in-pen))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c)))) (await (light! c (:stand lay)))
       (vp/dark? p lay) (await (dark! c lay))
