@@ -120,9 +120,9 @@
   (await (kept! c [::quote args (or (:worth args) (ctx/worth c))] #(quote! c args) settled?)))
 
 (defn ^:async kept-job-quote!
-  "ctx/quote of job sym with args, kept! while the caller's worth holds too, once settled?."
+  "ctx/quote of job sym with args, kept! while the caller's worth holds too and the failed sites it remembers (:shut-in-failed) are the same, once settled?."
   [c sym args]
-  (await (kept! c [::job-quote sym args (ctx/worth c)] #(ctx/quote c sym args) settled?)))
+  (await (kept! c [::job-quote sym args (ctx/worth c) (mapv :data (ctx/entries c :shut-in-failed))] #(ctx/quote c sym args) settled?)))
 
 (defn ^:async quote-once!
   "go-to's quote of the walk args, asked once in this pass (once!) and kept across passes (kept-quote!)."

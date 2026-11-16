@@ -107,6 +107,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
 
   // light-only changes reach a marked cell's darkness without any block update
   const onLight = packet => {
+    changes++
     if (near(getBot(), packet.chunkX * 16 + 8, hereY(getBot()), packet.chunkZ * 16 + 8, 8)) bump()
     for (let s = 0; s < 64; s++) lights.delete(keyOf(packet.chunkX, packet.chunkZ, s))
     lastLightKey = -1

@@ -286,6 +286,14 @@ test('a block update that resends the state it replaces moves neither epoch nor 
   assert.deepEqual([raw.epoch(), raw.changes()], before.map(n => n + 1))
 })
 
+test('a light-only packet moves changes (worldEpoch) so kept quotes and night chances are asked again', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  const before = raw.changes()
+  raw.lightChanged(20, 20)
+  assert.equal(raw.changes(), before + 1)
+})
+
 test('sightTable lets sight pass beds, as the entity sight check does', () => {
   const table = sightTable(registry)
   assert.deepEqual(['red_bed', 'white_bed'].map(n => table[id(n)]), [0, 0])

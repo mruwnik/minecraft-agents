@@ -470,6 +470,45 @@
               (is (nil? t)))
             (finally (set! flee/flee-target flee-target))))))))
 
+(deftest a-flee-search-still-going-on-is-kept-going-when-the-cheapest-pick-is-staying-in-the-open
+  ;; card 2e6fefe1: the search was dropped once a :shelter price existed though the cheapest pick was :exposed (not good enough, Q147)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [flee-target flee/flee-target
+              cheapest bed-down/cheapest
+              dear {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10}
+              c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night})) {}
+                           {:quote-call {:worth 1200 :ways #{:shelter :flee}}
+                            ::pick/pass (atom {:dig-in (js/Promise.resolve dear)
+                                               :niche (js/Promise.resolve {:seconds ##Inf :risk-s 0 :exposure-s 0 :morning-s 0})})})]
+          (set! flee/flee-target (fn [_ _] (js/Promise.resolve :searching)))
+          (set! bed-down/cheapest (fn [_ _] :exposed))
+          (try
+            (is (= :searching (await (night/shelter-prices c))))
+            (finally (set! flee/flee-target flee-target)
+                     (set! bed-down/cheapest cheapest))))))))
+
+(deftest a-kept-job-quote-is-asked-again-when-a-failed-site-is-remembered
+  ;; card 2e6fefe1: a way that failed without changing a block left the key as it was, and the stale "available" quote was kept
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom 0)
+              quote ctx/quote
+              entries ctx/entries
+              c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night})) {} {:quote-call {:worth 1200}})]
+          (set! ctx/quote (fn ([_ _ _] (swap! asked inc) (js/Promise.resolve {:seconds 1}))
+                            ([_ _ _ _] (swap! asked inc) (js/Promise.resolve {:seconds 1}))))
+          (try
+            (await (pick/kept-job-quote! c 'jobs.survival.shut-in {:for :night}))
+            (await (pick/kept-job-quote! c 'jobs.survival.shut-in {:for :night}))
+            (is (= 1 @asked) "unchanged: kept")
+            (set! ctx/entries (fn [_ _] [{:data {:pos {:x 0 :y 64 :z 0} :way :walls :reason :walls-server-refused}}]))
+            (await (pick/kept-job-quote! c 'jobs.survival.shut-in {:for :night}))
+            (is (= 2 @asked) "a failed site now remembered: asked again")
+            (finally (set! ctx/quote quote) (set! ctx/entries entries))))))))
+
 (deftest with-nothing-seen-the-night-looks-around-and-then-flees-to-the-ground-it-saw
   (async done
     (tu/run-async done

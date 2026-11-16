@@ -701,7 +701,7 @@
           prices (cond-> (dissoc (await (bed-down/answers c {:niche n :flee flee})) :bed :sealed :log-out) (not dig?) (dissoc :shelter))]
       (cond
         (not= :searching t) [prices t]
-        (some prices [:shelter :niche]) [prices nil]
+        (#{:shelter :niche} (bed-down/cheapest c prices)) [prices nil]
         :else :searching))))
 
 (defn stay!
