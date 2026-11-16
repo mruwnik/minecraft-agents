@@ -99,12 +99,21 @@
     (map vec (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells)))))
 
 (defn approach
-  "{:step :approach :pos cell :then span} for the best cell the body can walk to from which (span-from cell) gives a span,
-  ranked by (rank span cell) then by the nearest to feet; nil when none."
-  [p feet span-from rank]
-  (let [far (fn [cell] (u/dist (zipmap [:x :y :z] cell) (zipmap [:x :y :z] feet)))
-        options (keep (fn [cell] (when-let [span (span-from cell)] {:step :approach :pos cell :then span})) (stands p))]
-    (first (sort-by (juxt #(rank (:then %) (:pos %)) #(far (:pos %))) options))))
+  "{:step :approach :pos cell :then span} for the best of cells (the stands) from which (span-from cell) gives a span,
+  ranked by (rank span cell) then by the nearest to feet; nil when none. (bound cell) is a lower bound on the rank
+  any span from cell can have: cells go by it, and the scan ends at the first whose bound is no better than the best
+  rank found (or not under limit, when given), so a stand far from the goal is never priced."
+  [cells feet span-from rank bound limit]
+  (let [far (fn [cell] (u/dist (zipmap [:x :y :z] cell) (zipmap [:x :y :z] feet)))]
+    (loop [[[b cell] & more] (sort-by (juxt first #(far (second %))) (map (fn [c] [(bound c) c]) cells))
+           best nil]
+      (cond
+        (or (nil? cell) (and limit (>= b limit)) (and best (>= b (first best)))) (some-> best second)
+        :else (let [span (span-from cell)
+                    r (when span (rank span cell))]
+                (recur more (if (and span (or (nil? best) (< r (first best))))
+                              [r {:step :approach :pos cell :then span}]
+                              best)))))))
 
 (defn span-end
   "The cell [x y z] span ends at when built from cell: a stair's last step, a bridge's landing."
@@ -133,17 +142,23 @@
         opts {:own? own? :skip skip :fetch? (choose/pickaxe-fetch c (fetch-tool? c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
         out? (wworld/outside-area-fn feet)
         stair-from (in-area out? goal (fn [cell] (span/down-stair block-at cell goal may-dig? skip)))
+        cells (delay (stands p))
+        flat (fn [cell] (js/Math.hypot (- (cell 0) (goal 0)) (- (cell 2) (goal 2))))
         stair (when (allowed? c :stair)
                 (let [here (stair-from feet)
                       stand (when (and (not (skip :approach)) (>= (- (second feet) (second goal)) 2))
-                              (approach p feet stair-from (fn [stair _] (:aside stair))))]
+                              (approach @cells feet stair-from (fn [stair _] (:aside stair))
+                                        (fn [cell] (- (flat cell) (- (second cell) (second goal)) 3))
+                                        (some-> here :aside dec)))]
                   (if (and stand (or (nil? here) (<= (+ 2 (:aside (:then stand))) (:aside here)))) stand here)))
         bridge-from (in-area out? goal (fn [cell] (span/bridge-span block-at (escape/unseen-of p) cell goal opts)))
         bridge (when (allowed? c :bridge)
                  (or (bridge-from feet)
                      (when-not (skip :approach)
-                       (approach p feet #(when (>= (second %) (second feet)) (bridge-from %))
-                                 (fn [b _] (u/dist (zipmap [:x :y :z] (:landing b)) (zipmap [:x :y :z] goal)))))))
+                       (approach @cells feet #(when (>= (second %) (second feet)) (bridge-from %))
+                                 (fn [b _] (u/dist (zipmap [:x :y :z] (:landing b)) (zipmap [:x :y :z] goal)))
+                                 (fn [cell] (- (u/dist (zipmap [:x :y :z] cell) (zipmap [:x :y :z] goal)) (inc (span/max-bridge))))
+                                 nil))))
         spans (into [] (remove nil?) [stair bridge])
         priced (fn [e] (price p feet (or (:then e) e)))
         real (or (choose/dig-way p feet goal may-dig? opts)

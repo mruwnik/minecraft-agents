@@ -318,3 +318,12 @@
             (is (true? (:arrived @out)) (pr-str @out))
             (is (= (count stops) (count (distinct (map :cell stops)))) (pr-str (map (juxt :at :cell) stops)))
             (is (not-any? #(= [:stair (:at %)] ((juxt :step :at) (after %))) stops) "no stair again from where one stopped")))))))
+
+(deftest approach-prices-only-stands-that-can-beat-the-best-found
+  (let [cells (for [x (range 0 200)] [x 10 0])
+        priced (atom 0)
+        span-from (fn [cell] (swap! priced inc) {:aside (js/Math.abs (- (cell 0) 100))})
+        got (reach/approach cells [0 10 0] span-from (fn [s _] (:aside s)) (fn [cell] (js/Math.abs (- (cell 0) 100))) nil)]
+    (is (= [100 10 0] (:pos got)) "the stand under the goal")
+    (is (<= @priced 3) "stands whose bound cannot beat it are never priced")
+    (is (nil? (reach/approach cells [0 10 0] span-from (fn [s _] (:aside s)) (fn [cell] (js/Math.abs (- (cell 0) 100))) 0)) "none under the limit")))
