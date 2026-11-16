@@ -1,4 +1,5 @@
-;; A pillar's roof cell holds the body's own spawn bed: priced at the respawn it holds, the bed stays and the pillar ends :ceiling.
+;; A pillar's roof cell holds the body's own spawn bed: priced at a new bed, the respawn it holds and the coming night's sleep (others online make that sleep worth little, so the price is ~280-920 s).
+;; A call worth well below that keeps the bed and ends :ceiling; one well above digs it and goes on.
 {:defaults
  {:tags [:access]
   :mobs :keep
@@ -10,7 +11,14 @@
  [{:name "spawn-bed-roof-stays-and-pillar-ends-ceiling"
    :blocks [[:set [16 7 16] "red_bed[facing=east,part=foot]"] [:set [17 7 16] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :spawn-bed :data {:pos #xyz [16 7 16]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.access.pillar {:worth 265 :height 4})]]
+   :act [[:job (jobs.access.pillar {:worth 100 :height 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 60 :of-job true}]
    :after [[:block [16 7 16] "red_bed"]]
+   :limit-s 70}
+  {:name "spawn-bed-roof-dug-for-a-call-worth-far-more"
+   :blocks [[:set [16 7 16] "red_bed[facing=east,part=foot]"] [:set [17 7 16] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [16 7 16]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.access.pillar {:worth 3000 :height 4})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:not-block [17 7 16] "red_bed"]]
    :limit-s 70}]}

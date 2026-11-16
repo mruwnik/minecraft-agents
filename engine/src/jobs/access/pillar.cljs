@@ -22,6 +22,9 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.spent :as spent]
             [jobs.lib.reach :as reach]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.walk :as walk]
             [jobs.lib.pillar :as pl]
@@ -422,20 +425,34 @@
                                    (cond-> {:accept #{:falling-block} :walk false :collect false :need-drop false}
                                      (and ignore? (:ignore-zones? (:args c))) (assoc :ignore-zones? true))))))
 
+(defn coming-night-s
+  "Seconds of the night the body meets next: the night left now, else a whole night."
+  [c]
+  (let [left (get-in (sh-clock/night-left-quote c) [:uses :job-time 1])]
+    (if (pos? left) left (get-in (sh-clock/night-left-quote false sh-clock/dusk-tick) [:uses :job-time 1]))))
+
 (defn roof-dear?
   "Whether what digging the roof cell `at` destroys costs more than the call's worth: cost/destroyed-fn (a placed-looking
-  block is someone's build) and, for a bed, the respawn it holds or would hold (cost/spawn-worth against the world spawn
-  when it is the live spawn bed, else against the respawn the body has)."
+  block is someone's build; a bed is left lost, its put-back is a new one) and, for a bed, the respawn it holds or would hold
+  (cost/spawn-worth against the world spawn when it is the live spawn bed, else against the respawn the body has) and,
+  when the body knows no other bed, the coming night's sleep (sh-sleepers/night-sleep-s)."
   [c at block]
   (let [p (:primitives c)
         view (ctx/view c)
-        spawn (if (sh-spawn/spawn-bed-at? view (zipmap [:x :y :z] at))
+        pos (zipmap [:x :y :z] at)
+        bed? (and block (cost/bed? block))
+        spawn (if (sh-spawn/spawn-bed-at? view pos)
                 (some-> (.self p) .-worldSpawn u/pos-of)
                 (cost/respawn-of p view))
-        lost (if (and block (cost/bed? block) spawn)
+        lost (if (and bed? spawn)
                (cost/spawn-worth (assoc (cost/death-body p view) :respawn spawn) at (pl/feet-cell c))
-               0)]
-    (> (+ lost ((cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))) block at false)) (ctx/worth c))))
+               0)
+        other-bed? (some #(> (u/dist % pos) (sh-spawn/spawn-near))
+                         (concat (sh-spawn/known-beds p view) (sh-beds/seen-bed-places p)))
+        night (if (and bed? (not other-bed?))
+                (sh-sleepers/night-sleep-s p view (sh-beds/in-ground? p view) (coming-night-s c))
+                0)]
+    (> (+ lost night ((cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))) block at false)) (ctx/worth c))))
 
 (defn ^:async dig-ceiling!
   "A diggable roof over the head is dug out (a jobs.blocks.dig child, by hand when no tool harvests it), up to

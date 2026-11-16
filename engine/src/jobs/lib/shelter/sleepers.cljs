@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.value :as value]
             [jobs.lib.danger :as danger]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -91,6 +92,14 @@
     (if (and (:skipping (:data status)) (not (counts-self? p view status)))
       0
       (* (others-online p) left (value/skip-chance (sleepers-short p view))))))
+
+(defn night-sleep-s
+  "Seconds sleeping through a night with left seconds still to run saves over staying awake: the night's work
+  (health/night-lost-s; none in the ground, in-ground?) when the body's own sleep skips it (sleepers-short 0), and the
+  skip the others wait (skip-wait-s)."
+  [p view in-ground? left]
+  (+ (if (zero? (sleepers-short p view)) (health/night-lost-s in-ground? left 0) 0)
+     (skip-wait-s p view left)))
 
 (defn sleepers-known
   "How many other players are known asleep tonight: the larger of those in sight and tonight's latest count less the

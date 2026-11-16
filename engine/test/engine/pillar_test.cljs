@@ -217,6 +217,16 @@
           (is (= "black_bed" (block p [0 65 0])) "the bed stays: its put-back and the respawn it holds are worth more than the call")
           (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
 
+(deftest a-lone-bed-roof-is-priced-with-the-coming-night-it-would-sleep-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "black_bed"}})]
+          (core/submit! eng (list job {:height 4 :worth 1200}) {})
+          (await (ticks s eng 12))
+          (is (= "black_bed" (block p [0 65 0])) "the body's only bed: a new one, its respawn and tonight's sleep are worth more than the call")
+          (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
+
 (deftest a-bed-roof-that-is-not-the-spawn-bed-is-priced-against-the-respawn-the-body-has
   (async done
     (tu/run-async done
