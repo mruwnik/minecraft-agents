@@ -779,7 +779,9 @@
               pocket (merge (tu/box -12 70 -12 12 120 12 "stone") (tu/box 0 80 0 0 81 0 "air"))
               asked (atom [])
               real child/call-walk*
-              s (with-redefs [child/call-walk* (fn [c k a] (swap! asked conj a) (real c k a))]
+              pr0 (atom [])
+              realstop jobs.lib.cost/leg-stops?
+              s (with-redefs [jobs.lib.cost/leg-stops? (fn [& a] (swap! pr0 conj a) (apply realstop a)) child/call-walk* (fn [c k a] (swap! asked conj a) (real c k a))]
                   (await (search! {:target "rail" :max-distance 20} {:self {:pos [0.5 80 0.5]} :blocks pocket} 60 blind-far)))
               first-walk (first @asked)
               digs (filter #(nil? (:ways %)) @asked)]
@@ -789,6 +791,24 @@
           (is (nil? (:ways first-walk)) "the closed pocket is dug out of with every way go-to has, not the plain walk and clear-seal of a first leg")
           (is (= 80 (get-in first-walk [:pos :y])) "at the feet's height, a column of the sweep, not a step into unseen rock")
           (is (seq (walks s))))))))
+
+(def sealed-corridor
+  "Stone x 4..30, z 4..28, y 0..22 with a 2-high corridor x 14..26 at z 16 (the body in it): sealed, no unseen column in view."
+  (merge (tu/box 4 0 4 30 22 28 "stone") (tu/box 14 0 16 26 1 16 "air")))
+
+(deftest a-sealed-corridor-search-worth-less-than-the-hand-dig-out-ends-without-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              real child/call-walk*
+              dark #(swap! (fake/state (:p %)) assoc :light-default [0 0])
+              s (with-redefs [child/call-walk* (fn [c k a] (swap! asked conj a) (real c k a))]
+                  (await (search! {:target ["rail" "cobweb"] :scan-radius 32 :here true :use-notes false :worth 5}
+                                  {:blocks sealed-corridor :self {:pos [16.5 0 16.5]}} 80 dark)))]
+          (is (finished? s))
+          (is (= :price (:why (not-found-of s))) "the hand dig out (about 7 s) is dearer than the find is worth")
+          (is (empty? @asked) "no walk, so no step into rock"))))))
 
 (deftest the-last-leg-before-stuck-digs-out-of-a-sealed-pocket
   (async done
