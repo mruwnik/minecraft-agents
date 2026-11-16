@@ -185,18 +185,27 @@
            (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz)))))))))
 
 (defn joining-fill
-  "The first of fills (floor cells [x y z], nearest first) whose block, read solid, leaves goal ({:x :y :z}) no longer
-  proven walled in by the planner's goal flood before its search (wplan/enclosed-before-search?): a fill beside land the
-  planner's moves never reach the goal from bridges nothing. All of them read solid at once first, so when even that
-  leaves the goal walled in no fill is tried alone. Without a path world: the first of fills."
+  "The nearest of fills (floor cells [x y z], nearest first) whose block, read solid, leaves goal ({:x :y :z}) no longer
+  proven walled in by the planner's goal flood before its search (wplan/enclosed-before-search?, over the call's read:
+  c's :unknown): a fill beside land the planner's moves never reach the goal from bridges nothing. nil when all of fills
+  read solid at once still leave it walled in. More cells solid open no less, so the shortest nearest-first run of fills
+  that frees the goal is found by halving and its last fill kept when it frees the goal alone: a few floods whatever the
+  count of fills. Without a path world: the first of fills."
   [c goal fills]
   (let [pw (wworld/path-world (:primitives c) (:unknown c))
         to [(:x goal) (:y goal) (:z goal)]
+        fills (vec fills)
         shut? (fn [cells] (wplan/enclosed-before-search? c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) to (:range (:args c) 1)))]
     (cond
       (nil? pw) (first fills)
       (or (empty? fills) (shut? fills)) nil
-      :else (some #(when-not (shut? [%]) %) fills))))
+      :else (let [k (loop [lo 0 hi (dec (count fills))]
+                      (if (== lo hi)
+                        lo
+                        (let [mid (quot (+ lo hi) 2)]
+                          (if (shut? (subvec fills 0 (inc mid))) (recur (inc mid) hi) (recur lo mid)))))]
+              (when (or (zero? k) (not (shut? [(fills k)])))
+                (fills k))))))
 
 (defn drop-fill
   "{:step :fill-gap :cell :item} when result is :goal-cut-off or :goal-enclosed (the goal's region ends at a drop the body cannot climb back

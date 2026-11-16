@@ -31,6 +31,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
             [jobs.lib.look :as look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.tools :as tools]
             [jobs.lib.near :as near]
             [jobs.movement.go-to.climb-route :as climb-route]
@@ -751,12 +752,30 @@
                 (box 5 59 -1 8 64 1 "stone"))
          ["0,63,0" "0,64,0" "1,65,0"]))
 
+(defn looked-round!
+  "Whole sight passes from each of spots (feet [x y z]) all round and up and down, the body then back where it stood: what
+  a player who walked there and looked has seen."
+  [p spots]
+  (let [home (get-in @(fake/state p) [:self :pos])]
+    (doseq [pos spots yaw [0 90 180 270] pitch [-80 -60 -45 -20 0 30]]
+      (swap! (fake/state p) #(-> % (assoc-in [:self :pos] pos) (assoc :yaw yaw :pitch pitch)))
+      (rays/pass! (aget p "perception")))
+    (swap! (fake/state p) assoc-in [:self :pos] home)))
+
+(defn read-ctx
+  "A go-to ctx toward goal within range with the default read (the call's mask spec, as go-to's :unknown true makes it)."
+  [eng goal range]
+  (let [c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos goal :range range} :round 1})]
+    (assoc c :unknown (wworld/with-seeds (wworld/unknown-spec c) goal nil range))))
+
 (deftest no-fill-is-offered-beside-land-the-planner-never-reaches-the-goal-from
   ;; Old drop-fill offered [4 64 0]: drop-edges floods from the first standable cell beside the goal (the ledge top
   ;; [1 65 0]), not the planner's goal cells, and the fill joins the ledge to the body but never the sealed pocket.
-  (let [{:keys [eng]} (gt/setup {:self {:pos {:x 6.5 :y 65 :z 0.5}} :blocks sealed-cell-by-a-ledge :inventory [{:name "dirt" :count 9}]})
-        p (:primitives eng)
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [0 64 0] :range 1} :round 1})]
+  (let [{:keys [eng p]} (gt/setup {:self {:pos [6.5 65 0.5]} :blocks sealed-cell-by-a-ledge :inventory [{:name "dirt" :count 9}] :light [15 15]})
+        c (read-ctx eng [0 64 0] 1)]
+    (looked-round! p [[-2.5 59 0.5] [0.5 59 -2.5] [0.5 59 2.5] [4.5 59 0.5] [6.5 65 0.5]])
+    (is (sense/unknown? p [0 63 0]) "the pocket is unseen: no x-ray")
+    (is (wplan/enclosed-before-search? c (wworld/path-world p (:unknown c)) [0 64 0] 1) "its shell seen from round the pit proves it walled in")
     (is (= [[4 64 0]] (take 1 (choose/drop-edges p [[1 65 0]] [6 65 0]))) "the ledge's drop edge nearest the body")
     (is (= [4 64 0] (with-redefs [wplan/enclosed-before-search? (constantly false)] (:cell (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0]))))
         "with no planner proof, the fill the old rule offered")
