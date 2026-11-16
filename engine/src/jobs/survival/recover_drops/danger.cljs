@@ -4,11 +4,8 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
-            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.flee-search :as fs]
             [jobs.lib.ready :as ready]
-            [jobs.lib.rooms :as room-lib]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.deaths :as dth]))
 
@@ -28,55 +25,42 @@
                              {:skip (:weighed (ctx/mem c)) :sight? (:visible-only args true)
                               :ignore-heard? (body/heard-muted? (ctx/view c))})))
 
-(defn striker
-  "The attacker {:id :name} of the latest blow that hurt the body within jobs.lib.danger/::hit-s, or nil."
+(defn blow
+  "The :hurt entry of the latest blow by a mob within jobs.lib.danger/::hit-s, or nil."
   [c]
   (let [view (ctx/view c)
         since (- (:now view) (* 1000 (settings/get danger-q/settings ::danger-q/hit-s)))]
-    (some #(get-in % [:data :attacker]) (reverse (mem/since view :hurt since)))))
+    (last (filter #(get-in % [:data :attacker]) (mem/since view :hurt since)))))
 
-(defn flee?
-  "Whether the trip runs from a blow: a mob struck the body within hit-s (striker) that this trip has not run from before
-  (:fled: a flight from it ended, or a leg gained nothing on it; it came back or keeps up, so a flight does not shake it and the price alone decides)."
+(defn unanswered?
+  "Whether a mob's blow (blow) landed since the trip last answered one (:answered)."
   [c]
-  (let [s (striker c)]
-    (boolean (and s (not (contains? (:fled (ctx/mem c)) (:id s)))))))
+  (boolean (some-> (blow c) :t (> (:answered (ctx/mem c) 0)))))
 
-(defn flight-over!
-  "Once no blow has landed for hit-s, the mobs fled this flight (:fleeing) are :fled."
+(defn gap
+  "Blocks from the body to the nearest real danger in sight within the hostile radius (ranged ones their fire range), or nil."
   [c]
-  (when-not (striker c)
-    (ctx/update-mem! c #(-> % (update :fled (fnil into #{}) (:fleeing %)) (dissoc :fleeing)))))
+  (let [p (:primitives c)
+        ds (map #(u/dist (u/self-pos c) (danger-q/mob-pos p %))
+                (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius :fire-range} {:sight? true}))]
+    (when (seq ds) (/ (js/Math.round (* 10 (apply min ds))) 10))))
 
-(defn chasers
-  "The real dangers to the body (the hostile radius, ranged ones their fire range, a mob that struck it within hit-s
-  among them) as flee-search chasers {:name :mob :held :pos}."
+(defn ^:async answer!
+  "A mob's blow is a readiness failure of the trip: jobs.survival.respond-to-hostile (the priced fight, flight or cover)
+  answers it as a child, then the pile is weighed again where that leaves the body (:recheck). Every blow up to its
+  end is answered (:answered); a later one runs it again. Emits recover-drops.answered {:mob :gap :ending}, gap as gap
+  gives it. :next, or :continue for a cut."
   [c]
-  (let [p (:primitives c)]
-    (mapv (fn [e] {:name (cost/mob-kind e) :mob (.-name e) :held (.-held e) :pos (danger-q/mob-pos p e)})
-          (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius :fire-range} {:sight? false :hit-ids (danger-q/hit-ids (ctx/view c))}))))
-
-(defn ^:async flee-step!
-  "One leg out of the reach of the mobs at hand after a blow: the cell the one priced flee search picks (jobs.lib.flee-search,
-  its ring where they give the body up, within one step's search meter), walked as a jobs.movement.run-away leg of a
-  flee step's seconds. Emits recover-drops.fled {:mob :gap}, gap the blocks to the nearest chaser after the leg (nil: none known). :next,
-  with :recheck set (the pile is weighed again where the flight leaves the body), the striker :fleeing; a leg with no end
-  to take or that gained nothing makes it :fled at once."
-  [c]
-  (let [{who :name id :id} (striker c)
-        chs (chasers c)
-        gap (fn [chs] (apply min ##Inf (map #(u/dist (u/self-pos c) (:pos %)) chs)))
-        gap0 (gap chs)
-        step (when (seq chs) (fs/pick (await (fs/search! c chs [] {:meter (room-lib/search-meter 0)})) {}))
-        route (:route (meta step))
-        _ (when step
-            (await (ctx/call c :flee 'jobs.movement.run-away
-                             (cond-> {:pos step :range 1 :leg-s (settings/get fs/settings ::fs/step-s)} route (assoc :route route)))))
-        gap1 (gap (or (seq (chasers c)) chs))]
-    (ctx/emit! c :recover-drops.fled :info {:mob who :gap (when (js/isFinite gap1) (/ (js/Math.round (* 10 gap1)) 10))
-                                            :text (str "struck by " who ": " (if step "ran from it" "no way away from it"))})
-    (ctx/update-mem! c #(-> (assoc % :recheck true) (update (if (> gap1 gap0) :fleeing :fled) (fnil conj #{}) id)))
-    (if (ctx/alive? c) :next :continue)))
+  (let [who (get-in (blow c) [:data :attacker :name])
+        e (await (ctx/call c :respond 'jobs.survival.respond-to-hostile {}))]
+    (if (or (= :continue e) (not (ctx/alive? c)))
+      :continue
+      (let [g (gap c)]
+        (ctx/update-mem! c assoc :answered (ctx/now c) :recheck true)
+        (ctx/emit! c :recover-drops.answered :info {:mob who :gap g :ending (:kind e)
+                                                     :text (str "struck by " who ": answered (" (name (:kind e)) "), "
+                                                                (if g (str "the nearest danger " g " blocks off") "no danger in sight"))})
+        :next))))
 
 (defn hit-since?
   "Whether the body was hurt since the decision was taken."

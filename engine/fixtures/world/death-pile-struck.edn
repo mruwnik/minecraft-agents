@@ -1,9 +1,10 @@
-;; Card eff5ca7b: a mob striking the body during a recover-drops trip is run from first, then the pile is weighed again.
+;; Card eff5ca7b: a mob striking the body during a recover-drops trip is answered by respond-to-hostile as a child of the
+;; trip, then the pile is weighed again.
 ;; The body dies at [22 0 22] (RCON kill) and respawns at [4 0 4]; the pile (32 diamonds, iron) is worth far more than a
 ;; trip past one husk. No reflex is registered: the trip must not lean on one. Should-succeed: a husk summoned by the
-;; respawn strikes the body, a flee leg takes it out of the husk's reach (recover-drops.fled, gap past the 1.4-block
-;; melee reach; a body standing under the blows never emits it), and the pile, still worth it, is collected.
-;; Should-fail: with no husk the pile is collected and nothing is run from.
+;; respawn strikes the body; the trip starts its :respond child (the old trip never had one) at once, which ends with the
+;; husk out of melee reach (recover-drops.answered gap past 1.4 blocks, nil when none is in sight), and the pile is
+;; collected. Should-fail: with no husk the pile is collected and no :respond child starts.
 ;; Resistance IV keeps the body alive while the blows still land (they must, to count as hits).
 {:defaults
  {:tags [:survival :death :jobs]
@@ -15,14 +16,15 @@
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]]
   :limit-s 150}
  :cases
- [{:name "husk-striking-the-body-is-run-from-then-the-pile-is-fetched"
+ [{:name "husk-striking-the-body-is-answered-then-the-pile-is-fetched"
    :act [[:summon "husk" [6.5 0 5.5] "{CanPickUpLoot:0b,PersistenceRequired:1b}"]
          [:job (jobs.survival.recover-drops {:worth 1200})]]
-   :expect [{:event {:source :job :kind :recover-drops.fled :data {:mob "husk" :gap [:> 1.4]}} :within-s 90}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :respond}} :within-s 10 :of-job true}
+            {:event {:source :job :kind :recover-drops.answered :data {:mob "husk" :gap [:not [:<= 1.4]]}} :within-s 90}
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 145 :of-job true}]}
   {:name "no-mob-the-pile-is-collected"
    :act [[:job (jobs.survival.recover-drops {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :recover-drops.fled} :for-s 120
+            {:no-event {:source :job :kind :child_started :data {:slot :respond}} :for-s 120
              :until {:source :job :kind :completed :data {:decision :collected}}}]
    :after [[:item "diamond" 32]]}]}

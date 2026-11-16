@@ -28,7 +28,7 @@
 
 (def doc
   "After a death, go back for the drops when they are worth it. Serves the :died entry no :recovered covers (the keyed one, else the open pile best net of the walk); one run is the whole trip and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex or a restart goes on with the same trip (:recover-trip).
-  Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). A mob's blow (dg/striker, within jobs.lib.danger/::hit-s) first takes the body out of its reach: legs of the flee search's pick (dg/flee-step!), until no blow lands for hit-s or a leg gains nothing; then the pile is weighed again. A mob struck after a flight from it is not run from again: the price alone decides. The children run under :checks {:safe? (always)}: the trip prices its own danger.
+  Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). A mob's blow is answered first by jobs.survival.respond-to-hostile as a child (dg/answer!), each later blow again; then the pile is weighed again, its danger priced, and a skip for danger then ends the trip. The children run under :checks {:safe? (always)}: the trip prices its own danger.
   Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, its danger the walk risk of go-to's quote, ::margin); infinite for a pile that burned (died in lava or fire, est/lost) or fell out of the world, or a walk ending after the despawn.
   Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, its walk risk naming the mobs priced, the air the route spends); a hold is no longer than the pile's gain over its safe trip (est/surplus-s: a wait costs its seconds), the window left less the walk, the flight and the collect, and ::danger-memory-ms, and no shorter than the flight (seconds a chaser needs to give up); with no mob seen, or less, no hold: the pile is left (:skip).
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
@@ -146,15 +146,16 @@
 
 
 (defn retreat!
-  "Remember the danger for hold-ms and report the skip (see retry-later!). With :retry asked the run ends at once; else the
-  remembered danger makes can-run? :later, which stops the round between steps."
+  "Remember the danger for hold-ms and report the skip (see retry-later!). With :retry asked, or once a blow was answered
+  (a hold in place has no answer to the next one), the run ends at once; else the remembered danger makes can-run? :later,
+  which stops the round between steps."
   [c entry decided hold-ms]
   (ctx/update-mem! c #(-> % (dissoc :decided) (assoc :hostile-cut true)))
   (dth/save-trip! c)
   (ctx/remember! c :recover-danger (merge (est/numbers decided)
                                           {:death-t (:t entry) :until (+ (ctx/now c) hold-ms) :text (est/decision-text :skip decided (cfg/margin)) :mobs (:seen-mobs decided)})
                  cfg/danger-policy)
-  (if (:retry (:args c))
+  (if (or (:retry (:args c)) (:answered (ctx/mem c)))
     (ctx/end c :condition-failed :danger {:top-mobs (:top-mobs decided) :hold-s (js/Math.round (/ hold-ms 1000)) :pos (:pos (:data entry))})
     :next))
 
@@ -242,11 +243,10 @@
               (if (and (= :unreachable (:cause r)) (:blocked (ctx/mem c)) (est/deep-pile c pos)) :next r)))))
 
 (defn ^:async trip!
-  "A blow first takes the body out of the striker's reach (dg/flee-step!), the pile weighed again after; else trip-on!."
+  "A mob's blow not yet answered first (dg/answer!), the pile weighed again after; else trip-on!."
   [c entry]
-  (dg/flight-over! c)
-  (if (dg/flee? c)
-    (await (dg/flee-step! c))
+  (if (dg/unanswered? c)
+    (await (dg/answer! c))
     (await (trip-on! c entry))))
 
 (defn ^:async step!

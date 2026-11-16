@@ -9,6 +9,8 @@
             [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.fake :as fake]
+            [engine.flight-job :as fj]
+            [engine.hostile-test :as h]
             [engine.library-test :refer [setup calls inv]]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -16,7 +18,6 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.body :as body]
-            [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
             [jobs.survival.recover-drops :as recover-drops]
@@ -794,22 +795,44 @@
                                              :item {:name name :count count}})
                items))
 
-;; ------------------------------------- a mob striking the body: out of its reach, then the pile weighed again
+;; ------------------------------------- a mob striking the body: answered by respond-to-hostile, then the pile weighed again
 
-(deftest a-mob-striking-the-respawned-body-is-run-from-then-the-pile-is-fetched
+(defn strikes-again!
+  "Zombie e strikes the body once more on the first move after the trip answered its first blow (it followed the body)."
+  [p e seen]
+  (swap! (fake/state p) update :entities conj e)
+  (let [struck (atom false)]
+    (doseq [act ["steer" "moveTo"]]
+      (.override (.-world p) act
+                 (fn [token args impl]
+                   (when (and (seq (emitted seen :recover-drops.answered)) (compare-and-set! struck false true))
+                     (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 1 :attacker {:id (:id e) :name (:name e)}})))
+                   (impl token args))))))
+
+(defn setup-flight
+  "As setup on the flight floor, the clock moving a second with every primitive call: a flight ends by time (hostile-test)."
+  [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake-on-floor (assoc world :floor h/flight-floor)))
+        now (tu/act-clock clock p 1000)]
+    {:eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now :world (ew/of-data {} {} [])
+                        :events (events/make {:body "Fake" :sinks [sink] :now now})})
+     :p p :seen seen}))
+
+(deftest a-mob-striking-again-is-answered-again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5}}
-              {:keys [eng p seen]} (setup {:floor tu/walk-floor :inventory sword :entities (conj (vec (pile-drops death-pile-of-the-field-report)) zombie)})]
+        (let [zombie {:id 7 :name "zombie" :kind "hostile" :invulnerable true :pos [3.5 64 0.5]}
+              {:keys [eng p seen]} (setup-flight {:entities (vec (pile-drops death-pile-of-the-field-report))})]
           (die! eng {:pos death-pos :inventory death-pile-of-the-field-report})
-          (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 3 :attacker {:id 7 :name "zombie"}}))
+          (strikes-again! p zombie seen)
+          (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 1 :attacker {:id 7 :name "zombie"}}))
           (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 30))
-          (is (= "zombie" (:mob (first (emitted seen :recover-drops.fled)))))
-          (is (< (cost-danger/melee-reach) (:gap (first (emitted seen :recover-drops.fled))))
-              "no hostile reflex is registered: the trip itself takes the body out of the striker's reach")
-          (is (= :collected (:decision (recovered eng))) "weighed again away from the blows, the pile is still worth the walk"))))))
+          (is (= ["zombie" "zombie"] (mapv :mob (emitted seen :recover-drops.answered)))
+              "the trip answers the first blow with respond-to-hostile, then the next one with it again"))))))
 
 (defn ^:async picked-up-before-the-trip
   "The :recovered of a trip for a 42-item pile whose 36 cobblestone the body picked up at pickup-pos before the job."
