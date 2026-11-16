@@ -3,6 +3,7 @@
 ;; Stone mass x 2..30, z 8..24, y -6..6; body in a 1x2 cell at [16 0 16] facing east with cobblestone; a 1x2 pocket at
 ;; Card d7009e75: the sealed breach records what lay behind it (:behind {:names :cells} on the ending); lava beside the cut is no breach: the stair seals it and the run goes on.
 ;; [18 0..1 17] touches the tunnel's second cell [18 0..1 16] from the south.
+;; The tunnel goes on past the breach: its cells to [22 0 16] are air, the pocket cell [18 0 17] is filled.
 {:defaults
  {:tags [:mine :jobs] :time :any
   :plot {:height 12}
@@ -15,7 +16,7 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 90 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
    :after [[:block [18 0 17] "cobblestone"] [:block [18 1 17] "cobblestone"]
-           [:block [18 0 16] "air"] [:not-block [19 0 16] "air"]]}
+           [:block [18 0 16] "air"] [:block [19 0 16] "air"] [:block [22 0 16] "air"]]}
   {:name "breach-records-what-was-behind"
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length :behind {:names [:any] :cells [:any]}}} :within-s 90 :of-job true}]
    :after [[:block [18 0 17] "cobblestone"]]}
