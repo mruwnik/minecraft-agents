@@ -330,7 +330,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [bed {:x 96 :y 64 :z 0}
-              {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"96,64,0" "red_bed"}))
+              {:keys [eng raw clock seen]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"96,64,0" "red_bed"}))
               quote-once! pick/quote-once!
               ;; the search got a third of the way: the rest is priced past its end
               cut (fn [{:keys [route] :as q}]
@@ -346,7 +346,21 @@
           (try (await (st/tick-n eng 12))
                (finally (set! pick/quote-once! quote-once!)))
           (is (empty? (st/entries eng :bed-walk-unsafe)) "no whole way known yet is not no way: the walk is priced, not refused")
+          (is (= [true [:secs :left :dig-s :walk-hp :stay]]
+                 (let [d (first (st/emitted seen :night.bed-walk-checked))] [(:partial? d) (filterv #(number? (d %)) [:secs :left :dig-s :walk-hp :stay])]))
+              "the numbers the walk was weighed by")
           (is (= [bed] (mapv st/arg-pos (st/calls raw "sleep")))))))))
+
+(deftest a-partial-quote-prices-the-walk-hp-as-the-whole-route-along-the-same-way
+  ;; night-bed-far-walk live: the walk over a node-budget partial passed where the whole route's replica was refused
+  (let [bed {:x 120 :y 64 :z 0}
+        p (sky/with-sky (tu/seeing-all (tu/fake {:floor [-30 -30 130 30] :self {:pos {:x 5 :y 64 :z 0}} :time st/night})))
+        c {:id "j1" :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}
+        way (fn [x1] (mapv (fn [x] [x 64 0]) (range 5 (inc x1) 5)))
+        cut (night/budget-priced c {:uses {:job-time [12 30 ##Inf]} :moves-to [120 64 0]
+                                    :route {:found false :reason :partial :budget true :partial {:waypoints (way 60) :seconds 12 :steps 55}}})]
+    (is (= 30 (:seconds cut)))
+    (is (= (night/bed-walk-price c bed {:found true :seconds 30 :waypoints (way 120)} 18) (night/bed-walk-price c bed cut 18)))))
 
 (def dusk
   "Night by the clock (a bed takes a sleeper), the sky not dark yet."

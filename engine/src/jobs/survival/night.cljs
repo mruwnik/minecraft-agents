@@ -614,7 +614,7 @@
   :walk-hp) is no more than staying put costs, sheltering here taking the rest of the night at most (bed-down/dig-in-time-s), or
   lying in that bed, its walk priced in, is the cheapest of bed-down/answers by price (overdue or not): a body on
   dark open ground walks (its price with the work it costs, :walk, and its seconds, kept in job memory :bed-walk {:bed :walk-s :walk-secs} for night-answer, which weighs it). Else :bed-walk-unsafe {:pos bed :state} is remembered (sh-beds/bed-to-use skips the bed while the body's cell and the hostiles near the way are as priced) with a
-  night.bed-walk-unsafe info, and false. :searching (nothing remembered) while go-to's quote still searches: no route is known yet, not none."
+  night.bed-walk-unsafe info, and false; each priced walk a night.bed-walk-checked debug {:secs :left :dig-s :walk-hp :stay :partial?}. :searching (nothing remembered) while go-to's quote still searches: no route is known yet, not none."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
       (let [q (await (pick/quote-once! c (sh-beds/bed-walk bed)))
@@ -622,6 +622,11 @@
             [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
             dig-s (when (:found r) (await (bed-down/dig-in-time-s c)))
             {:keys [walk walk-hp stay]} (when (:found r) (bed-walk-price c bed r (min left dig-s)))]
+        (when (and (:found r) (not (:estimate q)))
+          (let [shown (update-vals {:secs (:seconds r) :left left :dig-s dig-s :walk-hp walk-hp :stay stay} price/round1)]
+            (ctx/emit! c :night.bed-walk-checked :debug
+                       (assoc shown :bed bed :partial? (not (:found (:route q)))
+                              :text (str "walk to the bed at " (pr-str bed) " priced: " (pr-str shown))))))
         (if (:estimate q)
           :searching
         (or (and (:found r)
