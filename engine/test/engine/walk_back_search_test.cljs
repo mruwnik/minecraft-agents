@@ -71,7 +71,12 @@
                 ways [(stair 0 12) (stair 1 10)]]
             (is (= :searching (await (bottom ways ans))))
             (is (= :searching (await (bottom ways ans))))
-            (is (= [12 11 11] @asked) "the deeper way, too dear, is quoted once; the other's search goes on")))))))
+            (is (= [12 11 11] @asked) "the deeper way, too dear, is quoted once; the other's search goes on")
+            (let [[far deep] (get-in @m [:descent :own-stair :answers])]
+              (is (> (:walk-s far) (:redo-s far)) "the far way's answer says its least walk is dearer than the steps")
+              (is (nil? (:quoted-s far)))
+              (is (= [12 52 0] (:cell deep)))
+              (is (= 99 (:quoted-s deep)) "the deep way's answer carries its quote"))))))))
 
 (def open-ground (merge (box -1 64 -2 12 80 2 "air") (box -1 63 -2 12 63 2 "stone")))
 

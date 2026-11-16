@@ -177,8 +177,8 @@
 (defn ^:async own-stair-bottom
   "The lowest stand of a stair this body cut earlier (memory :stair-way) worth walking down: its top level with the body (4 up or
   down), its bottom 3 or more below the feet and not below the tunnel level, and go-to's whole way to the bottom no dearer than cutting
-  new-stair-steps (walk-pick/walk-back-worth?). {:cell [x y z] :heading name}, or nil. A way answered not worth it from these feet
-  is kept in [:descent :own-stair] and not quoted again while a later one's quote goes on over rounds."
+  new-stair-steps (walk-pick/walk-back-answer). {:cell [x y z] :heading name}, or nil. A way answered not worth it from these feet
+  is kept in [:descent :own-stair] with its numbers (:answers) and not quoted again while a later one's quote goes on over rounds."
   [c]
   (let [feet (cell-of (u/self-pos c))
         passed (let [o (:own-stair (:descent (ctx/mem c)))] (if (= feet (:from o)) (:passed o) #{}))
@@ -195,18 +195,22 @@
                {:cell bottom :heading (:heading b)})]
     (loop [[w & more] (sort-by (comp second :cell) ways)]
       (when w
-        (let [worth (await (walk-pick/walk-back-worth? c (child/walk-back-args :stair-own (:cell w)) (stair-time/steps-s :down (new-stair-steps c (second (:cell w))))))]
+        (let [answer (await (walk-pick/walk-back-answer c (child/walk-back-args :stair-own (:cell w)) (stair-time/steps-s :down (new-stair-steps c (second (:cell w))))))
+              worth (:worth? answer)]
           (cond
             (= :searching worth) :searching
             worth w
-            :else (do (ctx/update-mem! c update-in [:descent :own-stair] #(if (= feet (:from %)) (update % :passed conj (:cell w)) {:from feet :passed #{(:cell w)}}))
-                      (recur more))))))))
+            :else (let [said (-> answer (dissoc :worth?) (assoc :cell (:cell w)))]
+                    (ctx/update-mem! c update-in [:descent :own-stair] #(if (= feet (:from %))
+                                                                          (-> % (update :passed conj (:cell w)) (update :answers conj said))
+                                                                          {:from feet :passed #{(:cell w)} :answers [said]}))
+                    (recur more))))))))
 
 (defn ^:async reuse-stair!
   "Before the first cut of the stair down: on the foot of a stair this body cut (stair-memory/foot-heading, as after a shed
   between two calls) the new steps go on along its heading; else a go-to child (slot :stair-own) down the stair this body cut
-  earlier (own-stair-bottom), so the new steps go on from its foot. nil once that is done, failed or not due, else :again /
-  :continue while it walks."
+  earlier (own-stair-bottom), so the new steps go on from its foot; a new stair keeps the old ones' :answers (the run's end
+  carries :descent). nil once that is done, failed or not due, else :again / :continue while it walks."
   [c]
   (let [d (:descent (ctx/mem c))
         {:keys [state cell heading]} (:own-stair d)
@@ -222,11 +226,13 @@
       (nil? state) (let [way (await (own-stair-bottom c))]
                      (if (= :searching way)
                        :continue
-                       (do (ctx/emit! c :mine.stair-plan :info (if way
-                                                          {:own-stair (:cell way) :text (str "mine walks down its stair at " (str/join "," (:cell way)) " and goes on from its foot")}
-                                                          {:text "mine cuts a new stair down"}))
-                     (ctx/update-mem! c assoc-in [:descent :own-stair] (if way (assoc way :state :walking) {:state :none}))
-                     :again)))
+                       (let [o (:own-stair (:descent (ctx/mem c)))
+                             answers (when (= (cell-of (u/self-pos c)) (:from o)) (:answers o))]
+                         (ctx/emit! c :mine.stair-plan :info (if way
+                                                               {:own-stair (:cell way) :text (str "mine walks down its stair at " (str/join "," (:cell way)) " and goes on from its foot")}
+                                                               {:answers answers :text (str "mine cuts a new stair down" (when (seq answers) (str "; " (count answers) " old stair(s) dearer to walk")))}))
+                         (ctx/update-mem! c assoc-in [:descent :own-stair] (if way (assoc way :state :walking) (cond-> {:state :none} (seq answers) (assoc :answers answers))))
+                         :again)))
       :else (let [r (await (child/call-walk* c :stair-own (child/walk-back-args :stair-own cell)))]
               (cond
                 (= :continue r) :continue

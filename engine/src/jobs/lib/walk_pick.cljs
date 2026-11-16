@@ -55,21 +55,31 @@
       (or (contract/ending? q) (not (number? mean)) (not (js/isFinite mean))) ##Inf
       :else (+ mean (risk-s c q)))))
 
-(defn ^:async walk-back-worth?
+(defn ^:async walk-back-answer
   "Whether walking back to cell ([x y z]) to go on with a job there costs less than redo-s seconds of its work done again
   where the body stands: go-to's quote of a route there (quoted-s: its mean job-time, a dig priced in, and its risk) is no
   dearer, by the ways of the walk's own args (jobs.lib.child/walk-back-args); a route not found counts only when those ways
-  change the world (a dig finds it). true / false, or :searching while go-to's quote search goes on (ask again next round).
-  Quoted at worth redo-s, what it is weighed against; false unquoted when even the least walk there (walk-s) is dearer."
+  change the world (a dig finds it). Quoted at worth redo-s, what it is weighed against; unquoted when even the least walk
+  there (walk-s) is dearer. {:worth? true / false / :searching (go-to's quote search goes on: ask again next round) :redo-s
+  :walk-s, and once quoted :quoted-s :mean :found :reason}: the numbers say why."
   [c walk-args redo-s]
-  (let [args (-> (select-keys walk-args [:range :ways]) (assoc :worth redo-s) (assoc :pos (zipmap [:x :y :z] (:pos walk-args))))]
-    (if (> (walk-s (u/self-pos c) args) redo-s)
-      false
+  (let [args (-> (select-keys walk-args [:range :ways]) (assoc :worth redo-s) (assoc :pos (zipmap [:x :y :z] (:pos walk-args))))
+        least (walk-s (u/self-pos c) args)
+        base {:redo-s redo-s :walk-s least}]
+    (if (> least redo-s)
+      (assoc base :worth? false)
       (let [q (await (ctx/quote c 'jobs.movement.go-to args))
-            route (:route q)]
-        (if (= :searching (:reason route))
-          :searching
-          (boolean (and (<= (quoted-s c q) redo-s) (or (:found route) (:escalating route)))))))))
+            route (:route q)
+            s (quoted-s c q)]
+        (merge base {:quoted-s s :mean (second (get-in q [:uses :job-time])) :found (boolean (:found route)) :reason (:reason route)
+                     :worth? (if (= :searching (:reason route))
+                               :searching
+                               (boolean (and (<= s redo-s) (or (:found route) (:escalating route)))))})))))
+
+(defn ^:async walk-back-worth?
+  "walk-back-answer's :worth?: true / false, or :searching."
+  [c walk-args redo-s]
+  (:worth? (await (walk-back-answer c walk-args redo-s))))
 
 (defn ^:async quote!
   "go-to's quote of the walk args (a go-to call's args), at the worth they name, else the calling job's: a walk with the same args then judges by the same worth."
