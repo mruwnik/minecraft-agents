@@ -1,5 +1,5 @@
 (ns world-test.trace
-  "The trace of a failed case: the body events from its setup on and the tail of body.log and, when the body ran with the step trace, the tail of its steps, kept next to the results."
+  "The trace of a failed case: the body events from its setup on (first and last when too many) and the tail of body.log and, when the body ran with the step trace, the tail of its steps, kept next to the results."
   (:require [clojure.string :as str]
             ["fs" :as fs]
             ["path" :as path]))
@@ -18,12 +18,22 @@
 (defn tail-text [text max-bytes]
   (let [n (count text)] (if (<= n max-bytes) text (subs text (- n max-bytes)))))
 
+(defn fit-count
+  "How many of sized leading entries fit in max-bytes."
+  [sizes max-bytes]
+  (count (take-while #(<= % max-bytes) (rest (reductions + 0 sizes)))))
+
 (defn cap-events
-  "{:events the latest events whose printed form fits max-bytes, :dropped how many older ones were left out}."
+  "{:events the first and the latest events whose printed form fits max-bytes (half each, the decisions are at the start, the outcome at the end), :dropped how many in between were left out}. A stream that fits whole is kept whole."
   [events max-bytes]
-  (let [sizes (map #(inc (count (pr-str %))) (reverse events))
-        kept (count (take-while #(<= % max-bytes) (rest (reductions + 2 sizes))))]
-    {:events (vec (take-last kept events)) :dropped (- (count events) kept)}))
+  (let [size #(inc (count (pr-str %)))
+        n (count events)
+        whole (fit-count (map size events) (- max-bytes 2))]
+    (if (= whole n)
+      {:events (vec events) :dropped 0}
+      (let [head (fit-count (map size events) (quot max-bytes 2))
+            tail (min (- n head) (fit-count (map size (reverse events)) (- max-bytes (quot max-bytes 2) 2)))]
+        {:events (into (vec (take head events)) (take-last tail events)) :dropped (- n head tail)}))))
 
 (defn trace-doc
   [{:keys [id run attempt status why events log steps start-ticks]}]

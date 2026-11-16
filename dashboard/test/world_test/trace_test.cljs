@@ -12,11 +12,12 @@
   (is (= "abc" (t/tail-text "abc" 10)))
   (is (= "fghij" (t/tail-text "abcdefghij" 5))))
 
-(deftest events-are-capped-keeping-the-latest
+(deftest events-are-capped-keeping-the-first-and-the-latest
   (let [evs (mapv (fn [i] {:kind :e :n i}) (range 100))
         {:keys [events dropped]} (t/cap-events evs 400)]
     (is (pos? dropped))
     (is (= 100 (+ dropped (count events))))
+    (is (= 0 (:n (first events))))
     (is (= 99 (:n (peek events))))
     (is (<= (count (pr-str events)) 400)))
   (is (= 0 (:dropped (t/cap-events [{:a 1}] 400)))))
