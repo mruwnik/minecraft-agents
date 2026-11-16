@@ -55,6 +55,20 @@
             {:no-event {:source :job :kind :child_started :data {:slot :pen}} :for-s 60 :until {:source :job :kind :roll.offers}}
             {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-librarian-in-an-open-ended-pen-cell-is-plugged-in-then-rolled"
+   ;; card 889f5a1f: as above with the librarian in the cell [16 0 17]: the pen child plugs the near end behind it (digging out of the box to place it) without walking off to see the cell's floor and roof the stand cannot see, then the roll rolls
+   :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
+            [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
+            [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
+            [:fill [16 0 14] [16 1 14] "cobblestone"]]
+   :body {:at [13.5 0 16.5] :yaw 270 :inventory [["cobblestone" 8]]}
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,82],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~6 ~ ~ 90 0"] [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~-3 ~ ~-1 0 0"] [:wait-s 2]
+         [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000052" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 2}})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :pen}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :roll.offers} :within-s 150 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 18] "cobblestone"]]}
   {:name "roll-librarian-boxed-in-never-seen-pen-walls-digs-out-to-look"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
             [:set [15 0 16] "cobblestone"] [:set [17 0 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]

@@ -131,15 +131,23 @@
   [p ws]
   (boolean (some #(top-slab? p (:slab (layout ws %))) sides)))
 
+(defn owed-with-villager-in
+  "The shut cells of lay owed (owed) while a villager stands in V, V's floor and roof never seen left out: from the stand
+  the top slab hides them, the villager standing there is held up by the floor, and no villager climbs walls three high."
+  [p lay]
+  (let [[x y z] (:cell lay)
+        hidden #{[x (dec y) z] [x (+ y 2) z]}]
+    (filterv #(not (and (hidden %) (nil? (name-at p %)))) (owed p (:shut lay)))))
+
 (defn penned
-  "The layout of the pen at workstation cell ws holding villager entity e (id its ident): shut, the slab on top, the
-  near end plugged, no other villager in it, lit, the body boxed in its stand; nil when there is none."
+  "The layout of the pen at workstation cell ws holding villager entity e (id its ident): shut (owed-with-villager-in),
+  the slab on top, the near end plugged, no other villager in it, lit, the body boxed in its stand; nil when there is none."
   [p ws e]
   (let [id (villager/ident e)]
     (some (fn [side]
             (let [lay (layout ws side)]
               (when (and (inside? lay e)
-                         (empty? (owed p (:shut lay)))
+                         (empty? (owed-with-villager-in p lay))
                          (plug-shut? p lay)
                          (top-slab? p (:slab lay))
                          (empty? (others-in p lay id))

@@ -35,7 +35,8 @@
   when boxed in; still unseen: nothing-possible :unseen), place a wooden slab
   in the upper half over the workstation (a block of another kind there is dug first), light the cell while it reads dark and
   the body can reach it (jobs.build.light-area, once a call), dig a plug of an empty pen open; with the villager in: wait while another
-  villager shares the cell, fill the near end (from the stand, digging the box's entry first to walk out); then step
+  villager shares the cell, fill the near end (digging the box's entry first to walk out; the cell's floor and roof the
+  stand does not see are not looked for: jobs.lib.villager-pen/owed-with-villager-in); then step
   into the stand (digging the entry when the box is shut), shut the box round the body from inside, place the
   workstation, if missing, from the stand (it is the lure: with the box shut the pen's cell is the only one next to it a
   villager can path to, the game's rule for claiming it), wait for the villager to walk in (a jobless one to the free
@@ -275,11 +276,10 @@
           :else (ctx/end c (:kind w) (:cause w) (:data w)))))))
 
 (defn ^:async shut!
-  "The shut cells seen open are filled (blocks fetched for those only); with none, the unseen ones are looked at, the
-  box's entry dug first when the body stands boxed in."
-  [c lay]
+  "The owed shut cells seen open are filled (blocks fetched for those only); with none, the unseen ones are looked at,
+  the box's entry dug first when the body stands boxed in."
+  [c lay owed]
   (let [p (:primitives c)
-        owed (vp/owed p (:shut lay))
         open (filterv #(vp/name-at p %) owed)]
     (cond
       (seq open) (await (fill! c :shut open {:collect false}))
@@ -294,13 +294,14 @@
         e (the-villager c)
         lay (lay-of c)
         block (vp/name-at p ws)
-        in? (boolean (and e lay (vp/inside? lay e)))]
+        in? (boolean (and e lay (vp/inside? lay e)))
+        shut (when lay (if in? (vp/owed-with-villager-in p lay) (vp/owed p (:shut lay))))]
     (when lay (ctx/update-mem! c assoc :side (:side lay)))
     (cond
       (and (nil? e) (nil? lay)) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})
       (and block (not (bs/air block)) (not= (item-of (:args c)) block)) (stop! c :condition-failed :occupied {:block block})
-      (seq (vp/owed p (:shut lay))) (await (shut! c lay))
+      (seq shut) (await (shut! c lay shut))
       (not (vp/top-slab? p (:slab lay))) (await (slab! c (:slab lay)))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c))) (not (and in? (vp/plug-shut? p lay)))) (await (light! c (:cell lay)))
       (and (not in?) (seq (vp/solids p (:plug lay)))) (await (dig-open! c :reopen lay :plug))

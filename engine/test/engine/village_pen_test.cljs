@@ -262,6 +262,22 @@
           (is (every? #(vp/solid? (block p %)) (:box (vp/layout ws [-1 0]))) "the box dug open to plug the near end is shut again round the body")
           (is (= [3 64 0] (vp/body-cell p))))))))
 
+(deftest a-villager-in-an-open-pen-whose-floor-and-roof-the-stand-never-sees-is-plugged-in-without-a-walk-to-see-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hidden #{[1 63 0] [1 66 0]}
+              hide (fn [{:keys [p]}]
+                     (let [sensed (.-sensedAt p)]
+                       (tu/set-sensed! p (fn [q] (if (hidden [(.-x q) (.-y q) (.-z q)]) #js {:unknown true :pos q} (sensed q))))))
+              [result p] (await (run (assoc (world (merge shut box)) :entities [(jobless {:x 1 :y 64 :z 0})]
+                                            :inventory [{:name "cobblestone" :count 4}])
+                                     {} 400 hide))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= ["cobblestone" "cobblestone"] [(block p [0 64 0]) (block p [0 65 0])]) "the near end plugged behind the villager")
+          (is (every? #(vp/solid? (block p %)) (:box (vp/layout ws [-1 0]))))
+          (is (= [3 64 0] (vp/body-cell p))))))))
+
 (deftest a-villager-outside-walks-in-to-the-workstation-placed-once-the-pen-is-shut-and-the-body-boxed-in
   (async done
     (tu/run-async done
