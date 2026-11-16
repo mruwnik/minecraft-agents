@@ -184,10 +184,25 @@
            distinct
            (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz)))))))))
 
+(defn joining-fill
+  "The first of fills (floor cells [x y z], nearest first) whose block, read solid, leaves goal ({:x :y :z}) no longer
+  proven walled in by the planner's goal flood before its search (wplan/enclosed-before-search?): a fill beside land the
+  planner's moves never reach the goal from bridges nothing. All of them read solid at once first, so when even that
+  leaves the goal walled in no fill is tried alone. Without a path world: the first of fills."
+  [c goal fills]
+  (let [pw (wworld/path-world (:primitives c) (:unknown c))
+        to [(:x goal) (:y goal) (:z goal)]
+        shut? (fn [cells] (wplan/enclosed-before-search? c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) to (:range (:args c) 1)))]
+    (cond
+      (nil? pw) (first fills)
+      (or (empty? fills) (shut? fills)) nil
+      :else (some #(when-not (shut? [%]) %) fills))))
+
 (defn drop-fill
   "{:step :fill-gap :cell :item} when result is :goal-cut-off or :goal-enclosed (the goal's region ends at a drop the body cannot climb back
-  from), a carried block can fill the floor of the cell beyond the drop edge nearest the body, and no zone refuses the
-  place: the bridge a player lays over the hole before a door; else nil."
+  from), a carried block can fill the floor of the cell beyond the drop edge nearest the body that the planner's goal
+  flood then no longer proves walled in (joining-fill), and no zone refuses the place: the bridge a player lays over the
+  hole before a door; else nil."
   [c result skip feet]
   (when (and (contains? #{:goal-cut-off :goal-enclosed} (some-> (:reason result) keyword)) (not (skip :fill-gap)))
     (let [p (:primitives c)
@@ -197,7 +212,7 @@
           starts (when goal (filter (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
                                     (for [dy [0 1] [dx dz] [[0 0] [1 0] [-1 0] [0 1] [0 -1]]]
                                       [(+ (:x goal) dx) (+ (:y goal) dy) (+ (:z goal) dz)])))
-          cell (when (and item (seq starts)) (first (drop-edges p starts feet)))]
+          cell (when (and item (seq starts)) (joining-fill c goal (drop-edges p starts feet)))]
       (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
         {:step :fill-gap :cell cell :item item :count carried}))))
 

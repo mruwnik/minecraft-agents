@@ -4,7 +4,7 @@
 
   Rules of go-to:
   - A goal that is lava, stands over lava or has lava on all four sides (escalate-choose/goal-lava?) is refused at once when the walk finds it walled in or cut off: no way is made, in or out; the dig rules below are for an acceptable goal that is walled in.
-  - A goal cut off by a drop (:goal-cut-off, or :goal-enclosed with a drop edge in its region) is bridged: a carried block fills the floor beyond the drop edge nearest the body that it can step onto (escalate-choose/drop-fill, gap-fill; a go-to.escalated {:step :fill-gap}) when that is no dearer than the stair, pillar or dig the escape would make (jobs.lib.cost.ways/fill-cost: placing, the block spent, a fetch when the pack runs low), then it walks again.
+  - A goal cut off by a drop (:goal-cut-off, or :goal-enclosed with a drop edge in its region) is bridged: a carried block fills the floor beyond the drop edge nearest the body that it can step onto and that leaves the planner's goal flood no proof the goal is walled in (escalate-choose/drop-fill, gap-fill; a go-to.escalated {:step :fill-gap}) when that is no dearer than the stair, pillar or dig the escape would make (jobs.lib.cost.ways/fill-cost: placing, the block spent, a fetch when the pack runs low), then it walks again; the go-to.escalated event names the :cell.
   - :dig-out: a body sealed in its own shelter (a :shelter entry) when the walk finds no way, leaves it first at any hour (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); the way out is priced before it is cut (start-hold: a dearer-than-waiting cut holds :risky for dawn). At a dark sky while the body is :dug-in (sh-inside/night-sheltered) only when the call's worth buys the walk's priced night risk (walk-risk/buys-hp): else it waits for light, as the readiness checks do.
   - A free body whose walk ends :one-way at a drop or a way down it refuses (escalate-choose/refused-drop?), or any body whose walk ends :damage-budget (escalate-choose/damage-refused?; a shut-in one weighs the cheapest climb against the dig), digs toward the goal as for an out-of-sight goal (dig-toward: dig-way, or a leg toward a far goal), not stopping when the stair's last cell brings the goal into sight. A search that ran out of land (:exhausted), or a walk whose felt-for floors ran out (:unseen-floors), with the goal below the body by more than a fall the walk takes within its damage budget (escalate-choose/drop-stranded?) digs down the same way, goal seen or not, when a dig route exists.
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
@@ -486,7 +486,8 @@
       :else
       (do (ctx/emit! c :go-to.escalated :info (cond-> {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
                                                        :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))}
-                                                (:weighed e) (assoc :weighed (:weighed e))))
+                                                (:weighed e) (assoc :weighed (:weighed e))
+                                                (= :fill-gap (:step e)) (assoc :cell (:cell e))))
           (ctx/update-mem! c #(-> (merge (dissoc % :escalate-failed :route-search) counted)
                                   ;; the next dig route past its price must end nearer than this one: the same route again changes nothing
                                   (cond-> (= :dig-route (:step e)) (update-in [:dig-ends goal] (fnil min ##Inf) (or (dig-end e goal (:dive-climb %)) ##Inf)))
@@ -587,14 +588,6 @@
                (mapcat :cells (filter #(= :dig-route (:step %)) (:then e))))
        (mapv :cell)))
 
-(defn fill-noted
-  "Memory m after a fill-gap at cell: the cell is kept (:filled); a cell filled before and still the one chosen shows the fill changed nothing, so fill-gap is ruled out for the call."
-  [m cell]
-  (let [cell (vec cell)]
-    (if (contains? (:filled m) cell)
-      (update m :skipped-steps (fnil conj #{}) :fill-gap)
-      (update m :filled (fnil conj #{}) cell))))
-
 (defn escalated!
   "The child made a way (or part of one, done false): start a climb's next way at once when it made all of it
   (route-ways/next-way; a stair whose guessed floor is now seen to be none, route-ways/floor-gone, chooses the ways again at once), walk on after its last, else walk again from a fresh count, or escalate again at once after an
@@ -626,7 +619,6 @@
                           nxt (assoc :escalation (cond-> nxt (:own-cut e) (assoc :own-cut true)) :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
                           ;; a cut of its own build (a pen open to the animals): put back at once, the walk on not waited for
                           (and (:own-cut e) (or (not= :dig-route step) (not done?))) (assoc :restore-now true)
-                          (and (= :fill-gap step) (:cell e)) (fill-noted (:cell e))
                           (not (#{:approach :fill-gap} step)) (assoc :restore-pending true)))
     (when gone
       (ctx/emit! c :go-to.climb-replanned :info {:at feet :floor gone :text "the climb's next stair rests on a floor now seen to be none: choosing the way again"}))

@@ -23,6 +23,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.seen-sections :as seen-sections]
@@ -479,6 +480,7 @@
                                                     {:pos [9 64 0] :range 0}))]
           (is (= {:arrived true} @out))
           (is (= [:fill-gap] (mapv :step (events-of seen :go-to.escalated))))
+          (is (= [[5 63 0]] (mapv :cell (events-of seen :go-to.escalated))) "the event names the cell filled")
           (is (= "dirt" (block p [5 63 0])) "the block went into the gap")
           (is (empty? (calls p "dig"))))))))
 
@@ -738,11 +740,27 @@
       {:step :leave-shelter} 9 :fill-gap)
     (is (< (cw/fill-cost 9) (cw/fill-cost 2)) "the last blocks of the pack cost a fetch")))
 
-(deftest a-fill-at-a-cell-filled-before-rules-fill-gap-out-for-the-call
-  (let [once (esc/fill-noted {} [5 63 0])]
-    (is (not (contains? (:skipped-steps once) :fill-gap)) "the first fill is a way made")
-    (is (contains? (:skipped-steps (esc/fill-noted once [5 63 0])) :fill-gap) "the same cell again: it changed nothing")
-    (is (not (contains? (:skipped-steps (esc/fill-noted once [6 63 0])) :fill-gap)) "another cell is a new bridge")))
+(def sealed-cell-by-a-ledge
+  "A pit (stone floor y 58, x -3..9, z -3..3). The goal [0 64 0] is the 1-high cell over a sealed 2-high pocket (feet
+  [0 63 0], stone pillar under it, stone walls round it, roof at y 65); its east wall tops a 1-wide stone ledge x 1..3
+  (top y 64), then an open column x 4, then the body's stone platform x 5..8, z -1..1 (top y 64)."
+  (apply dissoc
+         (merge (box -3 58 -3 9 58 3 "stone")
+                (box -1 59 -1 1 65 1 "stone")
+                (box 1 59 0 3 64 0 "stone")
+                (box 5 59 -1 8 64 1 "stone"))
+         ["0,63,0" "0,64,0" "1,65,0"]))
+
+(deftest no-fill-is-offered-beside-land-the-planner-never-reaches-the-goal-from
+  ;; Old drop-fill offered [4 64 0]: drop-edges floods from the first standable cell beside the goal (the ledge top
+  ;; [1 65 0]), not the planner's goal cells, and the fill joins the ledge to the body but never the sealed pocket.
+  (let [{:keys [eng]} (gt/setup {:self {:pos {:x 6.5 :y 65 :z 0.5}} :blocks sealed-cell-by-a-ledge :inventory [{:name "dirt" :count 9}]})
+        p (:primitives eng)
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [0 64 0] :range 1} :round 1})]
+    (is (= [[4 64 0]] (take 1 (choose/drop-edges p [[1 65 0]] [6 65 0]))) "the ledge's drop edge nearest the body")
+    (is (= [4 64 0] (with-redefs [wplan/enclosed-before-search? (constantly false)] (:cell (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0]))))
+        "with no planner proof, the fill the old rule offered")
+    (is (nil? (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0])) "the planner still proves the goal walled in with it filled")))
 
 (def doorway-hole
   "Floor y 63 with a 1-cell hole at x 5 (floor under it at y 62), and a floor 1 higher from x 6: the doorway of a hut whose sill was dug."

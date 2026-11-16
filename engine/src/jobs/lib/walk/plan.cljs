@@ -111,6 +111,13 @@
     (when (.step s 0)
       (#{:goal-not-standable :goal-on-magma} (keyword (.-reason ^js (.result s)))))))
 
+(defn enclosed-before-search?
+  "Whether the planner's goal flood proves the goal within range of to [x y z] walled in or cut off (or the start shut in)
+  before any search over pw, as a walk's plan to it would end at once."
+  [c ^js pw to range]
+  (let [^js s (planner/create-search (.-snapshot pw) (plan-query c to range) (plan-options pw 1 nil nil))]
+    (boolean (and (.step s 0) (#{"goal-enclosed" "goal-cut-off" "start-enclosed"} (.-reason ^js (.result s)))))))
+
 (defn no-stand-near?
   "Whether go-to gives a walk to within range of pos ({:x :y :z}) up at once, goal-not-standable (goal-stand-problem over
   the seen world, unknown as wworld/path-world takes it): a caller choosing a walk goal asks this, not a test of its own."

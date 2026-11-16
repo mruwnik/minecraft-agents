@@ -1,0 +1,22 @@
+;; A pit (floor y -1). The goal [10 5 10] is the 1-high cell over a sealed 2-high pocket (feet [10 4 10], stone pillar
+;; under it, stone walls round it, roof at y 6); its east wall tops a 1-wide stone ledge x 11..13 (top y 5), then an open
+;; column x 14, then the body's stone platform x 15..18, z 9..11 (top y 5, feet y 6). go-to plans over the real map
+;; (:unknown false): no player sees into the sealed pocket, and the planner must prove it walled in, as in the run that
+;; laid 31 blocks one after another over the pit beside a goal no block could join.
+;; Should-fail: a block over the open column joins the ledge to the body but never the pocket: no fill-gap, the cell
+;; stays air. Should-succeed: go-to-bridge-door-hole/dirt-carried-bridges-the-hole-before-the-door.
+{:defaults
+ {:tags [:movement :access]
+  :time :any
+  :plot {:height 10}
+  :blocks [[:fill [9 0 9] [11 6 11] "stone"] [:fill [11 0 10] [13 5 10] "stone"] [:fill [15 0 9] [18 5 11] "stone"]
+           [:set [10 4 10] "air"] [:set [10 5 10] "air"] [:set [11 6 10] "air"]]
+  :body {:at [16.5 6 10.5] :inventory [["dirt" 9]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "no-fill-beside-a-sealed-goal"
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [10 5 10] :range 1 :unknown false})]]
+   :expect [{:event {:source :job :kind #{:stopped :completed} :context {:chain [[:any]]}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :for-s 140
+             :until {:source :job :kind #{:stopped :completed} :context {:chain [[:any]]}} :of-job true}]
+   :after [[:not-block [14 5 10] "dirt"]]}]}
