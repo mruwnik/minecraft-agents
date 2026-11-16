@@ -354,9 +354,23 @@
       (or (empty? ways) (< unit (* (apply min (map :per ways)) (- 1 1e-9)))) {:s (* n unit) :stations #{} :leaves {name n}}
       :else (apply min-key #(+ (:s %) (stations-s (:stations %))) (map made-way ways)))))
 
+(defn epoch-memo
+  "f memoized for the latest [version table basis] only: a new table drops the old one's
+  results, so the memo holds one table's worth of answers, not every table's."
+  [f]
+  (let [held (atom {:epoch nil :m {}})]
+    (fn [version table basis & args]
+      (let [epoch [version table basis]
+            {:keys [m]} (swap! held (fn [h] (if (= (:epoch h) epoch) h {:epoch epoch :m {}})))]
+        (if-let [hit (find m args)]
+          (val hit)
+          (let [v (apply f version table basis args)]
+            (swap! held (fn [h] (if (identical? (:m h) m) (update h :m assoc args v) h)))
+            v))))))
+
 (def ^:private station-base
   "made of station st, its own stations priced at their table worths, so pricing one never needs itself."
-  (memoize (fn [version table basis st] (made {:version version :table table :basis basis :stations-s #(reduce + 0 (map table %))} st 1 #{}))))
+  (epoch-memo (fn [version table basis st] (made {:version version :table table :basis basis :stations-s #(reduce + 0 (map table %))} st 1 #{}))))
 
 (defn- stations-closure
   "Stations st and the stations making them needs."
@@ -365,7 +379,7 @@
     (if (= more st) st (recur version table basis more))))
 
 (def ^:private made-memo
-  (memoize (fn [version table basis name n]
+  (epoch-memo (fn [version table basis name n]
              (made {:version version :table table :basis basis
                     :stations-s (fn [st] (reduce + 0 (map #(:s (station-base version table basis %)) (stations-closure version table basis st))))}
                    name n #{}))))

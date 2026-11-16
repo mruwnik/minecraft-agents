@@ -9,6 +9,7 @@
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.table :as tbl]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.meal :as meal]
             [jobs.lib.room-order :as ord]))
@@ -118,3 +119,13 @@
     (is (= 1.15 (secs "stone_pickaxe")) "90/4 = 22.5 ticks takes 23")
     (is (= 0.6 (secs "diamond_pickaxe")) "90/8 = 11.25 takes 12 ticks")
     (is (= 0.5 (secs "netherite_pickaxe")) "90/9 = 10 ticks")))
+
+(deftest epoch-memo-keeps-one-tables-answers
+  (let [calls (atom 0)
+        f (value/epoch-memo (fn [_ table _ n] (swap! calls inc) [table n]))
+        t1 {:a 1} t2 {:a 2}]
+    (doseq [n (range 5)] (f "1.20" t1 {} n) (f "1.20" t1 {} n))
+    (is (= 5 @calls) "the same table answers from the memo")
+    (f "1.20" t2 {} 0)
+    (f "1.20" t1 {} 0)
+    (is (= 7 @calls) "a new table drops the old one's answers: t1 is computed again, not kept beside t2")))
