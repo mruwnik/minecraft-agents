@@ -1217,7 +1217,8 @@
         [_ _ d] (search/done? c)]
     (is (= {:done 1 :left 1} (select-keys d [:done :left])))
     (is (= {:legs 3 :scans 2 :failed [] :skipped 0 :farthest 40} (get-in d [:result :coverage])))
-    (is (= [{:what "x" :pos [1 2 3]}] (get-in d [:result :found])))))
+    (is (= [{:what "x" :pos [1 2 3]}] (get-in d [:result :found])))
+    (is (= "found 1 of 2: x at 1,2,3" (get-in d [:result :text])) "a limit ending says which and where")))
 
 (deftest a-patch-search-names-no-animal-so-it-is-not-surface-only
   (are [names surface?] (= surface? (search/surface-only? names))

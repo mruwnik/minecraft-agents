@@ -77,7 +77,7 @@
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :no-way-out (no leg left, none walked, and the body shut in a closed room with no column left to dig out toward), :no-way-up (animals that live at the surface, the body under rock and no stair up), :stuck (another walk after the failed ones in a row is not worth its price, cost/try-again? :walk) or :price (the next walk costs more than it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
-  - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
+  - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event, its :text naming each found target and where; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
   With :patch it looks for ground, not things: each look round (the origin first, then every leg's arrival) scans for a patch
@@ -303,16 +303,22 @@
 (defn coverage [m]
   {:legs (:legs m 0) :scans (:scans m 0) :failed (:failed m []) :skipped (:skipped m 0) :farthest (:farthest m 0)})
 
+(declare finding-text)
+
 (defn done?
-  "The targets found against :count; done once all are found."
+  "The targets found against :count, with where each is; done once all are found."
   [c]
-  (let [n (count (:found (ctx/mem c)))
+  (let [found (:found (ctx/mem c) [])
+        n (count found)
         left (max 0 (- (:count (:args c)) n))
+        listing (when (pos? n) (str ": " (str/join ", " (map finding-text found))))
         data [:units :found :done n :left left
-              :result (cond-> {:reason :found :found (:found (ctx/mem c) []) :coverage (coverage (ctx/mem c))} (pos? left) (assoc :why :time))]]
+              :result (cond-> {:reason :found :found found :coverage (coverage (ctx/mem c))}
+                        (pos? n) (assoc :text (str "found " n " of " (:count (:args c)) listing))
+                        (pos? left) (assoc :why :time))]]
     (if (zero? left)
-      (apply contract/ok :found (str "found " n) data)
-      (apply contract/later :searching (str "found " n " of " (:count (:args c))) data))))
+      (apply contract/ok :found (str "found " n listing) data)
+      (apply contract/later :searching (str "found " n " of " (:count (:args c)) listing) data))))
 
 (defn time-limit "Seconds the call may search." [c]
   (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
