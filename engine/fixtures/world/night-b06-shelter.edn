@@ -135,22 +135,33 @@
    :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]]
    :expect [{:event {:source :job :kind :shelter.exposed :message [:not [:contains "no site tried"]]} :within-s 90}]
    :limit-s 100}
-  ;; 1fbd292f: a wide dark natural cave is no shelter; with no pickaxe the quotes price dig-pit :no-tool, so the night job walls the body in where it stands
-  {:name "open-cave-walls-in-where-it-stands"
-   :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
-   :plot {:height 12}
+  ;; 1fbd292f: on open stone ground with no pickaxe the quotes price dig-pit :no-tool, so the night job walls the body in where it stands
+  {:name "open-stone-ground-walls-in-where-it-stands"
+   :time :night :time-why :night-light
+   :blocks [[:fill [4 -1 4] [28 -1 28] "stone"]]
    :body {:at [16.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :walls}} :within-s 90}]
    :limit-s 100}
-  ;; 1fbd292f: a dark hall reaching beyond the spawn-free radius (a 25-wide cave is safe from the night by Q345) with a pickaxe and a deep stone floor: a player digs a pit into the floor, so the body does not wall in (a 1-thick floor over void gave a 1-deep pit ringed with walls)
-  {:name "open-cave-with-a-pickaxe-digs-in-where-it-stands"
+  ;; 1fbd292f: on open ground over deep stone with a pickaxe a player digs a pit into the floor rather than walling in
+  {:name "open-stone-ground-with-a-pickaxe-digs-in-where-it-stands"
+   :time :night :time-why :night-light
+   :blocks [[:fill [4 -6 4] [28 -1 28] "stone"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 20]]}
+   :act [[:job (jobs.survival.night {:worth 1200})]]
+   :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :pit}} :within-s 90}]
+   :limit-s 100}
+  ;; 6104e114 (Q213): a dark hall past the spawn-free radius is as dark by day, so a pit sat in till dawn only loses the night's
+  ;; work (exposed ~56 s against ~489 s in the fake): staying is the night's answer, no shut-in
+  {:name "dark-hall-at-night-is-not-dug-into"
+   :time :night :time-why :night-light
    :blocks [[:fill [2 -6 2] [60 9 30] "stone"] [:fill [4 0 4] [58 6 28] "air"]]
    :plot {:height 12 :length 64}
    :body {:at [31.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 20]]}
    :act [[:job (jobs.survival.night {:worth 1200})]]
-   :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :pit}} :within-s 90}]
-   :limit-s 100}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}}}]
+   :limit-s 70}
   ;; 1fbd292f, b0e3b890, 49c6d276: in a dark 1-wide tunnel it cut itself the body keeps working; the night reflex does not fire (it saw each wall close up as it cut, a tunnel it never walked is not known shut)
   {:name "own-tunnel-keeps-working-at-night"
    :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 16] [4 1 16] "air"]]

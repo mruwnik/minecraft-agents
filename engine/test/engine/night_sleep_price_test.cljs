@@ -290,6 +290,25 @@
             (is (< (:exposed prices) (:bed prices)) "the work goes on here through the night, so the skip saves nothing the walk to the bed costs")
             (is (not= :bed pick))))))))
 
+(def dark-hall
+  "A dark stone hall shut on every side (inside x -27..27, y 64..66, z -2..2) round the body's start: its far ends lie past the
+  spawn-free radius, so mobs spawn in it by day as by night."
+  (apply dissoc (tu/box -28 62 -3 28 67 3 "stone") (keys (tu/box -27 64 -2 27 66 2 "stone"))))
+
+(deftest in-a-dark-hall-the-dawn-does-not-light-shutting-in-till-dawn-costs-the-nights-work
+  ;; Q213: dawn brings no light underground, so a pit sat in till dawn loses the night's work and leaves the hall as dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :blocks dark-hall :light {} :light-default [0 0] :sees-all true
+                                             :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 20}]})]
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
+          (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+          (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
+            (is (number? (:shelter prices)) "shut-in quotes a way here")
+            (is (< (:exposed prices) (:shelter prices)) (pr-str prices))
+            (is (= :exposed pick))))))))
+
 (defn ^:async night-answers-with
   "The first :night.answers of the night job in the sealed room with the bed 10 blocks off, world extended with extra."
   [extra]

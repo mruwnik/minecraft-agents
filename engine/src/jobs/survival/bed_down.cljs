@@ -235,10 +235,10 @@
   asleep (sh-sleepers/sleep-start-s), all of it from the walk's end (walk-secs, the walk's seconds: a walk that outlasts the night skips
   none of it), plus walk-s (the walk there and back by day, priced by the caller), the night it walks lost and the skip the others wait meanwhile. :sealed (a carried bed in the open, or a placed one the body stands beyond one end of, seal-plan): the bed's row shut in first, its seconds
   exposed, then lain in. :shelter sheltering here (dig-in-quote, when shut-in quotes a way) and :niche (niche, the caller's shelter-quote
-  of a pocket dug nearby) alike: busy their time (time-s), the toll their quote names, that time exposed from the worst of the cells the bed
+  of a pocket dug nearby) alike: busy the night left (shut in till dawn: in the ground, whose dark the dawn does not end, the work it loses), the toll their quote names, their time (time-s) exposed from the worst of the cells the bed
   is got up to (wake-cells) when asleep, and their :morning-s. :flee and :home (flee, home: the caller's target with go-to's :seconds and
-  :cost of the walk; go-to's price has its dark cells' spawns and the threats that catch it): busy the walk's seconds and, a flee to a cave or
-  natural ground, the shelter's time on arrival (flee-after; here's toll is here's), the walk's cost beyond its seconds, that shelter exposed at the target
+  :cost of the walk; go-to's price has its dark cells' spawns and the threats that catch it): busy the walk's seconds or, a flee to a cave or
+  natural ground (shut in there on arrival, flee-after; here's toll is here's), the night left, the walk's cost beyond its seconds, that shelter's time exposed at the target
   (exposed-price: the hostiles known there once),
   and by day that shelter's morning and the walk back to where the night found the body; :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-gain there. :exposed the night left in the open where the body stands (or the worst cell
@@ -268,11 +268,11 @@
         in-ground? (sh/in-ground? p view)
         way-s #(+ wait (cost/night-way-s in-ground? left %))
         open #(open-price c stands %)
-        dig (fn [q] (let [t (min left (sin/time-s q))] (way-s {:busy-s t :risk-s (:risk-s q) :open-s (open t) :morning-s (:morning-s q)})))
+        dig (fn [q] (let [t (min left (sin/time-s q))] (way-s {:busy-s left :risk-s (:risk-s q) :open-s (open t) :morning-s (:morning-s q)})))
         walk (fn [{:keys [cost pos] :as t} after]
                (let [seconds (min cost (or (:seconds t) cost))
                      busy (min left (sin/time-s after))]
-                 {:busy-s (+ seconds busy) :risk-s (- cost seconds)
+                 {:busy-s (if (pos? busy) left seconds) :risk-s (- cost seconds)
                   :open-s (exposed-price c (spawn-light/night-chance p pos) busy pos) :morning-s (+ seconds (:morning-s after))}))
         into-home? (some? (sh-beds/closed-home c))
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) into-home?))
