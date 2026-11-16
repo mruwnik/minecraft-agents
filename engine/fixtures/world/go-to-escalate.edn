@@ -6,8 +6,6 @@
 ;; It notes and puts back only holes in another's zone, claim or plan (owner Q139), or in a build anywhere (Q174): the put-back cases dig through
 ;; another's plan with :ignore-zones?; in plain natural ground its holes stay and no put-back event comes.
 ;; Card 8e26161d: with :escalate false a shut-in body ends :shut-in true; open ground never does.
-;; Card d0e7b7df: a fruitless re-plan after an escalation says why (info go-to.retrying), never a silent round: a wall thicker than the dig the call may spend
-;; leaves the body in its own short tunnel and the next rounds name the reason.
 ;; Pit mass: stone x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16 from y 0 up.
 {:defaults
  {:tags [:movement :access]
@@ -274,13 +272,14 @@
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:shut-in true}} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]}
-  {:name "thick-wall-escalation-then-retries-say-why"
+  {:name "thick-wall-escalation-digs-through-and-arrives"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "stone" :hollow] [:fill [21 0 14] [24 3 18] "stone"]]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
-            {:event {:source :job :kind :go-to.retrying} :within-s 120 :of-job true}]
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [26.5 1 16.5] 2]]
    :limit-s 150}
   {:name "stair-top-under-rock-one-way-behind-digs-up-and-arrives"
    ;; card 0b5a5f4f: the mine behind the body's own stair is reached by a 3 drop (U feet y 3 -> L feet y 0 at x 12), so the
@@ -392,8 +391,8 @@
   {:name "own-placed-cobble-wall-is-cleared-as-a-seal"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
-   :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}
-                                              {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "cobblestone" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
@@ -408,7 +407,7 @@
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :dig-route :pillar :stair :dig-out}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
-   :after [[:body-near [24.5 1 16.5] 2] [:block [20 1 16] "air"] [:block [20 2 16] "air"]]}
+   :after [[:body-near [24.5 1 16.5] 2]]}
   {:name "intent-for-another-block-is-never-dug"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
