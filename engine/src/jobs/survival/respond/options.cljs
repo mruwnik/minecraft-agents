@@ -27,6 +27,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
+            [jobs.lib.shelter.fill :as fill]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
@@ -261,18 +262,25 @@
   (covers-in: the hostiles' cells, the memory) changed is served and quoted again: first the ways with no quote, then
   the likeliest cheapest by its last quote (cover-price-fn), while the decision's stages before the flee search are in
   time (room-lib/survey-over?) and, after one, until pause? (fn []) holds; so a chase's decisions go on where the last
-  left off. Each way's :fails counts its failures where the body stands (flight/fails-here), and :dig-s the dig away out
+  left off. A way of quoted (quoted already this decision) is not asked again while its quote lives. A stale quote is
+  not served once a hostile stands in an open cell round the feet (fill/open-cells) it did not fill when quoted. Each way's :fails counts its failures where the body stands (flight/fails-here), and :dig-s the dig away out
   of it from the nearest hostile (hide-out/dig-out-s; the pillar has none). Meta :left the ways not quoted this call,
   :cut those of them with no quote served."
   ([c ways] (covers c ways (danger-q/known-hostiles (:primitives c) (danger-q/hostile-radius) {}) (constantly false)))
-  ([c ways hostiles pause?]
+  ([c ways hostiles pause?] (covers c ways hostiles pause? #{}))
+  ([c ways hostiles pause? quoted]
   (let [p (:primitives c)
         in (covers-in c)
         now (ctx/now c)
         place (select-keys in [:feet :items :tried :args])
         kept (::covers (ctx/mem c))
         kept (if (= place (:place kept)) kept {:place place :q {}})
-        live? (fn [kept w] (some-> (get-in kept [:q w 2]) (as-> t (<= 0 (- now t) (check-cache/ttl-ms)))))
+        open (delay (fill/open-cells p (:feet in)))
+        served? (fn [kept w]
+                  (let [[q then t] (get-in kept [:q w])
+                        entered? #(and ((:mobs in) %) (not ((:mobs then) %)))]
+                    (and t (<= 0 (- now t) (check-cache/ttl-ms))
+                         (or (nil? q) (= :pillar w) (= in then) (not-any? entered? @open)))))
         dig-s (delay (let [nearest (some->> (seq (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (apply min-key #(danger-q/mob-distance p %)))]
                        (hide-out/dig-out-s p (some->> nearest (danger-q/mob-pos p)))))
         spec-of (fn [kept w]
@@ -280,10 +288,10 @@
                     (if (= :pillar w)
                       (pillar-cover c hostiles q)
                       (when q (cond-> (update q :fails #(flight/fails-here c w (or % 0))) @dig-s (assoc :dig-s @dig-s))))))
-        due (remove #(and (live? kept %) (= in (get-in kept [:q % 1]))) ways)
-        stale (filter #(live? kept %) due)
+        due (remove #(and (served? kept %) (or (quoted %) (= in (get-in kept [:q % 1])))) ways)
+        stale (filter #(served? kept %) due)
         stale (if (next stale) (let [price (cover-price-fn c hostiles)] (sort-by #(or (some-> (spec-of kept %) price) ##Inf) stale)) stale)
-        [kept left] (loop [kept kept [w & more :as left] (concat (remove #(live? kept %) due) stale) n 0]
+        [kept left] (loop [kept kept [w & more :as left] (concat (remove #(served? kept %) due) stale) n 0]
                       (if (or (nil? w) (room-lib/survey-over? c) (and (pos? n) (pause?)))
                         [kept (vec left)]
                         (let [q (if (= :pillar w) (pillar-climb c hostiles) (get (shut-in/covers c [w]) w))]
@@ -292,8 +300,8 @@
                             [kept (vec left)]
                             (recur (assoc-in kept [:q w] [q in now]) more (inc n))))))]
     (when (< (count left) (count due)) (ctx/update-mem! c assoc ::covers kept))
-    (with-meta (into {} (keep (fn [w] (when (live? kept w) (some->> (spec-of kept w) (vector w))))) ways)
-      {:left left :cut (filterv #(not (live? kept %)) left)}))))
+    (with-meta (into {} (keep (fn [w] (when (served? kept w) (some->> (spec-of kept w) (vector w))))) ways)
+      {:left left :cut (filterv #(not (served? kept %)) left)}))))
 
 (defn exits-of
   "{:dawn-s} every cover's spec carries (cost/cover-answer's exits): the mean seconds of night left."

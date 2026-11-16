@@ -284,17 +284,18 @@
   stays open, the quote, the hide-out's quiet), and :pillar the pillar up (options/pillar-cover) while not tried this
   flight. The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
   None with a creeper near: its quotes are not asked for, they take seconds the fuse does not leave. The quotes
-  (options/covers) go on where the last decision's left off and stop where the decision's stages before the flee search
-  run out; before and between them the event loop runs each tick (walk-pick/tick-slice!, its wait not the decision's CPU:
+  (options/covers) go on where the last decision's left off until every way is quoted this decision or the decision's
+  stages before the flee search run out; before and between them the event loop runs each tick (walk-pick/tick-slice!, its wait not the decision's CPU:
   room-lib/waiting!). Meta :cut the ways left out."
   [c near sealing]
   (when-not (some combat/creeper? near)
     (let [ways (cond-> cover-ways (not (state/tried? c :pillar)) (conj :pillar))
-          cs (loop []
+          cs (loop [quoted #{}]
                (await (room-lib/waiting! c #(pick/tick-slice! c)))
-               (let [cs (options/covers c ways near #(zero? (pick/slice-left-ms)))]
-                 (if (and (seq (:cut (cljs.core/meta cs))) (not (room-lib/survey-over? c)))
-                   (recur)
+               (let [cs (options/covers c ways near #(zero? (pick/slice-left-ms)) quoted)
+                     left (:left (cljs.core/meta cs))]
+                 (if (and (seq left) (not (room-lib/survey-over? c)))
+                   (recur (into quoted (remove (set left) ways)))
                    cs)))
           cut (:cut (cljs.core/meta cs))]
       (when-not (or (:pit cs) (some #{:pit} cut)) (ctx/emit! c :hostile.pit-dropped :debug {:why (dig-pit/why-not c)}))

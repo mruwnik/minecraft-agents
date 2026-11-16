@@ -46,7 +46,9 @@
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.survival.respond.pillar :as respond.pillar]
             [jobs.survival.wall-placer :as wall-placer]
-            [jobs.lib.clock :as cpu-clock]))
+            [jobs.lib.clock :as cpu-clock]
+            [jobs.lib.danger :as danger-q]
+            [jobs.survival.respond-to-hostile :as rh]))
 
 (defn setup
   "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time). The world's
@@ -2502,7 +2504,7 @@
                   shut-in/covers (fn ([c] (covers c)) ([c ways] (swap! asked conj (first ways)) (swap! ms + 1000) (covers c ways)))]
       (with-stub-mem
         (fn []
-          (let [d1 (decide! 4) a1 @asked d2 (decide! 3) a2 @asked d3 (decide! 2)]
+          (let [d1 (decide! 5) a1 @asked d2 (decide! 4) a2 @asked d3 (decide! 3)]
             (is (= [#{:walls} [:pit :pocket]] d1))
             (is (= [[:walls] [:walls :pit]] [a1 a2]) "the zombie came nearer: the next decision quotes the pit")
             (is (contains? (first d2) :walls) "the walls' last quote served")
@@ -2523,13 +2525,71 @@
           (room-lib/start-decision! c)
           (cornered/covers c [:walls :pit :pocket])
           (swap! (fake/state p) assoc :entities [])
-          (fake/add-entity! p (zombie 2 64 0))
+          (fake/add-entity! p (zombie 4 64 0))
           (reset! slow? true)
           (room-lib/start-decision! c)
           (let [cs (cornered/covers c [:walls :pit :pocket])]
             (is (= [:walls :pit :pocket :pit] @asked) "the pit, open the shortest, is asked again first")
             (is (= #{:walls :pit :pocket} (set (keys cs))) "the others' last quotes served")
             (is (= [:pocket :walls] (:left (meta cs))) "then by price: the pocket before the walls")))))))
+
+;; card 3b354599: a stale quote was served as is though a hostile now stood in a cell round the feet
+(deftest a-stale-quote-is-not-served-once-a-hostile-stands-in-an-open-cell-round-the-feet
+  (let [m (atom {})
+        p (tu/fake-on-floor {:blocks dead-end :inventory [{:name "dirt" :count 20}] :entities [(zombie 4 64 0)]})
+        c (assoc (stub-ctx p m) :view (constantly {:now 1000 :data {}}))
+        ms (atom 0)
+        slow? (atom false)
+        asked (atom [])
+        open-s {:walls 20 :pit 2 :pocket 10}]
+    (with-redefs [cpu-clock/now #(deref ms)
+                  shut-in/covers (fn ([_] {}) ([_ [w]] (swap! asked conj w) (when @slow? (swap! ms + 1000)) {w {:open-s (open-s w) :seconds 40 :fails 0}}))]
+      (with-stub-mem
+        (fn []
+          (room-lib/start-decision! c)
+          (cornered/covers c [:walls :pit :pocket])
+          (swap! (fake/state p) assoc :entities [])
+          (fake/add-entity! p (zombie 2 64 0))
+          (reset! slow? true)
+          (room-lib/start-decision! c)
+          (let [cs (cornered/covers c [:walls :pit :pocket])]
+            (is (= [:walls :pit :pocket :walls] @asked) "none served: asked again in the ways' order")
+            (is (= [#{:walls} [:pit :pocket]] [(set (keys cs)) (:cut (meta cs))]))))))))
+
+;; card 3b354599: once a tick was spent, a decision asked one stale way and served the rest from where the mob stood
+(deftest a-decision-with-time-to-spare-quotes-every-stale-way-again-though-each-quote-spends-a-tick
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (atom {})
+              p (tu/fake-on-floor {:blocks dead-end :inventory [{:name "dirt" :count 20}] :entities [(zombie 5 64 0)]})
+              c (assoc (stub-ctx p m) :view (constantly {:now 1000 :data {}}))
+              asked (atom [])
+              decide! (fn ^:async decide [x]
+                        (swap! (fake/state p) assoc :entities [])
+                        (fake/add-entity! p (zombie x 64 0))
+                        (reset! asked [])
+                        (room-lib/start-decision! c)
+                        (await (rh/cover-specs c (danger-q/known-hostiles p (danger-q/hostile-radius) {}) nil))
+                        (sort @asked))
+              orig [ctx/mem ctx/update-mem! ctx/latest cpu-clock/now shut-in/covers cornered/pillar-climb walk-pick/slice-left-ms walk-pick/tick-slice!]]
+          (set! ctx/mem (fn [c] @(:mem c)))
+          (set! ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args)))
+          (set! ctx/latest (constantly nil))
+          (set! cpu-clock/now (constantly 0))
+          (set! shut-in/covers (fn ([_] {}) ([_ [w]] (swap! asked conj w) {w {:open-s 2 :seconds 40 :fails 0}})))
+          (set! cornered/pillar-climb (fn [_ _] (swap! asked conj :pillar) 0.1))
+          (set! walk-pick/slice-left-ms (constantly 0))
+          (set! walk-pick/tick-slice! (fn [_] (js/Promise.resolve nil)))
+          (try
+            (let [all (sort [:walls :pit :pocket :pillar])]
+              (is (= all (await (decide! 5))))
+              (is (= all (await (decide! 4))) "the zombie came nearer: every way asked again")
+              (is (= [] (await (decide! 4))) "nothing moved: every quote served"))
+            (finally
+              (let [[a b l n w pc sl ts] orig]
+                (set! ctx/mem a) (set! ctx/update-mem! b) (set! ctx/latest l) (set! cpu-clock/now n) (set! shut-in/covers w)
+                (set! cornered/pillar-climb pc) (set! walk-pick/slice-left-ms sl) (set! walk-pick/tick-slice! ts)))))))))
 
 (deftest a-cover-that-failed-here-is-dearer-here-in-this-flight-and-the-next
   (let [data (atom mem/empty-data)
