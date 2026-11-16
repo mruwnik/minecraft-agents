@@ -1,0 +1,30 @@
+;; Card b53ac450: the died trigger rests while a real danger is near the respawned body; the hostile reflex answers it
+;; first, then the pile is weighed. The body dies at [26 0 26] (RCON kill) and respawns at [4 0 4] beside a zombie
+;; (NoAI: it stands where it was summoned, so the danger stays near until the body leaves it). Should-succeed: hostile-near
+;; fires before died (before the fix died, ahead of it in the register, fired at the respawn and its trip took the body
+;; past the zombie), then the pile is collected. Should-fail: with no zombie, died fires and no hostile-near does.
+{:defaults
+ {:tags [:survival :death :hostile]
+  :time :any
+  :register [{:trigger :died} {:trigger :hostile-near}]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 3]]
+         :inventory [["diamond" 32] ["raw_iron" 24]]}
+  :mobs :keep
+  :limit-s 200}
+ :cases
+ [{:name "zombie-by-the-respawn-is-answered-before-the-pile"
+   :act [[:summon "zombie" [6.5 0 5.5] "{NoAI:1b,PersistenceRequired:1b}"]
+         [:kill-body]
+         [:await {:source :body :kind :respawned} 30]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :died}} :for-s 40
+             :until {:source :reflex :kind :fired :context {:reflex-id :hostile-near}}}
+            {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 190}]
+   :after [[:item "diamond" 32]]}
+  {:name "no-mob-died-fires-alone"
+   :act [[:kill-body]
+         [:await {:source :body :kind :respawned} 30]]
+   :expect [{:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 150}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 150
+             :until {:source :reflex :kind :ended :data {:decision :collected}}}]
+   :after [[:item "diamond" 32]]}]}

@@ -456,24 +456,24 @@
           (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 5))
           (is (= :skip (:decision (recovered eng))))
-          (is (false? (died/died nil (mem/view (:store eng)) {})))
+          (is (false? (died/died p (mem/view (:store eng)) {})))
           (is (= [] (tu/walk-calls p))))))))
 
 (deftest an-older-open-pile-is-fetched-before-a-newer-empty-one
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities dt/drops})]
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds} 60000)
           (die! eng {:pos {:x 5 :y 64 :z 0} :inventory []} 5000)
           (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng))) "the pile with the diamonds first")
-          (is (true? (died/died nil (mem/view (:store eng)) {})) "the newer death is still open")
+          (is (true? (died/died p (mem/view (:store eng)) {})) "the newer death is still open")
           (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 20))
           (is (= [:collected :skip] (mapv (comp :decision :data) (mem/entries (mem/view (:store eng)) :recovered))))
-          (is (false? (died/died nil (mem/view (:store eng)) {}))))))))
+          (is (false? (died/died p (mem/view (:store eng)) {}))))))))
 
 (deftest a-second-run-after-a-skip-says-the-death-was-decided
   (async done
@@ -689,7 +689,7 @@
           (core/submit! eng (tu/order dear) {})
           (await (run-until-empty eng 5))
           (is (nil? (recovered eng)) "a danger skip is not final")
-          (is (false? (died/died nil (mem/view (:store eng)) {})) "the died trigger rests while the danger is remembered")
+          (is (false? (died/died p (mem/view (:store eng)) {})) "the died trigger rests while the danger is remembered")
           (let [id (core/submit! eng (tu/order dear) {})]
             (await (core/tick! eng))
             (is (= :danger (:reason (core/waiting eng id))) (pr-str (core/waiting eng id)))
@@ -697,7 +697,7 @@
             (is (= 1 (count (mem/entries (mem/view (:store eng)) :recover-danger))) "the danger is not weighed again")
                         (is (= [] (tu/walk-calls p)))
             (swap! clock + 151000)
-            (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again once the memory has run out")
+            (is (true? (died/died p (mem/view (:store eng)) {})) "the died trigger fires again once the memory has run out")
             (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
             (await (run-until-empty eng 20))
             (is (= :collected (:decision (recovered eng))))))))))
@@ -730,7 +730,7 @@
           (await (run-until-empty eng 5))
           (is (nil? (recovered eng)) "the first weigh declines")
           (swap! clock + 151000)
-          (is (true? (died/died nil (mem/view (:store eng)) {})) "the hold has run out")
+          (is (true? (died/died p (mem/view (:store eng)) {})) "the hold has run out")
           (await (run-until-empty eng 20))
           (is (= :skip (:decision (recovered eng))) "the drowned is not forgotten with the guard")
           (is (re-find #"danger [1-9][0-9.]*,.*: drowned" (decided-text eng)))

@@ -62,7 +62,7 @@
   {:data (reduce (fn [d [kind t data]] (mem/add-entry d kind {:t t :data data} nil)) mem/empty-data entries)
    :now now-ms})
 
-(defn died-holds [memory] (died/died nil memory {}))
+(defn died-holds [memory] (died/died (tu/fake-on-floor {}) memory {}))
 
 (def died-at [:died 1000 {:pos {:x 20 :y 64 :z 0} :inventory []}])
 (def respawned-at [:respawned 1100 {:pos {:x 0 :y 64 :z 0}}])
@@ -74,6 +74,12 @@
   (is (false? (died-holds (memory-with 2000 died-at))) "the body is still dead")
   (is (false? (died-holds (memory-with 2000 [:respawned 500 {}] died-at))) "a respawn older than the death does not count")
   (is (true? (died-holds (memory-with 2000 died-at [:respawned 1100 {}])))))
+
+(deftest died-trigger-rests-while-a-real-danger-is-near
+  (let [view (memory-with 8000 died-at respawned-at [:hurt 2000 {:attacker {:id 7 :name "zombie"}}])]
+    (is (false? (died/died (tu/fake-on-floor {:entities [(h/zombie 6.5 0.5)]}) view {}))
+        "a zombie 6 blocks off whose last blow landed 6 s ago (past danger/::hit-s): the hostile reflex's, not cut for the pile")
+    (is (true? (died-holds view)) "the zombie gone: the pile is weighed")))
 
 (deftest died-trigger-does-not-hold-without-a-death
   (is (false? (died-holds (memory-with 2000)))))
