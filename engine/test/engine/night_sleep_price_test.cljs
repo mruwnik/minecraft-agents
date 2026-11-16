@@ -363,6 +363,23 @@
           (is (>= (- (:exposed asleep) (:exposed awake)) left) "asleep, getting up forfeits the skip the one other player waits for")
           (is (>= (- (:shelter asleep) (:shelter awake)) left) "so does sheltering"))))))
 
+(deftest a-bed-is-priced-by-one-formula-asleep-in-it-and-awake-beside-it
+  ;; Asleep the bed was credited no respawn point and awake it was (-645 s against 0 here, no respawn point known): the
+  ;; body lay down for the credit, got up without it, and lay down again.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bed {:x 2 :y 64 :z 0}
+              skipping {:sleep-status [{:t 0 :data {:skipping true}}]}
+              bed-price (fn ^:async price [self]
+                          (let [c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night :players ["Alex"] :self self :blocks {"2,64,0" "red_bed"} :light-default [0 4]})) {}
+                                             {:view (fn [] {:now 0 :data {:entries skipping}})
+                                              ::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})]
+                            (:bed (await (bed-down/answers c {:bed bed})))))
+              awake (await (bed-price {}))
+              asleep (await (bed-price {:isSleeping true}))]
+          (is (< (Math/abs (- awake asleep)) 20) "only the seconds to lie down differ"))))))
+
 (deftest a-flee-off-the-ground-owes-the-walk-back-by-day
   (async done
     (tu/run-async done

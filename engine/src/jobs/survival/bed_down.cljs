@@ -227,7 +227,7 @@
   "{answer seconds}: the ways through the night from here, each priced by cost/night-way-s (the night's work it loses, its tolls
   and hurt, its seconds exposed (exposed-price), what it costs by day) or, a bed, as the night's seconds it loses and the hp it risks
   and, where it sets the respawn point, less cost/spawn-gain there for deaths here, where the work goes on (a body asleep has
-  set it already).
+  set it already, respawn-body: the gain is then 0, asleep and awake priced by the one formula).
   :bed lying in `bed` (nil: the carried bed put down here, or in a closed home (sh-beds/closed-home) put-down-bed! walks
   into first, then left to :home when home is given; or the bed the body is asleep in): the night left lost unless
   the body's sleep skips it (sh-sleepers/sleepers-short 0) and no known hostile is near the bed (sh-sleepers/monsters-near-bed?:
@@ -291,7 +291,7 @@
                                                                                    ;; in the ground walk-s's commute-s has the walk's work lost
                                                                                    (if in-ground? 0 walked)
                                                                                    (sh-sleepers/skip-wait-s p view walked)
-                                                                                   (if asleep? 0 (- (cost/spawn-gain body at feet)))
+                                                                                   (- (cost/spawn-gain body at feet))
                                                                                    (reduce + (for [[q refused?] [[(- 1 refuse) false] [refuse true]] :when (pos? q)]
                                                                                                (* q (+ (bed-lost refused?) (if refused? (sh-sleepers/skip-wait-s p view after) 0)
                                                                                                        (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) (bed-open refused?) at (not refused?)))))))))
