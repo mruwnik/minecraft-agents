@@ -309,6 +309,18 @@
             (is (< (:exposed prices) (:shelter prices)) (pr-str prices))
             (is (= :exposed pick))))))))
 
+(deftest in-a-dark-hall-the-bed-is-not-credited-with-the-dark-a-skip-leaves
+  ;; Q213: the night ends, the dark does not: after the skip the body works the same seconds in the same hall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bed {:x 2 :y 64 :z 0}
+              c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night :blocks dark-hall :light {} :light-default [0 0]})) {}
+                           {:view (fn [] {:now 0 :data {:entries {:respawned [{:t 0 :data {:pos bed}}]}}})
+                            ::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})
+              prices (await (bed-down/answers c {:bed bed :walk-s 0}))]
+          (is (>= (:bed prices) (:exposed prices)) (pr-str prices)))))))
+
 (defn ^:async night-answers-with
   "The first :night.answers of the night job in the sealed room with the bed 10 blocks off, world extended with extra."
   [extra]

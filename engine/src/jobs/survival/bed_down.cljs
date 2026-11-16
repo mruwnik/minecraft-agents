@@ -243,7 +243,7 @@
   and by day that shelter's morning and the walk back to where the night found the body; :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-gain there. :exposed the night left in the open where the body stands (or the worst cell
   it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds plus its quoted death (chance x seconds: the mobs known at the spot wait for the return), and, unless the stint skips the night (sh-sleepers/stint-skip-chance: the players short lying down, less each stint tonight that came back to the same night), the cheapest other answer.
-  Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
+  In the ground :bed, :sealed and :log-out's skip also cost the night's dark danger left (a skip leaves the same dark to work in). Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
   the other players online wait for (sh-sleepers/skip-wait-s)."
   [c {:keys [bed walk-s walk-secs log-out? niche flee home]}]
   (let [p (:primitives c)
@@ -268,6 +268,8 @@
         in-ground? (sh/in-ground? p view)
         way-s #(+ wait (cost/night-way-s in-ground? left %))
         open #(open-price c stands %)
+        ;; in the ground the dawn lights nothing: a skip leaves the work the same dark hall to do, so no way that skips credits it
+        dark (if in-ground? (open left) 0)
         dig (fn [q] (let [t (min left (sin/time-s q))] (way-s {:busy-s left :risk-s (:risk-s q) :open-s (open t) :morning-s (:morning-s q)})))
         walk (fn [{:keys [cost pos] :as t} after]
                (let [seconds (min cost (or (:seconds t) cost))
@@ -287,7 +289,7 @@
     (as-> {:exposed (way-s {:open-s (open left)})} prices
      (cond-> prices
       (js/isFinite (:seconds here)) (assoc :shelter (dig here))
-      (or bed asleep? (and carried? (not (and home into-home?)))) (assoc :bed (+ (or walk-s 0)
+      (or bed asleep? (and carried? (not (and home into-home?)))) (assoc :bed (+ dark (or walk-s 0)
                                                                                    ;; in the ground walk-s's commute-s has the walk's work lost
                                                                                    (if in-ground? 0 walked)
                                                                                    (sh-sleepers/skip-wait-s p view walked)
@@ -295,14 +297,14 @@
                                                                                    (reduce + (for [[q refused?] [[(- 1 refuse) false] [refuse true]] :when (pos? q)]
                                                                                                (* q (+ (bed-lost refused?) (if refused? (sh-sleepers/skip-wait-s p view after) 0)
                                                                                                        (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) (bed-open refused?) at (not refused?)))))))))
-      sealed (assoc :sealed (+ lost (:seconds sealed) (:fetch-s sealed 0) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-gain body (:foot (:layout sealed)) feet))))
+      sealed (assoc :sealed (+ dark lost (:seconds sealed) (:fetch-s sealed 0) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-gain body (:foot (:layout sealed)) feet))))
       (and niche (js/isFinite (:seconds niche))) (assoc :niche (dig niche))
       flee (assoc :flee (way-s (walk flee (flee-after flee here))))
       home (assoc :home (let [w (walk home (flee-after home here))]
                           (if carried?
                             (+ lost (- (way-s w) (way-s {})) (- (cost/spawn-gain body (:pos home) feet)))
                             (way-s w))))
-      out-s (assoc :log-out (+ (:stint out-s) (* (- 1 (:skip out-s)) (apply min (vals prices))))))
+      out-s (assoc :log-out (+ (:stint out-s) (* (:skip out-s) dark) (* (- 1 (:skip out-s)) (apply min (vals prices))))))
      (cond-> prices
        (:home prices) (update :home failed-walk-s (:cost home) (vals (dissoc prices :home)) (sh-beds/home-walk-fails c (:pos home)))))))
 
