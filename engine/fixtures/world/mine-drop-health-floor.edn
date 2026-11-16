@@ -1,5 +1,5 @@
 ;; Card 1644acdc: gather.mine's walk to a seen ore keeps go-to's default health floor (12 hp): a 13 block drop at 20 hp (7 left) is
-;; not taken, the ore is skipped, the body stays on its platform and takes no damage; a 5 block drop (4 hp, 16 left) still is.
+;; not taken: no fall damage; the ore is dug to by a stair through the platform or the job ends honestly; a 5 block drop (4 hp, 16 left) still is.
 ;; Stone platform z 12..20, x 12..16 on the flat plot (the body stands at its east edge, so it sees the ore over the rim; a wider platform hid it and the case passed vacuously); a single iron ore at [22 0 16] on the ground beside it.
 {:defaults
  {:tags [:mine :jobs :movement] :time :any
@@ -11,9 +11,9 @@
  [{:name "thirteen-block-drop-to-a-seen-ore-is-not-taken"
    :blocks [[:fill [12 0 12] [16 12 20] "stone"]]
    :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :radius 16 :ways #{:seen} :mend false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :go-to.over-budget} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-near [16.5 13 16.5] 5] [:block [22 0 16] "iron_ore"] [:item "raw_iron" 0]]}
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}
+            {:no-event {:source :job :kind :go-to.over-budget} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]}
   ;; card 6ce69619: dark plot, torches carried, the platform's other sides lead off over unseen floor: the walk learns cell by cell (an unlit floor, a void edge)
   ;; and must end on go-to's own refusal of the drop (:unreachable, whichever of its reasons: no climb back, the 7 hp budget, a dark floor that keeps turning out absent), not :no-progress. A torch beside the ore shows it from the platform.
   ;; The platform is bedrock: with stone the body digs a stair down through it (no drop at all), so only the drop leads on.
