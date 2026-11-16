@@ -51,9 +51,11 @@
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [20 3 16] "stone"] [:body-near [20.5 3 16.5] 3.6]]}
   ;; cards 2b3f9198, fd0e530c: the pocket is walled in bedrock but for the shaft cell [19 4 16] under an island [19 5 16] in a pool, reached along a
-  ;; causeway from the body: the only way in is a dig beside water. It is dug at the flood's price (the pool pours down the shaft), not refused
+  ;; causeway from the body: the only way in is a dig beside water. It is dug at the flood's price (the pool pours down the shaft), not refused.
+  ;; The pocket is cave_air: the lit plot's light layer replaces plain air, and flowing water cannot fill an invisible light block, which would leave
+  ;; the goal a dry cell under falling water (a stand no player's world has)
   {:name "goal-whose-only-way-is-beside-water-is-dug-to"
-   :blocks [[:fill [14 0 11] [24 4 21] "bedrock"] [:fill [19 2 16] [19 3 16] "air"] [:set [19 4 16] "stone"]
+   :blocks [[:fill [14 0 11] [24 4 21] "bedrock"] [:fill [19 2 16] [19 3 16] "cave_air"] [:set [19 4 16] "stone"]
             [:fill [14 5 11] [24 5 21] "water"] [:fill [14 5 16] [19 5 16] "stone"]]
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [19 2 16] :range 0 :unknown false})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
