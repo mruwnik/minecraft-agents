@@ -255,6 +255,8 @@
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-pens-a-jobless-villager-before-it-waits-for-the-job"
+   ;; a composter nearer the villager than the lectern: it has wandered from our site, so it is penned (a jobless one nearest our lectern walks to it unpenned, card c66943dc)
+   :blocks [[:set [23 0 17] "composter"]]
    :body {:at [14.5 0 16.5] :yaw 270 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
    :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,34],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000022" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.lib.villager/take-job-ticks 200}})]]
