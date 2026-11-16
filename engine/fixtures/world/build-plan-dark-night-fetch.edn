@@ -21,7 +21,7 @@
    :after [[:block [50 0 16] "cobblestone"] [:block [51 0 16] "cobblestone"]]}
   ;; the kit a death far from the world spawn would lose: the site's dark stay costs more than the dawn wait at the default worth (a bare body's short stay goes ahead)
   {:name "no-torch-source-keeps-the-named-wait"
-   :body {:inventory [["cobblestone" 4] ["diamond" 64]]}
+   :body {:spawnpoint :far :inventory [["cobblestone" 4] ["diamond" 64]]}
    :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}
