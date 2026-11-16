@@ -32,11 +32,13 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
-  ;; card abc1c5e2: a still cow outside beside the gate, 2.3 from the cell inside it, cannot walk out, so it holds no
-  ;; trip (the old count waited 10 s for it at every line-up); the other cow is brought
+  ;; card abc1c5e2: a still cow outside beside the gate, 2.2 from the cell inside it, cannot walk out, so it holds no
+  ;; trip (the old count waited 10 s for it at every line-up); the other cow is brought. It stands a cow's width clear of
+  ;; the lane (z 17.7, lane z 16..17): beside the lane at z 17.3 it shoves the led cow against the gate's fence arm and the
+  ;; 1-wide gate (cow 0.9 wide) cannot be passed (card 70d3c88b)
   {:name "cow-outside-beside-the-gate-crowds-nothing"
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:summon "cow" [17.3 0 17.3] "{NoAI:1b}"]
+         [:summon "cow" [17.7 0 17.7] "{NoAI:1b}"]
          [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :herd.crowded-gate :data {:where :out}} :for-s 240 :until {:source :job :kind :completed}}]
