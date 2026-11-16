@@ -185,7 +185,7 @@
 
 (declare item-value)
 
-(defn- tree-each
+(defn tree-each
   "Seconds one `n` is worth by the recipe tree alone, its find seconds from `find` (over :find in default-basis)."
   [version n find]
   (or (:each (first (:items (item-value [{:name n :count 1}] :version version :basis {:find find})))) 0))
@@ -195,6 +195,12 @@
   [rows]
   (let [per (reduce + (map #(* (:got %) (:b %)) rows))]
     (when (pos? per) (max 0 (/ (reduce + (map #(- (:s %) (* (:got %) (:a %))) rows)) per)))))
+
+(defn tree-finds
+  "The four :find bases measured prices the recipe tree at (ore scan and terrain 0 and 1 over the default): one worth table each."
+  []
+  (let [terrain (get-in tbl/default-basis [:find :terrain])]
+    [{:ore-scan-s 0 :terrain terrain} {:ore-scan-s 1 :terrain terrain} {:ore-scan-s 0 :terrain 0} {:ore-scan-s 0 :terrain 1}]))
 
 (def ^:private measured
   (memoize

@@ -3,7 +3,9 @@
   (:require [cljs.test :refer [async deftest is]]
             [engine.game :as game]
             [jobs.lib.cost.caught :as caught]
+            [engine.settings :as settings]
             [jobs.lib.cost.table :as table]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.warm :as warm]))
 
 (defn warm-now! [] (run! #(%) (warm/steps)))
@@ -37,3 +39,10 @@
                    (reset! running false)
                    (is (<= (dec (count (warm/steps))) @turns) "a timer runs between every two steps, so the body's keepalives and stall watch are not held for the whole warm-up")
                    (done)))))))
+
+(deftest no-warm-step-builds-more-than-one-worth-table
+  (settings/with-settings {::table/craft-step 0.77 ::value/gather-prior-items 1.77}
+    (fn []
+      (let [built (map (fn [step] (let [n (.-n table/builds)] (step) (- (.-n table/builds) n))) (warm/steps))]
+        (is (pos? (reduce + built)) "the settings give fresh tables, so the steps build some")
+        (is (every? #(<= % 1) built) "a table is hundreds of ms, so the body's timers run between builds")))))

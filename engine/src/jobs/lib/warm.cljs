@@ -10,6 +10,8 @@
   "The warm-up, one fn per table or posterior."
   []
   (concat
+   ;; measured-worth prices the tree at these four bases: one table each, so one step each
+   (for [find (value/tree-finds)] #(value/tree-each @game/version "stone" find))
    [#(value/measured-worth @game/version)
     #(value/item-value [{:name "stone"}])
     #(value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version)))
