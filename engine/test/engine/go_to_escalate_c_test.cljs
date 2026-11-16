@@ -823,6 +823,28 @@
             :pair (shut? [[3 63 0] [5 63 0]])
             :fill (choose/joining-fill c {:x -3 :y 64 :z 2} [[3 63 0] [5 63 0] [4 63 4]])}))))
 
+(def two-rooms-off-a-walled-goal
+  "A stone room (x -2..2, z -2..2, feet y 64, roofed at y 67) with a trenched 1-wide lane (z 0, two deep) to a closed 24 by 24
+  room each side (x -33..-10 west, x 10..33 east) and the body in a sealed cell (x -1..1, z 16..18). A floor at [-6 63 0]
+  or [6 63 0] bridges its lane; each room alone floods within the late flood's budget, both together past it."
+  (apply dissoc (merge (box -36 60 -14 36 63 20 "stone") (box -36 64 -14 36 67 20 "stone"))
+         (concat (for [[x0 x1 z0 z1] [[-2 2 -2 2] [-33 -10 -11 12] [10 33 -11 12] [-1 1 16 18]]
+                       x (range x0 (inc x1)) z (range z0 (inc z1)) y [64 65 66]] (str x "," y "," z))
+                 (for [x (concat (range -9 -2) (range 3 10)) y [62 63 64 65 66]] (str x "," y ",0")))))
+
+(deftest a-fill-is-offered-only-when-it-alone-frees-the-goal
+  ;; Old joining-fill took the labelled flood's answer: the budget is shared by both labels, so the east room's flood
+  ;; passed it under the east fill's label and [6 63 0] came back, though neither fill alone frees the goal.
+  (let [{:keys [eng p]} (gt/setup {:self {:pos [0.5 64 17.5]} :blocks two-rooms-off-a-walled-goal :inventory [{:name "dirt" :count 9}]})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [0 64 0] :range 0} :round 1})
+        pw (wworld/path-world p nil)
+        shut? (fn [cells] (choose/shut-result? (choose/late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) [0 64 0] 0 nil)))]
+    (is (= {:none true :alone [true true] :both false :fill nil}
+           {:none (shut? [])
+            :alone (mapv #(shut? [%]) [[-6 63 0] [6 63 0]])
+            :both (shut? [[-6 63 0] [6 63 0]])
+            :fill (choose/joining-fill c {:x 0 :y 64 :z 0} [[-6 63 0] [6 63 0]])}))))
+
 (def hut-door-over-a-hole
   "A cobblestone hut (planks floor y 64, inside x 11..13, z 11..13, feet y 65, roof y 67) on stone ground (top y 63) whose
   only door [12 65 14] opens over a hole dug in the ground in front of it ([12 63 15]): 2 down from the door's floor."

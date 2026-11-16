@@ -218,8 +218,7 @@
           (.set ^js (.-flood-moves s) memo-key out)
           out))))
 
-  ;; the label a node of cell x y z flooded from the current node takes (fill-cells): the current node's, or a fill's own
-  ;; when the cell is that fill's stand and the current node was reached with no fill in the second pass; -1 refused
+  ;; -1 refuses a second fill on one way: each label answers for one fill alone
   (fillLabel [s x y z]
     (let [i (.get ^js (.-fill-cells s) (cell-key x y z))]
       (cond
@@ -531,7 +530,7 @@
         (set! (.-allow-shut s) true) ; a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
         (let [state (loop []
                       (cond
-                        ;; flooded with every fill refused: the queue again, fills let in
+                        ;; fills only after the goal's own region, so label 0 means no fill is needed
                         (and (some? (.-fill-cells s)) (zero? (.-lf-phase s)) (not ^boolean (.-leaked s))
                              (>= (.-lf-head s) (.-length ^js (.-lf-queue s))) (<= (.-size ^js (.-lf-seen s)) (.-lf-budget s)))
                         (do (set! (.-lf-phase s) 1)

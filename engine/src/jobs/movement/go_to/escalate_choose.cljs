@@ -207,24 +207,28 @@
 
 (defn joining-fill
   "The fill of fills (floor cells [x y z], nearest first) whose block alone, read solid, leaves goal ({:x :y :z}) no longer
-  proven shut by the planner's late goal flood (late-flood, over the call's read: c's :unknown): one flood over the world
-  read with every fill solid, each fill's stand labelled (options.fillCells), names the fill on the planner's fewest-move
-  way from the goal to the body. A fill beside land the planner's moves never reach the goal from bridges nothing. nil
-  when no fill alone frees it; the first of fills when it is not proven shut with none filled, or without a path world."
+  proven shut by the planner's late goal flood (late-flood, over the call's read: c's :unknown). One labelled flood over
+  the world with every fill solid (options.fillCells) names a candidate; a flood with that fill alone confirms it, since
+  the labelled flood's budget is shared by every label and its other fills' blocks can wall off a way. nil when it does not
+  free the goal; the first of fills when the goal is not proven shut with none filled, or without a path world."
   [c goal fills]
   (let [pw (wworld/path-world (:primitives c) (:unknown c))
-        fills (vec fills)]
+        fills (vec fills)
+        to [(:x goal) (:y goal) (:z goal)]
+        within (:range (:args c) 1)
+        filled #(wworld/with-walls pw (map (fn [cell] (zipmap [:x :y :z] cell)) %))]
     (cond
       (nil? pw) (first fills)
       (empty? fills) nil
       :else (let [stands (js/Map.)
                   _ (doseq [[i [x y z]] (map-indexed vector fills)] (.set stands (planner/cell-key x (inc y) z) (inc i)))
-                  r (late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) fills)) [(:x goal) (:y goal) (:z goal)]
-                                (:range (:args c) 1) stands)
+                  r (late-flood c (filled fills) to within stands)
                   joined (.-joined r)]
               (cond
                 (shut-result? r) nil
-                (pos? joined) (fills (dec joined))
+                (pos? joined) (let [fill (fills (dec joined))]
+                                (when-not (shut-result? (late-flood c (filled [fill]) to within nil))
+                                  fill))
                 :else (first fills))))))
 
 (defonce ^{:doc "Per body (its primitives): the last drop-fill asked, {:key :unknown :v}."} drop-fills (js/WeakMap.))

@@ -101,11 +101,8 @@
    ;; progress, whether it met the start (lf-seed-open: among the goal's own cells), whether the run is the one at the end
    ^:mutable ^js lf-seen ^:mutable ^js lf-queue ^:mutable lf-head ^:mutable lf-budget ^:mutable ^boolean lf-active
    ^:mutable ^boolean lf-open ^:mutable ^boolean lf-seed-open ^:mutable ^boolean lf-end
-   ;; options.fillCells (nil: none): a Map of cell-key -> i (1..) of the cells each a stand only once its own floor is filled
-   ;; (the world read with every floor filled). The late flood first floods with them all refused; once that exhausts it
-   ;; runs its queue again (lf-phase 1), a node it reached with none (label 0) taking fill i in (label i), all flooded from
-   ;; there labelled i and another fill refused (one fill alone). lf-labels: node key -> label (none: 0), lf-label the
-   ;; expanded node's, lf-joined the label under which the run met the start, leaked or ran past its budget (-1: none)
+   ;; options.fillCells: the late flood labels each node with the one fill it came through (lf-labels, lf-label; 0 none);
+   ;; lf-joined the label under which it met the start, leaked or passed its budget (-1: none)
    ^js fill-cells ^:mutable ^js lf-labels ^:mutable lf-label ^:mutable lf-phase ^:mutable lf-joined
    ^:mutable ^boolean cut-off ; the flood proved the goal unreachable with a cliff edge in its region or an edge to drop off at its level: cut off, not walled in
    ;; the walker's limits (options.limits) refused some move whose arrival would have changed the search (probeLimit): a

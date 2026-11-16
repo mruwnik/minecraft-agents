@@ -28,7 +28,8 @@
    - options.avoid {kinds, cells, factor}: a search for another path (see avoidCost).
    - options.only: a Set of cell-key; the search enters no other cell (a given route re-priced along its own cells).
    - options.fillCells: a Map of cell-key -> i (1..) of stands over floors the world reads filled: the late flood says in
-     result.joined which one alone lets the goal be reached (i; 0 none needed, -1 none does; see Search fill-cells).
+     result.joined which one lets the goal be reached (i; 0 none needed, -1 none does). The budget is shared by every
+     fill, so a caller confirms i with that fill alone.
    - options.limits {kinds, gap, corner}: what the walker can do. Without it the search is unrestricted.
        kinds: bits of the move kinds never planned.
        gap(x, y, z, h, move, lx, ly, lz, lh): false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h

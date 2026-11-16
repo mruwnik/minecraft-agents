@@ -247,7 +247,7 @@
            :limited ^boolean (.-limit-refused s)
            :damageRefused (and ^boolean (.-damage-refused s) (not (identical? status "found")))})))
 
-  ;; with options.fillCells, the result's joined is the late flood's lf-joined; with options.unknown, it says whether a phantom floor was refused: darkRefused (unseeable; darkBest {x y z h}
+  ;; with options.unknown, the result says whether a phantom floor was refused: darkRefused (unseeable; darkBest {x y z h}
   ;; the refused stand nearest the goal, h its distance) and unseenRefused (no stop to check it first)
   (withUnknown [s ^js r]
     (when (some? (.-fill-cells s)) (set! (.-joined r) (.-lf-joined s)))
