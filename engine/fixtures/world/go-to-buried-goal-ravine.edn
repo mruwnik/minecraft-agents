@@ -33,6 +33,7 @@
   :limit-s 120}
  :cases
  [{:name "buried-goal-beside-a-ravine-stays-up"
+   :blocks [[:set [15 22 10] "air"]]
    :act [[:job (jobs.movement.go-to {:worth 2400 :pos #at [15 22 10] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 110 :of-job true}]
    :after [[:body-near [15.5 22 10.5] 9]]}
