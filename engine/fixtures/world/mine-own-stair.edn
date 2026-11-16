@@ -23,4 +23,10 @@
             {:kind :stair-way :data {:dim "overworld" :floors [#at [436 -2 -384] #at [435 -3 -384] #at [434 -4 -384] #at [433 -5 -384] #at [432 -6 -384] #at [431 -7 -384] #at [430 -8 -384] #at [429 -9 -384]]}}]
    :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :direction :west :level #at [16 -10 16] :tunnel-length 14 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 280 :of-job true}]
-   :after [[:item "raw_iron" 1] [:block [35 -1 16] "stone"] [:block [34 -1 16] "stone"] [:block [36 -1 16] "stone"]]}]}
+   :after [[:item "raw_iron" 1] [:block [35 -1 16] "stone"] [:block [34 -1 16] "stone"] [:block [36 -1 16] "stone"]]}
+  ;; Card d38e13b5 (Brindle S20): stone for cobblestone is under the lawn, and the old stair (feet -1 to -6) is not needed for it. Should-succeed: three stone
+  ;; are mined and the body does not end at the stair foot (the walk and the redone steps cost more than a stone dig where it stands).
+  {:name "stone-dig-does-not-walk-an-old-stair-it-does-not-need"
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 3 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 3 :reason :count}} :within-s 120 :of-job true}]
+   :after [[:item "cobblestone" 3] [:body-far [20.5 -6 16.5] 4]]}]}
