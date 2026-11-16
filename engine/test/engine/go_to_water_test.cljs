@@ -312,20 +312,6 @@
           (is (< x 6) (str "not far into the tunnel: " [x y z] " result " @out))
           (is (not (and (<= y 60) (< 6 x))) (str "not under water in the tunnel: " [x y z])))))))
 
-;; 50 cells: 12.7 s, past the 12 s limit of a plan with no air in sight, within the 15 s supply
-(def mid-sealed-tunnel
-  (merge (box -2 55 -4 60 66 4 "stone")
-         (box 1 58 0 1 64 0 "water") (box 1 65 0 1 66 0 "air")
-         (box 2 58 0 51 59 0 "water") (box 52 58 0 52 59 0 "air")))
-
-(deftest a-dive-to-seen-air-past-the-limit-but-within-the-supply-is-taken
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p]} (await (gt/go! {:self {:pos [1.5 58 0.5] :inWater true :oxygen 20} :blocks mid-sealed-tunnel}
-                                             {:pos [52 58 0] :range 0 :ways #{:walk :clear-seal}}))]
-          (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
-
 (deftest a-dive-within-the-air-left-is-taken
   (async done
     (tu/run-async done

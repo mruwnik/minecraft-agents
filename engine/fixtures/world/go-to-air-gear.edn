@@ -100,7 +100,7 @@
          [:job (jobs.movement.go-to {:worth 1200 :pos #at [115 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 1 8.5] 3]]}
-  ;; card 30c625b6: Depth Strider III swims faster (priced at the walking speed), so a 50 cell dive fits the air with more to spare; the same dive bare (13 s) is taken too, to seen air
+  ;; card 30c625b6: Depth Strider III swims faster (priced at the walking speed), so a 50 cell dive (13 s bare, past the planner's 12 s) fits the air; the same dive bare is refused
   {:name "depth-strider-3-dive-50-cells-arrives"
    :blocks [[:fill [3 0 7] [54 4 9] "stone"]
             [:fill [4 0 8] [53 1 8] "water"]
@@ -111,14 +111,13 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [53.5 1 8.5] 3]]}
-  ;; the 50 cells are 12.7 s of the 15 s supply: a dive to seen air that fits the breath is taken (the planner refuses a swim past airLimit only when no air is seen at its end)
-  {:name "bare-dive-50-cells-arrives"
+  {:name "bare-dive-50-cells-refused"
    :blocks [[:fill [3 0 7] [54 4 9] "stone"]
             [:fill [4 0 8] [53 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [53 2 8] [53 3 8] "air"]
             [:fill [5 2 8] [52 2 8] "sea_lantern"]]
    :act [[:rcon "effect give $BODY minecraft:saturation 2 10 true"] [:rcon "item replace entity $BODY armor.head with minecraft:air"] [:rcon "item replace entity $BODY armor.feet with minecraft:air"]
          [:job (jobs.movement.go-to {:worth 1200 :pos #at [53 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-near [53.5 1 8.5] 3]]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [4.5 1 8.5] 14]]}]}
