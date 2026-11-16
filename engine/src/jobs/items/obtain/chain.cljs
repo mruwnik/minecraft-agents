@@ -5,11 +5,13 @@
             [jobs.items.craft :as craft]
             [jobs.items.obtain.base :refer [plan-allowed?]]
             [jobs.lib.cost :as cost]
+            [jobs.lib.foods :as foods]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.recipes :as recipes]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.sources :refer [source-opts]]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]))
 
 (defn furnace-free
   "Of plans in order of preference, the first with no smelt step (a furnace needs fuel and time), else the first."
@@ -19,9 +21,11 @@
 (defn spendable
   "{name total} the craft children may use: the carried items the reserve register leaves free (reserve/free) to
   jobs.items.craft's chooser, worn-out tools left out. A spare tool's craft, which may take held units once nothing
-  else can be got, asks as :craft."
+  else can be got, asks as :craft. Carried raw food is always spendable: the furnace turns it into more food points."
   [c]
-  (storage/usable-totals (reserve/free c (if (= :torches (craft/slot-of c)) :craft-held :craft))))
+  (let [free (storage/usable-totals (reserve/free c (if (= :torches (craft/slot-of c)) :craft-held :craft)))
+        raw (select-keys (storage/usable-totals (u/inventory (:primitives c))) (keys foods/cooked-of))]
+    (merge free raw)))
 
 (defn craft-plan
   "{:item name :steps [..]} for the first of names a craft chain of allowed steps (a smelt step needs the :smelt way,
