@@ -253,13 +253,29 @@
       (and best (or (nil? @reaching) (<= (:price best) @reaching))) best
       (or @reaching @searching) :searching)))
 
+(defn first-ok
+  "Ask ok? of xs nearest first by walk-s from feet to (target x), reject! each that fails, up to the first that passes:
+  true; false when none does; :searching when the next test, at the mean of these, would take the call begun at t0 (clock/now)
+  past cost/search-budget-s (cost/search-pays?; the first always runs)."
+  [feet xs target ok? reject! t0]
+  (let [t1 (clock/now)]
+    (loop [[x & more] (sort-by #(walk-s feet (target %)) xs) n 1]
+      (cond
+        (nil? x) false
+        (ok? x) true
+        :else (let [now (clock/now)]
+                (reject! x)
+                (if (cost/search-pays? (/ (- now t0) 1000) (/ (- now t1) n 1000) (cost/search-budget-s)) (recur more (inc n)) :searching))))))
+
 (defn ^:async searched!
   "{:pick x :price seconds :quote q} of the one of xs the body walks to soonest by one search over all their targets
   (targets/nearest! :all, go-to's world over what the body has seen: dangers and darkness priced, the planner's own price
   of a route), then go-to's quote of that walk alone (Q141: one search ranks them, not a quote each; the quote's risk
   past the planner's, walk-risk's, does not rank them). target (fn [x]) {:pos :range}, walk (fn [x]) the go-to args;
-  ok? (fn [x]), asked of the pick alone, or a quote with no finite price reject! the pick (fn [x]) and the search runs
-  again without it; rejected? (fn [x]) leaves out the ones rejected before. state, an atom of {} the caller keeps while
+  ok? (fn [x]), asked before each search of the ones left nearest first by walk-s up to the first that passes (first-ok)
+  and of the pick, or a quote with no finite price reject! the one (fn [x]) and the search runs again without it:
+  a search costs far more than a test, so a field of failing ones is not turned down one search each; rejected? (fn [x])
+  leaves out the ones rejected before. state, an atom of {} the caller keeps while
   what the search rests on holds, keeps a pick whose quote goes on and the answer once there is one. :searching while a
   search or a quote goes on, or when this call's next step (a search, a test or a quote, at the mean of those so far)
   would take it past cost/search-budget-s (Q141): the first step of a call always runs, a search stops at what the
@@ -287,12 +303,15 @@
                 (contains? @state :answer) :done
                 pending (await (quote-pick! pending))
                 :else (let [left (vec (remove rejected? xs))
+                            open (if ok? (first-ok (u/self-pos c) left target ok? reject! t0) true)
+                            left (if (true? open) (vec (remove rejected? left)) [])
                             goals (mapv goal left)
                             unknown (wworld/with-seeds (wworld/unknown-spec c) nil (-> (mapv (juxt :x :y :z) goals) (into (ledger/stair-stands c)) (into (ledger/tunnel-stands c))))
                             a (when (seq left) (await (targets/nearest! c goals 0 {:tag ::searched :all true :unknown unknown
-                                                                                    :ms (max 0 (- (* 1000 (cost/search-budget-s)) (- t t0)))})))
+                                                                                    :ms (max 0 (- (* 1000 (cost/search-budget-s)) (- (clock/now) t0)))})))
                             x (when (= :found (:status a)) (nth left (:index a)))]
                         (cond
+                          (= :searching open) :searching
                           (= :searching (:status a)) :searching
                           (nil? x) (do (swap! state assoc :answer nil) :done)
                           (and ok? (not (ok? x))) (do (reject! x) :again)

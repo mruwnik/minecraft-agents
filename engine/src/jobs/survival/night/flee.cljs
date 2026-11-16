@@ -215,8 +215,10 @@
                     true))
             target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
             walk #(assoc (flee-args %) :floor cost-health/spend-down)
+            listed (filterv (site-open c) (untried (sites p look/memory-radius)))
+            ;; the listing is every call's, not the search's: inside the budget it left none for the home's quote (card cee023a9)
             t0 (clock/now)
-            site (await (pick/searched! c (filter (site-open c) (untried (sites p look/memory-radius)))
+            site (await (pick/searched! c listed
                                         {:target target :walk walk :ok? ok? :quote pick/quote-once! :state (search-state c p)
                                          :rejected? #(rejected? c %) :reject! #(reject! c %)}))
             ;; the home at any distance is quoted on its own (past a search's nodes go-to still plans the long walk), in

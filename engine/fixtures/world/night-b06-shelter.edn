@@ -258,6 +258,16 @@
    :expect [{:event {:source :job :kind :night.bed-placed} :within-s 180}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 180}]
    :limit-s 200}
+  ;; cee023a9: no bed, every ground site fails (one-block floor) and the listing outlasts the search budget: the night still walks home in a few passes
+  {:name "walled-in-home-without-a-bed-walks-home"
+   :time :night-exclusive :time-why :sleep
+   :blocks [[:fill [10 0 10] [17 3 14] "stone"] [:fill [12 0 11] [15 1 13] "air"]]
+   :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [12 0 12]})]
+         [:job (jobs.survival.night {:worth 1200})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot #{:flee :enter-room}}} :within-s 60}]
+   :after [[:body-near [13.5 0 12.5] 2.5]]
+   :limit-s 100}
   ;; 2383463a: a bed 150 blocks off is too far to walk to tonight (no flight): it walls in here (18 cells with the corners; the 1-thick plot floor holds no pit)
   {:name "bed-150-blocks-away-is-too-far"
    :plot {:length 200 :width 32}

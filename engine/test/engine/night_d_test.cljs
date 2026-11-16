@@ -820,3 +820,44 @@
           (is (= :ground (:kind @out)) "the ground site is the answer")
           (is (seq @asked) "the site was quoted")
           (is (not-any? :place @asked) "the home's straight walk costs more than the site's price: not quoted"))))))
+
+(def walled-room
+  "A stone box (x 10..17, z 10..14, y 64..67) round a room with no way in (x 12..15, z 11..13, y 64..65): the home."
+  (merge (into {} (for [x (range 10 18) y (range 64 68) z (range 10 15)] [(str x "," y "," z) "stone"]))
+         (into {} (for [x (range 12 16) y [64 65] z (range 11 14)] [(str x "," y "," z) "air"]))))
+
+(deftest a-slow-flee-listing-and-a-field-of-failing-sites-still-let-the-night-act
+  ;; card cee023a9: with a live clock the site listing ate the 100 ms budget, so each pass turned down one site by a
+  ;; whole search and the home was never quoted: 1000+ passes, no act. Here the clock moves only by the costs below.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ms (atom 0)
+              now clock/now
+              sites flee/sites
+              looks flee/site-looks-open?
+              ground-ok? flee/ground-ok?
+              pass night/pass
+              passes (atom [])
+              {:keys [eng p]} (st/setup {:time night :inventory [{:name "stone_pickaxe" :count 1}] :blocks walled-room
+                                         :floor [-2 8 20 16] :self {:pos {:x 4.5 :y 64 :z 12.5}}})]
+          (tu/seeing-all p)
+          (know-home! eng {:x 12 :y 64 :z 12})
+          (set! clock/now #(deref ms))
+          (set! flee/sites (fn [p r] (swap! ms + 150) (sites p r))) ; the listing alone past the budget
+          (set! flee/site-looks-open? (fn [p x] (swap! ms + 0.5) (looks p x)))
+          (set! flee/ground-ok? (fn [c x] (swap! ms + 3) (ground-ok? c x))) ; no pit fits a one-block floor: every ground site fails
+          (set! night/pass (fn ^:async g [c]
+                             (let [calls (count (.-calls (.-world p)))
+                                   r (if (< (count @passes) 60) (await (pass c)) (ctx/end c :done nil {}))]
+                               (swap! passes conj (some #(not= "look" (.-name %)) (drop calls (.-calls (.-world p)))))
+                               r)))
+          (try
+            (core/submit! eng (tu/order '(jobs.survival.night {:worth 1200})) {})
+            (await (tu/run-until-empty eng 120))
+            (finally (set! clock/now now)
+                     (set! flee/sites sites)
+                     (set! flee/site-looks-open? looks)
+                     (set! flee/ground-ok? ground-ok?)
+                     (set! night/pass pass)))
+          (is (some true? (take 40 @passes)) "the night acts (walks home) within 40 passes; one failing site a pass took hundreds"))))))
