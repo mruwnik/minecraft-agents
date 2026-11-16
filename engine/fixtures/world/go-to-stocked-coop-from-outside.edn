@@ -1,0 +1,19 @@
+;; Card 2da337ba: go-to aimed into the body's own stocked coop from outside, with no way in (a closed oak fence ring, no gate, x 18..24, z 13..19, inside 19..23 x 14..18,
+;; on grass; the coop is the body's own zone). Whatever way the job ends, the fence cells and the ground under them are whole and the chickens are all still inside.
+;; Should-succeed: none (the job may arrive or stop; it is judged on what it leaves). Should-fail: a stair or dig through the fence that leaves the fence cut, or restores it over
+;; a hole in the ground under it (the flock walks out under the hung fence).
+{:name "stair-into-a-stocked-coop-leaves-fence-and-ground-whole"
+ :tags [:go-to :animals :pen :access]
+ :time :any
+ :plot {:floor "grass_block" :height 8}
+ :zones [{:name "coop" :min [17 -4 12] :max [25 4 20] :owner "$body"}]
+ :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]]
+ :body {:at [10.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["stone_shovel" 1]] :effects [["resistance" 900 4]]}
+ :act [[:summon "chicken" [20.5 0 15.5] "{NoAI:1b}"] [:summon "chicken" [21.5 0 16.5] "{NoAI:1b}"] [:summon "chicken" [22.5 0 17.5] "{NoAI:1b}"]
+       [:until [:cli "entities" ["$body" "--world" "$world" "--type" "chicken"] {:total 3}] 30]
+       [:job (jobs.movement.go-to {:worth 1200 :pos #xyz [21 0 16] :range 1})]]
+ :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
+ :after [[:block [18 0 16] "oak_fence"] [:block [24 0 16] "oak_fence"] [:block [21 0 13] "oak_fence"] [:block [21 0 19] "oak_fence"]
+         [:block [18 -1 16] "grass_block"] [:block [24 -1 16] "grass_block"] [:block [21 -1 13] "grass_block"] [:block [21 -1 19] "grass_block"]
+         [:entities "type=chicken,tag=wt" [[19 0 14] [23 1 18]] 3]]
+ :limit-s 140}
