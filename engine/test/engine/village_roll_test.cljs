@@ -185,6 +185,30 @@
           (is (some #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "the pen child plugs the near end")
           (is (zero? (digs p)) "no break while the near end is open behind the villager"))))))
 
+(defn seeing-all-but-the-pen-cell-roof-and-floor
+  "p seeing every block except the pen cell's roof and floor: from the stand the top slab hides them."
+  [p]
+  (tu/seeing-all p)
+  (let [hid? #(contains? #{[3 66 0] [3 63 0]} (u/cell-vec %))
+        blocks (.-seenBlocks p) block-at (.-seenBlockAt p) sensed (.-sensedAt p)]
+    (aset p "seenBlocks" (fn [q] (.filter (blocks q) #(not (hid? (.-pos %))))))
+    (aset p "seenBlockAt" (fn [pos] (if (hid? pos) #js {:unknown true :pos pos} (block-at pos))))
+    (aset p "sensedAt" (fn [pos] (if (hid? pos) #js {:unknown true :pos pos} (sensed pos))))
+    p))
+
+(deftest a-librarian-at-its-lectern-in-a-plugged-pen-whose-roof-is-unseen-is-rolled-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")])]
+                                            :wrap #(do (seeing-all-but-the-pen-cell-roof-and-floor (:p %)) %)
+                                            :scripts [[(offer "enchanted_book")]]}
+                                           {}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
+          (is (= 1 (digs p)))
+          (is (not-any? #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen)
+              "no pen child: the near end is plugged, so no walk out to see the roof"))))))
+
 (deftest a-villager-nearer-another-job-site-than-its-lectern-is-penned-before-the-first-break
   (async done
     (tu/run-async done
