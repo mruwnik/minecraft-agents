@@ -299,7 +299,7 @@
         stone (cells "stone" [2] [65] [5])]
     (is (= #{(at 0) (at 1)} (scan-targets ores #{})) "nothing stranded: both stay")
     (is (= #{} (scan-targets ores #{(at 9)})) "stranded: ore with only air and ore round it is dropped")
-    (is (= #{(at 1)} (scan-targets (merge ores stone) #{(at 9)})) "the one with stone beside it stays, the other is dropped")))
+    (is (= #{(at 0) (at 1)} (scan-targets (merge ores stone) #{(at 9)})) "a cluster touching stone stays whole: the far cell is dug to through its neighbour")))
 
 (deftest seen-ore-behind-a-wall-the-walk-cannot-pass-is-cut-to-once-then-skipped
   (async done

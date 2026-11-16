@@ -163,6 +163,20 @@
         names (keep #(u/seen-name p %) ring)]
     (and (some air-names names) (every? #(or (air-names %) (str/ends-with? % "_ore")) names))))
 
+(defn remove-floating
+  "pos-seq without the cells of its floating? clusters, each cluster judged once."
+  [c poss]
+  (let [cells (vec poss)]
+    (loop [todo cells, floaters #{}, kept #{}]
+      (if-let [pos (first todo)]
+        (if (or (floaters pos) (kept pos))
+          (recur (rest todo) floaters kept)
+          (let [cluster (cluster-of pos cells)]
+            (if (floating? c cluster)
+              (recur (rest todo) (into floaters cluster) kept)
+              (recur (rest todo) floaters (into kept cluster)))))
+        (remove floaters cells)))))
+
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near; next-target! prices the walks, a death or hide spot's mob on the way
   among them), those below the feet after all level or higher ones (a hole in the floor loses its drop; not soil or ores) and those over the ground snapshot after all others, :refused [verdict] of blocks a
@@ -180,7 +194,7 @@
                   (map :pos)
                   (remove skipped)
                   (remove #(too-deep? c %))
-                  (remove #(and (seq (:stranded (ctx/mem c))) (floating? c [%]))))
+                  (#(if (seq (:stranded (ctx/mem c))) (remove-floating c %) %)))
         cells (filter #(or (not stay?) (stay/beside-body? (cell-of here) %)) seen)
         heading (headings (:heading (ctx/mem c)))
         side (when (and stay? heading)
