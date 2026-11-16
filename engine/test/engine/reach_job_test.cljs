@@ -327,3 +327,9 @@
     (is (= [100 10 0] (:pos got)) "the stand under the goal")
     (is (<= @priced 3) "stands whose bound cannot beat it are never priced")
     (is (nil? (reach/approach cells [0 10 0] span-from (fn [s _] (:aside s)) (fn [cell] (js/Math.abs (- (cell 0) 100))) 0)) "none under the limit")))
+
+(deftest approach-takes-the-nearer-of-two-stands-of-equal-rank
+  ;; the far stand's bound sorts it first; the near one's bound equals the rank found, and still ties and is nearer
+  (let [bound {[50 10 0] 0 [1 10 0] 5}
+        got (reach/approach [[50 10 0] [1 10 0]] [0 10 0] (fn [_] {}) (fn [_ _] 5) bound nil)]
+    (is (= [1 10 0] (:pos got)))))

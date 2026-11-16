@@ -101,18 +101,18 @@
 (defn approach
   "{:step :approach :pos cell :then span} for the best of cells (the stands) from which (span-from cell) gives a span,
   ranked by (rank span cell) then by the nearest to feet; nil when none. (bound cell) is a lower bound on the rank
-  any span from cell can have: cells go by it, and the scan ends at the first whose bound is no better than the best
-  rank found (or not under limit, when given), so a stand far from the goal is never priced."
+  any span from cell can have: cells go by it, and the scan ends at the first whose bound is worse than the best
+  rank found (an equal bound can still tie and be nearer) (or not under limit, when given), so a stand far from the goal is never priced."
   [cells feet span-from rank bound limit]
   (let [far (fn [cell] (u/dist (zipmap [:x :y :z] cell) (zipmap [:x :y :z] feet)))]
     (loop [[[b cell] & more] (sort-by (juxt first #(far (second %))) (map (fn [c] [(bound c) c]) cells))
            best nil]
       (cond
-        (or (nil? cell) (and limit (>= b limit)) (and best (>= b (first best)))) (some-> best second)
+        (or (nil? cell) (and limit (>= b limit)) (and best (> b (first (first best))))) (some-> best second)
         :else (let [span (span-from cell)
-                    r (when span (rank span cell))]
-                (recur more (if (and span (or (nil? best) (< r (first best))))
-                              [r {:step :approach :pos cell :then span}]
+                    k (when span [(rank span cell) (far cell)])]
+                (recur more (if (and span (or (nil? best) (neg? (compare k (first best)))))
+                              [k {:step :approach :pos cell :then span}]
                               best)))))))
 
 (defn span-end
