@@ -6,7 +6,7 @@
   - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen dark, or one never seen guessed dark; look/dark-fn).
   - A call that ends other than arrived, or yields (:continue) as a hold or short of air, with the head under water first swims to the air it knows (surface-before-end!).
-  - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee and its toll over the stay (:stay-s, else a click's) costs more than the goal's :worth (else a tour's); :wait (default) walks on, an info goal-in-danger says so.
+  - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee and its toll over the stay (:stay-s, else a click's) costs more than the goal's :worth (else a tour's), at the attempt start and at every re-plan (a mob that came into view on the walk); :wait (default) walks on, an info goal-in-danger says so.
   - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
     Each steer is bounded by the call's :spend :job-time left (a caller's short leg), and the engine cuts the call at that limit; a search that goes on past it gives up :search-spent (the engine only notices at an act, and a search makes none).
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
@@ -222,6 +222,16 @@
   (fn [{:keys [steps] :as plan} first?]
     (or (when check (check plan first?))
         (when-let [t (turn-back/exceeded c steps)] {:turn-back t}))))
+
+(defn goal-danger-check
+  "near/walk-round!'s :stair-check: check's why, else {:goal-danger d} for a re-plan (not the first plan, which the attempt's own check priced) of a call under
+  goal-danger :end whose goal is now by a mob the body would flee that costs more than the goal is worth (aim/goal-danger): a mob that came into
+  view after the walk began gives the goal up as one seen before it did."
+  [c pos check]
+  (fn [plan first?]
+    (or (when check (check plan first?))
+        (when (and (not first?) (= :end (tuning/goal-danger)))
+          (when-let [d (aim/goal-danger c pos)] {:goal-danger d})))))
 
 (defn count-floor!
   "The walk's on-floor: one more of the call's unseen floors of kind :present or :absent (cut/count-floor!). A :missed
@@ -622,7 +632,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (turn-back-check c (known-end-check c pos (reprice/check c pos (route-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))))
+            stair-check (goal-danger-check c pos (turn-back-check c (known-end-check c pos (reprice/check c pos (route-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))))
             round (await (near/walk-round! (assoc c :aimed-goal (some? (:aimed (ctx/mem c))) :on-pose (approach-recorder c pos) :closest #(:closest (cut/record c)) :on-floor #(count-floor! c %1 %2) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
@@ -673,6 +683,11 @@
 
           (and (= "stair" status) (:risk (:why walked)))
           (reprice/end c (:risk (:why walked)))
+
+          (and (= "stair" status) (:goal-danger (:why walked)))
+          (let [danger (:goal-danger (:why walked))]
+            (ctx/emit! c :goal-in-danger :info (assoc danger :target pos))
+            (await (end/give-up! c pos {:reason :goal-dangerous} danger)))
 
           (and (= "stair" status) (= :dives (:why walked)))
           (esc/dive-refused! c pos)

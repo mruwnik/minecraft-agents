@@ -1381,6 +1381,17 @@
           (is (str/includes? (:text @(:out s)) "zombie") (:text @(:out s)))
           (is (= [0 64 0] (at (:p s))) "the body did not walk"))))))
 
+(deftest goal-danger-end-gives-up-on-a-mob-that-comes-into-view-on-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie (assoc goal-zombie :pos {:x 31 :y 64 :z 1})
+              s (with-redefs [threats/sensed-mobs (fn [p _] (if (> (first (at p)) 5) [zombie] []))]
+                  (await (go! {:blocks flat} {:pos [30 64 0] :range 0 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
+          (is (= {:arrived false :why :goal-dangerous} (select-keys @(:out s) [:arrived :why])) (pr-str @(:out s)))
+          (is (= "zombie" (:mob @(:out s))))
+          (is (< (first (at (:p s))) 25) "the body did not walk on to the goal"))))))
+
 (deftest goal-danger-end-prices-the-open-cells-beside-a-solid-goal
   (async done
     (tu/run-async done
