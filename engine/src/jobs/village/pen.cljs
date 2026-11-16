@@ -311,8 +311,8 @@
 (defn ^:async judge-kept!
   "Once, right after free!, with the workstation still gone: a villager outside the cell still reading the pen's
   profession within the game's site-check radius (jobs.lib.villager/near-site?) is looked at every game tick for one
-  poll (the game takes an untraded villager's job a tick after the break); still employed, it holds another job site or
-  has traded: :kept. Farther off the game has not checked the site yet, so the free counts for nothing and is made again
+  poll (the game takes an untraded villager's job a tick after the break); still employed and seen, it holds another job site or
+  has traded: :kept (a villager gone from view is no evidence). Farther off the game has not checked the site yet, so the free counts for nothing and is made again
   once it is near. :again or :continue."
   [c ws e in?]
   (let [p (:primitives c)
@@ -329,7 +329,7 @@
             now (villager/find-by-uuid p id)]
         (cond
           (= :continue r) :continue
-          r (do (ctx/update-mem! c assoc :judged true) :again)
+          (or r (not (employed? now))) (do (ctx/update-mem! c assoc :judged true) :again)
           (and (employed? now) (not (villager/near-site? now ws))) (do (ctx/update-mem! c dissoc :freed) :again)
           :else (do (ctx/update-mem! c assoc :judged true :kept id) :again))))))
 

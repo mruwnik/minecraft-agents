@@ -467,6 +467,25 @@
           (is (= {:status :stopped :reason :kept-job} (select-keys result [:status :reason])) (pr-str result))
           (is (= "lectern" (block p ws)) "the lectern is placed back before the call ends"))))))
 
+(defn villager-leaves-view-once-freed
+  "The librarian is gone from the fake world the moment the lectern is broken."
+  [{:keys [p]}]
+  (add-watch (fake/state p) :gone
+             (fn [_ s _ w]
+               (when-not (= "lectern" (get-in w [:blocks ws]))
+                 (remove-watch s :gone)
+                 (swap! s update :entities #(vec (remove :profession %)))))))
+
+(deftest a-librarian-unseen-after-the-free-is-no-evidence-of-a-kept-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _] (await (run-ticking (assoc (world (merge shut box))
+                                                    :entities [(vt/villager nil {:profession "librarian" :level 1 :pos {:x 6 :y 64 :z 3}})]
+                                                    :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 villager-leaves-view-once-freed))]
+          (is (= :not-walked-in (:reason result)) (pr-str result)))))))
+
 (defn walks-in-through-the-near-end-once-freed
   "As walks-in-once-freed, but as the game does on the walk in: the librarian takes the job back within 2 blocks of the
   lectern, its feet still in the near end, and steps into the cell 10 s of clock later."
