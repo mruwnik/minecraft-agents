@@ -208,10 +208,15 @@
   (not (and next-case (= :keep (body-start-plan next-case false)))))
 
 (def far-spawn-y
-  "The absolute height of a :spawnpoint :far pad: 100 over the surface plots' floor, above every plot (the tallest, 31,
-  stands at 181) and the underground cells' rock, so nothing else lies there; a body away from home (the death price
-  reads the straight distance from the respawn point). Fixed, so it stays under build height (its air reaches 252)."
+  "The absolute height of a :spawnpoint :far pad: over the terrain and under build height (its air reaches 252)."
   250)
+
+(def far-spawn-blocks
+  "Blocks east of the start a :spawnpoint :far pad lies: past the walk back that beats the despawn of a death's items
+  (cost.value/fetch-cost, about 1300), as for a body whose bed is lost or far from its work. The trial bodies' deaths
+  that woke that far woke 2200 to 18500 blocks off; the fake world's spawn is 5000 off, so unit tests and world cases
+  price a death alike."
+  5000)
 
 (defn far-spawn?
   "Whether the case asks for a far respawn point (:spawnpoint :far)."
@@ -219,12 +224,12 @@
   (= :far (get-in c [:body :spawnpoint])))
 
 (defn respawn-cell
-  "The block the game respawns the body in: :spawnpoint (:far: at far-spawn-y, absolute), else the start, floored
+  "The block the game respawns the body in: :spawnpoint (:far: far-spawn-blocks east of the start at far-spawn-y, absolute), else the start, floored
   (/spawnpoint takes only integers; a fractional one is refused and the body would respawn at the world spawn)."
   [c]
   (let [{:keys [spawnpoint at]} (:body c)
         floor-y (if (= :sky (light-of c)) (:y default-grid) (:y underground))
-        p (if (= :far spawnpoint) (some-> at (assoc 1 (- far-spawn-y floor-y))) (or spawnpoint at))]
+        p (if (= :far spawnpoint) (some-> at (assoc 1 (- far-spawn-y floor-y)) (update 0 + far-spawn-blocks)) (or spawnpoint at))]
     (some->> p (mapv #(js/Math.floor %)))))
 
 (defn seeded-night?
@@ -1039,15 +1044,17 @@
   ["armor.head" "armor.chest" "armor.legs" "armor.feet" "weapon.offhand"])
 
 (defn far-pad-commands
-  "Fills for the :spawnpoint :far pad: a 3x3 stone floor under the respawn cell with air over it (two cells), or the same
-  area as air when clearing. The plot is the only thing below it, so nothing else lies there."
+  "The :spawnpoint :far pad: its chunks forceloaded, a 3x3 stone floor under the respawn cell with air over it (two
+  cells); when clearing, the same area as air and the forceload removed. build-plot! sends it with the plot's blocks, so a
+  chunk not loaded yet is built again."
   [origin c clear?]
   (when (far-spawn? c)
     (let [[x y z] (abs-pos origin (respawn-cell c))
+          load (fn [op] (str "forceload " op " " (dec x) " " (dec z) " " (inc x) " " (inc z)))
           fill (fn [y0 y1 b] (str "fill " (dec x) " " y0 " " (dec z) " " (inc x) " " y1 " " (inc z) " " b))]
       (if clear?
-        [(fill (dec y) (inc y) "minecraft:air")]
-        [(fill (dec y) (dec y) "minecraft:stone") (fill y (inc y) "minecraft:air")]))))
+        [(fill (dec y) (inc y) "minecraft:air") (load "remove")]
+        [(load "add") (fill (dec y) (dec y) "minecraft:stone") (fill y (inc y) "minecraft:air")]))))
 
 (defn body-commands
   "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down), still a spectator
@@ -1055,9 +1062,8 @@
   far from every plot, which would price each death as a huge walk back)."
   [origin body c]
   (let [{:keys [at yaw pitch inventory effects]} (:body c)]
-    (-> (vec (far-pad-commands origin c false))
-        (into [(str "clear " body)
-               (str "effect clear " body)])
+    (-> [(str "clear " body)
+         (str "effect clear " body)]
         (into (for [slot worn-slots] (str "item replace entity " body " " slot " with minecraft:air")))
         (into [(str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " " (or pitch 0))
                (str "effect give " body " minecraft:instant_health 1 10 true")

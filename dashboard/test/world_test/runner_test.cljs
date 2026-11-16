@@ -34,7 +34,7 @@
 
 (deftest build-plot-retries-an-unloaded-plot-then-fails-as-a-setup-error
   (let [origin [20000 150 20000]
-        c {:plot {:height 4 :floor "stone"} :blocks [[:fill [0 0 0] [1 1 1] "water"]]}
+        c {:plot {:height 4 :floor "stone"} :blocks [[:fill [0 0 0] [1 1 1] "water"]] :body {:at [1.5 0 1.5] :spawnpoint :far}}
         unloaded "That position is not loaded"
         run (fn [bad-rounds]
               (let [sent (atom []) left (atom bad-rounds)]
@@ -54,7 +54,8 @@
           (.then #(run 2))
           (.then (fn [{:keys [res sent]}]
                    (is (nil? res) "loaded on the third try")
-                   (is (= 3 (count (filter #(re-find #"water" %) sent))))))
+                   (is (= 3 (count (filter #(re-find #"water" %) sent))))
+                   (is (= 3 (count (filter #(re-find #"^fill 25000 249 20000 .* minecraft:stone" %) sent))) "the :far pad is built with the plot, so a try that found it unloaded builds it again")))
           (.then #(run 9))
           (.then (fn [{:keys [res]}]
                    (is (re-find #"plot not built.*not loaded" res))

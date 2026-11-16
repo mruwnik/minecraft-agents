@@ -1965,13 +1965,13 @@
       (check 16))))
 
 (defn build-plot!
-  "Sends the plot's setup and block commands (idempotent), then checks the replies: a plot whose chunks were not loaded
+  "Sends the plot's setup and block commands and the :far pad (idempotent), then checks the replies: a plot whose chunks were not loaded
   yet is built again after a pause, up to 3 times. Resolves to nil when built, else to the failure message (a setup
   error, not a job failure). io: {:send cmds->promise of replies, :sleep ms->promise}."
   [{:keys [send sleep]} grid origin c]
   (letfn [(attempt [retries]
             (-> (send (f/setup-commands grid origin c))
-                (.then (fn [setup] (.then (send (into (f/block-commands origin c) (f/relight-commands grid origin c))) #(into setup %))))
+                (.then (fn [setup] (.then (send (-> (f/block-commands origin c) (into (f/far-pad-commands origin c false)) (into (f/relight-commands grid origin c)))) #(into setup %))))
                 (.then (fn [replies]
                          (let [bad (f/build-failure replies)]
                            (cond
