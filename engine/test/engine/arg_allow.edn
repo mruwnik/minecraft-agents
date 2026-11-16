@@ -39,6 +39,9 @@
  [jobs.blocks.clear-cells :keep]
  [jobs.blocks.seal-opening :radius]
  [jobs.build.from-plan :explore]
+ ;; build.hut is submitted by the agent; its trigger caller is card 08e3050f
+ [jobs.build.hut :blueprints]
+ [jobs.build.hut :plan]
  [jobs.build.pen :ignore-zones?]
  [jobs.build.pen :uneven?]
  [jobs.build.rail :plan]
