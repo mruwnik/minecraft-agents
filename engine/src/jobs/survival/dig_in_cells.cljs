@@ -104,6 +104,13 @@
       ready
       (conj (vec (support-chain p feet (first cells) (settings/get settings ::support-depth))) (first cells)))))
 
+(defn unsupported?
+  "Whether no cell of cells can take the first block from feet: none is in supported-order and none has a support-chain (open water)."
+  [p cells feet]
+  (and (seq cells)
+       (empty? (supported-order p feet cells))
+       (not-any? #(support-chain p feet % (settings/get settings ::support-depth)) cells)))
+
 (defn door
   "The door cells [feet head] of one side among the placed cells: the first side
   with both cells placed, else the first side placed at feet height plus the

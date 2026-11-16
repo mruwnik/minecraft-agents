@@ -51,7 +51,7 @@
 (defn done? [c] (way/done? c :walls))
 
 (defn why-not
-  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; {:stop :lava-adjacent} with :on-lava :stop when a cell to fill holds lava; {:stop :hostile-in-cell} (not with :for :night) when a known hostile stands in an open cell, which the walls fail on; nil otherwise."
+  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; {:stop :no-support} when no open cell can take a first block (dig-in-cells/unsupported?); for the night also {:stop :own-plan} when an open cell lies in a plan the body made; {:stop :lava-adjacent} with :on-lava :stop when a cell to fill holds lava; {:stop :hostile-in-cell} (not with :for :night) when a known hostile stands in an open cell, which the walls fail on; nil otherwise."
   [c]
   (let [p (:primitives c)
         cells (fill/open-cells p (sh-sense/feet p))
@@ -62,6 +62,7 @@
       {:stop :lava-adjacent :text "lava in a cell the walls would fill"}
       (placer/own-plan-cell c cells) {:stop :own-plan :text "the walls need a cell of the body's own plan"}
       (nil? (lb/pick c (flight/blocks c))) {:stop :no-blocks :text "no block to wall the body in with"}
+      (dig-cells/unsupported? p cells (sh-sense/feet p)) {:stop :no-support :text "no open cell has a block to be placed against"}
       (and (not= :night (:for (:args c))) (some (seal/hostile-cells p (danger-q/hostile-radius)) cells))
       {:stop :hostile-in-cell :text "a hostile stands in a cell the walls would close"}
       (and (= :night (:for (:args c))) (< have open)) {:stop :no-blocks :text (str "fewer blocks carried than the " open " open cells")})))

@@ -346,6 +346,15 @@
     (is (< (:open-s (cover 20)) stay) "blocks for the side facing the shooter: its fire stops after two placements")
     (is (<= stay (:open-s (cover 1))) "one block cannot close that side: the body stays in the fire while it works")))
 
+(deftest walls-in-open-water-are-no-cover-against-a-trident-drowned
+  (let [sea (merge (blocks "stone" [-8 8] [50 50] [-8 8]) (blocks "water" [-8 8] [51 64] [-8 8]))
+        cover (fn [world] (shut-in/covers (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks world :inventory [{:name "dirt" :count 19}]
+                                                                                   :entities [{:id 9 :name "drowned" :kind "hostile" :held "trident" :pos {:x 0.5 :y 58 :z 6.5} :health 20}]})))
+                                             :args {:for :danger})
+                                      [:walls]))]
+    (is (= {} (cover sea)) "afloat with every cell water and the sea floor 13 down: no block can be placed, so no walls")
+    (is (:walls (cover (merge sea ground))) "over ground the same walls are priced")))
+
 (deftest a-night-wall-of-dear-blocks-quotes-its-placing-and-leaves-the-dawn-dig-to-morning-s
   (let [c (fn [item] (assoc (ctx-of (tu/seeing-all (tu/fake {:blocks ground :inventory [{:name item :count 20}]})))
                             :args {:for :night}))
