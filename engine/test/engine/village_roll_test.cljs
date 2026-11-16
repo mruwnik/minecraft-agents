@@ -573,7 +573,8 @@
               [result _ seen] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true
                                             :wrap (after-the-break swap-in)}
                                            {:villager nil :spend {:wall-time 30}}))]
-          (is (not (:found result)) (pr-str result))
+          (is (= {:found false :status :stopped :reason :wall-time :rolls 1} (select-keys result [:found :status :reason :rolls]))
+              "the call waits for the villager it rolled till its budget ends; v-2's offers are never read")
           (is (= ["v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen)))))))))
 
 (deftest a-villager-rolled-once-that-takes-another-job-ends-other-job-not-another-villager-rolled
@@ -687,7 +688,7 @@
           (is (= {:found false :status :stopped :reason :other-job} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
 
-(deftest a-spare-carried-is-placed-the-moment-the-job-is-gone-and-the-drop-picked-up-after
+(deftest a-spare-carried-is-not-placed-over-the-drop-the-drop-is-picked-up-first
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -695,7 +696,7 @@
                                             :scripts [[(offer "enchanted_book")]]} {}))
               acts (keep #(when (and (= :action (:source %)) (= :started (:kind %)) (#{"dig" "place" "collect"} (:name %))) (:name %)) @seen)]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
-          (is (= ["dig" "place" "collect"] acts) "the lectern is out no longer than the job takes to go")
+          (is (= ["dig" "collect" "place"] acts) "a lectern placed over the drop lying in the cell pushes it out of reach")
           (is (= 1 (count (filter #(= "lectern" (:name %)) (:inventory @(fake/state p)))))
               "the drop is in the bag again")
           (is (= "lectern" (workstation p))))))))

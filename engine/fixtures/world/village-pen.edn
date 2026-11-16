@@ -14,7 +14,9 @@
 ;; pen-lures-a-villager-out-of-view-of-the-boxed-body (card 3263645c: as above, the villager off the pen's axis, so the
 ;; boxed body loses sight of it; the pen waits for the walk-in instead of ending :villager-out-of-view).
 ;; pen-shuts-over-a-wall-torch-without-the-body-walking-into-the-ring (card 512e8f37): the shut fill digs a wall torch in the wall and leaves its drop.
-;; Should-fail: pen-villager-that-never-walks-in-ends-not-walked-in (a jobless NoAI villager 6 blocks off the pen's axis,
+;; Should-fail: pen-traded-librarian-outside-keeps-its-job-ends-kept-job (card c66943dc: a traded librarian (level 2) 4 off
+;; the near end keeps its job when the lectern is freed; the drop is picked up, the lectern placed back, the call ends :kept-job, not after a walk-in wait).
+;; pen-villager-that-never-walks-in-ends-not-walked-in (a jobless NoAI villager 6 blocks off the pen's axis,
 ;; out of view once the body is boxed: the pen is built, its near end stays open, the call ends :not-walked-in after the
 ;; walking-hour ticks).
 {:defaults
@@ -81,6 +83,12 @@
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000003c" :pos #at [16 0 16] :profession "librarian"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"] [:block [16 0 18] "oak_fence"] [:block [16 1 18] "air"]]}
+  {:name "pen-traded-librarian-outside-keeps-its-job-ends-kept-job"
+   :act [[:summon "villager" [16.5 0 20.5] "{NoAI:1b,UUID:[I;20260,7,5,84],Xp:10,VillagerData:{profession:\"minecraft:librarian\",level:2,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000054" :pos #at [16 0 16] :profession "librarian"})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :free}} :within-s 200 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :kept-job}} :within-s 230 :of-job true}]
+   :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}
   {:name "pen-villager-that-never-walks-in-ends-not-walked-in"
    :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,41],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000029" :pos #at [16 0 16] :profession "librarian" :settings {:jobs.lib.villager/take-job-ticks 200}})]]

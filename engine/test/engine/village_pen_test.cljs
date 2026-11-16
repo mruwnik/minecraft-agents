@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.blocks-dig-test :as bd]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.village-trade-test :as vt]
@@ -123,7 +124,7 @@
 (defn ^:async run
   "Run the pen on world spec, the body in the stand behind the lectern; env-fn may change the world as the clock moves. [result p seen]."
   [spec args n & [env-fn]]
-  (let [{:keys [p seen] :as env} (bd/setup (merge {:self at-stand} spec))
+  (let [{:keys [p seen] :as env} (cond-> (bd/setup (merge {:self at-stand} (dissoc spec :wrap))) (:wrap spec) ((:wrap spec)))
         _ (when env-fn (env-fn env))
         result (await (child-outcome env args n))]
     [result p seen]))
@@ -424,6 +425,47 @@
           (is (= 1 (count (filter #(= [2 64 0] [(.-x (.-pos (.-args %))) (.-y (.-pos (.-args %))) (.-z (.-pos (.-args %)))]) (vt/calls p "dig")))))
           (is (= "lectern" (block p ws)))
           (is (= "oak_fence" (block p [0 64 0]))))))))
+
+(defn lectern-dig-yields-once
+  "env whose dig of the lectern breaks it and yields a round (the drop's pickup delay) before the drop is in the bag;
+  rounds counts its rounds."
+  [rounds]
+  (fn [env]
+    (let [state (fake/state (:p env))
+          j (get-in env [:eng :jobs 'jobs.blocks.dig])]
+      (assoc-in env [:eng :jobs 'jobs.blocks.dig]
+                (assoc j :round (fn ^:async stubbed [c]
+                                  (let [x (:pos (:args c))]
+                                    (cond
+                                      (not= ws (if (map? x) [(:x x) (:y x) (:z x)] (vec x))) (await ((:round j) c))
+                                      (= 1 (swap! rounds inc)) (do (swap! state assoc-in [:blocks ws] "air") :continue)
+                                      :else (do (swap! state update :inventory conj {:name "lectern" :count 1})
+                                                (ctx/end c :done nil {:dug true :collected 1}))))))))))
+
+(deftest the-free-waits-for-its-dig-to-pick-up-the-drop-before-the-lectern-is-placed-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rounds (atom 0)
+              [result p] (await (run-ticking (assoc (world (merge shut box))
+                                                    :entities [(vt/villager nil {:profession "librarian" :level 1 :pos {:x 6 :y 64 :z 3}})]
+                                                    :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}]
+                                                    :wrap (lectern-dig-yields-once rounds))
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 walks-in-once-freed))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= 2 @rounds) "the dig child ran on to its pickup")
+          (is (= "lectern" (block p ws))))))))
+
+(deftest a-librarian-that-keeps-its-job-after-the-free-ends-kept-job-with-the-lectern-placed-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run-ticking (assoc (world (merge shut box))
+                                                    :entities [(vt/villager nil {:profession "librarian" :level 1 :pos {:x 6 :y 64 :z 3}})]
+                                                    :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
+                                             {:settings {:jobs.lib.villager/take-job-ticks 200}} 600))]
+          (is (= {:status :stopped :reason :kept-job} (select-keys result [:status :reason])) (pr-str result))
+          (is (= "lectern" (block p ws)) "the lectern is placed back before the call ends"))))))
 
 (deftest a-second-villager-beside-an-open-stand-is-shut-out-of-the-cells-next-to-the-workstation
   (async done

@@ -18,7 +18,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.workstation-drop :as wd]
             [jobs.lib.trade-window :as tw]))
 
 (def doc
@@ -33,9 +33,8 @@
   at night it is waited for till day (reason :night-villager-out-of-view), then looked for once more; one seen this call
   is waited for by day as long as the roll is worth (worth-of); then :gone. With the body boxed in its stand of the built pen, its near end open
   (jobs.lib.villager-pen/luring), a villager out of view is left to the pen child, which waits for it to walk in. Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
-  the place again are one urgent section (a night or food reflex waits for it); with a spare workstation carried, the
-  spare goes in the moment the villager reads jobless and the drop is picked up after, so the villager has no time to
-  claim another free job site. Before a break, and while a jobless villager is waited for, the villager must stand shut in
+  the place again are one urgent section (a night or food reflex waits for it); the drop is picked up before the place
+  (a block placed over a drop lying in the cell pushes it away; the penned villager reaches no other job site meanwhile). Before a break, and while a jobless villager is waited for, the villager must stand shut in
   its pen (jobs.lib.villager-pen/penned: alone in a lit one-wide cell, the workstation under a top slab plugging its far
   end, its other sides shut, the body boxed in behind it), the pen first, always: else a jobs.village.pen child shuts it
   in, and its ending other than done (but :villager-out-of-view, which the round looks for) is this call's. Once its
@@ -54,7 +53,7 @@
   - nothing-possible :no-job: the penned villager took no job in jobs.lib.villager/take-job-ticks game ticks of its walking
     hours; :sites names the other job-site blocks seen (a free one it may hold a claim on).
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig, place or pen child.")
+    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, once jobs.lib.workstation-drop/recover! has nothing new to try; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig, place or pen child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -340,16 +339,6 @@
                   :continue)))
       :else (ctx/end c (:kind r) (:cause r) (data-of c nil)))))
 
-(defn ^:async flush-to-cell!
-  "A body in the cell beside the workstation steps to its edge nearest the workstation, so the pickup reach (hitbox grown by a block)
-  covers the whole workstation cell and the drop is taken where it falls, even when a slab keeps the body out of the cell."
-  [c pos]
-  (let [[x y z] (b/feet-cell c)
-        dx (- (:x pos) x)
-        dz (- (:z pos) z)]
-    (when (and (= y (:y pos)) (= 1 (+ (Math/abs dx) (Math/abs dz))))
-      (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5 (* 0.2 dx)) :y y :z (+ z 0.5 (* 0.2 dz))} :range 0.1})))))
-
 (defn cell-offset
   "Where in its cell a view spot lies, from the cell centre, at most 0.2 (what moveTo's :offset takes): the slit shows
   the villager from the spot the body saw it from, not from anywhere in the cell."
@@ -438,14 +427,14 @@
         (await (ctx/atomic c :urgent :roll
                            (fn ^:async dig-and-put-back []
                              (let [slot (keyword (str "dig-" (rolls c)))
-                                   _ (await (flush-to-cell! c pos))
+                                   _ (await (wd/flush-to-cell! c pos))
                                    have (u/carried-count (:primitives c) (item-of (:args c)))
-                                   _ (ctx/update-mem! c #(-> % (assoc :broken true :stand (u/self-pos c) :expect-carried (inc have) :spare (pos? have))
-                                                             (dissoc :lose-polled :job-at :job-ticks :drop-ids :crouched :reach-drops :recovers)))
-                                   r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect (zero? have)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+                                   _ (ctx/update-mem! c #(-> (apply dissoc % :lose-polled :job-at :job-ticks wd/fresh-keys)
+                                                             (assoc :broken true :stand (u/self-pos c) :expect-carried (inc have))))
+                                   r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
                                (if (ending-or-wait? r)
                                  r
-                                 (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0)) (assoc :drop-ids (:ids r))))
+                                 (do (ctx/update-mem! c update :rolls (fnil inc 0))
                                      (await (back-steps! c)))))))))))
 
 (defn ^:async wait-take-job!
@@ -484,12 +473,6 @@
       (= :villager-out-of-view (contract/cause-key r)) :again
       :else (ctx/end c (:kind r) (:cause r) (data-of c nil)))))
 
-(defn on-cell?
-  "Whether the body's feet or head fill the cell pos."
-  [c pos]
-  (let [[x y z] (b/feet-cell c)]
-    (and (= x (:x pos)) (= z (:z pos)) (contains? #{(:y pos) (dec (:y pos))} y))))
-
 (defn ^:async clear-cell!
   "Walk off the workstation cell so it can be placed (jobs.lib.step-off), to the side the dig was made from, never into a dead end behind it. :again, :continue or the stop."
   [c pos]
@@ -498,31 +481,6 @@
       (= :continue r) :continue
       (= :arrived r) :again
       :else (stop! c :place-failed))))
-
-(defn ^:async to-stand!
-  "Back to where the dig was made from when the body picked up the drop beyond the cell: placing from there would shut it
-  in behind the workstation. :again, :continue, or nil when it is there (or not known)."
-  [c]
-  (let [stand (:stand (ctx/mem c))]
-    (when (and stand (not (u/within? (u/self-pos c) stand 1.5)))
-      (let [r (await (child/call-walk* c :to-stand {:pos stand :range 1 :ways #{:walk}}))]
-        (cond (= :continue r) :continue
-              (:arrived (:data r)) :again
-              :else nil)))))
-
-(defn drop-spot
-  "Where the broken workstation's drop lies, for the body to reach: the nearest seen item of it within 4 blocks of the cell, else the
-  cell beyond the workstation from where the dig was made (a drop slides on, away from the digger). Nil when neither is known."
-  [c pos item]
-  (let [seen (->> (look/seen-items (:primitives c) {:radius 4 :max 32})
-                  (filter #(and (= item (.-name (.-item %))) (u/within? (u/pos-of (.-pos %)) pos 4))))
-        stand (:stand (ctx/mem c))]
-    (cond
-      (seq seen) (u/pos-of (.-pos (first (sort-by #(u/dist (u/pos-of (.-pos %)) pos) seen))))
-      stand (let [dx (- (+ (:x pos) 0.5) (:x stand))
-                  dz (- (+ (:z pos) 0.5) (:z stand))
-                  [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
-              {:x (+ (:x pos) 0.5 sx) :y (:y pos) :z (+ (:z pos) 0.5 sz)}))))
 
 (defn expect-after-unseen-break
   "The count the bag should hold once the drop of a workstation found gone (no dig of this call booked it) is picked up: what it holds
@@ -533,100 +491,15 @@
                               (look/seen-items (:primitives c) {:radius 4 :max 32})))]
     (max 1 (if dropped? (inc have) have))))
 
-(defn far-side
-  "The point 2 blocks beyond spot on the line from the body through it, along the longer axis: the other side of the wall or cell the drop lies in."
-  [c spot]
-  (let [{:keys [x z]} (u/self-pos c)
-        dx (- (:x spot) x)
-        dz (- (:z spot) z)]
-    (if (>= (js/Math.abs dx) (js/Math.abs dz))
-      (assoc spot :x (+ (:x spot) (* 2 (js/Math.sign dx))))
-      (assoc spot :z (+ (:z spot) (* 2 (js/Math.sign dz)))))))
-
-(defn crouch-decider
-  "A steer decide function: sneaking, straight to each [x z hold] of legs in turn, held there hold ticks; a leg not reached in
-  40 ticks is left as it is. Done after the last leg."
-  [legs]
-  (let [leg (volatile! 0)
-        ticks (volatile! 0)
-        held (volatile! 0)]
-    (fn [js-pose]
-      (let [[tx tz hold] (get legs @leg)
-            x (.-x js-pose) z (.-z js-pose)
-            at? (and (<= (js/Math.abs (- tx x)) 0.1) (<= (js/Math.abs (- tz z)) 0.1))]
-        (vswap! ticks inc)
-        (when at? (vswap! held inc))
-        (if (or (> @held hold) (>= @ticks 40))
-          (do (vswap! leg inc) (vreset! ticks 0) (vreset! held 0)
-              (if (< @leg (count legs)) #js {:controls #js {:sneak true :forward false}} #js {:done true}))
-          (if at?
-            #js {:controls #js {:sneak true :forward false}}
-            #js {:controls #js {:sneak true :forward true} :yaw (js/Math.atan2 (- x tx) (- z tz))}))))))
-
-(defn ^:async crouch-in!
-  "Take a drop that slid into the cell behind the emptied workstation cell (a villager's cell): sneak from the dig stand into
-  the workstation cell, up against its far side, so the pickup reach covers the whole cell behind, hold a second and sneak back.
-  A crouching body is 1.5 high, so it fits under a top slab over the cell where a villager (1.95) does not: the cell stays
-  shut and nothing is dug. Once a break. :again (after a walk back to the stand, or the crouch), or nil."
-  [c]
-  (let [{:keys [pos]} (:args c)
-        stand (:stand (ctx/mem c))]
-    (when (and stand (not (:crouched (ctx/mem c))))
-      (or (await (to-stand! c))
-          (do (ctx/update-mem! c assoc :crouched true)
-              (when (u/within? (u/self-pos c) stand 1.5)
-                (let [dx (- (+ (:x pos) 0.5) (:x stand))
-                      dz (- (+ (:z pos) 0.5) (:z stand))
-                      [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])
-                      in [(+ (:x pos) 0.5 (* 0.2 sx)) (+ (:z pos) 0.5 (* 0.2 sz))]]
-                  (ctx/emit! c :roll.crouch-in :info {:pos pos :text (str "the " (item-of (:args c)) " drop is out of reach: sneaking into its emptied cell to take it")})
-                  (await (ctx/act c :steer (walk/steer-args 8 (crouch-decider [[(:x stand) (:z stand) 0] (conj in 20) [(:x stand) (:z stand) 0]]))))
-                  :again)))))))
-
-(defn ^:async reach-drop!
-  "Take the drop through a gap in a wall (a back passage behind a sealed cell): the first try walks (go-to, walk only) within pickup
-  range of the drop's spot, later tries to the far side of it from where the body stood, then presses up against whatever keeps the body
-  out, so the pickup box reaches through. :again, :continue, or nil when it was tried four times or no spot is known."
-  [c]
-  (let [{:keys [pos]} (:args c)
-        n (:reach-drops (ctx/mem c) 0)
-        spot (when (< n 4) (drop-spot c pos (item-of (:args c))))]
-    (when spot
-      (ctx/update-mem! c update :reach-drops (fnil inc 0))
-      (let [r (await (child/call-walk* c (keyword (str "reach-drop-" n)) (if (zero? n)
-                                                       {:pos spot :range 2.5 :ways #{:walk}}
-                                                       {:pos (far-side c spot) :range 1.2 :ways #{:walk}})))]
-        (cond
-          (= :continue r) :continue
-          :else (do (when (:arrived (:data r))
-                      (await (ctx/act c :moveTo #js {:pos #js {:x (:x spot) :y (:y spot) :z (:z spot)} :range 0.1})))
-                    (await (child/pause! c 1 :picking-up-the-drop))
-                    :again))))))
-
 (defn ^:async recover!
-  "The broken workstation is not carried (its drop slid out of reach, e.g. into the sealed cell beside it): walk to where its drop
-  lies and take it through a gap (reach-drop!); failing that stand on its cell when the body can enter it, else stay at the cell's
-  edge, and wait a few polls for the drop to come; then end :workstation-lost naming the cell the drop lies in (:drop-cell). Nothing
-  above the cell is ever dug: the cell stays shut. :again or :continue."
+  "The broken workstation's drop is not carried: jobs.lib.workstation-drop/recover!, ending :workstation-lost naming
+  the cell the drop lies in once it has nothing new to try. :again or :continue."
   [c]
   (let [{:keys [pos]} (:args c)
-        tries (:recovers (ctx/mem c) 0)]
-    (cond
-      (>= tries 5) (let [spot (or (drop-spot c pos (item-of (:args c))) pos)]
-                     (ctx/end c :nothing-possible :workstation-lost
-                              (data-of c {:drop-cell {:x (js/Math.floor (:x spot)) :y (js/Math.floor (:y spot)) :z (js/Math.floor (:z spot))}})))
-      :else (or (await (crouch-in! c))
-                (await (reach-drop! c))
-                (if (on-cell? c pos)
-                  (do (ctx/update-mem! c update :recovers (fnil inc 0))
-                      (await (child/pause! c 1 :picking-up-the-drop))
-                      :continue)
-                  (let [r (await (child/call-walk* c :to-drop {:pos pos :range 0 :ways #{:walk}}))]
-                    (cond (= :continue r) :continue
-                          (:arrived (:data r)) :again
-                          :else (do (ctx/update-mem! c update :recovers (fnil inc 0))
-                                    (await (child/pause! c 1 :picking-up-the-drop))
-                                    :continue))))))))
+        r (await (wd/recover! c pos (item-of (:args c))))]
+    (if (map? r)
+      (ctx/end c :nothing-possible :workstation-lost (data-of c {:drop-cell (:lost r)}))
+      r)))
 
 (defn ^:async place!
   "Place the workstation again, and the book of the break closed."
@@ -640,37 +513,19 @@
                                                      (some? ways) (assoc :ways ways))))]
     (if (ending-or-wait? r)
       r
-      (let [{:keys [spare drop-ids] expect :expect-carried} (ctx/mem c)
+      (let [expect (:expect-carried (ctx/mem c))
             have (u/carried-count (:primitives c) item)]
-        (ctx/update-mem! c #(cond-> (dissoc % :broken :expect-carried :spare :drop-ids)
-                              (and spare expect) (assoc :owed {:ids drop-ids :expect (dec expect)})))
-        (if (and expect (not spare) (< have (dec expect)))
+        (ctx/update-mem! c dissoc :broken :expect-carried)
+        (if (and expect (< have (dec expect)))
           (ctx/end c :nothing-possible :workstation-lost
                    (data-of c {:carried have :expected (dec expect)
                                :text (str "the bag holds " have " " item " after the place, " (dec expect) " expected: one is missing")}))
           :again)))))
 
-(defn ^:async collect-owed!
-  "A spare was placed before the broken workstation's drop was picked up: pick it up now (jobs.items.collect-drops child,
-  slot :owed); the bag must then hold the count before the break, else :workstation-lost. :again, :continue or the stop."
-  [c]
-  (let [{:keys [pos]} (:args c)
-        item (item-of (:args c))
-        {:keys [ids expect]} (:owed (ctx/mem c))
-        r (await (child/run!* c :owed 'jobs.items.collect-drops (cond-> {:items [item] :near pos :holes [pos] :expect 1} (seq ids) (assoc :ids ids))))
-        have (u/carried-count (:primitives c) item)]
-    (cond
-      (= :continue r) :continue
-      (>= have expect) (do (ctx/update-mem! c dissoc :owed) :again)
-      :else (do (ctx/update-mem! c dissoc :owed)
-                (ctx/end c :nothing-possible :workstation-lost
-                         (data-of c {:carried have :expected expect
-                                     :text (str "the bag holds " have " " item " after the spare was placed, " expect " expected: the drop was not picked up")}))))))
-
 (defn ^:async place-or-return!
   "place!, after a walk back to the dig's stand when the body is elsewhere (to-stand!)."
   [c]
-  (or (await (to-stand! c)) (await (place! c))))
+  (or (await (wd/to-stand! c)) (await (place! c))))
 
 (defn ^:async leave-box!
   "The body stands boxed in its stand behind the workstation (jobs.lib.villager-pen/exit-cell) and must walk: dig the
@@ -723,7 +578,6 @@
         profession (when e (.-profession e))
         out-of-tries? (>= (rolls c) (max-rolls))]
     (cond
-      (:owed (ctx/mem c)) (await (collect-owed! c))
       (nil? block) (await (approach! c pos))
       (bs/air block)
       (cond
@@ -733,8 +587,8 @@
         ;; the workstation is gone: wait for the villager to lose the job, then place it back (one that took another job
         ;; never will: place at once, the next step ends :other-job)
         (and e (not= "unemployed" profession) (not (other-job? c e))) (await (wait-lose-job! c))
-        (< (u/carried-count p item) (cond-> (:expect-carried (ctx/mem c)) (:spare (ctx/mem c)) dec)) (await (recover! c))
-        (on-cell? c pos) (await (clear-cell! c pos))
+        (< (u/carried-count p item) (:expect-carried (ctx/mem c))) (await (recover! c))
+        (wd/on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)
       ;; villagers count only while in view; one seen before may have stepped away while it lost its job. Boxed in
@@ -771,7 +625,7 @@
         r (cond
             (not (and (:broken (ctx/mem c)) block (bs/air block) (pos? (u/carried-count (:primitives c) (item-of (:args c))))))
             (ctx/end c :done nil)
-            (on-cell? c pos) (await (clear-cell! c pos))
+            (wd/on-cell? c pos) (await (clear-cell! c pos))
             :else (await (place-or-return! c)))]
     (when (and (contract/ending? r) (not= :done (:kind r)) (:broken (ctx/mem c)) (some-> (u/seen-name (:primitives c) pos) bs/air))
       (ctx/emit! c :roll.cell-open :warn {:pos pos :text (str "CELL OPEN: the " (item-of (:args c)) " at " (:x pos) "," (:y pos) "," (:z pos) " is not placed back")}))

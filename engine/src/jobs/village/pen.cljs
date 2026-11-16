@@ -20,7 +20,8 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.villager :as villager]
-            [jobs.lib.villager-pen :as vp]))
+            [jobs.lib.villager-pen :as vp]
+            [jobs.lib.workstation-drop :as wd]))
 
 (def doc
   "Shut the villager :villager in alone, in a lit one-wide cell beside the workstation of :profession at :pos
@@ -42,7 +43,8 @@
   workstation, if missing, from the stand (it is the lure: with the box shut the pen's cell is the only one next to it a
   villager can path to, the game's rule for claiming it); a villager reading the pen's profession outside the cell holds
   a job site and walks to none, so the workstation is broken once a call (free!: an untraded villager loses the job,
-  another's claim on it goes) and placed again, a fresh lure; wait for the villager to walk in, and light a shut pen
+  another's claim on it goes), its drop picked up (jobs.lib.workstation-drop), and placed again, a fresh lure (one
+  that still reads the profession then kept its job: :kept-job); wait for the villager to walk in, and light a shut pen
   still dark from the stand (its light reaches the cell under the top slab). A cell still dark after the light child ended done is looked at when unknown, then read each
   poll: the same light twice ends nothing-possible :dark.
   The wait counts game ticks of the villagers' walking hours (jobs.lib.villager/take-job-ticks, 1240); reason
@@ -53,8 +55,8 @@
   With the body boxed in its stand of a built pen whose near end is open (jobs.lib.villager-pen/luring) it sees out only
   through the pen, so a villager out of view is waited for to walk in like one in view.
   Ends done when the pen holds the villager (jobs.lib.villager-pen/penned; result {:side [dx dz] :cell [x y z]}), else condition-failed
-  :villager-out-of-view (never in view this call and not luring), :occupied (another block at :pos), :workstation-taken (another villager employed in the cell or its near end; :villager), :need (blocks not carried and no fetch allowed); nothing-possible
-  :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :unseen (:cells), :dark, :not-walked-in (the villager
+  :villager-out-of-view (never in view this call and not luring), :occupied (another block at :pos), :workstation-taken (another villager employed in the cell or its near end; :villager), :kept-job (kept-job!), :need (blocks not carried and no fetch allowed); nothing-possible
+  :no-room (no side has its cell, stand and near end open), :unreachable (the stand), :unseen (:cells), :dark, :workstation-lost (the drop of free! not picked up; :drop-cell), :not-walked-in (the villager
   stayed out for the whole wait; :sites names the other job sites seen), or a child's ending. What it built stays: the
   next call finds the pen standing, but a call that ends other than done with the body boxed in its stand digs the box's
   entry open first (cleanup).")
@@ -278,12 +280,54 @@
     (await (built! c slot (await (child! c slot 'jobs.blocks.dig (cond-> {:pos cell :collect true} (= :entry k) (assoc :need-drop false))))
                    #(vp/solid? (vp/name-at (:primitives c) cell))))))
 
-(defn ^:async free!
-  "Break the workstation once a call (the drop picked up), so the place that follows is a fresh lure."
+(defn ^:async pick-up!
+  "The workstation broken by free! is carried again: the call is :freed. Else its drop is taken
+  (jobs.lib.workstation-drop/recover!), and once that has nothing new to try the call ends nothing-possible
+  :workstation-lost naming the cell the drop lies in. :again or :continue."
   [c ws]
-  (ctx/update-mem! c assoc :freed true)
-  (await (built! c :free (await (child! c :free 'jobs.blocks.dig {:pos ws :collect true}))
-                 #(= (item-of (:args c)) (vp/name-at (:primitives c) ws)))))
+  (let [item (item-of (:args c))
+        pos (u/cell-pos ws)]
+    (if (>= (u/carried-count (:primitives c) item) (:free-expect (ctx/mem c)))
+      (do (ctx/update-mem! c #(-> % (dissoc :free-expect) (assoc :freed true))) :again)
+      (let [r (await (wd/recover! c pos item))]
+        (if (map? r)
+          (stop! c :nothing-possible :workstation-lost {:drop-cell (:lost r) :text (str "the " item " broken to free the villager was not picked up")})
+          r)))))
+
+(defn ^:async free!
+  "Break the workstation once a call from the stand, flush against it (the drop picked up, pick-up!), so the place
+  that follows is a fresh lure. A dig child under way goes on."
+  [c ws]
+  (let [item (item-of (:args c))]
+    (when-not (get-in (ctx/mem c) [:children :free])
+      (await (wd/flush-to-cell! c (u/cell-pos ws)))
+      (ctx/update-mem! c #(-> (apply dissoc % wd/fresh-keys)
+                              (assoc :stand (u/self-pos c) :free-expect (inc (u/carried-count (:primitives c) item))))))
+    (let [r (await (built! c :free (await (child! c :free 'jobs.blocks.dig {:pos ws :collect true}))
+                           #(= item (vp/name-at (:primitives c) ws))))]
+      (if (= :again r) (await (pick-up! c ws)) r))))
+
+(defn ^:async kept-job!
+  "The villager outside the cell still reads the pen's profession after free!: it holds another job site, or has
+  traded (the game keeps a traded villager's job). With the workstation still gone, look every game tick for one poll
+  for it to read jobless (the game takes an untraded villager's job a tick after the break); else place the
+  workstation back, then end condition-failed :kept-job (:villager, :sites the other job sites seen)."
+  [c ws block e]
+  (let [p (:primitives c)
+        gone? (or (nil? block) (bs/air block))
+        id (villager/ident e)]
+    (cond
+      (and gone? (not (:lose-polled (ctx/mem c))))
+      (let [tick-ms (settings/ticks->ms 1)
+            r (await (child/poll! c #(some-> (villager/find-by-uuid p id) .-profession (= "unemployed"))
+                                  tick-ms (js/Math.ceil (/ (* 1000 (villager/poll-s)) tick-ms)) :villager-keeps-job))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c assoc :lose-polled true) :again)))
+      gone? (await (workstation! c ws))
+      :else (stop! c :condition-failed :kept-job
+                   {:villager id :sites (villager/job-sites c (:pos (b/parse (:args c))))
+                    :text (str "villager " id " kept its " (:profession (:args c)) " job after its workstation was broken: it holds another job site or has traded")}))))
 
 (defn ^:async step-in!
   "Walk into the stand behind the workstation, where the roll is made from and the box is shut round the body."
@@ -367,6 +411,8 @@
       (and (nil? e) (nil? lay)) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})
       (and block (not (bs/air block)) (not= (item-of (:args c)) block)) (stop! c :condition-failed :occupied {:block block})
+      (some? (get-in (ctx/mem c) [:children :free])) (await (free! c ws))
+      (and (:free-expect (ctx/mem c)) (or (nil? block) (bs/air block))) (await (pick-up! c ws))
       (seq shut) (await (shut! c lay shut))
       (not (vp/top-slab? p (:slab lay))) (await (slab! c (:slab lay)))
       (and (vp/dark? p lay) (not (:lit (ctx/mem c))) (not (and in? (vp/plug-shut? p lay)))) (await (light! c (:cell lay)))
@@ -378,6 +424,7 @@
         (await (plug! c lay)))
       (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
       (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/with-floors p lay (:box lay)) {:in-place true :quick true}))
+      (and (not in?) e (:freed (ctx/mem c)) (= (:profession (:args c)) (.-profession e))) (await (kept-job! c ws block e))
       (or (nil? block) (bs/air block)) (await (workstation! c ws))
       (and (not in?) (seq (vp/employed-in p lay (some-> e villager/ident))))
       (stop! c :condition-failed :workstation-taken {:villager (villager/ident (first (vp/employed-in p lay (some-> e villager/ident))))})
