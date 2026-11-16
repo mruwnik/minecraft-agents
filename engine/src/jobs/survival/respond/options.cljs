@@ -207,10 +207,9 @@
   flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb), and its
   failures here (flight/fails-here); begun by plan!'s look at the unsensed cells of its rise (cost/look-s), rock there by
   :blocked (respond.pillar/rise-look);
-  nil when no pillar fits here, a climber or a flyer is near (both reach its top) or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
+  nil when no pillar fits here or a climber or a flyer is near (both reach its top). A shot felt within ::hurt-window-s keeps the whole of its seconds in the line of fire (cornered-covers prices the shooter)."
   [c hostiles]
   (when-let [climb (and (pillar/pillar-item c) (not-any? #(or (combat/climber? %) (combat/flyer? %)) hostiles)
-                        (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
                         (pillar/climb-of c))]
     (let [h (- (pillar/pillar-height) (pillar/lifted c))
           s (* (settings/get settings ::pillar-s) (/ h (pillar/pillar-height)))
@@ -218,7 +217,10 @@
           {:keys [looks blocked]} (pillar/rise-look (:primitives c) (pl/feet-cell c))
           refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
                                      (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
-      {:open-s (if (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles) seconds s) :seconds seconds
+      {:open-s (if (or (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles)
+                       (some #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))
+                 seconds s)
+       :seconds seconds
        :fails (flight/fails-here c :pillar (- 1 (* (- 1 refused) (- 1 climb))))
        :reached (boolean (some combat/enderman? hostiles)) :rise [s h]
        :look-s (cost/look-s looks) :blocked blocked})))
@@ -271,7 +273,7 @@
         ways (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options)
         specs (if given (select-keys given ways) (covers c ways))
         equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
-        mobs (mapv #(hostile/mob-near (:primitives c) %) hostiles)
+        mobs (hostile-loss/mobs-of (:primitives c) (ctx/view c) hostiles)
         body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
         at (u/self-pos c)
         answer #(cost/cover-answer {:equipment equipment :mobs mobs} (merge (exits-of c) %))

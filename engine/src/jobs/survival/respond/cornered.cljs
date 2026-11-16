@@ -215,9 +215,13 @@
 
 (defn pillar-open?
   "Whether a pillar is still a cover where the body stands now (rc/pillar-cover): an option before it may have taken
-  time, and a shot felt since leaves its top in the line of fire."
-  [c]
-  (some? (rc/pillar-cover c (near-hostiles c))))
+  time. Under fire (a shot felt since the order was made) it must also still be the cheapest answer, priced afresh
+  with the arrows of the shooters (rc/cornered-answers); home?: the body is in its home room."
+  [c home?]
+  (let [hs (near-hostiles c)]
+    (and (some? (rc/pillar-cover c hs))
+         (or (not (under-fire? c))
+             (= :pillar (:answer (hostile/weigh c hs (cornered-answers c hs home? nil false false))))))))
 
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order, cheapest first (by-price; a way through another's area at its trespass price, zone-prices), that it can
@@ -282,8 +286,8 @@
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
                   :plug-dig-zone (when (and (flight/tried? c :plug-dig) (:zone-dig (ctx/mem c))) (await (refuge/plug-option! c :plug-dig-zone #{:pit :pocket})))
                   :stand (await (hold! c "no way out of the creeper: standing"))
-                  :pillar (when (pillar-open? c) (await (refuge/pillar! c false)))
-                  :pillar-zone (when (and (not (flight/tried? c :pillar)) (pillar-open? c)) (await (refuge/pillar! c true)))
+                  :pillar (when (pillar-open? c home?) (await (refuge/pillar! c false)))
+                  :pillar-zone (when (and (not (flight/tried? c :pillar)) (pillar-open? c home?)) (await (refuge/pillar! c true)))
                   :water (await (stand! c :water :water "in water, away from the enderman"))
                   :roof (await (stand! c :roof :roof "under a roof, out of the enderman's reach"))
                   :swim-out (await (stand! c :swim-out :dry nil))

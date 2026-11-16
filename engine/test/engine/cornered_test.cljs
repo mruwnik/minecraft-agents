@@ -2403,6 +2403,23 @@
     (is (some? (cover "zombie")))
     (is (nil? (cover "phantom")) "a phantom flies to the pillar's top")))
 
+;; A shot felt is priced, not a cut-off: the pillar stays a cover, its whole seconds in the line of fire (Q30).
+(deftest a-shot-felt-keeps-the-pillar-priced-with-its-seconds-open
+  (let [cover (fn [hurts]
+                (let [p (tu/fake-on-floor {:inventory [{:name "dirt" :count 20}]})
+                      c (stub-ctx p (atom {}))]
+                  (with-stub-mem
+                    (fn []
+                      (with-redefs [respond.pillar/pillar-item (fn ([_] "dirt") ([_ _] "dirt"))
+                                    respond.pillar/pillar-climb (constantly 0)
+                                    respond.pillar/mob-class (constantly :clear)
+                                    ctx/since (constantly hurts)
+                                    ctx/now (constantly 1000)]
+                        (cornered/pillar-cover c [#js {:name "zombie"}]))))))
+        arrow [{:data {:damageType "arrow" :attacker {:name "skeleton"}}}]]
+    (is (some? (cover arrow)) "a felt shot no longer cuts the pillar off")
+    (is (< (:open-s (cover [])) (:open-s (cover arrow))) "the shot's whole seconds are in the line of fire")))
+
 ;; pillar! looks at an unsensed rise before its first block: rock there (none under full sky light, which comes only
 ;; straight down an open column) leaves the next answer after the look. Each unsensed cell is rock by 0.9, a tunnel's ceiling.
 (deftest an-unsensed-rise-prices-the-pillar-by-the-look-and-the-rock-behind-it
