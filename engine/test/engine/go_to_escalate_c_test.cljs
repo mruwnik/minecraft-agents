@@ -911,6 +911,28 @@
           (is (= "dirt" (block p [12 64 15])))
           (is (= 1 @asked) "the escalate? that kept the give-up and the choice after it share one answer"))))))
 
+(deftest the-sliced-drop-fill-answer-is-kept-for-the-sync-ask-and-recomputed-on-a-new-epoch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos {:x 12.5 :y 64 :z 20.5}} :blocks hut-door-over-a-hole :seeing-all true
+                           :states {"12,65,14" {:open false :half "lower" :facing "south"}
+                                    "12,66,14" {:open false :half "upper" :facing "south"}}
+                           :inventory [{:name "dirt" :count 5}]})
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [12 65 12] :range 0} :round 1})
+              result {:reason :goal-cut-off}
+              feet [12 64 20]
+              asked (atom 0)
+              joining choose/joining-fill-task
+              cell (fn [] (:cell (choose/drop-fill c result #{} feet)))]
+          (with-redefs [choose/joining-fill-task (fn [& args] (swap! asked inc) (apply joining args))]
+            (await (choose/drop-fill-sliced c result #{} feet))
+            (is (= 1 @asked) "the slices ran the fill's flood")
+            (is (= [[12 64 15] 1] [(cell) @asked]) "the sync ask reads the sliced answer without flooding")
+            (is (nil? (choose/drop-fill-sliced c result #{} feet)) "a kept answer is not sliced again")
+            (fake/set-block! p [40 64 40] "dirt")
+            (is (= [[12 64 15] 2] [(cell) @asked]) "a new epoch computes it again")))))))
+
 (def doorway-hole
   "Floor y 63 with a 1-cell hole at x 5 (floor under it at y 62), and a floor 1 higher from x 6: the doorway of a hut whose sill was dug."
   (-> (merge (box -2 62 -2 4 63 4 "stone") (box 5 62 -2 5 62 4 "stone") (box 6 62 -2 12 64 4 "stone"))))
