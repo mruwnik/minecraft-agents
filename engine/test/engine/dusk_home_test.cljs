@@ -73,10 +73,12 @@
       (fn ^:async t []
         (let [dawn-near (assoc stair-home-world :time 23800)
               dark-far (await (go-home-from-the-ground 60 70 {:commute? true}))
+              dark-near (await (go-home-from-the-ground 6 64 {:commute? true}))
               dawn-far (await (go-home-from-the-ground 60 70 {:commute? true} dawn-near))
               plain (await (go-home-from-the-ground 60 70 {}))]
           (is (< (first dark-far) 3) "the far home is walked to through the dark")
-          (is (> (first dawn-far) 50) "little dark left: the walk is lost work")
+          (is (< (first dark-near) 3) "a close home is walked to")
+          (is (> (first dawn-far) 50) "little dark left: the walk is lost work (the only pin of the stay branch)")
           (is (= :shelter-cheaper (second dawn-far)))
           (is (= ["jobs.survival.night"] (nth dawn-far 2)) "the night job the reflex runs, not go-home again")
           (is (< (first plain) 3) "without :commute? the call walks home"))))))

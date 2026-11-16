@@ -243,7 +243,7 @@
   and by day that shelter's morning and the walk back to where the night found the body; :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-gain there. :exposed the night left in the open where the body stands (or the worst cell
   it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds plus its quoted death (chance x seconds: the mobs known at the spot wait for the return), and, unless the stint skips the night (sh-sleepers/stint-skip-chance: the players short lying down, less each stint tonight that came back to the same night), the cheapest other answer.
-  In the ground :bed, :sealed and :log-out's skip also cost the night's dark danger left (a skip leaves the same dark to work in). Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
+  In the ground :bed, :sealed, a carried bed's :home and :log-out's skip also cost the night's dark danger left (a skip leaves the same dark to work in). Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
   the other players online wait for (sh-sleepers/skip-wait-s)."
   [c {:keys [bed walk-s walk-secs log-out? niche flee home]}]
   (let [p (:primitives c)
@@ -302,7 +302,7 @@
       flee (assoc :flee (way-s (walk flee (flee-after flee here))))
       home (assoc :home (let [w (walk home (flee-after home here))]
                           (if carried?
-                            (+ lost (- (way-s w) (way-s {})) (- (cost/spawn-gain body (:pos home) feet)))
+                            (+ dark lost (- (way-s w) (way-s {})) (- (cost/spawn-gain body (:pos home) feet)))
                             (way-s w))))
       out-s (assoc :log-out (+ (:stint out-s) (* (:skip out-s) dark) (* (- 1 (:skip out-s)) (apply min (vals prices))))))
      (cond-> prices

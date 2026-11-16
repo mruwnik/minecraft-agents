@@ -321,6 +321,19 @@
               prices (await (bed-down/answers c {:bed bed :walk-s 0}))]
           (is (>= (:bed prices) (:exposed prices)) (pr-str prices)))))))
 
+(deftest in-a-dark-hall-a-carried-beds-home-is-not-credited-with-the-dark-a-skip-leaves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night :blocks dark-hall :light {} :light-default [0 0]
+                                                              :inventory [{:name "red_bed" :count 1} {:name "stone_pickaxe" :count 1}
+                                                                          {:name "cobblestone" :count 20}]})) {}
+                           {:view (fn [] {:now 0 :data {:entries {:respawned [{:t 0 :data {:pos {:x 2 :y 64 :z 0}}}]}}})
+                            ::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})
+              prices (await (bed-down/answers c {:home {:pos {:x 2 :y 64 :z 0} :cost 0 :seconds 0}}))]
+          (is (number? (:home prices)) (pr-str prices))
+          (is (>= (:home prices) (:exposed prices)) (pr-str prices)))))))
+
 (defn ^:async night-answers-with
   "The first :night.answers of the night job in the sealed room with the bed 10 blocks off, world extended with extra."
   [extra]
@@ -339,7 +352,17 @@
       (fn ^:async t []
         (let [{:keys [prices]} (await (night-answers-with {:blocks (assoc dark-hall "10,64,0" "red_bed") :light-default [0 0]
                                                            :sees-all true :players ["Alex"] :entities [sleeper]}))]
-          (is (not-any? neg? (vals prices)) (pr-str prices)))))))
+          (is (not-any? neg? (vals prices)) (pr-str prices))
+          (is (< (:bed prices) (:exposed prices)) (pr-str prices)))))))
+
+(deftest in-a-dark-hall-with-no-one-to-wait-for-no-skip-is-cheaper-than-working-on
+  ;; the skip leaves the same dark to work in, so with no sleeper to wait for the bed (or a carried bed's home) cannot undercut :exposed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [prices]} (await (night-answers-with {:blocks (assoc dark-hall "10,64,0" "red_bed") :light-default [0 0]
+                                                           :sees-all true}))]
+          (is (>= (:bed prices) (:exposed prices)) (pr-str prices)))))))
 
 (deftest thirteen-awake-players-keep-the-body-in-its-closed-room-and-one-asleep-sends-it-to-the-bed
   ;; Brindle S7: 13 awake others charged every awake answer ~6500 s, so the walk out to the bed won
