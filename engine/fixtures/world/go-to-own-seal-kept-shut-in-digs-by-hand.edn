@@ -1,0 +1,23 @@
+;; A body in a pit under its own shelter lid (one dirt in the scaffold ledger), a NoAI zombie on the ground by the lid that
+;; could drop in were it opened. The lid is kept for the zombie, the walls are stone, and the body has no pickaxe and no
+;; logs: the stair's tool fetch walk is shut in by the kept lid (:hostile-near), so go-to digs the stair by hand
+;; (go-to.by-hand) instead of waiting for ever, and the body gets out.
+;; Stone mass x 4..28, z 8..24, y 0..3 (top feet y 4); pit [16 1..2 16]; lid [16 3 16]; goal [22 4 16].
+{:defaults
+ {:tags [:go-to :access :hostile]
+  :time :any
+  :mobs :keep
+  :plot {:height 12 :light :lit}
+  :blocks [[:fill [4 0 8] [28 3 24] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:set [16 3 16] "dirt"]]
+  :memory [{:kind :scaffold :policy {:cap 1 :ttl :forever}
+            :data {:entries [{:cell #at [16 3 16] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
+  :body {:at [16.5 1 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "kept-lid-no-pickaxe-digs-the-stair-by-hand"
+   :act [[:summon "zombie" [16.5 4 19.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 3]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [22 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.by-hand} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:block [16 3 16] "dirt"]]}]}

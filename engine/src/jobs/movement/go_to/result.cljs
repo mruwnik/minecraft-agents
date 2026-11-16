@@ -202,9 +202,21 @@
   (let [kept (:seal-kept (ctx/mem c))]
     (boolean (and (shut-in-give-up? fields) (seq kept) (escape/walls-room? c (set kept))))))
 
+(defn kept-wait-spent?
+  "Books this kept-shut wait on the call's memory; whether the body has waited more seconds than the goal is worth (the
+  call's :worth): past that the wait costs more than arriving gains. A wait not asked again within the full-pack gap
+  starts over."
+  [c]
+  (let [now (ctx/now c)
+        {:keys [since last]} (:kept-wait (ctx/mem c))
+        since (if (and last (< (- now last) waits/full-pack-gap-ms)) since now)]
+    (ctx/update-mem! c assoc :kept-wait {:since since :last now})
+    (>= (/ (- now since) 1000) (ctx/worth c))))
+
 (defn give-up!
   "End the call not having arrived: :unreachable with result's why, or a :hostile-near wait (condition-failed) when the
-  body is shut in by its own shelter kept for a hostile (kept-shut?)."
+  body is shut in by its own shelter kept for a hostile (kept-shut?) and has not yet waited the goal's worth
+  (kept-wait-spent?)."
   ([c pos result] (give-up! c pos result nil))
   ([c pos result extra]
    (let [{:keys [why] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
@@ -217,7 +229,7 @@
                   (shut-in-give-up? fields)
                   (merge (some->> (escape/shut-in-blockers c (when pos (if (map? pos) pos (zipmap [:x :y :z] pos)))) (hash-map :blocked-by))))
          text (give-up-words pos fields)
-         reason (if (kept-shut? c fields) :hostile-near :unreachable)
+         reason (if (and (kept-shut? c fields) (not (kept-wait-spent? c))) :hostile-near :unreachable)
          text (cond->> text (= :hostile-near reason) (str "waiting for the hostile to go: its own shelter, kept against it, shuts the body in; "))]
      (finish! c (merge {:status :stopped :arrived false :reason reason :text text} fields)))))
 
