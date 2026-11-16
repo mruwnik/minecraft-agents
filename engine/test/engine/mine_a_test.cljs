@@ -284,6 +284,11 @@
           (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
           (is (finished? s)))))))
 
+(deftest ore-seen-later-touching-a-stranded-cell-is-stranded-too
+  (let [at (fn [x z] {:x x :y 64 :z z})]
+    (is (= #{(at 1 0) (at 2 0)} (mine-targets/joined-to #{(at 0 0)} [(at 1 0) (at 2 0) (at 5 0)])) "joined through the chain, not the far one")
+    (is (= #{} (mine-targets/joined-to #{} [(at 1 0)])))))
+
 (deftest seen-ore-behind-a-wall-the-walk-cannot-pass-is-cut-to-once-then-skipped
   (async done
     (tu/run-async done

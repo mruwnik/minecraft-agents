@@ -138,6 +138,21 @@
   (let [danger (threats/stay-danger-fn c)]
     (keep (fn [[pos [stay-s worth]]] (when (danger (cell-of pos) stay-s worth) pos)) (:risky (ctx/mem c)))))
 
+(defn cluster-of
+  "pos and the cells of targets joined to it by touching sides, edges or corners."
+  [pos targets]
+  (let [touching? (fn [a b] (and (not= a b) (every? #(<= (js/Math.abs (- (% a) (% b))) 1) [:x :y :z])))]
+    (loop [found #{pos} todo [pos]]
+      (if-let [cur (peek todo)]
+        (let [more (remove found (filter #(touching? cur %) targets))]
+          (recur (into found more) (into (pop todo) more)))
+        found))))
+
+(defn joined-to
+  "The cells of targets joined by touching sides, edges or corners, through other targets, to a cell of stranded."
+  [stranded targets]
+  (into #{} (mapcat #(disj (cluster-of % targets) %)) stranded))
+
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near; next-target! prices the walks, a death or hide spot's mob on the way
   among them), those below the feet after all level or higher ones (a hole in the floor loses its drop; not soil or ores) and those over the ground snapshot after all others, :refused [verdict] of blocks a
@@ -154,7 +169,8 @@
         seen (->> (if (ways/seen? (:args c)) (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true}) [])
                   (map :pos)
                   (remove skipped)
-                  (remove #(too-deep? c %)))
+                  (remove #(too-deep? c %))
+                  (#(remove (joined-to (:stranded (ctx/mem c)) %) %)))
         cells (filter #(or (not stay?) (stay/beside-body? (cell-of here) %)) seen)
         heading (headings (:heading (ctx/mem c)))
         side (when (and stay? heading)
@@ -280,16 +296,6 @@
   (walk-skip! c pos)
   (u/failed! c))
 
-(defn cluster-of
-  "pos and the cells of targets joined to it by touching sides, edges or corners."
-  [pos targets]
-  (let [touching? (fn [a b] (and (not= a b) (every? #(<= (js/Math.abs (- (% a) (% b))) 1) [:x :y :z])))]
-    (loop [found #{pos} todo [pos]]
-      (if-let [cur (peek todo)]
-        (let [more (remove found (filter #(touching? cur %) targets))]
-          (recur (into found more) (into (pop todo) more)))
-        found))))
-
 (defn skip-unreachable!
   "Skip a target the walk cannot reach (result/unreachable-walk?) and the targets touching it, and give them up (give-up!): their stands are the same cells, so
   the verdict holds. No failure counted, so a vein of such cells never ends the run."
@@ -298,6 +304,7 @@
     (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (result/why (near/last-walk c)) :cluster (count cluster)
                                           :text (str "mine skips " (str/join "," (access/cell pos)) (when (> (count cluster) 1) (str " and " (dec (count cluster)) " touching") ) ": no way to stand beside it")})
     (doseq [cell cluster] (skip! c cell))
+    (ctx/update-mem! c update :stranded (fnil into #{}) cluster)
     (give-up! c pos cluster)
     (walk-skip! c pos)
     (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) (map access/cell cluster)))))
