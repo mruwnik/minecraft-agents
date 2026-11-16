@@ -700,10 +700,11 @@
       (is (= {:steps seen} (cut [-16256 67 -7904] seen)) "a 1-block dip over seen floors far from the goal is walked: its steps are the way back")
       (is (= {:steps seen} (cut [30 67 0] seen)) "toward the goal, too"))
     (let [moved (fn [move [x y z]] {:x x :y y :z z :move move})
-          ravine [(moved :walk [-16266 56 -7912]) (moved :drop [-16265 54 -7912]) (moved :gap [-16262 53 -7912]) (moved :drop [-16261 51 -7912])]
+          ravine [(moved :walk [-16266 56 -7912]) (assoc (moved :drop [-16265 54 -7912]) :one-way true) (assoc (moved :gap [-16262 53 -7912]) :one-way true)
+                  (assoc (moved :drop [-16261 51 -7912]) :one-way true)]
           stair (into [(moved :walk [0 64 0])] (map #(moved :drop [% (- 64 %) 0])) (range 1 10))]
       (is (= {:steps (subvec ravine 0 1) :refused [-16265 54 -7912] :kind :descent} (cut [-15827 65 -7782] ravine))
-          "Tamsin S6 (card f95caff7): a ravine floor's drops of 2 and gap jumps down are one-way, seen or not: no way back")
+          "Tamsin S6 (card f95caff7): a ravine floor's drops of 2 and gap jumps down, which the planner marks one-way, are no way back")
       (is (= {:steps stair} (cut [100 64 0] stair)) "a seen stair of 1-block drops is its own way back up"))))
 
 (deftest an-unfinished-search-walks-down-only-as-far-as-the-climb-back-pays
