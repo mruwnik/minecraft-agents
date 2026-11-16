@@ -12,6 +12,7 @@
             [engine.library-test :refer [setup calls inv]]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.scenario :as scenario]
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -554,16 +555,20 @@
                  (select-keys (recovered eng) [:decision :items :reason]))))))))
 
 (defn appear-after-first-leg!
-  "Cut the first walk step short (2 s, a few blocks, the clock moved on so the leg's seconds are used) and add entity e to the fake world as it is taken."
-  [p clock e]
-  (let [n (atom 0)]
-    (.override (.-world p) "steer"
-               (fn [token args impl]
-                 (when (= 1 (swap! n inc))
-                   (set! (.-timeoutS args) 2)
-                   (swap! clock + 2000)
-                   (swap! (fake/state p) update :entities conj e))
-                 (impl token args)))))
+  "Cut the first walk step short (2 s, a few blocks, the clock moved on so the leg's seconds are used) and add entity e to
+  the fake world as it is taken; with strikes? its blows hurt the body on that step and every one after."
+  ([p clock e] (appear-after-first-leg! p clock e false))
+  ([p clock e strikes?]
+   (let [n (atom 0)]
+     (.override (.-world p) "steer"
+                (fn [token args impl]
+                  (when (= 1 (swap! n inc))
+                    (set! (.-timeoutS args) 2)
+                    (swap! clock + 2000)
+                    (swap! (fake/state p) update :entities conj e))
+                  (when strikes?
+                    (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 3 :attacker {:id (:id e) :name (:name e)}})))
+                  (impl token args))))))
 
 (deftest recover-drops-rechecks-the-dangers-between-legs-of-the-walk
   (async done
@@ -578,6 +583,44 @@
           (is (re-find #"zombie" (:text (danger-remembered eng))) "a mob that turned up on the way makes the trip dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open")
           (is (< (.-x (.-pos (.self p))) 19) "the body did not walk on to the pile"))))))
+
+;; ------------------------------------- a mob striking the body comes before the pile
+
+(defn fired [seen] (keep #(when (= :fired (:kind %)) (:reflex %)) @seen))
+
+(def died-then-hostile
+  "The default order: the died trigger before hostile-near, so only recover-drops' own check lets the hostile reflex act.
+  Its answer is a notice: which reflex gets the body is the question, not how it fights."
+  "{:register [{:trigger :died} {:trigger :hostile-near :job (jobs.debug.notify {:text \"answered\" :worth 1})}]}")
+
+(deftest a-mob-striking-the-respawned-body-is-answered-before-the-pile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities drops})]
+          (core/load-scenario! eng (scenario/parse died-then-hostile))
+          (fake/add-entity! p {:id 50 :name "zombie" :kind "hostile" :pos [1 64 0] :health 20})
+          (die! eng {:pos death-pos :inventory diamonds})
+          (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 3 :attacker {:id 50 :name "zombie"}}))
+          (await (core/tick! eng))
+          (is (= [:hostile-near] (fired seen)) "the zombie hitting the body first: a died entry ahead of it does not cut its answer"))))))
+
+(deftest a-trip-under-way-yields-to-the-hostile-reflex-when-a-mob-strikes-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos [19 64 1]}
+              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
+          (core/load-scenario! eng (scenario/parse died-then-hostile))
+          (die! eng {:pos death-pos :inventory diamonds})
+          (appear-after-first-leg! p clock zombie true)
+          (loop [n 0]
+            (when (and (< n 10) (not (some #{:hostile-near} (fired seen))))
+              (await (core/tick! eng))
+              (recur (inc n))))
+          (is (= [:died :hostile-near] (take 2 (fired seen))) "the hostile reflex answers the zombie mid-trip")
+          (is (= [nil nil] [(recovered eng) (danger-remembered eng)])
+              "the trip neither went on to the pile under the zombie nor declined it for the zombie: the death stays open"))))))
 
 ;; ------------------------------------------- every :declined says why
 

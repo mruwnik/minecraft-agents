@@ -1,0 +1,25 @@
+;; Card eff5ca7b: a mob striking the body is the hostile reflex's, though the :died entry comes first in the register.
+;; The body dies at [22 0 22] (RCON kill) and respawns at [4 0 4] with an iron sword (given); a husk (no loot pick-up) stands
+;; by the pile and comes for the body. The pile (diamonds, iron) is worth the trip past one husk, so before the fix the trip
+;; walked on under its blows and the hostile reflex could not cut it. Should-succeed: hostile-near fires before the pile is
+;; collected (recover-drops waits :hostile-near or ends between steps), the husk is answered, then the pile is collected.
+;; Resistance III keeps the body alive while the blows still land (they must, to count as hits).
+{:defaults
+ {:tags [:survival :death :jobs]
+  :register [{:trigger :died}
+             {:trigger :hostile-near}]
+  :body {:at [22.5 0 22.5] :spawnpoint [4 0 4] :effects [["resistance" 600 3]]
+         :inventory [["diamond" 32] ["raw_iron" 24] ["cobblestone" 64]]}
+  :mobs :keep
+  :act [[:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:rcon "give $BODY iron_sword 1"]
+        [:summon "husk" [20.5 0 20.5] "{CanPickUpLoot:0b,PersistenceRequired:1b}"]]
+  :limit-s 220}
+ :cases
+ [{:name "husk-striking-the-body-is-answered-before-the-pile"
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 120}
+            {:no-event {:source :reflex :kind :ended :data {:decision :collected}} :for-s 200
+             :until {:source :reflex :kind :fired :context {:reflex-id :hostile-near}}}
+            {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 200}]
+   :after [[:item "diamond" 32]]}]}

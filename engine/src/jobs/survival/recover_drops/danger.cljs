@@ -22,6 +22,12 @@
                              {:skip (:weighed (ctx/mem c)) :sight? (:visible-only args true)
                               :ignore-heard? (body/heard-muted? (ctx/view c))})))
 
+(defn struck?
+  "Whether a mob's blow hurt the body within jobs.lib.danger/::hit-s and the hostile-near trigger would hold (ready/hostile-now?):
+  the danger the trip priced has come, and the hostile reflex answers it."
+  [c]
+  (boolean (and (seq (danger-q/hit-ids (ctx/view c))) (ready/hostile-now? c))))
+
 (defn hit-since?
   "Whether the body was hurt since the decision was taken."
   [c decided]

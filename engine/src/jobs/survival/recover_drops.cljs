@@ -28,7 +28,7 @@
 
 (def doc
   "After a death, go back for the drops when they are worth it. Serves the :died entry no :recovered covers (the keyed one, else the open pile best net of the walk); one run is the whole trip and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex or a restart goes on with the same trip (:recover-trip).
-  Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). The children run under :checks {:safe? (always)}: the trip prices its own danger.
+  Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). Waits :hostile-near while a mob strikes the body (dg/struck?): the hostile reflex answers it. The children run under :checks {:safe? (always)}: the trip prices its own danger.
   Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, its danger the walk risk of go-to's quote, ::margin); infinite for a pile that burned (died in lava or fire, est/lost) or fell out of the world, or a walk ending after the despawn.
   Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, its walk risk naming the mobs priced, the air the route spends); a hold is no longer than the pile's gain over its safe trip (est/surplus-s: a wait costs its seconds), the window left less the walk, the flight and the collect, and ::danger-memory-ms, and no shorter than the flight (seconds a chaser needs to give up); with no mob seen, or less, no hold: the pile is left (:skip).
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
@@ -57,11 +57,14 @@
 (def defaults {:spend {:job-time ::job-time-s} :ways #{:carried :chest}})
 
 (defn can-run?
-  "A death to serve, else :later with the danger remembered for one (a backed-off trip waits it out), else the decision already taken."
+  "A death to serve, :later :hostile-near while a mob strikes the body (dg/struck?): the hostile reflex answers it, which
+  the died trigger before it in the register would otherwise cut, and a trip ends between steps for it; else :later with
+  the danger remembered for one (a backed-off trip waits it out), else the decision already taken."
   [c]
-  (if (seq (dth/open-deaths c))
-    (contract/ok :open-death "a death to serve")
-    (checks/cause-status :later (or (dth/danger-wait (ctx/view c)) (est/decided-wait (ctx/view c))))))
+  (cond
+    (empty? (dth/open-deaths c)) (checks/cause-status :later (or (dth/danger-wait (ctx/view c)) (est/decided-wait (ctx/view c))))
+    (dg/struck? c) (contract/later :hostile-near "a mob strikes the body: the hostile reflex answers it first")
+    :else (contract/ok :open-death "a death to serve")))
 
 (defn worth-of
   "Seconds a root trip is worth: getting the pile it serves again (cost/goal-value, args :value-overrides) and its
