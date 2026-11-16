@@ -775,9 +775,9 @@
         c (read-ctx eng [0 64 0] 1)]
     (looked-round! p [[-2.5 59 0.5] [0.5 59 -2.5] [0.5 59 2.5] [4.5 59 0.5] [6.5 65 0.5]])
     (is (sense/unknown? p [0 63 0]) "the pocket is unseen: no x-ray")
-    (is (choose/goal-shut? c (wworld/path-world p (:unknown c)) [0 64 0] 1) "its shell seen from round the pit proves it walled in")
+    (is (choose/shut-result? (choose/late-flood c (wworld/path-world p (:unknown c)) [0 64 0] 1 nil)) "its shell seen from round the pit proves it walled in")
     (is (= [[4 64 0]] (take 1 (choose/drop-edges p [[1 65 0]] [6 65 0]))) "the ledge's drop edge nearest the body")
-    (is (= [4 64 0] (with-redefs [choose/goal-shut? (constantly false)] (:cell (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0]))))
+    (is (= [4 64 0] (with-redefs [choose/shut-result? (constantly false)] (:cell (choose/drop-fill (assoc c :jobs.lib.check-cache/fresh true) {:reason :goal-enclosed} #{} [6 65 0]))))
         "with no planner proof, the fill the old rule offered")
     (is (nil? (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0])) "the planner still proves the goal walled in with it filled")))
 
@@ -798,9 +798,55 @@
         pw (wworld/path-world p (:unknown c))]
     (is (= {:early-proof false :late-proof true :edges [[3 69 0]] :fill nil}
            {:early-proof (wplan/enclosed-before-search? c pw [1 70 0] 0)
-            :late-proof (choose/goal-shut? c pw [1 70 0] 0)
+            :late-proof (choose/shut-result? (choose/late-flood c pw [1 70 0] 0 nil))
             :edges (vec (choose/drop-edges p [[1 70 0]] [6 71 0]))
             :fill (:cell (choose/drop-fill c {:reason :goal-cut-off} #{} [6 71 0]))}))))
+
+(def two-trenched-lanes
+  "Two stone rooms (goal's x -6..0, body's x 8..14; z -1..5, feet y 64, walls 3 high) joined by two 1-wide lanes x 1..7
+  along z 0 and z 4, each floor a trench two deep (feet y 62: no climb back out). A gap jump spans at most 3 cells: a
+  floor at [4 63 4] alone bridges its lane, those at [3 63 0] and [5 63 0] only together."
+  (apply dissoc (merge (box -10 55 -6 18 63 10 "stone") (box -7 64 -2 15 66 6 "stone"))
+         (concat (for [x (concat (range -6 1) (range 8 15)) z (range -1 6) y [64 65 66]] (str x "," y "," z))
+                 (for [x (range 1 8) z [0 4] y [62 63 64 65 66]] (str x "," y "," z)))))
+
+(deftest the-fill-that-alone-joins-the-goal-is-found-whatever-pair-joins-it-first
+  ;; Old joining-fill halved the fills nearest first: [3 63 0] and [5 63 0] together free the goal, so it kept [5 63 0],
+  ;; which alone does not, and offered nothing; [4 63 4] alone does.
+  (let [{:keys [eng p]} (gt/setup {:self {:pos [11.5 64 0.5]} :blocks two-trenched-lanes :inventory [{:name "dirt" :count 9}]})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [-3 64 2] :range 0} :round 1})
+        pw (wworld/path-world p nil)
+        shut? (fn [cells] (choose/shut-result? (choose/late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) [-3 64 2] 0 nil)))]
+    (is (= {:none true :alone [true true false] :pair false :fill [4 63 4]}
+           {:none (shut? [])
+            :alone (mapv #(shut? [%]) [[3 63 0] [5 63 0] [4 63 4]])
+            :pair (shut? [[3 63 0] [5 63 0]])
+            :fill (choose/joining-fill c {:x -3 :y 64 :z 2} [[3 63 0] [5 63 0] [4 63 4]])}))))
+
+(def hut-door-over-a-hole
+  "A cobblestone hut (planks floor y 64, inside x 11..13, z 11..13, feet y 65, roof y 67) on stone ground (top y 63) whose
+  only door [12 65 14] opens over a hole dug in the ground in front of it ([12 63 15]): 2 down from the door's floor."
+  (dissoc (merge (box -2 58 -2 24 63 24 "stone") (box 10 64 10 14 64 14 "oak_planks")
+                 (apply dissoc (box 10 65 10 14 67 14 "cobblestone") (for [x (range 11 14) z (range 11 14) y [65 66]] (str x "," y "," z)))
+                 {"12,65,14" "oak_door" "12,66,14" "oak_door"})
+          "12,63,15"))
+
+(deftest go-to-bridges-a-hole-before-a-door-asking-the-fill-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom 0)
+              joining choose/joining-fill
+              {:keys [out p seen]} (with-redefs [choose/joining-fill (fn [& args] (swap! asked inc) (apply joining args))]
+                                     (await (run-job! {:self {:pos {:x 12.5 :y 64 :z 20.5}} :blocks hut-door-over-a-hole :seeing-all true
+                                                       :states {"12,65,14" {:open false :half "lower" :facing "south"}
+                                                                "12,66,14" {:open false :half "upper" :facing "south"}}
+                                                       :inventory [{:name "dirt" :count 5}]}
+                                                      {:pos [12 65 12] :range 0})))]
+          (is (= {:arrived true} @out))
+          (is (= [[12 64 15]] (mapv :cell (events-of seen :go-to.escalated))) "the door's step filled")
+          (is (= "dirt" (block p [12 64 15])))
+          (is (= 1 @asked) "the escalate? that kept the give-up and the choice after it share one answer"))))))
 
 (def doorway-hole
   "Floor y 63 with a 1-cell hole at x 5 (floor under it at y 62), and a floor 1 higher from x 6: the doorway of a hut whose sill was dug."

@@ -20,6 +20,7 @@
             [jobs.lib.per-body :as per-body]
             [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.column-kinds :as kinds]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
@@ -185,47 +186,51 @@
            distinct
            (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz)))))))))
 
-(defn goal-shut?
-  "Whether the planner's late goal flood (wider than its early one: no sealed test) proves the goal within range of to
-  [x y z] walled in or cut off by a drop (or the start shut in) over pw before any search: the proof behind a plan's
-  :goal-enclosed and :goal-cut-off, over at most the room-cells drop-edges closes the goal's region in. pw: a pathWorld
-  (wworld/path-world)."
-  [c ^js pw to range]
+(defn late-flood
+  "The result of the planner's late goal flood (wider than its early one: no sealed test) toward the goal within range of to
+  [x y z] over pw before any search, over at most the room-cells drop-edges closes the goal's region in; fill-cells (nil:
+  none) its options.fillCells. pw: a pathWorld (wworld/path-world)."
+  [c ^js pw to range fill-cells]
   (let [^js s (planner/create-search (.-snapshot pw) (wplan/plan-query c to range)
                                      (doto (wplan/plan-options pw 1 nil nil)
                                        (unchecked-set "preFlood" 0) (unchecked-set "floodAfter" 0) (unchecked-set "maxNodes" 1)
-                                       (unchecked-set "goalFlood" reach-room/room-cells)))]
+                                       (unchecked-set "goalFlood" reach-room/room-cells)
+                                       (unchecked-set "fillCells" fill-cells)))]
     (.step s js/Infinity)
-    (boolean (#{"goal-enclosed" "goal-cut-off" "start-enclosed"} (.-reason ^js (.result s))))))
+    (.result s)))
+
+(defn shut-result?
+  "Whether a planner result proves the goal walled in or cut off by a drop (or the start shut in): the proof behind a
+  plan's :goal-enclosed and :goal-cut-off."
+  [^js r]
+  (boolean (#{"goal-enclosed" "goal-cut-off" "start-enclosed"} (.-reason r))))
 
 (defn joining-fill
-  "The nearest of fills (floor cells [x y z], nearest first) whose block, read solid, leaves goal ({:x :y :z}) no longer
-  proven shut by the planner's goal flood (goal-shut?, over the call's read: c's :unknown): a fill beside land the
-  planner's moves never reach the goal from bridges nothing. nil when all of fills read solid at once still leave it
-  shut. More cells solid open no less, so the shortest nearest-first run of fills that frees the goal is found by
-  halving and its last fill kept when it frees the goal alone: a few floods whatever the count of fills. Without a path
-  world: the first of fills."
+  "The fill of fills (floor cells [x y z], nearest first) whose block alone, read solid, leaves goal ({:x :y :z}) no longer
+  proven shut by the planner's late goal flood (late-flood, over the call's read: c's :unknown): one flood over the world
+  read with every fill solid, each fill's stand labelled (options.fillCells), names the fill on the planner's fewest-move
+  way from the goal to the body. A fill beside land the planner's moves never reach the goal from bridges nothing. nil
+  when no fill alone frees it; the first of fills when it is not proven shut with none filled, or without a path world."
   [c goal fills]
   (let [pw (wworld/path-world (:primitives c) (:unknown c))
-        to [(:x goal) (:y goal) (:z goal)]
-        fills (vec fills)
-        shut? (fn [cells] (goal-shut? c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) to (:range (:args c) 1)))]
+        fills (vec fills)]
     (cond
       (nil? pw) (first fills)
-      (or (empty? fills) (shut? fills)) nil
-      :else (let [k (loop [lo 0 hi (dec (count fills))]
-                      (if (== lo hi)
-                        lo
-                        (let [mid (quot (+ lo hi) 2)]
-                          (if (shut? (subvec fills 0 (inc mid))) (recur (inc mid) hi) (recur lo mid)))))]
-              (when (or (zero? k) (not (shut? [(fills k)])))
-                (fills k))))))
+      (empty? fills) nil
+      :else (let [stands (js/Map.)
+                  _ (doseq [[i [x y z]] (map-indexed vector fills)] (.set stands (planner/cell-key x (inc y) z) (inc i)))
+                  r (late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) fills)) [(:x goal) (:y goal) (:z goal)]
+                                (:range (:args c) 1) stands)
+                  joined (.-joined r)]
+              (cond
+                (shut-result? r) nil
+                (pos? joined) (fills (dec joined))
+                :else (first fills))))))
 
-(defn drop-fill
-  "{:step :fill-gap :cell :item} when result is :goal-cut-off or :goal-enclosed (the goal's region ends at a drop the body cannot climb back
-  from), a carried block can fill the floor of the cell beyond the drop edge nearest the body that the planner's goal
-  flood then no longer proves walled in (joining-fill), and no zone refuses the place: the bridge a player lays over the
-  hole before a door; else nil."
+(defonce ^{:doc "Per body (its primitives): the last drop-fill asked, {:key :unknown :v}."} drop-fills (js/WeakMap.))
+
+(defn drop-fill-of
+  "drop-fill's answer, without the kept one."
   [c result skip feet]
   (when (and (contains? #{:goal-cut-off :goal-enclosed} (some-> (:reason result) keyword)) (not (skip :fill-gap)))
     (let [p (:primitives c)
@@ -238,6 +243,26 @@
           cell (when (and item (seq starts)) (joining-fill c goal (drop-edges p starts feet)))]
       (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
         {:step :fill-gap :cell cell :item item :count carried}))))
+
+(defn drop-fill
+  "{:step :fill-gap :cell :item} when result is :goal-cut-off or :goal-enclosed (the goal's region ends at a drop the body cannot climb back
+  from), a carried block can fill the floor of the cell beyond a drop edge that the planner's goal flood then no longer
+  proves walled in (joining-fill), and no zone refuses the place: the bridge a player lays over the hole before a door;
+  else nil. Kept per body while the world it read (threat-field/world-epoch), the call's read and the question hold (never
+  under check-cache/fresh): the escalate? that keeps a give-up and the choice after it ask the same."
+  [c result skip feet]
+  (let [p (:primitives c)
+        epoch (threat-field/world-epoch p)
+        u (:unknown c)
+        k [epoch feet (some-> (:reason result) keyword) (boolean (skip :fill-gap)) (:pos (:args c)) (:range (:args c))
+           (:ignore-zones? (:args c)) (escape/pillar-item c) (some-> u .-missed .-size) (some-> u .-blocked .-size)]
+        keep? (and (some? epoch) (not (::check-cache/fresh c)))
+        kept (.get drop-fills p)]
+    (if (and keep? kept (identical? u (:unknown kept)) (= k (:key kept)))
+      (:v kept)
+      (let [v (drop-fill-of c result skip feet)]
+        (when keep? (.set drop-fills p {:key k :unknown u :v v}))
+        v))))
 
 (defn own-stair
   "The body's own stair cut again (climb/recut) as the way out for a body standing on it under goal: what stands in its

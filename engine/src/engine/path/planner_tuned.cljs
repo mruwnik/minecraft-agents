@@ -27,6 +27,8 @@
      eye there sees the goal block). The goal flood and goal-not-standable still judge the whole area.
    - options.avoid {kinds, cells, factor}: a search for another path (see avoidCost).
    - options.only: a Set of cell-key; the search enters no other cell (a given route re-priced along its own cells).
+   - options.fillCells: a Map of cell-key -> i (1..) of stands over floors the world reads filled: the late flood says in
+     result.joined which one alone lets the goal be reached (i; 0 none needed, -1 none does; see Search fill-cells).
    - options.limits {kinds, gap, corner}: what the walker can do. Without it the search is unrestricted.
        kinds: bits of the move kinds never planned.
        gap(x, y, z, h, move, lx, ly, lz, lh): false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h
@@ -405,8 +407,12 @@
      ;; returnable held replaying closed-drops
      (true? (option options "returnable" false)) #js [] false
      (or (true? (option options "oneWayClosed" false)) (true? (option options "closedDetour" false)))
-     ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end cut-off limit-refused limit-probe
-     nil nil 0 0 false false false false false false 0
+     ;; lf-seen lf-queue lf-head lf-budget lf-active lf-open lf-seed-open lf-end
+     nil nil 0 0 false false false false
+     ;; fill-cells lf-labels lf-label lf-phase lf-joined
+     (.-fillCells options) (when (some? (.-fillCells options)) (js/Map.)) 0 0 -1
+     ;; cut-off limit-refused limit-probe
+     false false 0
      ;; known-cells known-new known-edges edges-new
      (.-knownCells options) nil (.-knownEdges options) nil
      ;; searched-out

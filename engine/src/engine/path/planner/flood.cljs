@@ -218,6 +218,19 @@
           (.set ^js (.-flood-moves s) memo-key out)
           out))))
 
+  ;; the label a node of cell x y z flooded from the current node takes (fill-cells): the current node's, or a fill's own
+  ;; when the cell is that fill's stand and the current node was reached with no fill in the second pass; -1 refused
+  (fillLabel [s x y z]
+    (let [i (.get ^js (.-fill-cells s) (cell-key x y z))]
+      (cond
+        (undefined? i) (.-lf-label s)
+        (and (== (.-lf-phase s) 1) (zero? (.-lf-label s))) i
+        :else -1)))
+
+  (labelOf [s key]
+    (let [l (.get ^js (.-lf-labels s) key)]
+      (if (undefined? l) 0 l)))
+
   ;; adds region r of the cell (-1: every region, as one node) when a forward move out of it reaches the flood's current
   ;; node; true when it is the start
   (floodNode [s ^js seen ^js queue start-key x y z h r]
@@ -226,12 +239,15 @@
         false
         (do
           (set! (.-hit s) (.includes (.floodMovesOf s x y z h r key) (.-flood-target s)))
-          (if ^boolean (.-hit s)
-            (do (.add seen key)
-                (.push queue x y z r)
-                (.leakBubble s x y z)
-                (== key start-key))
-            false)))))
+          (let [label (if (and ^boolean (.-hit s) (some? (.-fill-cells s))) (.fillLabel s x y z) 0)]
+            (if (and ^boolean (.-hit s) (>= label 0))
+              (do (.add seen key)
+                  (when (pos? label) (.set ^js (.-lf-labels s) key label))
+                  (.push queue x y z r)
+                  (.leakBubble s x y z)
+                  (when (== key start-key) (set! (.-lf-joined s) label))
+                  (== key start-key))
+              false))))))
 
   ;; cells a gap jump could come from: 2..4 along each cardinal, level, one up or one down (a jump up a block)
   (floodAhead [s seen queue start-key]
@@ -438,6 +454,11 @@
     (set! (.-lf-imported s) 0)
     (set! (.-leaked s) (< (.-rest-p s) 0.5))
     (set! (.-lf-active s) true)
+    (when (some? (.-fill-cells s))
+      (.clear ^js (.-lf-labels s))
+      (set! (.-lf-label s) 0)
+      (set! (.-lf-phase s) 0)
+      (set! (.-lf-joined s) -1))
     (.floodSeeds s ^js (.-lf-seen s) ^js (.-lf-queue s))
     (when (true? (.has ^js (.-lf-seen s) (aget (.-node-keys s) 0)))
       (set! (.-lf-open s) true)
@@ -510,6 +531,12 @@
         (set! (.-allow-shut s) true) ; a shut trapdoor is a way through, only dearer: the flood must not call its far side enclosed
         (let [state (loop []
                       (cond
+                        ;; flooded with every fill refused: the queue again, fills let in
+                        (and (some? (.-fill-cells s)) (zero? (.-lf-phase s)) (not ^boolean (.-leaked s))
+                             (>= (.-lf-head s) (.-length ^js (.-lf-queue s))) (<= (.-size ^js (.-lf-seen s)) (.-lf-budget s)))
+                        (do (set! (.-lf-phase s) 1)
+                            (set! (.-lf-head s) 0)
+                            (recur))
                         (not (and (not ^boolean (.-leaked s)) (< (.-lf-head s) (.-length ^js (.-lf-queue s))) (<= (.-size ^js (.-lf-seen s)) (.-lf-budget s)))) 0
                         (> (.-size ^js (.-lf-seen s)) limit) 1
                         :else
@@ -519,6 +546,8 @@
                           (set! (.-fz s) (aget ^js (.-lf-queue s) (+ (.-lf-head s) 2)))
                           (set! (.-fr s) (aget ^js (.-lf-queue s) (+ (.-lf-head s) 3)))
                           (set! (.-flood-target s) (if (neg? (.-fr s)) (- -1 (.keyOf s (.-fx s) (.-fy s) (.-fz s) 0)) (.keyOf s (.-fx s) (.-fy s) (.-fz s) (.-fr s))))
+                          (when (some? (.-fill-cells s))
+                            (set! (.-lf-label s) (.labelOf s (.keyOf s (.-fx s) (.-fy s) (.-fz s) (js/Math.max 0 (.-fr s))))))
                           (if (or ^boolean (.floodColumn s ^js (.-lf-seen s) ^js (.-lf-queue s) start-key) ^boolean (.floodAround s ^js (.-lf-seen s) ^js (.-lf-queue s) start-key))
                             2
                             (do (set! (.-lf-head s) (+ (.-lf-head s) 4))
@@ -527,6 +556,9 @@
           (set! (.-allow-shut s) false)
           (set! (.-fr s) -1)
           (when (== state 2) (set! (.-lf-open s) true))
+          (when (and (== state 0) (some? (.-fill-cells s)) (neg? (.-lf-joined s))
+                     (or ^boolean (.-leaked s) (> (.-size ^js (.-lf-seen s)) (.-lf-budget s))))
+            (set! (.-lf-joined s) (.-lf-label s)))
           (not (== state 1))))))
 
   ;; the run that is over: true when the goal is walled in or cut off (the flood exhausted within its budget, neither meeting the start
