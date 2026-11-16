@@ -176,6 +176,15 @@
         (= :again r) (do (mem/plug! c cell) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]})
         :else (assoc r :reason :water-unplugged)))))
 
+(defn ^:async fill-water-step!
+  "Water on the line is filled before the cell is dug (jobs.lib.lava/seal! on the water cell, event stair.plugged): water
+  in a cut cell, and the water behind a cell this stair plugged earlier, which once gone lets the plug be dug (kept-plugs).
+  nil when there is none or it cannot be filled (the judge then stops :fluid-in-cut or :plugged); :continue otherwise."
+  [c block-at cut]
+  (when-let [[_ w] (first (cells/fill-water block-at (mem/plugs-of c) cut))]
+    (let [r (await (lava/seal! c :stair.plugged block-at w {:fluid "water" :ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
+      (when (or (= :continue r) (= :again r)) :continue))))
+
 (def no-tool-hint "no tool harvests it: pass :need-drop false to dig it by hand (slow, no drop)")
 
 (defn fetch-tool?

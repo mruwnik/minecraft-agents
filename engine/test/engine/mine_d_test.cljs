@@ -436,7 +436,7 @@
           (is (empty? (events-of s :mine.turned)))
           (is (= :no-stone-found (:reason (done-event s)))))))))
 
-(deftest a-given-heading-is-turned-when-water-fills-its-first-step
+(deftest a-given-heading-goes-on-when-water-fills-its-first-step-the-water-is-filled-and-the-cell-dug
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -444,7 +444,8 @@
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (core/submit! (:eng s) (tu/order (spec {:block "stone" :count 2 :heading "west" :tunnel-length 4})) {})
           (await (run-ticks s 300))
-          (is (seq (events-of s :mine.turned)))
+          (is (seq (events-of s :stair.plugged)) "the water on the line is filled")
+          (is (empty? (events-of s :mine.turned)))
           (is (<= 2 (get (inv s) "cobblestone" 0))))))))
 
 ;; Alder j48: between two stair steps something moved the body off the stair line; the stair stopped :off-stair and mine ended with no stone.

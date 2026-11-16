@@ -55,11 +55,11 @@
 
   Hazards: exposed lava is filled with a building block (a jobs.blocks.place child, fetched when the call's :ways allow; :on-lava :stop stops
   :lava-exposed instead); after a seal it waits half a second, looking, before it digs or steps on; a failed seal, or lava flowing back once a reseal is not worth it (jobs.lib.lava/reseal?), backs the body off and stops :lava-unsealed. A cut that
-  now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot). :accept
+  now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot); water in a cut cell, and the water behind a cell it plugged earlier, is filled the same way before the cell is dug (:fluid-in-cut or :plugged only when it cannot be filled). :accept
   (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column (a stair up's top cell; also an unseen cell there when the cut from
   beside is cheaper than what the landing risks, undermine-worth?: at low health, or under seen water) would land on the body once the cell under it is cut: the body steps out of the column (the step behind, the cell behind, a side), cuts the column and what drops into it
   from there, and walks back. With no cell to step to it is cut in place, and one that lands on the body is dug out at
-  once (at most 2 landings, then :hazard). The body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged with water still beside it (stair-memory/kept-plugs),
+  once (at most 2 landings, then :hazard). The body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged with water still beside it that could not be filled (stair-memory/kept-plugs),
   a crop, or a base block.
 
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
@@ -496,6 +496,7 @@
                                    (let [r (await (sstep/dig! c in blind cut accept))] (case r :continue :again :yield :continue r))))
                              (await (sstep/lava-step! c :stair.sealed (:block-at in) feet cut))
                              (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (case r :continue :again :yield :continue r))
+                             (await (sstep/fill-water-step! c (:block-at in) cut))
                              (await (sstep/water-step! c (:block-at in) accept cut))
                              (await (sstep/judge-after-lava! c in step-cells accept cut feet)))]
                 (if (and (= :no-floor (:reason stop)) (bs/open-floor? (:block stop)))

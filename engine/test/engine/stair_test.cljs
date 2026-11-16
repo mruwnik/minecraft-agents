@@ -772,16 +772,24 @@
         _ (core/submit! eng (tu/order '(jobs.access.stair {:dir :down :heading :east :steps 3 :here true})) {})
         _ (await (tick-out! first-run))]
     {:plug (block-at p [1 64 0])
+     :behind (block-at p [1 64 1])
      :plug-digs (count (filter #{{:x 1 :y 64 :z 0}} (digs p)))
      :stops (map :reason (drop stops (events-of first-run :stopped)))}))
 
-(deftest a-later-stair-digs-the-plug-an-earlier-one-set-against-water-only-once-the-water-is-gone
+(deftest a-later-stair-fills-the-water-behind-the-plug-an-earlier-one-set-and-digs-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:plug "cobblestone" :plug-digs 1 :stops [:plugged]} (await (later-stair-at-plug! "water"))) "the plug stays shut")
+        (is (= {:plug "air" :behind "cobblestone" :plug-digs 2 :stops []} (await (later-stair-at-plug! "water"))) "the water behind is filled, then the plug is dug")
         ;; card 37b7baf9: with the water seen gone the plug is an ordinary block
-        (is (= {:plug "air" :plug-digs 2 :stops []} (await (later-stair-at-plug! "stone"))))))))
+        (is (= {:plug "air" :behind "stone" :plug-digs 2 :stops []} (await (later-stair-at-plug! "stone"))))))))
+
+(deftest fill-water-lists-water-in-the-cut-and-water-behind-a-plug
+  (let [b {[1 64 0] "cobblestone" [1 64 1] "water" [1 63 0] "water" [1 65 0] "water" [2 64 0] "stone"}
+        at #(get b % "stone")]
+    (is (= #{[[1 64 0] [1 64 1]] [[1 64 0] [1 65 0]]} (set (sc/fill-water at #{[1 64 0]} [[1 64 0]]))) "behind and above a plug; the cell under it is no source")
+    (is (= [] (sc/fill-water at #{} [[1 64 0] [2 64 0]])) "water beside an unplugged cut is the plug step's")
+    (is (= [[[1 63 0] [1 63 0]]] (sc/fill-water at #{} [[1 64 0] [1 63 0]])) "water in a cut cell")))
 
 (deftest water-that-filled-the-lower-cut-cell-is-plugged-there-not-in-the-cell-above
   (let [block-at {[1 64 0] "air" [1 63 0] "water"}
@@ -808,21 +816,25 @@
           (is (= :water-unplugged (:reason @out)))
           (is (= [1 64 0] (:cell @out))))))))
 
-(deftest water-let-into-the-cut-stops-the-stair
+(deftest water-let-into-the-cut-is-filled-and-the-cell-dug
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [prep (fn [p]
+        (let [flooded? (atom false)
+              prep (fn [p]
                      (let [world (.-world p)]
                        (.override world "dig"
                                   (fn ^:async f [token a impl]
                                     (let [r (await (impl token a))
                                           {:keys [x y z]} (js->clj (.-pos a) :keywordize-keys true)]
-                                      (swap! (.. world -state) assoc-in [:blocks [x y z]] "water")
+                                      (when-not @flooded?
+                                        (reset! flooded? true)
+                                        (swap! (.. world -state) assoc-in [:blocks [x y z]] "water"))
                                       r)))))
-              {:keys [out]} (await (stair! {:blocks ground} (assoc east :accept #{:fluid-adjacent}) prep))]
-          (is (= :fluid-in-cut (:reason @out)))
-          (is (= [1 64 0] (:cell @out))))))))
+              {:keys [out p] :as s} (await (stair! {:blocks ground :inventory (conj pick {:name "cobblestone" :count 8})} (assoc east :accept #{:fluid-adjacent}) prep))]
+          (is (= :done (:status @out)))
+          (is (= 1 (count (events-of s :stair.plugged))) "the water in the cut cell is filled once")
+          (is (= "air" (block-at p [1 64 0])) "and the cell is dug after"))))))
 
 (deftest air-under-the-next-floor-stops
   (async done

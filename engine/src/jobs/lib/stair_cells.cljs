@@ -110,7 +110,7 @@
       {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
       ;; before fluid: the water that forced a plug may already stand in the cut cell below it
       plug-cell {:reason :plugged :cell plug-cell :block (block-at plug-cell)
-                 :why "the cell was filled against water by this body; the water is behind it (the dig-plugs? setting digs it)"}
+                 :why "the cell was filled against water by this body; the water behind it could not be filled"}
       fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
       crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
       floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
@@ -154,6 +154,19 @@
                  w (cons cell (map #(shape/add cell %) (remove #(and (= [0 -1 0] %) (dug? (shape/add cell %))) rules/neighbour-deltas)))
                  :when (= "water" (block-at w))]
              [cell w])))))
+
+(defn fill-water
+  "The water to fill before the cut is dug, as [cell water] pairs in cut order: water in a cut cell, and water beside or
+  above a cut cell this body plugged (plugs, the set of plugged cells), which the plug holds back."
+  [block-at plugs cut]
+  (vec (for [cell cut
+             w (if (= "water" (block-at cell))
+                 [cell]
+                 (when (contains? plugs cell)
+                   (for [d rules/neighbour-deltas :let [w (shape/add cell d)]
+                         :when (and (>= (second w) (second cell)) (= "water" (block-at w)))]
+                     w)))]
+         [cell w])))
 
 (defn target-steps
   "Steps to cut from the args and the start feet, or {:error text}; :here marks an error only the feet cause."

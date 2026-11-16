@@ -354,16 +354,15 @@
             (is (some #(= pos (mapv (:pos %) [:x :y :z])) found) (str fluid " in seen memory: " (pr-str found)))
             (is (= {:reason hazard :at pos} (select-keys end [:reason :at])) (pr-str end))))))))
 
-(deftest a-fluid-in-the-cut-is-in-seen-memory-and-named
+(deftest water-in-the-cut-is-filled-and-the-tunnel-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10}
-                                 (rock-world {"1,64,0" "water"}) 120))
-              found (lk/seen-blocks (:p s) {:names ["water"] :radius 8 :live? true})
-              end (first (tunnel-ends s))]
-          (is (some #(= [1 64 0] (mapv (:pos %) [:x :y :z])) found) (pr-str found))
-          (is (= {:reason :fluid-in-cut :fluid :water :at [1 64 0]} (select-keys end [:reason :fluid :at])) (pr-str end)))))))
+                                 (rock-world {"1,64,0" "water"}) 120))]
+          (is (= 1 (count (events-of s :stair.plugged))) "the water on the line is filled once")
+          (is (not= "water" (block-at s 1 64 0)))
+          (is (= :tunnel-length (:reason (first (tunnel-ends s)))) (pr-str (first (tunnel-ends s)))))))))
 
 (deftest the-tunnel-seals-lava-a-cut-lays-open-and-goes-on
   (async done
