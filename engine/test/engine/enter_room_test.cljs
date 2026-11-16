@@ -19,6 +19,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
+            [jobs.lib.sense :as sense]
             [jobs.survival.enter-room :as enter-room]
             [engine.test-util :as tu]))
 
@@ -197,6 +198,31 @@
     (is (true? (room-lib/refuge-room? (:p yard) {:x 5 :y 64 :z 0})) "the yard is closed")
     (is (true? (enter-room/unclosable? (:p yard) {:x 5 :y 64 :z 0})))
     (is (false? (enter-room/unclosable? (:p holed) {:x 5 :y 64 :z 0})) "one hole is mended by a plug")))
+
+(deftest a-room-is-judged-unclosable-again-only-once-the-land-near-it-is-written
+  ;; the night asked every pass, moved or not, for each remembered home (reach-room/unroofed-cell twice, 40-50 ms)
+  (let [{:keys [p]} (st/setup (hut-world {:x 5 :y 64 :z 12} (into {} (for [x [4 5 6] z [-1 0 1]] [(str x ",67," z) "air"]))))
+        pos {:x 5 :y 64 :z 0}
+        floods (atom 0)
+        written (atom 0)
+        unroofed reach-room/unroofed-cell
+        site-memory sense/site-memory]
+    (set! reach-room/unroofed-cell (fn ([p pos] (swap! floods inc) (unroofed p pos)) ([p pos shut first?] (swap! floods inc) (unroofed p pos shut first?)) ([p pos shut] (swap! floods inc) (unroofed p pos shut))))
+    (set! sense/site-memory (fn [_ _] @written))
+    (try
+      (let [first-ask (enter-room/unclosable? p pos)
+            after-first @floods
+            again (enter-room/unclosable? p pos)
+            after-again @floods
+            _ (swap! written inc)
+            _ (enter-room/unclosable? p pos)]
+        (is (true? first-ask))
+        (is (pos? after-first))
+        (is (true? again))
+        (is (= after-first after-again) "nothing written near it: not judged again")
+        (is (< after-again @floods) "the land near it written: judged again"))
+      (finally (set! reach-room/unroofed-cell unroofed)
+               (set! sense/site-memory site-memory)))))
 
 (deftest a-home-in-anothers-zone-is-not-walked-into
   (async done

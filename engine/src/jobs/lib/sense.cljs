@@ -16,6 +16,7 @@
             [jobs.lib.cost.look :as cost]
             [jobs.lib.cost.value :as value]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
@@ -223,6 +224,24 @@
   the body sees anywhere); nil without a perception."
   [p {:keys [x y z]}]
   (some-> ^js (:st (aget p "perception")) (memory-age/writes-around x y z)))
+
+(defonce ^:private site-keeps (js/WeakMap.))
+
+(defn kept-at-site
+  "(f) kept per body for key k and the cell pos while nothing near pos is written (site-memory): a room read asked every pass
+  after a move, where the land round the room is as it was. Not kept without a perception, nor when a flood or search of f was cut (reach/cuts)."
+  [p k {:keys [x y z] :as pos} f]
+  (let [memory (site-memory p pos)]
+    (if-not memory
+      (f)
+      (let [^js m (or (.get site-keeps p) (let [m (js/Map.)] (.set site-keeps p m) m))
+            ck (str k "|" x "," y "," z)
+            ^js hit (.get m ck)]
+        (if (and hit (= memory (aget hit 0)))
+          (aget hit 1)
+          (let [n (reach/cuts) v (f)]
+            (when (= n (reach/cuts)) (.set m ck #js [memory v]))
+            v))))))
 
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."

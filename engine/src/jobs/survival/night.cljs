@@ -273,7 +273,7 @@
 (defn room-chance
   "The chance the room at pose is closed: 1 for a closed room, reach-room/closed-chance for a room not seen inside yet, nil for any other."
   [p pose]
-  (if (room-lib/refuge-room? p pose) 1 (reach-room/closed-chance p pose)))
+  (sense/kept-at-site p :room-chance pose #(if (room-lib/refuge-room? p pose) 1 (reach-room/closed-chance p pose))))
 
 (defn walk-against
   "enter-room/walk-args of place t, quoted at dig-s, the dig-in it is weighed against, when that is finite, else at the
