@@ -1,25 +1,25 @@
-;; A furnace obtain from a bare start (crafting table and wooden pickaxe, no furnace, no cobblestone) with the only stone 230 blocks
-;; east, far past sight, so its search is priced in obtain's quote and not in the args-only default budget (need/fetch! passes the
-;; quote's mean plus sd as :spend). Plot 260 x 64, open sky over a glowstone floor, a glowstone wall round it so the body cannot
+;; Smelting raw iron from a bare start (crafting table, wooden pickaxe, coal; no furnace, no cobblestone) with the only stone 230 blocks
+;; east, far past sight. smelt fetches the furnace through need/fetch!, which passes the obtain quote's mean plus sd as the child's
+;; :spend (a direct jobs.items.obtain call gets only its 183 s args-only default, which a player's work never does). Plot 260 x 64, open sky over a glowstone floor, a glowstone wall round it so the body cannot
 ;; leave and no wall block is stone; body at the west end.
-;; Should-succeed: 8 cobblestone are mined and the furnace made, ending :completed, never :limit-reached.
-;; Should-fail: the same start with no stone anywhere ends :no-source (the search found nothing), not a budget cut mid-gather.
+;; Should-succeed: 8 cobblestone are mined, the furnace made and the iron smelted, ending :completed, never :limit-reached.
+;; Should-fail: the same start with no stone anywhere ends smelt's :no-furnace-seen (the furnace fetch found nothing), not a budget cut mid-gather.
 {:defaults
  {:tags [:items :obtain :explore :budget :large :jobs]
   :time :any
   :plot {:height 12 :length 260 :width 64 :floor "glowstone" :light :sky}
-  :body {:at [1.5 0 32.5] :yaw 270 :settle-s 2 :inventory [["crafting_table" 1] ["wooden_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :body {:at [1.5 0 32.5] :yaw 270 :settle-s 2 :inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["wooden_pickaxe" 1]] :effects [["resistance" 600 4]]}
   :blocks [[:fill [0 0 0] [259 2 0] "glowstone"] [:fill [0 0 63] [259 2 63] "glowstone"] [:fill [0 0 0] [0 2 63] "glowstone"] [:fill [259 0 0] [259 2 63] "glowstone"]]
   :limit-s 700}
  :cases
  [{:name "furnace-with-the-stone-230-blocks-off-finishes-inside-its-quoted-budget"
    :blocks [[:fill [230 0 30] [233 3 34] "stone"]]
-   :act [[:job (jobs.items.obtain {:item "furnace" :count 1 :explore true :worth 3000})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 650 :of-job true}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :explore true :worth 3000})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 650 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 650 :until {:source :job :kind :completed}}]
-   :after [[:item "furnace" [:>= 1]]]}
-  {:name "furnace-with-no-stone-anywhere-ends-no-source-not-a-budget-cut"
-   :act [[:job (jobs.items.obtain {:item "furnace" :count 1 :explore true :worth 3000})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 650 :of-job true}
+   :after [[:item "iron_ingot" 2]]}
+  {:name "furnace-with-no-stone-anywhere-ends-no-furnace-seen-not-a-budget-cut"
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :explore true :worth 3000})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 650 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 650 :until {:source :job :kind :stopped}}]
-   :after [[:item "furnace" 0]]}]}
+   :after [[:item "iron_ingot" 0]]}]}
