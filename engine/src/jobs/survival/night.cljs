@@ -573,14 +573,16 @@
   staying put (spawns at the feet, spawn-light/night-chance, over shelter-s, the seconds the body stays open here: sheltering
   here closes them out, the night left when nothing can; over the walk's seconds when already enclosed: spawns at the feet go
   on); the hostiles known near
-  the body), both priced by bed-down/exposed-price (:walk-hp, :stay); :walk also costs jobs.lib.cost/commute-s (the walk back by day; in the ground the walk there too). r is go-to's
-  quoted route."
+  the body), both priced by bed-down/exposed-price (:walk-hp, :stay); :walk also costs jobs.lib.cost/commute-s (the walk back by day; in the ground the walk there too,
+  against the work staying up loses, cost/night-lost-s: none, the body works on in the dark). r is go-to's quoted route."
   [c bed r shelter-s]
   (let [p (:primitives c)
         secs (or (:seconds r) 0)
         here (spawn-light/night-chance p (sh-sense/feet p))
-        hp (walk-hp-s c bed r)]
-    {:walk (+ hp (cost/commute-s (sh/in-ground? p (ctx/view c)) secs shelter-s))
+        hp (walk-hp-s c bed r)
+        in-ground? (sh/in-ground? p (ctx/view c))
+        [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])]
+    {:walk (+ hp (cost/commute-s in-ground? secs (cost/night-lost-s in-ground? left 0)))
      :walk-hp hp
      :stay (bed-down/exposed-price c here (if (pos? shelter-s) shelter-s secs) (u/self-pos c))}))
 

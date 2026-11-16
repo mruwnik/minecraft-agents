@@ -331,6 +331,16 @@
     (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
     (first (st/emitted seen :night.answers))))
 
+(deftest in-a-dark-hall-the-walk-to-a-bed-is-weighed-against-working-on-not-against-a-shut-in
+  ;; Q213: underground the body would work on in the dark, so the walk there and back is all lost work; nothing here can
+  ;; shut it in, and a shut-in's night credited to the walk made the bed's price negative
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [prices]} (await (night-answers-with {:blocks (assoc dark-hall "10,64,0" "red_bed") :light-default [0 0]
+                                                           :sees-all true :players ["Alex"] :entities [sleeper]}))]
+          (is (not-any? neg? (vals prices)) (pr-str prices)))))))
+
 (deftest thirteen-awake-players-keep-the-body-in-its-closed-room-and-one-asleep-sends-it-to-the-bed
   ;; Brindle S7: 13 awake others charged every awake answer ~6500 s, so the walk out to the bed won
   (async done
