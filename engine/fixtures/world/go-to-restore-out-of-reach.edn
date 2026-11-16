@@ -1,0 +1,19 @@
+;; A cell dug to drop into a shaft is far above the goal once the body arrives. The put-back may walk up to it once; the walk back
+;; digs it again, and that cell is then left to restore-broken (go-to.restore-skipped), not put back and dug again for ever.
+;; Stone mass x 4..16, z 4..16, y 0..24. The body sits in a closed cell [10 20..21 10] one block from a shaft [12 4..21 10]
+;; whose bottom three cells are water; the goal is the ledge [13 7 10] beside the water. Should-succeed: arrived, at most one
+;; put-back (go-to.restored) and two escalations. Would fail on the old code: it restores and digs again without end.
+{:defaults
+ {:tags [:movement] :time :any
+  :plot {:height 26}
+  :blocks [[:fill [4 0 4] [16 24 16] "stone"] [:fill [10 20 10] [10 21 10] "air"] [:fill [12 4 10] [12 21 10] "air"]
+           [:fill [12 4 10] [12 6 10] "water"] [:fill [13 7 10] [13 8 10] "air"]]
+  :body {:at [10.5 20 10.5] :inventory [["stone_pickaxe" 1]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "a-cell-put-back-and-dug-again-is-left-for-restore-broken"
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [13 7 10] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :go-to.restore-skipped} :within-s 100 :of-job true}
+            {:count-event {:source :job :kind :go-to.escalated} :for-s 100 :at-most 2}
+            {:count-event {:source :job :kind :go-to.restored} :for-s 100 :at-most 1}]}]}

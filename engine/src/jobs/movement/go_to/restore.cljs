@@ -43,11 +43,19 @@
   [c [_ y _]]
   (> (- (second (end/feet-cell c)) y) 2))
 
+(defn short?
+  "Whether the body's feet are out of the call's range of goal pos (a column goal's: wplan/in-goal?)."
+  [c pos]
+  (let [feet (zipmap [:x :y :z] (end/feet-cell c))
+        r (:range (:args c) 1)]
+    (if (wplan/column-goal? c pos) (not (wplan/in-goal? c feet pos r)) (> (u/dist feet pos) r))))
+
 (defn skip-why
   "Why hole e must not be filled now, or nil: :changed (no longer air: forgotten), :kept (a cell of a stair way cut to
   climb away from a dive, recorded in memory :stair-way: the next go-to walks it; forgotten), :occupied (the body is in it),
   :needed (filling it would shut in a body that has room now: the stair it stands on, its way out), :away (out of
-  reach and deep below the feet: walking down to it would put the body inside its own refilled stair)."
+  reach and deep below the feet: walking down to it would put the body inside its own refilled stair), :repeated (this
+  call put the cell back before and dug it again: another put-back changes nothing, restore-broken does it later)."
   [c {:keys [cell]}]
   (let [p (:primitives c)]
     (cond
@@ -55,14 +63,8 @@
       (and (:dive-climb (ctx/mem c)) (contains? (ledger/own-cells c) cell)) :kept
       (tidy/in-body? p cell) :occupied
       (reach-room/closes-in? p :fill cell) :needed
+      (contains? (:put-back (ctx/mem c)) cell) :repeated
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
-
-(defn short?
-  "Whether the body's feet are out of the call's range of goal pos (a column goal's: wplan/in-goal?)."
-  [c pos]
-  (let [feet (zipmap [:x :y :z] (end/feet-cell c))
-        r (:range (:args c) 1)]
-    (if (wplan/column-goal? c pos) (not (wplan/in-goal? c feet pos r)) (> (u/dist feet pos) r))))
 
 (defn goal-cell?
   "Whether cell is the goal's feet or head cell while the body is still outside the call's range of it: the walk ends in it."
@@ -127,7 +129,9 @@
                 r (await (ctx/call c :restore 'jobs.blocks.place args))]
             (cond
               (= :continue r) :continue
-              (:placed (:data r)) (do (tidy/forget-cell! c cell) (note-placed! c cell) (done! :restored cell))
+              (:placed (:data r)) (do (tidy/forget-cell! c cell) (note-placed! c cell)
+                                           (ctx/update-mem! c update :put-back (fnil conj #{}) cell)
+                                           (done! :restored cell))
               :else (skip! (contract/cause-key r))))))))))
 
 (defn restore-next!

@@ -1168,6 +1168,16 @@
           (is (true? (:restore-held (ctx/mem c))) "the route cell ahead is held, not filled")
           (is (contains? (into #{} (map :cell) (tidy/entries c)) [2 64 4]) "it stays in the ledger for the arrival"))))))
 
+(deftest a-cell-the-call-put-back-and-dug-again-is-not-put-back-twice
+  ;; the put-back walked up to the cell, the way on needed it open and the call dug it again: refilling it again is the same loop
+  (let [{:keys [eng]} (gt/setup {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks (into (box -2 18 -2 2 40 2 "stone") (for [y (range 20 40)] [(str "0," y ",1") "air"]))})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:range 1} :round 1})
+        hole {:cell [0 36 1] :action :dig :was "cobblestone" :zone "vault" :escalation true :go-to "j9"}]
+    (.setOwner (:primitives eng) "tx")
+    (is (nil? (restore/skip-why c hole)))
+    (ctx/update-mem! c assoc :put-back #{[0 36 1]})
+    (is (= :repeated (restore/skip-why c hole)))))
+
 (deftest the-dug-routes-of-a-climb-and-of-earlier-ways-are-all-held-ahead
   (let [{:keys [eng]} (gt/setup {:blocks {}})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
