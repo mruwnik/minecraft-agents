@@ -179,6 +179,10 @@
   (flag :hostile-near [:hostile-near (str "a hostile within " radius)] [:no-hostile-near (str "no hostile within " radius)]
         (online (fn [c _] (some? (danger-q/nearest-danger (world c) radius {:ranged-radius radius} {}))))))
 
+(defn hit []
+  (flag :hit [:hit "a mob's blow hurt the body lately"] [:not-hit "no mob's blow lately"]
+        (fn [c] (boolean (seq (danger-q/hit-ids (view c)))))))
+
 (defn coord [p k] (if (map? p) (get p k) (get p ({:x 0 :y 1 :z 2} k))))
 
 (defn outside-box
@@ -284,6 +288,8 @@
    'hostile-near {:args [:number] :type :status
                   :doc "a real danger (as the hostile-near trigger: a mob that can reach the body, or a ranged one with a line of fire) is within that many blocks"
                   :fn hostile-near}
+   'hit {:args [] :type :status :doc "a mob's blow hurt the body within jobs.lib.danger/hit-s seconds (felt, as a player feels it)"
+         :fn hit}
    'outside-box {:args [:position :position] :type :status
                  :doc "the body's cell is outside the box between two corner positions, written as vectors [x y z] (min, max; max cell included)"
                  :fn outside-box}

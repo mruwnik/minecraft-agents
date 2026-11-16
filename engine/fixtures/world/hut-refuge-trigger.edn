@@ -1,0 +1,55 @@
+;; An agent's own danger reflex (owner Q172): hurt by a mob or a real danger near, outside its hut, it walks into the hut.
+;; The register entry is the recipe card c69a4163 gives Tiberius on Leo: (or (hit) (hostile-near 4)) outside the hut's inside, go-to in.
+;; Stone ground x 0..24, z 0..12, top y 2; a pool x 2..8, z 2..8, water 1 deep at y 2 (the body stands in it, head above);
+;; a stone hut x 14..18, z 4..8, inside x 15..17 z 5..7 y 3..4, oak door on the west wall at [14 3 6], torches inside and round the pool (lit at any time).
+;;   drowned-hitting-a-hurt-body-in-water-runs-into-the-hut (should-succeed): 13 hp, no regeneration, an AI drowned beside it:
+;;     the trigger fires, the body is inside the hut, the door is shut and the body does not die.
+;;   felt-blow-from-a-far-mob-fires-the-trigger (should-succeed): (hit) alone: a NoAI drowned 6 blocks off (no hostile-near 4)
+;;     deals a blow (damage ... by it); the trigger fires on the felt blow and the body walks in.
+;;   far-mob-that-never-hits-does-not-fire (should-fail): the same far NoAI drowned, no blow: the trigger never fires.
+{:defaults
+ {:tags [:survival :triggers :water]
+  :time :any
+  :plot {:height 10}
+  :register [{:trigger :suffocating} {:trigger :door-left}
+             {:id :hut-refuge
+              :when (and (or (hit) (hostile-near 4)) (outside-box #at [15 3 5] #at [17 4 7]))
+              :job (jobs.movement.go-to {:pos #at [16 3 6] :range 1 :ways #{:walk} :worth 3600})
+              :persistence :cooldown :cooldown-s 2}]
+  :blocks [[:fill [0 0 0] [24 2 12] "stone"]
+           [:fill [2 2 2] [8 2 8] "water"]
+           [:fill [14 3 4] [18 5 8] "stone"]
+           [:fill [14 6 4] [18 6 8] "stone"]
+           [:fill [15 3 5] [17 4 7] "air"]
+           [:set [17 3 7] "torch"] [:set [1 3 1] "torch"] [:set [1 3 9] "torch"] [:set [9 3 1] "torch"] [:set [9 3 9] "torch"] [:set [12 3 10] "torch"]
+           [:set [14 3 6] "oak_door[facing=west,half=lower,hinge=left,open=false]"]
+           [:set [14 4 6] "oak_door[facing=west,half=upper,hinge=left,open=false]"]]
+  :body {:spawnpoint :far :at [5.5 2 5.5] :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "drowned-hitting-a-hurt-body-in-water-runs-into-the-hut"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]
+         [:summon "drowned" [6.5 2 5.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 25]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hut-refuge}} :within-s 10}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hut-refuge}} :within-s 30}
+            {:no-event {:source :body :kind :died} :for-s 25}]
+   :after [[:body-near [16.5 3 6.5] 1.5] [:block [14 3 6] "oak_door[half=lower,open=false]"]]}
+  {:name "felt-blow-from-a-far-mob-fires-the-trigger"
+   :register [{:trigger :suffocating}
+              {:id :hut-refuge
+               :when (and (hit) (outside-box #at [15 3 5] #at [17 4 7]))
+               :job (jobs.movement.go-to {:pos #at [16 3 6] :range 1 :ways #{:walk} :worth 3600})
+               :persistence :cooldown :cooldown-s 2}]
+   :act [[:summon "drowned" [5.5 3 11.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:rcon "damage $BODY 1 minecraft:mob_attack by @e[type=drowned,tag=wt,$BOX,limit=1]"]
+         [:wait-s 15]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hut-refuge}} :within-s 8}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hut-refuge}} :within-s 25}]
+   :after [[:body-near [16.5 3 6.5] 1.5]]}
+  {:name "far-mob-that-never-hits-does-not-fire"
+   :act [[:summon "drowned" [5.5 3 11.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hut-refuge}} :for-s 10}]
+   :after [[:body-near [5.5 2 5.5] 2]]
+   :limit-s 30}]}

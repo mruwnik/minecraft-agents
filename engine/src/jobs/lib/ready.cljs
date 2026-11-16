@@ -808,14 +808,14 @@
 
 (defn fit-for
   "The fit? of a job whose work is of category (:click, :work or :long, cost.risk/work-s): later :game-mode off survival,
-  :low-health while that work costs more than the body may risk now (price/fit: none while waiting cannot heal it; never
-  while a mob is hitting the body, where a rest cannot heal), :poisoned while poisoned. seconds-of (a fn of c, optional): the job's own quoted seconds, used while positive instead of the category's."
+  :low-health while that work costs more than the body may risk now (price/fit: none while waiting cannot heal it; marked :hit
+  while a mob is hitting the body: moving away is the agent's reflex), :poisoned while poisoned. seconds-of (a fn of c, optional): the job's own quoted seconds, used while positive instead of the category's."
   ([category] (fit-for category nil))
   ([category seconds-of]
    (fn [c]
      (let [p (:primitives c)]
        (if-let [hurt (or (body/off-mode p) (price/fit c category (quoted-s seconds-of c)) (body/poison-wait p))]
-         (checks/cause-status (if (:hit hurt) :never :later) hurt)
+         (checks/cause-status :later hurt)
          (contract/ok :healthy "health enough"))))))
 
 (def fit? "fit-for a job that works a place for a while (:work)." (fit-for :work))

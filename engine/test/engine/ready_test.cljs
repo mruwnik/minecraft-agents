@@ -718,14 +718,15 @@
        :long 2.1 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
        :long 1.5 8 [] :ok))))     ; waiting cannot heal it: no wait (the job's own cannot-heal check stops it)
 
-(deftest fit-never-rests-where-a-mob-is-hitting-the-body
+;; Would fail on old code: fit-for turned a :hit wait :never, ending a repeat for good where the agent's reflex moves the body.
+(deftest fit-waits-while-a-mob-is-hitting-the-body
   (dear-death
    (fn []
      (let [hit {:t 9000 :data {:amount 5 :attacker {:id 7 :name "drowned"}}}
            check #((ready/fit-for :work) (assoc (ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 2 :food 20}})
                                                 :view (constantly {:now 10000 :data %})))
            [kind-of text] (check (mem/add-entry mem/empty-data :hurt hit {:cap 50 :ttl 60000}))]
-       (is (= :never kind-of) "a rest where the blows land never heals")
+       (is (= :later kind-of) "the job waits; what moves the body off is the agent's own reflex")
        (is (re-find #"hitting the body" text))
        (is (= :later (first (check mem/empty-data))) "unhit, the same body rests to heal")))))
 

@@ -116,11 +116,17 @@
     (is (= [:later :later] [(at -60 24 -120) (at -34 34 -98)]))
     (is (= [:ok :ok :ok :ok] [(at -81 24 -120) (at -60 35 -120) (at -60.5 24 -97) (at -60 21 -120)]))))
 
+(deftest hit-holds-while-a-mob-blow-is-felt
+  (let [at (fn [now hurt] (kind '(hit) (ctx-of (tu/fake) (view now {:hurt [hurt]}))))
+        blow {:amount 5 :attacker {:id 7 :name "drowned"}}]
+    (is (= [:ok :later :later] [(at 4000 blow) (at 6000 blow) (at 1000 {:amount 2 :causes ["fall"]})])
+        "a blow within danger/hit-s holds it; an older one or a hurt no mob dealt does not")))
+
 (deftest the-library-is-what-is-what-the-default-trigger-set-names
   (is (= cond/library triggers/library))
   (is (every? #(contains? triggers/library %) '[health food inventory time-of-day place since distance-to free-slots
                                                  blocks-near daytime mounted in-water wearing hostile-near burning
-                                                 suffocating night-unsafe outside-box])))
+                                                 suffocating night-unsafe outside-box hit])))
 
 ;; ------------------------------------------------------------------ statuses of compiled forms
 
