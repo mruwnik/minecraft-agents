@@ -843,11 +843,65 @@
     (vec (mapcat (fn [y] (fill-commands [ox y oz (+ ox (dec sx)) y (+ oz (dec sz))] "light" " replace air"))
                  (distinct [(+ oy (min height (:light-y underground))) (+ oy height)])))))
 
+(def air-blocks #{"air" "cave_air" "void_air"})
+
+(defn solid-cells
+  "The cells [x y z] (plot-relative) the case's plain :blocks entries leave solid: each fill or set in order, so a later
+  air carves out an earlier block. Water and the other layouts (:hollow, :outline) are not modelled."
+  [blocks]
+  (reduce (fn [solid [op a b block d]]
+            (let [[a b block] (if (= :set op) [a a b] [a b block])]
+              (if (and (some? d) (not= :set op))
+                solid
+                (let [lo (mapv #(js/Math.floor (min %1 %2)) a b)
+                      hi (mapv #(js/Math.floor (max %1 %2)) a b)
+                      cells (for [x (range (lo 0) (inc (hi 0))) y (range (lo 1) (inc (hi 1))) z (range (lo 2) (inc (hi 2)))] [x y z])
+                      solid? (not (or (air-blocks block) (re-find #"^water" block)))]
+                  (if solid? (into solid cells) (reduce disj solid cells))))))
+          #{} blocks))
+
+(defn sealed-cells
+  "The non-solid cells of the plot box (plot-relative, y 0..height) that no open air reaches: not joined, through
+  non-solid cells, to the top layer or to the body's start. A light block there would be a cell water cannot fill and
+  the planner reads as a block."
+  [[sx sz] height c]
+  (let [solid (solid-cells (:blocks c))
+        in-box? (fn [[x y z]] (and (< -1 x sx) (< -1 y (inc height)) (< -1 z sz)))
+        open? (fn [p] (and (in-box? p) (not (solid p))))
+        start (mapv #(js/Math.floor %) (get-in c [:body :at]))
+        seeds (filter open? (concat [start] (for [x (range sx) z (range sz)] [x height z])))
+        reached (loop [seen (set seeds) todo (vec seeds)]
+                  (if-let [[x y z] (peek todo)]
+                    (let [ns (remove seen (filter open? [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]]))]
+                      (recur (into seen ns) (into (pop todo) ns)))
+                    seen))]
+    (set (for [x (range sx) y (range (inc height)) z (range sz)
+               :let [p [x y z]]
+               :when (and (not (solid p)) (not (reached p)))]
+           p))))
+
+(defn light-layer-commands
+  "light-commands for one layer y, skipping the cells in sealed: whole fill when none lies in the layer, else one fill per
+  run of cells in each row."
+  [[sx sz] [ox oy oz] y sealed]
+  (let [ry (- y oy)
+        out? (fn [x z] (sealed [x ry z]))]
+    (if-not (some (fn [[_ sy _]] (= sy ry)) sealed)
+      (fill-commands [ox y oz (+ ox (dec sx)) y (+ oz (dec sz))] "light" " replace air")
+      (vec (for [z (range sz)
+                 run (remove #(out? (first %) z) (partition-by #(out? % z) (range sx)))]
+             (str "fill " (+ ox (first run)) " " y " " (+ oz z) " " (+ ox (last run)) " " y " " (+ oz z) " light replace air"))))))
+
 (defn relight-commands
-  "The light layers laid again once the case's :blocks are placed (they may have filled or cleared them); none unless a lit cell."
-  [grid origin c]
+  "The light layers laid again once the case's :blocks are placed (they may have filled or cleared them), except in
+  sealed pockets (sealed-cells); none unless a lit cell."
+  [grid [ox oy oz :as origin] c]
   (if (and (:underground? grid) (= :lit (:light grid)))
-    (light-commands grid origin (get-in c [:plot :height]))
+    (let [height (get-in c [:plot :height])
+          dm (dims grid)
+          sealed (sealed-cells dm height c)]
+      (vec (mapcat #(light-layer-commands dm origin % sealed)
+                   (distinct [(+ oy (min height (:light-y underground))) (+ oy height)]))))
     []))
 
 (defn underground-setup-commands

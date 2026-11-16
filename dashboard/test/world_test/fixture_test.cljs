@@ -87,6 +87,30 @@
     (is (every? #(re-find #"light replace air$" %) cmds))
     (is (empty? (f/relight-commands (f/case-grid dark-case) origin dark-case)))))
 
+(def pocket-case
+  (assoc lit-case :body {:at [2 2 2]}
+         :blocks [[:fill [10 0 10] [14 4 14] "bedrock"] [:fill [12 2 12] [12 3 12] "air"] [:set [12 4 12] "stone"]
+                  [:fill [10 5 10] [14 5 10] "water"]]))
+
+(deftest relight-skips-a-sealed-pocket-the-case-carves-but-keeps-the-open-air
+  (let [g (f/case-grid pocket-case)
+        origin (f/plot-origin g 465)
+        [ox oy oz] origin
+        cmds (f/relight-commands g origin pocket-case)
+        lit? (fn [x y z] (some (fn [c] (let [[x0 y0 z0 x1 _ z1] (map js/parseInt (rest (re-find #"fill (-?\d+) (-?\d+) (-?\d+) (-?\d+) (-?\d+) (-?\d+)" c)))]
+                                          (and (= y0 y) (<= x0 x x1) (<= z0 z z1))))
+                               cmds))]
+    (is (not (lit? (+ ox 12) (+ oy 2) (+ oz 12))) "the pocket's cell stays air")
+    (is (lit? (+ ox 11) (+ oy 2) (+ oz 12)) "its neighbour (bedrock now, but the fill is replace air) is in a lit run")
+    (is (lit? (+ ox 2) (+ oy 2) (+ oz 12)) "open air beside the pocket is lit")
+    (is (lit? (+ ox 12) (+ oy 16) (+ oz 12)) "the top layer is lit over the pocket")))
+
+(deftest relight-without-pockets-is-the-two-whole-layers
+  (let [g (f/case-grid lit-case)
+        c (assoc lit-case :body {:at [2 2 2]} :blocks [[:fill [1 0 1] [3 0 3] "stone"]])
+        origin (f/plot-origin g 465)]
+    (is (= (f/light-commands g origin 16) (f/relight-commands g origin c)))))
+
 (deftest an-underground-cell-is-refilled-solid-after-the-case
   (let [g (f/case-grid dark-case)
         origin (f/plot-origin g 465)
