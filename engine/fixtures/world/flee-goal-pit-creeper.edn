@@ -1,0 +1,25 @@
+;; Card f5cd89b9 (run4 F18): a flight walks to its goal along the route the flee search judged, not a leg go-to plans itself. A 4-HP body
+;; in a 2-deep one-wide pit whose only exit (a step at x 31) faces a creeper walking up from 8 blocks east, on a walk to a goal far west:
+;; the old leg left the pit toward the creeper and the blast killed it. Should-succeed: no death. Should-fail: none.
+;; Plot 96 long: stone x 0..95, z 0..31, y 0..2 (platform feet y 3); pit x 30 z 16 y 1..2, step [31 2 16]. Glowstones light the pit mouth.
+{:defaults
+ {:body {:spawnpoint :far}
+  :tags [:hostile :survival :flee :creeper]
+  :time :any
+  :mobs :keep
+  :plot {:length 96 :width 32}
+  :register [{:trigger :hostile-near}]
+  :blocks [[:fill [0 0 0] [95 2 31] "stone"] [:fill [0 3 0] [95 8 31] "air"]
+           [:fill [30 1 16] [30 2 16] "air"] [:set [31 2 16] "air"]
+           [:fill [28 2 12] [28 2 12] "glowstone"] [:fill [34 2 20] [34 2 20] "glowstone"] [:fill [40 2 12] [40 2 12] "glowstone"]]
+  :limit-s 60}
+ :cases
+ [{:name "walk-to-a-goal-past-a-creeper-does-not-leave-the-pit-toward-it"
+   :body {:at [30.5 1 16.5] :yaw 90}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 16 minecraft:generic"]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [6 3 16] :range 2})]
+         [:summon "creeper" [38.5 3 16.5]]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 30}]
+   :limit-s 50}]}
