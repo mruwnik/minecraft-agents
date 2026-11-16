@@ -825,6 +825,25 @@
           (is (identical? cut (await (price late))) "as little left: the cut search is the answer")
           (is (not (identical? cut (await (price 0)))) "a fresh step's meter plans again"))))))
 
+;; card 2aa4ee29: the deadline passed between spent? and the plan's cap, and a planner of no nodes spun on its missing start
+(deftest a-plan-whose-meter-ran-out-after-it-was-asked-is-not-started
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              asks (atom 0)
+              caps (atom [])
+              orig-spent search/spent? orig-plan search/plan-to!]
+          (set! search/spent? (fn [_] (> (swap! asks inc) 2)))
+          (set! search/plan-to! (fn [_ _ _ _ cap _] (swap! caps conj cap) (js/Promise.resolve #js {:expanded 0 :reason "budget"})))
+          (let [ends (try (await (search/price! (ctx-of p) [{:pos {:x 6.5 :y 64 :z 0.5}}] {:chasers chasers :meter (assoc (rooms/search-meter 0) :deadline -1)}))
+                          (finally (set! search/spent? orig-spent) (set! search/plan-to! orig-plan)))]
+            (is (= [] @caps) "no plan of no nodes")
+            (is (search/cut? ends))))))))
+
 (deftest a-kept-flee-price-holds-when-the-world-changes-out-of-sight
   (async done
     (tu/run-async done

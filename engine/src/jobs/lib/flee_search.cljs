@@ -380,36 +380,39 @@
               (if (nil? pw)
                 []
                 (let [most (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))
-                      cap (binding [lreach/*search* meter] (lreach/metered-cap most :node-s))
-                      t1 (clock/now)
-                      ^js res (await (plan-to! c pw policy (query c t) cap landings))
-                      ms (- (clock/now) t1)
-                      spent (or (.-expanded res) 0)
-                      ;; the clock's, or the nodes' price when more: a clock that does not move with the CPU (a fake's) still ends the search
-                      s (max (/ ms 1000) (* spent (cost/search-cell-ceiling-s)))
-                      _ (lreach/spend! meter s false)
-                      r (some->> (routed res slow) (seen-split p))
-                      short? (and r (not (:found? r)) (< cap most) (= "budget" (.-reason res))
-                                  (not (and (nil? (:pos t)) (seen-shut? p pos t r))))
-                      out (if r
-                            (conj out (assoc r :target t
-                                               :cut? short?
-                                               :open? (or (:found? r) (and (nil? (:pos t)) (given-up? @chasers (:end r))))
-                                               :price (+ (:priced r)
-                                                         (let [spawns (spawn-light/spawns-over p (:cells r) @share)]
-                                                           (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos)))
-                                               :counts counts
-                                               :trapped (when (or (:unseen r) short?) (trapped-at (nth (:cells r) (dec (:seen-n r)))))))
-                            out)
-                      stop? (boolean (and enough? r (far? t) (enough? out below?)))]
-                  (recur (inc i) out
-                         (+ nodes spent)
-                         (cond-> ring-left (nil? (:pos t)) (- spent))
-                         (inc planned)
-                         (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0)))
-                         (+ plan-ms ms)
-                         (+ own-s s)
-                         stop?))))))))))
+                      cap (binding [lreach/*search* meter] (lreach/metered-cap most :node-s))]
+                  ;; the deadline passed since spent? was asked: the next turn cuts (a planner of no nodes holds no start)
+                  (if (zero? cap)
+                    (recur i out nodes ring-left planned unrouted plan-ms own-s stop?)
+                    (let [t1 (clock/now)
+                          ^js res (await (plan-to! c pw policy (query c t) cap landings))
+                          ms (- (clock/now) t1)
+                          spent (or (.-expanded res) 0)
+                          ;; the clock's, or the nodes' price when more: a clock that does not move with the CPU (a fake's) still ends the search
+                          s (max (/ ms 1000) (* spent (cost/search-cell-ceiling-s)))
+                          _ (lreach/spend! meter s false)
+                          r (some->> (routed res slow) (seen-split p))
+                          short? (and r (not (:found? r)) (< cap most) (= "budget" (.-reason res))
+                                      (not (and (nil? (:pos t)) (seen-shut? p pos t r))))
+                          out (if r
+                                (conj out (assoc r :target t
+                                                   :cut? short?
+                                                   :open? (or (:found? r) (and (nil? (:pos t)) (given-up? @chasers (:end r))))
+                                                   :price (+ (:priced r)
+                                                             (let [spawns (spawn-light/spawns-over p (:cells r) @share)]
+                                                               (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos)))
+                                                   :counts counts
+                                                   :trapped (when (or (:unseen r) short?) (trapped-at (nth (:cells r) (dec (:seen-n r)))))))
+                                out)
+                          stop? (boolean (and enough? r (far? t) (enough? out below?)))]
+                    (recur (inc i) out
+                           (+ nodes spent)
+                           (cond-> ring-left (nil? (:pos t)) (- spent))
+                           (inc planned)
+                           (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0)))
+                           (+ plan-ms ms)
+                           (+ own-s s)
+                           stop?))))))))))))
 
 (defn shooter?
   "Whether chaser ch only shoots: a shot spot (:shooter?, where an unseen shot came from) or a mob {:mob :held} that
