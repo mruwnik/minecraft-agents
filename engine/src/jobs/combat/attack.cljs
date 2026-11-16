@@ -47,7 +47,7 @@
   within :ranged-radius), except the ids in :skip. Only a hostile the body has seen is fought; one only heard is turned
   toward (:nothing-possible :heard-only), never walked to. One beyond hostile-fight/::leash of where the fight began is not a target.
   A melee hostile beyond reach is waited for, never walked to, with :hold or when it stands in or beside unlit space (hostile-fight/dark-around?: a player
-  does not chase into unlit space, more may be there unseen); the wait (treading water, head out, when the body swims) declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
+  does not chase into unlit space, more may be there unseen); the wait (in water: treading, head out, holding its cell against the current) declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
   without a swing; a ranged one that, with another in range, is better left than walked to (hostile-fight/too-far-to-chase?: the
   priced answer says flee) ends :too-far; a creeper is a target only alone in range (hostile-fight/targets) and ends :creeper-unsafe when
   it cannot be fought hit-and-back (hostile-fight/hit-and-back-ok?) or only creepers are left: the parent, not each step, weighs fight against flight.
@@ -320,8 +320,9 @@
   (let [tpos (aim-pos c target)]
     (cond
       (in-reach? c target) :there
-      (hostile/held? c target) (do (if (breath/swimming? (:primitives c))
-                                     (await (ctx/act c :swim #js {:ms chase-gap-ms :tread true}))
+      ;; in water, standing or afloat, the wait holds its cell: a current would carry a body that only waits away (into a cave)
+      (hostile/held? c target) (do (if (breath/in-water? (:primitives c))
+                                     (await (ctx/act c :swim #js {:ms chase-gap-ms :tread true :hold true}))
                                      (await (combat/wait-gap! c (ctx/now c) chase-gap-ms)))
                                    :held)
       :else

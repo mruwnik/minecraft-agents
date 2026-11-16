@@ -35,4 +35,16 @@
    :expect [{:no-event {:source :job :kind :stopped} :for-s 12 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible}} :within-s 30 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [32 4 32]] 1]]
+   :limit-s 45}
+  {:name "held-fight-in-a-current-holds-its-cell"
+   :doc "Flowing water along a walled channel (source at x 10, flowing +x): the body waits for a far NoAI zombie standing
+   in the current; it holds its cell against it, not carried 5 blocks down the channel while it waits."
+   :blocks [[:fill [9 0 15] [18 0 15] "stone"] [:fill [9 0 17] [18 0 17] "stone"] [:set [9 0 16] "stone"] [:set [10 0 16] "water"]]
+   :body {:at [12.5 0 16.5]}
+   :act [[:wait-s 3]
+         [:summon "zombie" [12.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:job (jobs.combat.attack {:worth 1200 :targets :hostiles :radius 8 :hold true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible}} :within-s 30 :of-job true}]
+   :after [[:body-near [12.5 0 16.5] 1.5]]
    :limit-s 45}]}

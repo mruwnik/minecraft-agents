@@ -2616,7 +2616,20 @@
                                                  {:floor flight-floor :blocks lake :self {:pos [3.5 63 0.5] :health 20}
                                                   :inventory sword :entities [(drowned-at -2.5 63 0.5)]} 20))]
           (is (breath/swimming? p) "afloat")
-          (is (some #(true? (.-tread (.-args %))) (calls p "swim")) "the wait treads water, or the body sinks under the held fight"))))))
+          (is (some #(and (true? (.-tread (.-args %))) (true? (.-hold (.-args %)))) (calls p "swim"))
+              "the wait treads water holding its cell, or the body sinks or drifts under the held fight"))))))
+
+(deftest a-held-fight-wading-in-a-current-holds-its-cell-while-it-waits-for-the-mob
+  ;; a body only waiting in flowing water is carried off by the current (Brindle went 14 blocks down a stream into a cave)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :radius 8 :hold true})
+                                                 {:floor flight-floor :blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",64," z) "water"]))
+                                                  :self {:pos [0.5 64 0.5] :health 20} :inventory sword
+                                                  :entities [(assoc (zombie 6.5 0.5) :visible true)]} 20))]
+          (is (not (breath/swimming? p)) "wading, feet on the floor")
+          (is (some #(true? (.-hold (.-args %))) (calls p "swim")) "the wait holds the body's cell against the current"))))))
 
 (deftest a-shooter-that-no-walk-reaches-ends-the-fight-however-hurt-the-body-is
   ;; every swing is out of reach and a walk to it finds no way, the shooter hurting the body between them: the count of
