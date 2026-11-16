@@ -21,10 +21,10 @@
 (defn spendable
   "{name total} the craft children may use: the carried items the reserve register leaves free (reserve/free) to
   jobs.items.craft's chooser, worn-out tools left out. A spare tool's craft, which may take held units once nothing
-  else can be got, asks as :craft. Carried raw food is always spendable: the furnace turns it into more food points."
+  else can be got, asks as :craft. Carried raw meat and fish are always spendable: the furnace turns them into more food points (potatoes stay planting stock)."
   [c]
   (let [free (storage/usable-totals (reserve/free c (if (= :torches (craft/slot-of c)) :craft-held :craft)))
-        raw (select-keys (storage/usable-totals (u/inventory (:primitives c))) (keys foods/cooked-of))]
+        raw (select-keys (storage/usable-totals (u/inventory (:primitives c))) (remove #{"potato"} foods/raw-meals))]
     (merge free raw)))
 
 (defn craft-plan

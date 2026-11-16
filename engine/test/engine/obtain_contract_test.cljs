@@ -204,6 +204,14 @@
           (is (not= :no-source (:cause (kc e))) (str (get-in e [:cause :why])))
           (is (seq (f/events-of s :smelt.loaded)) "the carried beef went in the furnace"))))))
 
+(deftest carried-potatoes-are-planting-stock-not-baked-for-an-obtain
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (oi/ore-world {"1,64,2" "furnace"} [{:name "potato" :count 2} {:name "coal" :count 1}]) [f/own-zone])
+              _ (await (ending-of s 'jobs.items.obtain {:item "baked_potato" :count 1 :explore false} 10))]
+          (is (empty? (f/events-of s :smelt.loaded)) "the carried potatoes were not put in the furnace"))))))
+
 (deftest a-gather-that-ended-with-stone-in-sight-does-not-say-nothing-is-seen
   (async done
     (tu/run-async done
