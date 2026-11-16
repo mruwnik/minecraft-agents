@@ -1,6 +1,6 @@
 (ns engine.path.planner.water
   "Search methods: swimming, diving, currents and leaving the water."
-  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP drowned-hp EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WATER-TABLE WHOLE breathable?]]
+  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP drowned-hp EXIT-SLACK overrun-s HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WATER-TABLE WHOLE breathable?]]
             [engine.path.planner.current :as current]
             [engine.path.planner.search :refer [Search]]))
 
@@ -142,16 +142,19 @@
 
   ;; The air of a move from node i of `base` seconds (times costs.airDrain, the expected drain: 1/(Respiration+1)) with the
   ;; head under water (`under`): false when refused for air. Over the air limit (airLimit + airGrace * airDrain: a turtle
-  ;; helmet's 10 free seconds) a move is refused, except on a way to air from under water (to-air): there its seconds past
-  ;; c-air-drown (the supply plus the grace) drown DROWN-HP hp each (move-drown, which consider adds to the node's drowning
+  ;; helmet's 10 free seconds) a move is refused, except on a way to air from under water (to-air): there the expected seconds past
+  ;; c-air-drown (the supply plus the grace; overrun-s: the swim may run slower than quoted) drown DROWN-HP hp each (move-drown, which consider adds to the node's drowning
   ;; and prices; not damage, so no damage budget refuses it), and without lethal-air a move whose count (lethalCount: each
   ;; air-out's hits, and the certain damage so far) reaches lethal-hp is refused. A move with the head out breathes AIR-REFILL
   ;; times its `refill` seconds back and closes the air-out (move-run, move-closed).
   (airStep [s i ^boolean under base refill]
     (let [air (if (>= i 0) (aget (.-airs s) i) 0)
           use (+ air (* base (.-c-air-drain s)))
-          drown (if (and under (> use (.-c-air-drown s)))
-                  (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-drown s)))) (.-c-air-drain s))
+          real (if (and under (> use (.-c-air-drown s)))
+                 (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-drown s)))) (.-c-air-drain s))
+                 0)
+          drown (if under
+                  (/ (* DROWN-HP (- (overrun-s use (.-c-air-drown s)) (overrun-s air (.-c-air-drown s)))) (.-c-air-drain s))
                   0)
           run (if (>= i 0) (aget (.-drown-runs s) i) 0)
           closed (if (>= i 0) (aget (.-drown-closed s) i) 0)]
@@ -161,7 +164,7 @@
             false)
 
         (and under ^boolean (.-no-lethal s) (> use (.-c-air-drown s))
-             (>= (.lethalCount s closed (+ run drown) (if (>= i 0) (aget (.-dmgs s) i) 0)) (.-lethal-hp s)))
+             (>= (.lethalCount s closed (+ run real) (if (>= i 0) (aget (.-dmgs s) i) 0)) (.-lethal-hp s)))
         (do (set! (.-lethal-seen s) true)
             false)
 
@@ -169,7 +172,7 @@
         (do (set! (.-move-air s) (if under use (js/Math.max 0 (- air (* AIR-REFILL refill)))))
             (set! (.-move-peak s) (if under use 0))
             (set! (.-move-drown s) drown)
-            (set! (.-move-run s) (if under (+ run drown) 0))
+            (set! (.-move-run s) (if under (+ run real) 0))
             (set! (.-move-closed s) (if under closed (+ closed (drowned-hp (.-drown-slack s) run))))
             true))))
 

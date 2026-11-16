@@ -181,6 +181,15 @@
   "The hp that `hp` of drowning (continuous: DROWN-HP a second) may take: vanilla deals whole DROWN-HP hits, the first up to
   a second early (a body already at 0 air) and a swim may run slower than planned, so ceil(seconds + slack) hits (costs.drownSlack)."
   [slack hp] (if (pos? hp) (* DROWN-HP (js/Math.ceil (+ (/ hp DROWN-HP) slack))) 0))
+(def ^:const SWIM-SPREAD 0.25) ; a swim may take up to this much longer than quoted (blocked cell, current, missed exit): broad pessimistic prior, uniform on [0, SWIM-SPREAD]
+(defn overrun-s
+  "The expected seconds of air `use` (a swim quoted to use that much) runs past `limit` when the real swim takes m times the quoted, m uniform on [1, 1+SWIM-SPREAD]."
+  [use limit]
+  (let [hi (* use (+ 1 SWIM-SPREAD))]
+    (cond
+      (<= hi limit) 0
+      (>= use limit) (- (* use (+ 1 (/ SWIM-SPREAD 2))) limit)
+      :else (/ (* (- hi limit) (- hi limit)) (* 2 (- hi use))))))
 (def ^:const LETHAL-S 1e6) ; seconds a lethal drowning costs, and each hp past it, times the dearest second (planner-tuned lethal-seconds): any plan that does not drown wins
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const DMG-STEP 0) ; hp of damage that make an arrival at a node already reached worth a record of its own (a finite budget: exact)

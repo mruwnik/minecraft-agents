@@ -328,8 +328,13 @@
 (deftest a-plan-to-air-from-under-water-prices-drowning-not-refuses
   (let [r (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})]
     (is (found? r) "the swim to air is planned")
-    (is (< 4 (cost r :drown) 7) "2 hp a second past the supply (about 3 s)")
+    (is (< 7 (cost r :drown) 12) "2 hp a second past the supply (about 3 s: 6 hp) and the expected overrun of a slower swim")
     (is (zero? (cost r :risk)) "drowning is its own cost, not risk")))
+
+(deftest a-plan-to-air-quoted-just-within-the-supply-prices-the-chance-of-overrunning
+  (let [drown-at (fn [used] (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed used}}) :drown))]
+    (is (pos? (drown-at 11)) "the swim may run slower than quoted")
+    (is (< (drown-at 9) (drown-at 11)) "the nearer the supply, the dearer")))
 
 (deftest a-plan-to-air-has-no-drowning-with-the-air-to-spare
   (is (zero? (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 2}}) :drown))))
@@ -440,7 +445,7 @@
   (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) at-health-10)]
     (is (found? r))
     (is (>= (cost r :drown) 10) "it drowns: still the only way")
-    (is (< (cost r :drown) 20) "the least drowning: a breath at the top first")))
+    (is (< (cost r :drown) 30) "the least drowning: a breath at the top first")))
 
 (deftest a-lethal-way-to-air-is-refused-unless-the-caller-allows-it
   (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) (assoc-in at-health-10 [:costs :lethalAir] 0))]
@@ -469,7 +474,7 @@
   ;; a 30-block tunnel: about 3.75 s past the supply, counted as ceil(3.75 + 1) = 5 hits (10 hp)
   (let [r (run (lethal-dive false 42) dive-start (near 43 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 12)))]
     (is (found? r))
-    (is (< 0 (cost r :drown) 10) "it drowns some, short of the counted 10 hp")))
+    (is (pos? (cost r :drown)) "it drowns some")))
 
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)
@@ -869,7 +874,7 @@
 (deftest each-air-out-counts-its-own-hits
   (let [r (run-air-outs 13 1)]
     (is (found? r))
-    (is (= 3 (cost r :drown)) "three air-outs of 1 hp"))
+    (is (< 3 (cost r :drown) 6) "three air-outs of 1 hp, and the expected overrun of each"))
   (is (= "air-lethal" (:reason (run-air-outs 12 1))) "3 x ceil(0.5 + 1) hits = 12 hp")
   (is (= "air-lethal" (:reason (run-air-outs 6 0))) "3 x ceil(0.5) hits = 6 hp")
   (is (found? (run-air-outs 7 0))))
@@ -885,7 +890,7 @@
 (deftest certain-damage-on-the-plan-adds-to-the-lethal-drowning-count
   (let [r (run-drown-then-drop 7)]
     (is (found? r))
-    (is (= 2 (cost r :drown)))
+    (is (= 3 (cost r :drown)) "2 hp and the expected overrun")
     (is (= 2 (cost r :damage)) "the fall"))
   (is (= "air-lethal" (:reason (run-drown-then-drop 6))) "4 counted hp of drowning and the 2 hp fall"))
 
