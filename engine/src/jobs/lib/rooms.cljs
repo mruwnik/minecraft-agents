@@ -303,6 +303,13 @@
   [c]
   (cond-> (search-meter (step-spent-s c)) (:decision-deadline (ctx/mem c)) (assoc :deadline (:decision-deadline (ctx/mem c)))))
 
+(defn flee-meter
+  "step-meter for the flee search: its held share (flee-hold-s) runs from its start even when a stage before it with no
+  meter (a cover's quote) ran past the decision's deadline, as the hold promises."
+  [c]
+  (let [m (step-meter c)]
+    (cond-> m (:deadline m) (update :deadline max (+ (clock/now) (* 1000 (flee-hold-s c)))))))
+
 (defn survey-meter
   "step-meter for the searches that run before the flee search: less what it is to keep (flee-hold-s), and its deadline the decision's less that."
   [c]

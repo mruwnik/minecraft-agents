@@ -113,7 +113,7 @@
 (declare under-floor? margin fire-price choose-opts)
 
 (defn ^:async judge!
-  "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, part of the step's one search, room-lib/step-meter, from
+  "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, part of the step's one search, room-lib/flee-meter, from
   chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
   cornered step's covers where the body stands, respond.options/cornered-covers, built only when the search needs them (flee-search/price-all!), the walks back
   from dead ends priced with the fire of threats' shooters, fire-price, near-ring (blocks, nil none) the search's near ring;
@@ -125,7 +125,7 @@
         named (cond-> (mapv (fn [h] {:pos h :kind :home}) homes)
                 (and goal (not (given-up? c goal)) (not (under-floor? c goal))) (conj {:pos goal :kind :goal}))
         chs (chasers c)
-        m (room-lib/step-meter c)
+        m (room-lib/flee-meter c)
         ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))
                                                :fire (:route (fire-price c threats covered?)) :meter m :near near-ring
                                                :enough (delay (choose-opts c threats covered? nil))}))

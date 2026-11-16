@@ -19,6 +19,7 @@
             [engine.flight-job :as fj]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.reach :as reach]
@@ -1085,3 +1086,21 @@
     (is (false? (reach-room/boundary-kept? p door)))
     (reach-room/boundary p door)
     (is (true? (reach-room/boundary-kept? p door)))))
+
+(deftest a-decision-past-its-deadline-still-gives-the-flee-search-its-hold
+  ;; Sorrel skeleton death (card 24286035): the covers' quotes, which no meter stops, ran past the decision's deadline,
+  ;; every flee search then planned 0 nodes and flee was priced on a guess
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 26.5} open-door []))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 33.5)]
+              _ (rooms/new-step! c)
+              _ (cover/hold-for-flee! c)
+              _ (ctx/update-mem! c assoc :decision-deadline (- (clock/now) 1))
+              judged (await (respond.goal/judge! c threats [home] nil nil nil nil))]
+          (is (pos? (rooms/flee-hold-s c)))
+          (is (pos? (:nodes (meta (:ends judged)))) "the flee search plans on its held share")
+          (is (nil? (:home-why judged)) "the home is judged, not left :unjudged"))))))

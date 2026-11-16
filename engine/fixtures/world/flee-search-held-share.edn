@@ -1,0 +1,23 @@
+;; Card 24286035 (Sorrel skeleton death): the covers' quotes (walls, pit, pocket), which no meter stops, ran past the
+;; decision's deadline; the flee search's meter carried that deadline, so every flee search planned 0 nodes (retreat.search-work
+;; :nodes 0 :cut? true) and flee was priced on a guess. A zombie and a bowed skeleton (NoAI, helmeted) near a body with
+;; cobblestone and a shovel on open grass: every cover is quoted before the flee search.
+;; Should-succeed: the flee search plans (nodes > 0) and none ends cut with 0 nodes. The old code fails only when the
+;; quotes overrun the deadline (a loaded machine, as Sorrel's); engine.flee-home-test pins the forced overrun.
+;; Should-fail control: flee-hit-while-deciding/blows-before-the-first-step-do-not-corner-the-flight.
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near}]
+  :plot {:light :lit :length 64}
+  :body {:spawnpoint :far :at [32.5 0 16.5] :yaw 90 :inventory [["cobblestone" 20] ["stone_shovel" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "covers-quoted-first-leave-the-flee-search-its-hold"
+   :act [[:summon "zombie" [26.5 0 16.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [32.5 0 8.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :hostile.decided} 15]]
+   :expect [{:event {:source :job :kind :retreat.search-work :data {:nodes [:> 0]}} :within-s 15}
+            {:no-event {:source :job :kind :retreat.search-work :data {:nodes 0 :cut? true}} :for-s 15}
+            {:no-event {:source :body :kind :died} :for-s 1}]}]}
