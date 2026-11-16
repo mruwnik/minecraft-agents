@@ -1,7 +1,7 @@
 ;; Card 45995775 (Q31): an unseen cell's light is guessed from the light the body perceives, not from the open sky or the clock.
 ;; jobs.debug.ready-probe (safe-at, :stay-s 120) at an unseen cell; it emits job.ready-probe only once started.
-;; dark-room-by-day (should-fail): a sealed unlit stone room on a sky plot at noon; the :at cell [20 0 16] lies in its dark,
-;; unseen. No seen light reaches it, so it is guessed dark: the probe waits :exposed. The old guess read it as open sky, lit by day.
+;; dark-room-by-day (should-fail): a sealed unlit stone room on a sky plot at noon; the :at cell [13 0 16] is the first cell past the dark sight (near 4) of the body at x 8.5,
+;; unseen, one cell from the seen frontier (a short way to the rock prior, so it counts at nearly the hall chance). No seen light reaches it, so it is guessed dark: the probe waits :exposed. The old guess read it as open sky, lit by day.
 ;; lit-hall-at-night (should-succeed): a sealed glowstone-lit hall at night; the :at cell [23 0 15] lies round a corner of a
 ;; passage, unseen, one step from the seen passage end (light 13, glowstone in the end wall), so it is guessed lit and
 ;; the probe starts. The old guess read every unseen cell dark at night by the clock, lit by day: it waited :exposed for dawn.
@@ -17,7 +17,7 @@
  [{:name "dark-room-by-day-unseen-cell-waits-exposed"
    :blocks [[:fill [6 0 12] [22 1 20] "air"]]
    :body {:at [8.5 0 16.5] :yaw -90 :settle-s 2 :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [20 0 16] :stay-s 120})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [13 0 16] :stay-s 120})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]}
   {:name "lit-hall-at-night-unseen-cell-round-a-corner-starts"
