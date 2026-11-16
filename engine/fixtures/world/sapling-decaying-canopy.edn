@@ -26,7 +26,10 @@
             {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 120}]}
   {:name "attached-leaves-walked-on"
    :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=true]"]]
-   :act [[:job (jobs.forestry.plant-sapling {:worth 1200 :at #at [16 0 4] :species "jungle"})] [:until-pos {:x-min 11 :y-min 11} 90]]
+   ;; the hunger above empties the food, and a body that cannot sprint cannot jump the 2-cell gap the gather digs out of the
+   ;; canopy's edge (go-to refuses :gap-sprint): food is refilled so the walk out is the leaves' doing, not the food's
+   :act [[:rcon "effect give $BODY minecraft:saturation 2 0 true"]
+         [:job (jobs.forestry.plant-sapling {:worth 1200 :at #at [16 0 4] :species "jungle"})] [:until-pos {:x-min 11 :y-min 11} 90]]
    :expect [{:event {:source :job :kind :obtain.gathering} :within-s 40 :of-job true}]}
   {:name "go-to-onto-decaying-leaves-gives-up"
    ;; watched on after the go-to ends: a body left on the leaves falls when they go
