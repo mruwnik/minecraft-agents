@@ -61,14 +61,14 @@
             [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"]
             [:fill [16 0 14] [16 1 14] "cobblestone"]]
-   :body {:at [13.5 0 16.5] :yaw 270 :inventory [["cobblestone" 8]]}
+   :body {:at [13.5 0 16.5] :yaw 270 :inventory [["cobblestone" 8] ["oak_fence" 1]]}
    :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,82],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~6 ~ ~ 90 0"] [:wait-s 3] [:rcon "execute at $BODY run tp $BODY ~-3 ~ ~-1 0 0"] [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000052" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 2}})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :pen}} :within-s 30 :of-job true}
             {:event {:source :job :kind :roll.offers} :within-s 150 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
-   :after [[:block [16 0 16] "lectern"] [:block [16 1 18] "cobblestone"]]}
+   :after [[:block [16 0 16] "lectern"] [:block [16 0 18] "oak_fence"]]}
   {:name "roll-librarian-boxed-in-never-seen-pen-walls-digs-out-to-look"
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
             [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
@@ -225,7 +225,7 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :occupied}} :within-s 40 :of-job true}]}
   {:name "roll-at-night-names-the-villager-and-the-reason"
    :time :night :time-why :villager-schedule
-   :body {:inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
+   :body {:inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["oak_fence" 1]]}
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,7],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :roll.villager :data {:villager "00004f24-0000-0007-0000-000500000007"}} :within-s 40 :of-job true}
@@ -248,7 +248,7 @@
             {:no-event {:source :job :kind :stopped :data {:reason :gone}} :for-s 90}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-villager-behind-the-body-is-looked-for-not-gone"
-   :body {:at [14.5 0 16.5] :yaw 90 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
+   :body {:at [14.5 0 16.5] :yaw 90 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["oak_fence" 1]]}
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,8],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
@@ -278,7 +278,7 @@
   {:name "roll-pens-a-jobless-villager-before-it-waits-for-the-job"
    ;; a composter nearer the villager than the lectern: it has wandered from our site, so it is penned (a jobless one nearest our lectern walks to it unpenned, card c66943dc)
    :blocks [[:set [23 0 17] "composter"]]
-   :body {:at [14.5 0 16.5] :yaw 270 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
+   :body {:at [14.5 0 16.5] :yaw 270 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["oak_fence" 1]]}
    :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,34],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000022" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.lib.villager/take-job-ticks 200}})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :pen}} :within-s 60 :of-job true}
@@ -306,7 +306,7 @@
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
             [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"] [:fill [16 0 14] [16 1 14] "cobblestone"]]
-   :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2]]}
+   :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2] ["oak_fence" 1]]}
    :act [[:summon "villager" [15.5 0 19.5] "{NoAI:1b,UUID:[I;20260,7,5,46],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:summon "villager" [16.5 0 23.5] "{UUID:[I;20260,7,5,47],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 1 :jobs.lib.villager/take-job-ticks 400}})]]
@@ -317,7 +317,7 @@
    :blocks [[:fill [15 0 17] [15 2 17] "cobblestone"] [:fill [17 0 17] [17 2 17] "cobblestone"] [:set [16 2 17] "glowstone"]
             [:fill [15 0 16] [15 1 16] "cobblestone"] [:fill [17 0 16] [17 1 16] "cobblestone"] [:fill [16 2 15] [16 2 16] "cobblestone"] [:set [16 1 16] "oak_slab[type=top]"]
             [:fill [15 0 15] [15 1 15] "cobblestone"] [:fill [17 0 15] [17 1 15] "cobblestone"] [:fill [16 0 14] [16 1 14] "cobblestone"]]
-   :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2]]}
+   :body {:at [16.5 0 15.5] :yaw 0 :inventory [["cobblestone" 8] ["torch" 2] ["oak_fence" 1]]}
    :act [[:summon "villager" [15.5 0 19.5] "{NoAI:1b,UUID:[I;20260,7,5,48],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:summon "villager" [16.5 0 23.5] "{UUID:[I;20260,7,5,49],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000030" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 1 :jobs.lib.villager/take-job-ticks 400}})]]

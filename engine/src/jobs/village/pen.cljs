@@ -25,7 +25,7 @@
   "Shut the villager :villager in alone, in a lit one-wide cell beside the workstation of :profession at :pos
   (jobs.lib.villager-pen): the cell floored, walled three high, roofed over it and the workstation, a top slab over the
   workstation (a broken workstation leaves a gap a villager cannot pass and a sneaking body reaches through), its near
-  end plugged once the villager stands in it. No other villager may path to a cell next to the workstation (the game's
+  end plugged once the villager stands in it (plug!). No other villager may path to a cell next to the workstation (the game's
   rule for claiming a job site): its sides across the pen are walled two high and the body's stand behind it is boxed in with
   the body inside. The side is the one the villager stands in, else the one with the fewest blocks to place or dig
   among those whose cell, stand and near end are seen open (a pen already standing costs least).
@@ -35,7 +35,7 @@
   when boxed in; still unseen: nothing-possible :unseen), place a wooden slab
   in the upper half over the workstation (a block of another kind there is dug first), light the cell while it reads dark and
   the body can reach it (jobs.build.light-area, once a call), dig a plug of an empty pen open; with the villager in: wait while another
-  villager shares the cell, fill the near end (digging the box's entry first to walk out; the cell's floor and roof the
+  villager shares the cell, plug the near end (plug!, digging the box's entry first to walk out; the cell's floor and roof the
   stand does not see are not looked for: jobs.lib.villager-pen/owed-with-villager-in); then step
   into the stand (digging the entry when the box is shut), shut the box round the body from inside, place the
   workstation, if missing, from the stand (it is the lure: with the box shut the pen's cell is the only one next to it a
@@ -46,7 +46,7 @@
   The wait counts game ticks of the villagers' walking hours (jobs.lib.villager/take-job-ticks, 1240); reason
   :villager-not-in-pen by day, :night-villager-not-in-pen at night (villagers walk to no job site then).
   Needs: a villager id, a profession with a workstation, the cell (else impossible :bad-args); building blocks, a wooden
-  slab, torches and the workstation carried or fetchable.
+  slab, a wooden fence, torches and the workstation carried or fetchable.
   A building child that ends done with its piece still unbuilt ends the call nothing-possible :not-built (:piece).
   With the body boxed in its stand of a built pen whose near end is open (jobs.lib.villager-pen/luring) it sees out only
   through the pen, so a villager out of view is waited for to walk in like one in view.
@@ -185,12 +185,14 @@
                     (= :done (:kind e)) :again
                     :else (ctx/end c (:kind e) (:cause e) (:data e)))))))
 
-(defn slab-item
-  "The wooden slab to place: one carried, else one of the species jobs.lib.build.wood chooses (fetched by the place)."
-  [c]
-  (let [carried (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))]
-    (or (some #(when (and (wood/species-of %) (re-find #"_slab$" %)) %) (keys carried))
-        (str (wood/choose carried nil) "_slab"))))
+(defn wood-item
+  "The wooden block of kind (slab, fence) to place: one carried, else one of the species jobs.lib.build.wood chooses
+  (fetched by the place)."
+  [c kind]
+  (let [carried (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+        suffix (str "_" kind)]
+    (or (some #(when (and (wood/species-of %) (.endsWith % suffix)) %) (keys carried))
+        (str (wood/choose carried nil) suffix))))
 
 (defn ^:async slab!
   "A top slab over the workstation: dig what else stands there, then place the slab, clicked so it takes the upper half."
@@ -199,12 +201,28 @@
         n (vp/name-at p cell)]
     (if (and n (not (bs/air n)))
       (await (built! c :slab (await (child! c :slab-dig 'jobs.blocks.dig {:pos cell :collect true})) #(= n (vp/name-at p cell))))
-      (let [item (slab-item c)
+      (let [item (wood-item c "slab")
             click (placement/click {:block item :type "top"} cell (placement/eye (u/self-pos c)) #(some->> (vp/name-at p %) (hash-map :name)))]
         (if (:refused click)
           (stop! c :nothing-possible :slab-refused {:pos cell :refused (:refused click)})
           (await (built! c :slab (await (child! c :slab 'jobs.blocks.place (merge {:pos cell :item item :click (:click click)} (place-ways c))))
                          #(not (vp/top-slab? p cell)))))))))
+
+(defn ^:async plug!
+  "Shut the near end behind the villager in the cell, placing nothing into a cell its box overlaps (the server refuses
+  it; from V the box reaches up to 0.3 into O): a wooden fence in O's feet cell, whose post stands 0.375 in from O's
+  sides, 1.5 high (jobs.lib.villager-pen/plug-shut?), on O's floor, placed first when not seen solid; with O's feet
+  already solid, the cell over O's head (2 up; a villager stands 1.95)."
+  [c lay]
+  (let [p (:primitives c)
+        [[x y z :as feet]] (:plug lay)
+        floor (get (:floors lay) feet)]
+    (cond
+      (vp/solid? (vp/name-at p feet)) (await (fill! c :plug [[x (+ y 2) z]]))
+      (not (vp/solid? (vp/name-at p floor))) (await (fill! c :plug-floor [floor]))
+      :else (let [item (wood-item c "fence")]
+              (await (built! c :plug (await (child! c :plug 'jobs.blocks.place (merge {:pos feet :item item} (place-ways c))))
+                             #(not (vp/plug-shut? p lay))))))))
 
 (defn ^:async light!
   "Light cell (jobs.build.light-area) once a call: the pen's own while the body can reach it, else the stand, whose
@@ -312,7 +330,7 @@
       (and in? (not (vp/plug-shut? p lay)))
       (if (and (vp/at-stand? p lay) (not (vp/way-in? p lay)))
         (await (dig-open! c :exit lay :entry))
-        (await (fill! c :plug (vp/with-floors p lay (:plug lay)))))
+        (await (plug! c lay)))
       (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
       (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/with-floors p lay (:box lay)) {:in-place true}))
       (or (nil? block) (bs/air block)) (await (workstation! c ws))

@@ -524,7 +524,7 @@
       (add-watch s :job (fn [_ _ _ w]
                           (let [e (get-in w [:entities (v1)])]
                             (->> [e] (filter #(and (= [3.5 64 0.5] (:pos %)) (= "unemployed" (:profession %))
-                                                   (= "lectern" (get-in w [:blocks ws-pos])) (= "cobblestone" (get-in w [:blocks [4 65 0]]))))
+                                                   (= "lectern" (get-in w [:blocks ws-pos])) (= "oak_fence" (get-in w [:blocks [4 64 0]]))))
                                  (run! (fn [_] (remove-watch s :job)
                                          (swap! s update-in [:entities (v1)] assoc :profession "librarian" :offers offers)))))))
       env)))
@@ -545,13 +545,13 @@
               walker (jobless {:pos {:x 9 :y 64 :z 6}})
               [result p seen] (await (roll {:entities [picked walker] :keeps-job? true
                                             :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone" "8,64,0" "lectern"}
-                                            :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
+                                            :inventory [{:name "cobblestone" :count 8} {:name "oak_fence" :count 1} {:name "torch" :count 2}]
                                             :wrap (comp (walks-in-and-takes-the-job [(offer "enchanted_book")]) (ticking! 1000)
                                                         #(do (tu/seeing-all (:p %)) %))}
                                            {:villager nil}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
           (is (= ["v-2" "v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen))))
-          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
+          (is (= ["oak_fence" "air"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
 
 (deftest a-villager-out-of-view-of-the-body-boxed-in-the-built-pen-is-waited-for-to-walk-in-not-looked-for
   (async done
@@ -559,12 +559,12 @@
       (fn ^:async t []
         (let [[result p] (await (roll {:entities [(jobless {:pos {:x 60 :y 64 :z 3}})] :keeps-job? true
                                        :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone" "8,64,0" "lectern"}
-                                       :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
+                                       :inventory [{:name "cobblestone" :count 8} {:name "oak_fence" :count 1} {:name "torch" :count 2}]
                                        :wrap (comp (walks-in-and-takes-the-job [(offer "enchanted_book")] 60000) (ticking! 1000)
                                                    #(do (tu/seeing-all (:p %)) %))}
                                       {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
-          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
+          (is (= ["oak_fence" "air"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
 
 (defn walls-unseen-from-the-stand
   "env whose body has not seen the pen cell's walls and roof until it first stands outside the stand (the eye in the
@@ -586,7 +586,7 @@
       (fn ^:async t []
         (let [[result p seen] (await (roll {:entities [(jobless {:pos {:x 60 :y 64 :z 3}})] :keeps-job? true
                                             :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone" "8,64,0" "lectern"}
-                                            :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
+                                            :inventory [{:name "cobblestone" :count 8} {:name "oak_fence" :count 1} {:name "torch" :count 2}]
                                             :wrap (comp walls-unseen-from-the-stand (walks-in-and-takes-the-job [(offer "enchanted_book")] 60000)
                                                         (ticking! 1000) #(do (tu/seeing-all (:p %)) %))}
                                            {}))]
@@ -594,7 +594,7 @@
           (is (some #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "the pen child looks at the walls and waits")
           (is (not-any? #(and (= :child_started (:kind %)) (= :walk (:slot %)) (not (re-find #"/pen/" (str (:job %))))) @seen)
               "no walk of the roll's own")
-          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
+          (is (= ["oak_fence" "air"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
 
 (deftest a-penned-villager-kept-from-its-free-workstation-by-anothers-claim-takes-it-after-one-break
   (async done

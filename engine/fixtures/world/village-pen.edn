@@ -2,6 +2,8 @@
 ;; the lectern, the near end plugged once it stands in. NoAI villagers: they stand where summoned (no gravity, no walk).
 ;; Should-succeed: pen-shuts-in-a-villager-beside-the-lectern (cell 16 0 17 along +z: walls, roof, top slab, plug at 16 0 18;
 ;; the lectern's sides 15/17 0 16 walled, the body boxed in its stand 16 0 15).
+;; pen-plugs-a-villager-whose-box-overlaps-the-near-end (card 88333a5e: the near end plugged with a fence, whose post
+;; clears the box of a villager standing at the cell's edge).
 ;; pen-closes-the-stand-beside-a-second-villager (card 7cb975da: a second jobless villager beside the open stand; the
 ;; stand's box is shut, so no cell next to the lectern is left for it).
 ;; pen-lures-a-villager-from-outside-with-the-lectern (card 956f6431: AI villagers, no lectern at the start; the named
@@ -19,7 +21,7 @@
   :time :day :time-why :villager-schedule
   :plot {:floor "grass_block"}
   :blocks [[:fill [16 0 16] [16 0 16] "lectern"]]
-  :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4]]}
+  :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["oak_fence" 1]]}
   :limit-s 240}
  :cases
  [{:name "pen-shuts-in-a-villager-beside-the-lectern"
@@ -28,17 +30,24 @@
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"] [:block [16 2 16] "cobblestone"]
            [:block [16 2 17] "cobblestone"] [:block [15 0 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
-           [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]
+           [:block [16 0 18] "oak_fence"] [:block [16 1 18] "air"]
            [:block [15 0 16] "cobblestone"] [:block [15 1 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [17 1 16] "cobblestone"] [:block [16 2 15] "cobblestone"]
            [:block [15 1 15] "cobblestone"] [:block [17 1 15] "cobblestone"] [:block [16 1 14] "cobblestone"]]}
+  {:name "pen-plugs-a-villager-whose-box-overlaps-the-near-end"
+   ;; card 88333a5e: the villager stands at z 17.8 in the cell, its box (0.6 wide) reaching 0.1 into the near end, as an AI
+   ;; one works its lectern; the server refuses a full block there (:mob-in-cell), a fence's post (0.375 in) clears it
+   :act [[:summon "villager" [16.5 0 17.8] "{NoAI:1b,UUID:[I;20260,7,5,83],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000053" :pos #at [16 0 16] :profession "librarian"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:block [16 0 18] "oak_fence"] [:block [16 1 18] "air"] [:entities "type=villager" [[16 0 17] [16 2 17]] 1]]}
   {:name "pen-at-a-lectern-one-above-the-ground-floors-the-near-end-and-the-boxs-entry"
    ;; card 41317cb8: the lectern stands on a stone block, so the cells round it have air below: the plug and the box's entry are placed against floors the pen lays first
    :blocks [[:fill [16 0 16] [16 0 16] "stone"] [:set [16 1 16] "lectern"]]
-   :body {:at [16.5 0 12.5] :yaw 0 :inventory [["cobblestone" 40] ["oak_slab" 2] ["torch" 4]]}
+   :body {:at [16.5 0 12.5] :yaw 0 :inventory [["cobblestone" 40] ["oak_slab" 2] ["torch" 4] ["oak_fence" 1]]}
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,81],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000051" :pos #at [16 1 16] :profession "librarian"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
-   :after [[:block [16 1 16] "lectern"] [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"] [:block [16 2 18] "cobblestone"]
+   :after [[:block [16 1 16] "lectern"] [:block [16 0 18] "cobblestone"] [:block [16 1 18] "oak_fence"] [:block [16 2 18] "air"]
            [:block [16 0 14] "cobblestone"] [:block [16 0 17] "cobblestone"] [:block [16 0 15] "cobblestone"]]}
   {:name "pen-shuts-over-a-wall-torch-without-the-body-walking-into-the-ring"
    ;; card 512e8f37: a wall torch stands in the pen's east wall cell (17 0 17); the shut fill digs it and no longer picks the drop up, so the body
@@ -59,7 +68,7 @@
            [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"]]}
   {:name "pen-lures-a-villager-from-outside-with-the-lectern"
    :blocks [[:fill [16 0 16] [16 0 16] "air"]]
-   :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["lectern" 1]]}
+   :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["lectern" 1] ["oak_fence" 1]]}
    :act [[:time-set 2000] [:summon "villager" [16.5 0 20.5] "{UUID:[I;20260,7,5,44],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:summon "villager" [9.5 0 23.5] "{UUID:[I;20260,7,5,45],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000002c" :pos #at [16 0 16] :profession "librarian"})]]
@@ -67,11 +76,11 @@
    :after [[:block [16 0 16] "lectern"] [:block [16 1 16] "oak_slab[type=top]"]]}
   {:name "pen-lures-a-villager-out-of-view-of-the-boxed-body"
    :blocks [[:fill [16 0 16] [16 0 16] "air"]]
-   :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["lectern" 1]]}
+   :body {:at [16.5 0 14.5] :yaw 0 :inventory [["cobblestone" 24] ["oak_slab" 2] ["torch" 4] ["lectern" 1] ["oak_fence" 1]]}
    :act [[:time-set 2000] [:summon "villager" [22.5 0 19.5] "{UUID:[I;20260,7,5,60],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000003c" :pos #at [16 0 16] :profession "librarian"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
-   :after [[:block [16 0 16] "lectern"] [:block [16 0 18] "cobblestone"] [:block [16 1 18] "cobblestone"]]}
+   :after [[:block [16 0 16] "lectern"] [:block [16 0 18] "oak_fence"] [:block [16 1 18] "air"]]}
   {:name "pen-villager-that-never-walks-in-ends-not-walked-in"
    :act [[:summon "villager" [22.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,5,41],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000029" :pos #at [16 0 16] :profession "librarian" :settings {:jobs.lib.villager/take-job-ticks 200}})]]

@@ -3,7 +3,8 @@
   the workstation W, along a side d. V is floored, walled three high on both sides, roofed, and V and W lie under one
   roof; W plugs V's far end with a top slab above it, so a broken W leaves a gap 1.5 high, too low for a villager (1.95)
   and room for a sneaking body (1.5) to reach in. The near end O (the cell beyond V, feet and head) stays open until the
-  villager stands in V, then it is plugged. A villager claims a job site it can path to a cell next to (the game's
+  villager stands in V, then it is plugged (plug-shut?) without a block in a cell the villager's box overlaps (its box,
+  0.6 wide, reaches 0.3 into O from V, and the server refuses a block whose collision overlaps a mob). A villager claims a job site it can path to a cell next to (the game's
   AcquirePoi: reach 1, by Manhattan distance), so W's other sides are shut too: the two across d walled feet and head
   high (one high, a villager stepped onto it, within the 2 blocks of W that give it the job, and on to the roof), and the body's stand S behind W (opposite V) boxed in, floor, roof and both cells of its three other sides, with the
   body in it. V must hold no other villager and read lit."
@@ -82,13 +83,19 @@
 
 (defn dark? [p lay] (torch/perceived-dark? p (:cell lay)))
 
+(def tall
+  "Blocks whose collision stands 1.5 high, more than a villager steps up: fences and walls."
+  #"_fence$|_wall$")
+
 (defn plug-shut?
   "Whether the near end lets no villager through (it needs two open cells over each other): its head cell is solid, or
-  its feet cell is and so is the cell over the head (a 1-high gap, as a training cell's back seal has)."
+  its feet cell holds a fence or wall, or its feet cell is solid and so is the cell over the head (a 1-high gap, as a
+  training cell's back seal has)."
   [p lay]
-  (let [[[x y z] head] (:plug lay)
+  (let [[[x y z :as feet] head] (:plug lay)
         s? #(solid? (name-at p %))]
-    (or (s? head) (and (s? [x y z]) (s? [x (+ y 2) z])))))
+    (or (s? head)
+        (and (s? feet) (or (boolean (re-find tall (name-at p feet))) (s? [x (+ y 2) z]))))))
 
 (defn body-cell [p] (feet-cell (.self p)))
 
@@ -184,15 +191,15 @@
   (filterv #(solid? (name-at p %)) cells))
 
 (defn work
-  "Blocks a pen still needs placed or dug (unseen cells counted as owed): its price in blocks. in?: the villager
-  stands in it, so the plug stays."
+  "Blocks a pen still needs placed or dug (unseen cells counted as owed): its price in blocks; the plug is one block.
+  in?: the villager stands in it, so the plug stays."
   [p lay in?]
   (+ (count (owed p (:shut lay)))
      (count (owed p (:box lay)))
      (if (top-slab? p (:slab lay)) 0 1)
-     (cond (not in?) (+ (count (:plug lay)) (count (solids p (:plug lay))))
+     (cond (not in?) (inc (count (solids p (:plug lay))))
            (plug-shut? p lay) 0
-           :else (count (owed p (:plug lay))))))
+           :else 1)))
 
 (defn choose
   "The side to pen villager e at workstation cell ws: one whose cell e stands in, else one whose cell and stand are

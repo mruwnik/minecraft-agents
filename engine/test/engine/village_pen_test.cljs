@@ -54,6 +54,8 @@
     plug true
     {"0,65,0" "stone"} true
     {"0,64,0" "stone" "0,66,0" "stone"} true
+    {"0,64,0" "oak_fence"} true
+    {"0,64,0" "cobblestone_wall"} true
     {"0,64,0" "stone"} false
     {} false))
 
@@ -142,11 +144,12 @@
       (fn ^:async t []
         (let [[result p] (await (run (assoc (world {} {:slab? false})
                                             :entities [(jobless {:x 1 :y 64 :z 0})]
-                                            :inventory [{:name "cobblestone" :count 24} {:name "oak_slab" :count 1} {:name "torch" :count 2}])
+                                            :inventory [{:name "cobblestone" :count 24} {:name "oak_slab" :count 1} {:name "oak_fence" :count 1} {:name "torch" :count 2}])
                                      {} 400))
               lay (vp/layout ws [-1 0])]
           (is (= :done (:status result)) (pr-str result))
-          (is (every? #(vp/solid? (block p %)) (concat (:shut lay) (:plug lay) (:box lay))))
+          (is (every? #(vp/solid? (block p %)) (concat (:shut lay) (:box lay))))
+          (is (= ["oak_fence" nil] (mapv #(block p %) (:plug lay))))
           (is (= ["oak_slab" "top"] [(block p [2 65 0]) (get-in @(fake/state p) [:states [2 65 0] :type])])))))))
 
 (deftest a-pen-over-a-drop-floors-the-near-end-and-the-boxs-entry-too
@@ -156,7 +159,7 @@
         (let [[result p] (await (run (-> (world {} {:slab? false})
                                          (update :blocks dissoc "4,63,0")
                                          (assoc :entities [(jobless {:x 1 :y 64 :z 0})]
-                                                :inventory [{:name "cobblestone" :count 30} {:name "oak_slab" :count 1} {:name "torch" :count 2}]))
+                                                :inventory [{:name "cobblestone" :count 30} {:name "oak_slab" :count 1} {:name "oak_fence" :count 1} {:name "torch" :count 2}]))
                                      {} 400))]
           (is (= :done (:status result)) (pr-str result))
           (is (every? #(vp/solid? (block p %)) [[0 63 0] [4 63 0]]) "the plug and the entry are placed against a floor"))))))
@@ -220,13 +223,13 @@
           (is (every? #(vp/solid? (block p %)) (:shut (vp/layout ws [-1 0])))))))))
 
 (defn plug-hides-villager
-  "While the near end's head cell is solid and the stand's entry still open, the villager in the cell is out of view (the
-  plug is in the way); with the box shut round the body it shows again."
+  "While the near end is plugged and the stand's entry still open, the villager in the cell is out of view (the plug is
+  in the way); with the box shut round the body it shows again."
   [{:keys [p]}]
   (let [hidden (atom false)]
     (add-watch (fake/state p) :hide
                (fn [_ s _ w]
-                 (let [hide? (boolean (and (get-in w [:blocks [0 65 0]]) (not (get-in w [:blocks [4 65 0]]))))]
+                 (let [hide? (boolean (and (get-in w [:blocks [0 64 0]]) (not (get-in w [:blocks [4 65 0]]))))]
                    (when (not= hide? @hidden)
                      (reset! hidden hide?)
                      (swap! s assoc-in [:entities 0 :pos] (if hide? [60 64 3] [1.5 64 0.5]))))))))
@@ -236,10 +239,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (run-ticking (assoc (world shut) :entities [(jobless {:x 1.5 :y 64 :z 0.5})]
-                                                    :inventory [{:name "cobblestone" :count 10}])
+                                                    :inventory [{:name "cobblestone" :count 10} {:name "oak_fence" :count 1}])
                                              {:settings {:jobs.lib.villager/take-job-ticks 200}} 600 plug-hides-villager))]
           (is (not= :no-tool (:reason result)) (pr-str result))
-          (is (every? #(vp/solid? (block p %)) (:plug (vp/layout ws [-1 0]))) "the plug is not dug open"))))))
+          (is (= "oak_fence" (block p [0 64 0])) "the plug is not dug open"))))))
 
 (deftest a-second-villager-in-the-cell-keeps-the-near-end-open
   (async done
@@ -286,10 +289,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (run-ticking (assoc (world (merge shut box)) :entities [(jobless {:x 60 :y 64 :z 3})]
-                                                    :inventory [{:name "cobblestone" :count 4}])
+                                                    :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
                                              {} 400 walk-in-after))]
           (is (= :done (:status result)) (pr-str result))
-          (is (= ["cobblestone" "cobblestone"] [(block p [0 64 0]) (block p [0 65 0])]))
+          (is (= ["oak_fence" nil] [(block p [0 64 0]) (block p [0 65 0])]))
           (is (every? #(vp/solid? (block p %)) (:box (vp/layout ws [-1 0]))) "the box dug open to plug the near end is shut again round the body")
           (is (= [3 64 0] (vp/body-cell p))))))))
 
@@ -302,12 +305,33 @@
                      (let [sensed (.-sensedAt p)]
                        (tu/set-sensed! p (fn [q] (if (hidden [(.-x q) (.-y q) (.-z q)]) #js {:unknown true :pos q} (sensed q))))))
               [result p] (await (run (assoc (world (merge shut box)) :entities [(jobless {:x 1 :y 64 :z 0})]
-                                            :inventory [{:name "cobblestone" :count 4}])
+                                            :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
                                      {} 400 hide))]
           (is (= :done (:status result)) (pr-str result))
-          (is (= ["cobblestone" "cobblestone"] [(block p [0 64 0]) (block p [0 65 0])]) "the near end plugged behind the villager")
+          (is (= ["oak_fence" nil] [(block p [0 64 0]) (block p [0 65 0])]) "the near end plugged behind the villager")
           (is (every? #(vp/solid? (block p %)) (:box (vp/layout ws [-1 0]))))
           (is (= [3 64 0] (vp/body-cell p))))))))
+
+(defn server-refuses-the-near-end
+  "Place answers as the server does for a villager standing at x 1.2 in the cell: its box (0.9-1.5) overlaps the near
+  end, so a full block there is refused; a fence's post (0.375-0.625 of the cell) clears it."
+  [{:keys [p]}]
+  (.override (.-world p) "place"
+             (fn ^:async f [token a impl]
+               (let [pos (.-pos a)]
+                 (if (and (= [0 0] [(.-x pos) (.-z pos)]) (#{64 65} (.-y pos)) (not (.endsWith (.-item a) "_fence")))
+                   #js {:status "failed" :reason "Server refused" :refusal #js {:entities #js [#js {:name "villager" :id 1}]}}
+                   (await (impl token a)))))))
+
+(deftest a-villager-whose-box-overlaps-the-near-end-is-plugged-in-with-a-fence
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run (assoc (world (merge shut box)) :entities [(jobless {:x 1.2 :y 64 :z 0.5})]
+                                            :inventory [{:name "cobblestone" :count 4} {:name "oak_fence" :count 1}])
+                                     {} 400 server-refuses-the-near-end))]
+          (is (= :done (:status result)) (pr-str result))
+          (is (= ["oak_fence" nil] [(block p [0 64 0]) (block p [0 65 0])])))))))
 
 (deftest a-villager-outside-walks-in-to-the-workstation-placed-once-the-pen-is-shut-and-the-body-boxed-in
   (async done
@@ -316,11 +340,11 @@
         (let [lured (atom :never)
               bare (update (world shut) :blocks dissoc "2,64,0")
               [result p] (await (run-ticking (assoc bare :entities [(jobless {:x 6 :y 64 :z 3})]
-                                                    :inventory [{:name "lectern" :count 1} {:name "cobblestone" :count 30} {:name "torch" :count 2}])
+                                                    :inventory [{:name "lectern" :count 1} {:name "cobblestone" :count 30} {:name "oak_fence" :count 1} {:name "torch" :count 2}])
                                              {} 600 (lured-in lured)))]
           (is (= :done (:status result)) (pr-str result))
           (is (= [] @lured) "the lectern goes down only once the box round the body is shut")
-          (is (= ["cobblestone" "cobblestone"] [(block p [0 64 0]) (block p [0 65 0])]))
+          (is (= ["oak_fence" nil] [(block p [0 64 0]) (block p [0 65 0])]))
           (is (= "lectern" (block p ws))))))))
 
 (deftest a-second-villager-beside-an-open-stand-is-shut-out-of-the-cells-next-to-the-workstation
