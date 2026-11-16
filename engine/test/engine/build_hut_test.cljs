@@ -147,3 +147,14 @@
               {:keys [eng]} (start [] {} (assoc registry/jobs 'jobs.explore.search search))
               _ (await (tu/child-outcome eng 'jobs.farm.find-spot {:blueprint "ring"} 300 777))]
           (is (= 777 @got)))))))
+
+(def bed-room
+  {:id "bed-room" :front :south
+   :key {"S" "cobblestone" "." :clear
+         "B" {:block "bed" :facing :east :part :foot}
+         "H" {:block "bed" :facing :east :part :head}}
+   :layers [["SSSS" "SBHS" "SSSS"]]})
+
+(deftest a-carried-bed-of-any-colour-is-no-shortage
+  (let [carried {"cobblestone" 64 "white_bed" 1}]
+    (is (= {} (hut/needs bed-room carried)))))

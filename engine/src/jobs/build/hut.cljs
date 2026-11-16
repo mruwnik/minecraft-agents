@@ -66,8 +66,9 @@
   [bp carried]
   (let [sp (wood/choose carried nil)]
     (plan/shortage (keep (fn [{:keys [want]}]
-                           (when-not (plan/companion? want)
-                             (some->> (plan/item-for (wood/resolve-bed (wood/resolve-want want sp)) carried) (hash-map :item))))
+                           (let [want (wood/resolve-bed (wood/resolve-want want sp))]
+                             (when-not (plan/companion? want)
+                               (some->> (plan/item-for want carried) (hash-map :item)))))
                          (shape/placed-cells bp {:at [0 0 0]} nil))
                    carried)))
 
