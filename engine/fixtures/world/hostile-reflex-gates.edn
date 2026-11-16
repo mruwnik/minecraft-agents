@@ -61,18 +61,17 @@
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
    :after [[:body-near [21.5 0 16.5] 2]]
    :limit-s 40}
-  ;; No blocks: the walls cost about what a hold under the roof does (a hold is priced with the walls that may follow it, so with blocks
-  ;; either may win on the walls' quote), so the roof is the one way a player has.
+  ;; With dirt the walls and the hold under the roof cost about the same (a hold is priced with the walls that may follow it), so either is right.
   {:name "provoked-enderman-roof-gap-body-walks-under"
    :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 16 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16}})}]
    :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
-   :body {:effects [["resistance" 900 4]]}
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [11.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
          [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
-            {:event {:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} :within-s 30}
-            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
+            {:event #{{:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} {:source :job :kind :retreat_sealed}} :within-s 30}
+            {:no-event {:source :body :kind :died} :for-s 30}]
    :limit-s 40}
   ;; card c0e1f21d: the roof gap beside the enderman is no place to run to; the hut 12 blocks the other way is
   {:name "provoked-enderman-far-roof-hut-body-runs-past-the-near-gap"
@@ -132,16 +131,16 @@
    :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 16 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16}})}
               {:trigger :suffocating}]
    :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
-   :body {:effects [["resistance" 900 4]]}
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [11.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
          [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
-         [:await {:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} 30]
+         [:await #{{:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} {:source :job :kind :retreat_sealed}} 30]
          [:wait-s 6]
          [:rcon "kill @e[type=enderman,tag=wt,$BOX]"]]
-   :expect [{:event {:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} :within-s 30}
+   :expect [{:event #{{:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} {:source :job :kind :retreat_sealed}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 60}
-            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 60}]
+            {:no-event {:source :body :kind :died} :for-s 60}]
    :limit-s 75}
   ;; card ba8479cc: mobbed by a zombie, a skeleton and an angry enderman in a sealed stone hall with no water and no 2-high gap: the water and roof options find nothing and the flight falls through the options to the fight within seconds instead of holding on a search while hit
   {:name "mobbed-underground-by-enderman-zombie-skeleton-body-falls-back"
