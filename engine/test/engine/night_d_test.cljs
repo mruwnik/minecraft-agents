@@ -14,6 +14,7 @@
             [engine.hut-shelter-test :as hut]
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.goal-worth-test :as gw]
             [engine.perception :as perception]
             [engine.perception.store :as store]
             [engine.settings :as settings]
@@ -397,6 +398,77 @@
             (is (= at again) "the same flee target")
             (is (zero? m) "nothing changed: the second pass asks none again")
             (is (pos? k) "the body moved: its walks are asked again")))))))
+
+(defn counting-quotes
+  "ctx/quote counting the quotes of job sym in counter (its 3-arity goes through the 4-arity)."
+  [orig sym counter]
+  (fn ([c j args] (orig c j args))
+      ([c j args d] (when (= sym j) (swap! counter inc)) (orig c j args d))))
+
+(deftest a-later-pass-asks-shut-in-no-quote-of-digging-in-while-the-body-and-its-world-hold
+  ;; card 2e6fefe1: each night pass asked shut-in again for digging in here (40-100 ms), though nothing had changed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom 0)
+              quote ctx/quote
+              out (atom nil)
+              {:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})
+              pass! (fn ^:async pass [c]
+                      (let [before @asked]
+                        (await (bed-down/dig-in-quote (assoc c ::pick/pass (atom {}))))
+                        (- @asked before)))
+              probe (tu/job (fn ^:async probe-round [c]
+                              (let [first-pass (await (pass! c))
+                                    second-pass (await (pass! c))
+                                    _ (swap! (fake/state p) assoc-in [:self :pos] [1 64 0])
+                                    moved (await (pass! c))]
+                                (reset! out [first-pass second-pass moved])
+                                (ctx/end c :done nil))))
+              eng (assoc eng :jobs (assoc registry/jobs 'dig-in-probe probe))]
+          (tu/seeing-all p)
+          (set! ctx/quote (counting-quotes quote 'jobs.survival.shut-in asked))
+          (try
+            (core/submit! eng (tu/order '(dig-in-probe)) {})
+            (await (tu/run-until-empty eng 20))
+            (finally (set! ctx/quote quote)))
+          (is (= [1 0 1] @out) "the first pass asks; the second, nothing changed, none; the body moved: asked again"))))))
+
+(deftest one-pass-prices-the-night-answers-once-for-the-same-ways
+  ;; card 2e6fefe1: a pass priced bed-down/answers up to three times over (walkable-home's bound, night-answer, shelter-prices)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [priced (atom 0)
+              respawn-body bed-down/respawn-body
+              c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night})) {}
+                           {::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})]
+          (set! bed-down/respawn-body (fn [c] (swap! priced inc) (respawn-body c)))
+          (try
+            (let [a (await (bed-down/answers c {}))
+                  b (await (bed-down/answers c {}))
+                  _ (await (bed-down/answers c {:flee {:pos {:x 20 :y 64 :z 0} :cost 10 :seconds 10}}))]
+              (is (= a b))
+              (is (= 2 @priced) "the same ways twice: priced once; a flee to weigh: priced again"))
+            (finally (set! bed-down/respawn-body respawn-body))))))))
+
+(deftest a-flee-search-still-going-on-leaves-digging-in-priced-to-be-taken
+  ;; card 998c3088 / 2e6fefe1: walled-in-home ran 483 passes, each :searching back from shelter-prices while digging in was priced
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [flee-target flee/flee-target
+              c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night})) {}
+                           {:quote-call {:worth 1200 :ways #{:shelter :flee}}
+                            ::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})
+                                               :niche (js/Promise.resolve {:seconds ##Inf :risk-s 0 :exposure-s 0 :morning-s 0})})})]
+          (set! flee/flee-target (fn [_ _] (js/Promise.resolve :searching)))
+          (try
+            (let [[prices t] (await (night/shelter-prices c))]
+              (is (contains? prices :shelter) "digging in here is priced: good enough to take now (Q147)")
+              (is (not (contains? prices :flee)))
+              (is (nil? t)))
+            (finally (set! flee/flee-target flee-target))))))))
 
 (deftest with-nothing-seen-the-night-looks-around-and-then-flees-to-the-ground-it-saw
   (async done

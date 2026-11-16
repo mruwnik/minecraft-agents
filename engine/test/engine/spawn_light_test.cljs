@@ -287,3 +287,23 @@
         (perception/pass! per)
         (is (not (identical? first-region (region))) "a write in a section it read floods it anew")
         (is (= 2 @floods))))))
+
+(deftest night-chance-is-judged-once-while-the-world-holds
+  ;; card 2e6fefe1: a night pass judged the same cells' night chance afresh 8+ times over (3-8 ms each)
+  (let [p (tu/fake {:floor [-10 -10 10 10] :time st/night :self {:pos {:x 0 :y 64 :z 0}}})
+        asked (atom 0)
+        reaches sh-sense/sky-reaches-from-above?
+        cell {:x 2 :y 64 :z 0}]
+    (set! sh-sense/sky-reaches-from-above? (fn [p c] (swap! asked inc) (reaches p c)))
+    (try
+      (let [a (spawn-light/night-chance p cell)
+            first-n @asked
+            b (spawn-light/night-chance p cell)
+            again-n @asked
+            _ (swap! (fake/state p) update :blocks assoc "5,64,5" "stone")
+            _ (spawn-light/night-chance p cell)]
+        (is (pos? first-n))
+        (is (= a b))
+        (is (= first-n again-n) "the same cell, nothing changed: judged once")
+        (is (< again-n @asked) "a block placed: judged again"))
+      (finally (set! sh-sense/sky-reaches-from-above? reaches)))))

@@ -1146,7 +1146,7 @@
               "pathWorld" (fn [unknown] (let [{:keys [snapshot table space]} (steer/path-world @state)]
                                           #js {:snapshot (if unknown (let [w @state] (steer/masked snapshot unknown (into #{} (map first) (steer/buried w)) w)) snapshot) :table table :space space}))
               "worldEpoch" (let [last (volatile! nil) n (volatile! 0)]
-                             (fn [] (let [w @state ks [(:blocks w) (:states w) (:unloaded w) (:offline w)]]
+                             (fn [] (let [w @state ks [(:blocks w) (:states w) (:unloaded w) (:offline w) (:light w) (:light-default w)]]
                                       (when-not (and @last (every? true? (map identical? ks @last)))
                                         (vreset! last ks) (vswap! n inc))
                                       @n)))

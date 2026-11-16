@@ -353,10 +353,10 @@
   {:ways #{:pocket} :for :night :worth worth :settings {:jobs.survival.dig-pocket/walk-radius (sites/niche-reach)}})
 
 (defn ^:async niche-quote
-  "sin/shelter-quote of shut-in's quote of a niche (niche-args), asked once a pass (walk-pick/once!). Quoted at the night's worth: the call's
-  own worth is made from this price."
+  "sin/shelter-quote of shut-in's quote of a niche (niche-args), asked once a pass (walk-pick/once!) and kept across passes
+  (walk-pick/kept-job-quote!). Quoted at the night's worth: the call's own worth is made from this price."
   [c]
-  (await (pick/once! c :niche (fn ^:async f [] (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in (niche-args (ctx/worth c)))))))))
+  (await (pick/once! c :niche (fn ^:async f [] (sin/shelter-quote (await (pick/kept-job-quote! c 'jobs.survival.shut-in (niche-args (ctx/worth c)))))))))
 
 (defn ^:async niche!
   "Out of the failed pit first (dig-in-leave/climb!, a stair), then jobs.survival.shut-in digs a pocket
@@ -685,8 +685,9 @@
 (defn ^:async shelter-prices
   "[prices target]: the ways through the night from here without a bed (bed-down/answers, its :bed, :sealed and :log-out left out):
   :shelter (shut-in here) with the :shelter way while a site is left (not :no-site), :niche (niche-quote, the climb out of the failed pit first in) with it while not tried, :flee
-  with the :flee way to flee/flee-target (target, searched with a survey first when no shelter way is left). :searching while that
-  search goes on."
+  with the :flee way to flee/flee-target (target, searched with a survey first when no shelter way is left). While that search
+  goes on, the others without the flee when :shelter or :niche is priced (Q147: good enough; the search goes on at the next
+  ask), else :searching."
   [c]
   (let [m (ctx/mem c)
         shelter? (ctx/way? c :shelter)
@@ -696,11 +697,12 @@
         feet (sh-sense/feet (:primitives c))
         n (if (and n pit) (update n :seconds + (pit-site/climb-s c feet (- (:y pit) (:y feet)))) n)
         t (when (ctx/way? c :flee) (await (flee/flee-target c (not dig?))))]
-    (if (= :searching t)
-      :searching
-      (let [flee (when (map? t) (assoc t :seconds (get-in t [:route :seconds])))
-            prices (await (bed-down/answers c {:niche n :flee flee}))]
-        [(cond-> (dissoc prices :bed :sealed :log-out) (not dig?) (dissoc :shelter)) t]))))
+    (let [flee (when (map? t) (assoc t :seconds (get-in t [:route :seconds])))
+          prices (cond-> (dissoc (await (bed-down/answers c {:niche n :flee flee})) :bed :sealed :log-out) (not dig?) (dissoc :shelter))]
+      (cond
+        (not= :searching t) [prices t]
+        (some prices [:shelter :niche]) [prices nil]
+        :else :searching))))
 
 (defn stay!
   "Staying the night where the body stands, as it is (in the open or not), is the cheapest of prices while another way is priced too: the round ends nothing-possible

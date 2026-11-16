@@ -11,6 +11,7 @@
             [jobs.lib.memory-age :as memory-age]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -107,11 +108,25 @@
   ([p cell caves-free? subtract stay? solid-at] (chance-at p cell caves-free? subtract stay? solid-at nil))
   ([p cell caves-free? subtract stay? solid-at lit] (chance-in p cell caves-free? subtract stay? solid-at lit true)))
 
+(defonce ^:private night-kept (js/WeakMap.))
+
 (defn night-chance
   "chance-at of a stay at cell through the night: the sky darkened as at a clear midnight, or more; a lit cell a dark
-  floor's mobs walk to through the doors as they stand (sh-inside/stay-hall) is priced as dark by that hall's chance."
+  floor's mobs walk to through the doors as they stand (sh-inside/stay-hall) is priced as dark by that hall's chance.
+  Kept per body while the world (threat-field/world-epoch), that darkening and the feet hold: a night pass asks the same cells again."
   [p cell]
-  (chance-at p cell false (max (sh-sense/sky-subtract-now p) (look/sky-subtract-at 18000 0 0)) true))
+  (let [subtract (max (sh-sense/sky-subtract-now p) (look/sky-subtract-at 18000 0 0))
+        epoch (field/world-epoch p)
+        chance #(chance-at p cell false subtract true)]
+    (if (nil? epoch)
+      (chance)
+      (let [k [epoch subtract (sh-sense/feet p)]
+            ^js e (.get night-kept p)
+            ^js e (if (and e (= k (.-k e))) e (let [e #js {:k k :cells (js/Map.)}] (.set night-kept p e) e))
+            ck (str (:x cell) "," (:y cell) "," (:z cell))]
+        (if (.has (.-cells e) ck)
+          (.get (.-cells e) ck)
+          (let [v (chance)] (.set (.-cells e) ck v) v))))))
 
 (defn dawn-lowers?
   "Whether day would lower chance-at at cell: it is night and the cell's light comes from the sky."

@@ -96,18 +96,33 @@
       (let [pending (or (get @memo k) (let [pr (f)] (swap! memo assoc k pr) pr))]
         (await pending)))))
 
-(defn ^:async kept-quote!
-  "go-to's quote of the walk args, kept per body (threat-field/shared) while its world epoch, walk-risk/body-inputs,
-  health, carried items and the walk's worth (the args', else the caller's) hold, so a later pass asks no unchanged walk again. A search still going on (:estimate) or a
-  quote past its deadline is not kept: asked again, it goes on."
-  [c args]
+(defn ^:async kept!
+  "(f)'s value for key k, kept per body (threat-field/shared) while its world epoch, walk-risk/body-inputs, health and
+  carried items hold, so a later pass asks nothing unchanged again. A value keep? refuses (a search still going on) is
+  not kept: asked again, it goes on."
+  [c k f keep?]
   (let [p (:primitives c)
-        box (field/shared c [::quote args (or (:worth args) (ctx/worth c)) (hash (walk-risk/body-inputs c)) (.-health (.self p)) (mapv (juxt :name :count) (u/inventory p))]
+        box (field/shared c [::kept k (hash (walk-risk/body-inputs c)) (.-health (.self p)) (mapv (juxt :name :count) (u/inventory p))]
                           #(volatile! nil) (constantly 1))]
     (or @box
-        (let [q (await (quote! c args))]
-          (when-not (or (:estimate q) (= contract/too-expensive q)) (vreset! box q))
-          q))))
+        (let [v (await (f))]
+          (when (keep? v) (vreset! box v))
+          v))))
+
+(defn settled?
+  "Whether quote q may be kept: no search still going on (:estimate) and not past its deadline."
+  [q]
+  (not (or (:estimate q) (= contract/too-expensive q))))
+
+(defn ^:async kept-quote!
+  "go-to's quote of the walk args, kept! while the walk's worth (the args', else the caller's) holds too, once settled?."
+  [c args]
+  (await (kept! c [::quote args (or (:worth args) (ctx/worth c))] #(quote! c args) settled?)))
+
+(defn ^:async kept-job-quote!
+  "ctx/quote of job sym with args, kept! while the caller's worth holds too, once settled?."
+  [c sym args]
+  (await (kept! c [::job-quote sym args (ctx/worth c)] #(ctx/quote c sym args) settled?)))
 
 (defn ^:async quote-once!
   "go-to's quote of the walk args, asked once in this pass (once!) and kept across passes (kept-quote!)."

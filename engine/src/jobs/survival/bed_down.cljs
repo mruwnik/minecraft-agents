@@ -183,11 +183,11 @@
       body)))
 
 (defn ^:async dig-in-quote
-  "sin/shelter-quote of shut-in's quote of digging in here (a wall or a pit), asked once a pass (walk-pick/once!)."
+  "sin/shelter-quote of shut-in's quote of digging in here (a wall or a pit), asked once a pass (walk-pick/once!) and kept
+  across passes (walk-pick/kept-job-quote!)."
   [c]
   (await (pick/once! c :dig-in
-                     (fn ^:async f []
-                       (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))
+                     (fn ^:async f [] (sin/shelter-quote (await (pick/kept-job-quote! c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))
 
 (defn ^:async dig-in-s
   "Seconds shut-in's quote of digging in here takes (dig-in-quote), its toll in."
@@ -223,7 +223,7 @@
     (let [q (cost/retry-chance :walk fails)]
       (+ (* q s) (* (- 1 q) (+ cost (apply min ##Inf others)))))))
 
-(defn ^:async answers
+(defn ^:async answers-now
   "{answer seconds}: the ways through the night from here, each priced by cost/night-way-s (the night's work it loses, its tolls
   and hurt, its seconds exposed (exposed-price), what it costs by day) or, a bed, as the night's seconds it loses and the hp it risks
   and, where it sets the respawn point, less cost/spawn-gain there for deaths here, where the work goes on (a body asleep has
@@ -305,6 +305,11 @@
       out-s (assoc :log-out (+ (:stint out-s) (* (- 1 (:skip out-s)) (apply min (vals prices))))))
      (cond-> prices
        (:home prices) (update :home failed-walk-s (:cost home) (vals (dissoc prices :home)) (sh-beds/home-walk-fails c (:pos home)))))))
+
+(defn ^:async answers
+  "answers-now, asked once a pass for the same opts (walk-pick/once!)."
+  [c opts]
+  (await (pick/once! c [::answers opts] #(answers-now c opts))))
 
 (defn home-bound-s
   "Seconds of walk past which a :home answer (no bed carried) costs more than the least of prices (cost/night-walk-bound-s)."
