@@ -96,7 +96,10 @@
    - options.stopAtEdge: with the goal unloaded, the search names the first node it expands at the loaded edge (edgeStop)
      as its frontier and ends once it has expanded as many nodes again (or run out, or the caller ends it: endSweep), not
      after searching all loaded land; what only those nodes refused is not in the result. go-to's budgeted searches set it
-     (walk.search/new-search)."
+     (walk.search/new-search).
+   - options.oneWayClosed: a found path with a step the body cannot undo (isOneWay) is planned again with no such step
+     (options.returnable): that search's result, with oneWay {move x y z distance path open} the step of the first path
+     when it finds no whole path (go-to :one-way :closed)."
   (:require [engine.constants :as constants]
             [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
             [engine.path.planner.goals :as goal-set]
@@ -626,6 +629,29 @@
   (js/Object.assign #js {} options #js {:returnable true :goalFlood 0 :stopAtEdge false
                                         :maxNodes (js/Math.min (option options "maxNodes" 200000) (js/Math.max 1 (.-n-nodes search)))}))
 
+(defn- closed-node
+  "The first one-way step of search's found path under options.oneWayClosed, -1 when none (or not closed, or not found)."
+  [^Search search options]
+  (if (and (true? (option options "oneWayClosed" false)) (nil? (.-reason search)))
+    (.firstOneWay search (.-goal-node search))
+    -1))
+
+(defn- detour-options
+  "The options of the returnable search for the way round search's one-way step (closed-node)."
+  [options]
+  (js/Object.assign #js {} options #js {:returnable true :oneWayClosed false}))
+
+(defn- detour-result
+  "The result of the returnable detour search; with no whole path, oneWay names node, the one-way step of search's path."
+  [^Search search node ^Search detour]
+  (.settle detour)
+  (let [^js r (.resultFrom detour -1 nil)
+        goal (.-goal-node search)]
+    (when-not (identical? (.-status r) "found")
+      (set! (.-oneWay r) #js {:move (aget (.-moves search) node) :x (aget (.-xs search) node) :y (aget (.-ys search) node) :z (aget (.-zs search) node)
+                              :distance 0 :path (.pathTo search goal) :open ^boolean (.oneWayOpen search goal)}))
+    r))
+
 (defn- with-rim
   "r with its first step marked over: the rim a body sunk in a bowl (bowl-rim of query's start) climbs out over to it, or
   the fence or wall top a body steps off (post-top)."
@@ -643,14 +669,18 @@
   (clean-options) supplies the partial end."
   [^Search search snapshot query options]
   (.settle search)
-  (let [node (.oneWayNode search)]
+  (let [node (.oneWayNode search)
+        closed (closed-node search options)]
     (with-rim
-      (if (neg? node)
-        (.resultFrom search -1 nil)
-        (let [^Search clean (new-search snapshot query (clean-options search options))]
-          (.init clean)
-          (.step clean js/Infinity)
-          (.resultFrom search node (.nearest clean))))
+      (cond
+        (not (neg? closed)) (let [^Search detour (new-search snapshot query (detour-options options))]
+                              (.step detour js/Infinity)
+                              (detour-result search closed detour))
+        (neg? node) (.resultFrom search -1 nil)
+        :else (let [^Search clean (new-search snapshot query (clean-options search options))]
+                (.init clean)
+                (.step clean js/Infinity)
+                (.resultFrom search node (.nearest clean))))
       search query)))
 
 (defn create-search
@@ -693,6 +723,7 @@
   (let [search (new-search snapshot query options)
         clean (volatile! nil)
         node (volatile! -1)
+        closed (volatile! -1)
         ready (volatile! false)]
     (.init search)
     #js {:step (fn [max-expansions]
@@ -702,15 +733,18 @@
                    (not ^boolean (.step search max-expansions)) false
                    :else (do (.settle search)
                              (vreset! node (.oneWayNode search))
-                             (if (neg? @node)
-                               (vreset! ready true)
-                               (let [^Search c (new-search snapshot query (clean-options search options))]
-                                 (.init c)
-                                 (vreset! clean c)
-                                 false)))))
-         :result (fn [] (with-rim (if (neg? @node)
-                                    (.resultFrom search -1 nil)
-                                    (.resultFrom search @node (.nearest ^Search @clean)))
+                             (vreset! closed (closed-node search options))
+                             (cond
+                               (not (neg? @closed)) (do (vreset! clean (new-search snapshot query (detour-options options))) false)
+                               (neg? @node) (vreset! ready true)
+                               :else (let [^Search c (new-search snapshot query (clean-options search options))]
+                                       (.init c)
+                                       (vreset! clean c)
+                                       false)))))
+         :result (fn [] (with-rim (cond
+                                    (not (neg? @closed)) (detour-result search @closed @clean)
+                                    (neg? @node) (.resultFrom search -1 nil)
+                                    :else (.resultFrom search @node (.nearest ^Search @clean)))
                                   search query))
          ;; ends a search sweeping after its edge stop now (Search.endSweep), for a caller out of budget: true when it did
          :endSweep (fn [] (if (some? @clean) (.endSweep ^Search @clean) (.endSweep search)))

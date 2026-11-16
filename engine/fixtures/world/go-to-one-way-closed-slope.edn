@@ -1,0 +1,21 @@
+;; Card b1ab6233: go-to :one-way :closed takes a way round a step the body cannot climb back (planner oneWayClosed), and ends :one-way only when there is none.
+;; A stone ledge x 1..15 y 0..1 (the body on top at feet y 2), plain ground east of it at feet y 0: straight east is a 2-block drop, the cheapest way.
+;; Should-succeed: one-block steps down at x 16 (y 0), z 19..20, beside the ledge: the closed walk takes them and arrives (before the fix it ended :one-way at the ledge).
+;; Should-fail: the same ledge with no steps: the closed walk ends :why :one-way and stays on the ledge.
+{:defaults
+ {:tags [:movement :planner]
+  :time :any
+  :plot {:height 8 :light :lit}
+  :blocks [[:fill [1 0 1] [15 1 30] "stone"]]
+  :body {:at [8.5 2 16.5]}
+  :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1 :ways #{:walk} :one-way :closed})]]
+  :limit-s 90}
+ :cases
+ [{:name "closed-walks-the-steps-round-the-ledge"
+   :blocks [[:fill [16 0 19] [16 0 20] "stone"]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:why :one-way}} :for-s 60 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "closed-with-no-steps-gives-up-one-way"
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :why :one-way}} :within-s 60 :of-job true}]
+   :after [[:body-far [24.5 0 16.5] 6]]}]}

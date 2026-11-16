@@ -56,7 +56,7 @@
   old one is stale), with walls read as stone; with doors other than :never, the iron doors the plan would open by hand are walls
   too (planned again without them). A one-way step (a drop of 2 or 3, a gap jump down) is taken when the land past it runs
   on into unloaded land (walk/plan-walk! :one-way :open) when one-way is :open: a far goal past a cliff is walked on to; a
-  loaded pit is never entered. With one-way :closed any plan (found too) is cut before a step the body cannot come back from; a partial plan ends at the nearest node the body can come back from. With
+  loaded pit is never entered. With one-way :closed a plan takes a way round a step the body cannot come back from, else is cut before it; a partial plan ends at the nearest node the body can come back from. With
   explore, a search that ran out of loaded land walks to its frontier (walk/plan-walk! :frontier). With budget, at most
   that many expansions of search (walk/plan-walk! :budget): the plan may be status \"searching\" (walk nowhere, the
   search goes on at the next call) or a walk to where an unfinished search has got to (never, with progress false).

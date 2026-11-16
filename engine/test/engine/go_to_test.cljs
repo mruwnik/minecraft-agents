@@ -310,6 +310,16 @@
           (is (= 64 (js/Math.floor (second (at (:p closed))))) "closed: still on the plateau")
           (is (= :one-way (:why @(:out closed)))))))))
 
+(deftest go-to-one-way-closed-walks-a-slope-round-a-ledge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the ledge of the test above, with one-block steps down beside it (z 4..5): the cheapest way drops the ledge
+        (let [steps (merge (floor -2 -3 10 5) (floor 61 11 -3 47 3) (floor 62 11 4 11 5) (floor 61 12 4 47 5))
+              closed (await (go! {:blocks steps} {:pos [30 62 0] :one-way :closed :ways #{:walk}}))]
+          (is (true? (:arrived @(:out closed))))
+          (is (= 62 (js/Math.floor (second (at (:p closed)))))))))))
+
 (deftest go-to-drop-cost-false-takes-no-drop-and-a-number-keeps-it
   (async done
     (tu/run-async done

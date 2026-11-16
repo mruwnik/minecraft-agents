@@ -146,12 +146,13 @@
   (\"searching\"), and goes on at the next call; with :progress false only nowhere until the search ends."
   ([c pw to range weight] (plan-walk! c pw to range weight nil))
   ([c pw to range weight {:keys [policy walls one-way frontier budget] :or {policy (wworld/body-policy c)} :as opts}]
-   (if budget
-     (await (wsearch/plan-walk-budgeted! c pw to range weight (assoc opts :policy policy)))
-     (let [walled (wworld/with-walls pw walls)
-           t (clock/now)
-           within (await (wplan/plan-within! c walled to range weight policy))]
-       (assoc (wplan/walk-plan c pw walled to one-way frontier within) :ms (- (clock/now) t))))))
+   (let [policy (cond-> policy (= :closed one-way) (assoc :one-way :closed))]
+     (if budget
+       (await (wsearch/plan-walk-budgeted! c pw to range weight (assoc opts :policy policy)))
+       (let [walled (wworld/with-walls pw walls)
+             t (clock/now)
+             within (await (wplan/plan-within! c walled to range weight policy))]
+         (assoc (wplan/walk-plan c pw walled to one-way frontier within) :ms (- (clock/now) t)))))))
 
 (def sneak-moves
   "The steps a sneaking walk holds sneak on: level ground and jumps up. A drop or gap lets go (sneak stops at the edge),
