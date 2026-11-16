@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [engine.path.planner-tuned :as planner]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.access :as access]
@@ -184,18 +185,31 @@
            distinct
            (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz)))))))))
 
+(defn goal-shut?
+  "Whether the planner's late goal flood (wider than its early one: no sealed test) proves the goal within range of to
+  [x y z] walled in or cut off by a drop (or the start shut in) over pw before any search: the proof behind a plan's
+  :goal-enclosed and :goal-cut-off, over at most the room-cells drop-edges closes the goal's region in. pw: a pathWorld
+  (wworld/path-world)."
+  [c ^js pw to range]
+  (let [^js s (planner/create-search (.-snapshot pw) (wplan/plan-query c to range)
+                                     (doto (wplan/plan-options pw 1 nil nil)
+                                       (unchecked-set "preFlood" 0) (unchecked-set "floodAfter" 0) (unchecked-set "maxNodes" 1)
+                                       (unchecked-set "goalFlood" reach-room/room-cells)))]
+    (.step s js/Infinity)
+    (boolean (#{"goal-enclosed" "goal-cut-off" "start-enclosed"} (.-reason ^js (.result s))))))
+
 (defn joining-fill
   "The nearest of fills (floor cells [x y z], nearest first) whose block, read solid, leaves goal ({:x :y :z}) no longer
-  proven walled in by the planner's goal flood before its search (wplan/enclosed-before-search?, over the call's read:
-  c's :unknown): a fill beside land the planner's moves never reach the goal from bridges nothing. nil when all of fills
-  read solid at once still leave it walled in. More cells solid open no less, so the shortest nearest-first run of fills
-  that frees the goal is found by halving and its last fill kept when it frees the goal alone: a few floods whatever the
-  count of fills. Without a path world: the first of fills."
+  proven shut by the planner's goal flood (goal-shut?, over the call's read: c's :unknown): a fill beside land the
+  planner's moves never reach the goal from bridges nothing. nil when all of fills read solid at once still leave it
+  shut. More cells solid open no less, so the shortest nearest-first run of fills that frees the goal is found by
+  halving and its last fill kept when it frees the goal alone: a few floods whatever the count of fills. Without a path
+  world: the first of fills."
   [c goal fills]
   (let [pw (wworld/path-world (:primitives c) (:unknown c))
         to [(:x goal) (:y goal) (:z goal)]
         fills (vec fills)
-        shut? (fn [cells] (wplan/enclosed-before-search? c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) to (:range (:args c) 1)))]
+        shut? (fn [cells] (goal-shut? c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) to (:range (:args c) 1)))]
     (cond
       (nil? pw) (first fills)
       (or (empty? fills) (shut? fills)) nil

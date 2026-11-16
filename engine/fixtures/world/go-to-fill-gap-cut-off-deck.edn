@@ -1,0 +1,30 @@
+;; A stone deck (top y 5, x 10..12, z 9..11) floating over the plot floor; across the open column x 13 a stone block
+;; (x 14..18, z 9..11, y 0..9) holds a 2-high tunnel along z 10 (feet y 7, x 14..18) whose roof is too low to jump from,
+;; and a stone lintel at [13 8 10] over the column. The goal [11 6 10] is on the deck: cut off by a drop, which only the
+;; planner's late goal flood proves (its early flood stops at the deck's cliff edges). The body looks round from the deck
+;; and the floor below, then from the tunnel, so it knows the scene. Should-fail: a block at [13 5 10] lays a floor a step
+;; down from the tunnel's mouth, but the body's head meets the lintel stepping onto it: no fill-gap, the cell stays air.
+;; Should-succeed: go-to-bridge-door-hole/dirt-carried-bridges-the-hole-before-the-door.
+{:defaults
+ {:tags [:movement :access]
+  :time :any
+  :plot {:height 12 :light :lit}
+  :blocks [[:fill [10 5 9] [12 5 11] "stone"] [:fill [14 0 9] [18 9 11] "stone"]
+           [:fill [14 7 10] [18 8 10] "air"] [:set [13 8 10] "stone"]]
+  :body {:at [16.5 7 10.5] :inventory [["dirt" 9]] :effects [["resistance" 600 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "no-fill-the-body-cannot-step-onto-beside-a-cut-off-deck"
+   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~11 ~6 ~10 -90 0"] [:until-pos {:x-min 11 :x-max 12 :z-min 10 :z-max 11} 10]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~8 ~ ~10 -90 0"] [:until-pos {:x-min 8 :x-max 9 :z-min 10 :z-max 11} 10]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~13 ~ ~10 90 0"] [:until-pos {:x-min 13 :x-max 14 :z-min 10 :z-max 11} 10]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~7 ~10 90 0"] [:until-pos {:x-min 16 :x-max 17 :z-min 10 :z-max 11} 10]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed :after-previous true} 30]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [11 6 10] :range 0})]]
+   :expect [{:event {:source :job :kind #{:stopped :completed} :data {:name "jobs.movement.go-to"}} :within-s 290 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :for-s 290
+             :until {:source :job :kind #{:stopped :completed} :data {:name "jobs.movement.go-to"}} :of-job true}]
+   :after [[:not-block [13 5 10] "dirt"]]}]}

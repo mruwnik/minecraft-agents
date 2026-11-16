@@ -775,11 +775,32 @@
         c (read-ctx eng [0 64 0] 1)]
     (looked-round! p [[-2.5 59 0.5] [0.5 59 -2.5] [0.5 59 2.5] [4.5 59 0.5] [6.5 65 0.5]])
     (is (sense/unknown? p [0 63 0]) "the pocket is unseen: no x-ray")
-    (is (wplan/enclosed-before-search? c (wworld/path-world p (:unknown c)) [0 64 0] 1) "its shell seen from round the pit proves it walled in")
+    (is (choose/goal-shut? c (wworld/path-world p (:unknown c)) [0 64 0] 1) "its shell seen from round the pit proves it walled in")
     (is (= [[4 64 0]] (take 1 (choose/drop-edges p [[1 65 0]] [6 65 0]))) "the ledge's drop edge nearest the body")
-    (is (= [4 64 0] (with-redefs [wplan/enclosed-before-search? (constantly false)] (:cell (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0]))))
+    (is (= [4 64 0] (with-redefs [choose/goal-shut? (constantly false)] (:cell (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0]))))
         "with no planner proof, the fill the old rule offered")
     (is (nil? (choose/drop-fill c {:reason :goal-enclosed} #{} [6 65 0])) "the planner still proves the goal walled in with it filled")))
+
+(def deck-by-a-tunnel
+  "A stone deck (top y 69, x 0..2, z -1..1) floating over a stone ground (y 63); across the open column x 3 a stone block
+  (x 4..8, z -1..1, y 64..73) holds a 2-high tunnel along z 0 (feet y 71, x 4..8), its roof too low to jump from, and a
+  stone lintel at [3 72 0] over the column: a fill at [3 69 0] lays a floor a step down from the tunnel's mouth that the
+  body's head meets the lintel stepping onto."
+  (assoc (apply dissoc (merge (box -6 63 -4 12 63 4 "stone") (box 0 69 -1 2 69 1 "stone") (box 4 64 -1 8 73 1 "stone"))
+                (for [x (range 4 9) y [71 72]] (str x "," y ",0")))
+         "3,72,0" "stone"))
+
+(deftest a-fill-the-body-cannot-step-onto-is-not-offered-beside-a-cut-off-deck
+  ;; The planner's early flood stops at the deck's cliff edges, so only its late flood proves the deck cut off; the old
+  ;; check read that early flood alone and offered [3 69 0].
+  (let [{:keys [eng p]} (gt/setup {:self {:pos [6.5 71 0.5]} :blocks deck-by-a-tunnel :inventory [{:name "dirt" :count 9}] :light [15 15] :seen [[-9 60 -7 15 80 7]]})
+        c (read-ctx eng [1 70 0] 0)
+        pw (wworld/path-world p (:unknown c))]
+    (is (= {:early-proof false :late-proof true :edges [[3 69 0]] :fill nil}
+           {:early-proof (wplan/enclosed-before-search? c pw [1 70 0] 0)
+            :late-proof (choose/goal-shut? c pw [1 70 0] 0)
+            :edges (vec (choose/drop-edges p [[1 70 0]] [6 71 0]))
+            :fill (:cell (choose/drop-fill c {:reason :goal-cut-off} #{} [6 71 0]))}))))
 
 (def doorway-hole
   "Floor y 63 with a 1-cell hole at x 5 (floor under it at y 62), and a floor 1 higher from x 6: the doorway of a hut whose sill was dug."
@@ -2297,3 +2318,4 @@
         (let [{:keys [out seen]} (with-redefs [esc/route-cell! (fn [_ _ _] (js/Promise.resolve :open))] (await (edge-walk)))]
           (is (= :spent (get-in out [:escalation :step])) (pr-str out))
           (is (< 1 (count (dig-routes seen))) "taken again while under its price"))))))
+
