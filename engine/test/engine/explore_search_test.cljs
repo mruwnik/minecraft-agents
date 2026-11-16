@@ -796,7 +796,7 @@
   "Stone x 4..30, z 4..28, y 0..22 with a 2-high corridor x 14..26 at z 16 (the body in it): sealed, no unseen column in view."
   (merge (tu/box 4 0 4 30 22 28 "stone") (tu/box 14 0 16 26 1 16 "air")))
 
-(deftest a-sealed-corridor-search-worth-less-than-the-hand-dig-out-ends-without-digging
+(deftest a-sealed-corridor-search-at-a-high-worth-digs-out-at-the-feet-height-and-ends
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -804,11 +804,11 @@
               real child/call-walk*
               dark #(swap! (fake/state (:p %)) assoc :light-default [0 0])
               s (with-redefs [child/call-walk* (fn [c k a] (swap! asked conj a) (real c k a))]
-                  (await (search! {:target ["rail" "cobweb"] :scan-radius 32 :here true :use-notes false :worth 5}
+                  (await (search! {:target ["rail" "cobweb"] :scan-radius 32 :here true :use-notes false :worth 1200}
                                   {:blocks sealed-corridor :self {:pos [16.5 0 16.5]}} 80 dark)))]
           (is (finished? s))
-          (is (= :price (:why (not-found-of s))) "the hand dig out (about 7 s) is dearer than the find is worth")
-          (is (empty? @asked) "no walk, so no step into rock"))))))
+          (is (= :distance (:why (not-found-of s))) "the priced dig-out leg is walked, then no leg is left")
+          (is (= [0] (distinct (map #(get-in % [:pos :y]) @asked))) "every walk asked is at the feet's height, never a step up or down into unseen rock"))))))
 
 (deftest the-last-leg-before-stuck-digs-out-of-a-sealed-pocket
   (async done
