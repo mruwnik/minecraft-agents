@@ -380,6 +380,25 @@
               asleep (await (bed-price {:isSleeping true}))]
           (is (< (Math/abs (- awake asleep)) 20) "only the seconds to lie down differ"))))))
 
+(deftest a-body-asleep-in-a-bed-has-it-as-its-respawn-point-when-the-entries-share-an-instant
+  ;; slept and an older bed's :spawn-bed written at the same instant: the sleep set the respawn point, so the far bed gains nothing.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bed {:x 2 :y 64 :z 0}
+              far {:x 400 :y 64 :z 0}
+              bed-price (fn ^:async price [spawn-at]
+                          (let [entries {:sleep-status [{:t 0 :data {:skipping true}}]
+                                         :slept [{:t 5 :data {:pos bed}}]
+                                         :spawn-bed [{:t 5 :data {:pos spawn-at}}]}
+                                c (gw/ctx-of (tu/seeing-all (tu/fake-on-floor {:time night :players ["Alex"] :self {:isSleeping true} :blocks {"2,64,0" "red_bed"} :light-default [0 4]})) {}
+                                             {:view (fn [] {:now 5 :data {:entries entries}})
+                                              ::pick/pass (atom {:dig-in (js/Promise.resolve {:seconds 30 :risk-s 0 :exposure-s 0 :morning-s 10})})})]
+                            (:bed (await (bed-down/answers c {:bed bed})))))
+              tied (await (bed-price far))
+              same (await (bed-price bed))]
+          (is (< (Math/abs (- tied same)) 1) "asleep in the respawn bed gains nothing, whichever :spawn-bed was written at that instant"))))))
+
 (deftest a-flee-off-the-ground-owes-the-walk-back-by-day
   (async done
     (tu/run-async done

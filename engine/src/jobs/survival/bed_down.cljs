@@ -172,13 +172,13 @@
     (+ skipped (sh-sleepers/skip-wait-s p view left) (open-gain c (stand-cells p) left))))
 
 (defn respawn-body
-  "threats/death-body, its :respawn the bed slept in last when that came after the latest :spawn-bed (lying down sets
+  "threats/death-body, its :respawn the bed slept in last when that came at or after the latest :spawn-bed (lying down sets
   the respawn point)."
   [c]
   (let [body (threats/death-body c)
         slept (ctx/latest c :slept)
         marked (sh-spawn/spawn-bed-entry (ctx/view c))]
-    (if (and slept (or (nil? marked) (> (:t slept) (:t marked))))
+    (if (and slept (or (nil? marked) (>= (:t slept) (:t marked))))
       (assoc body :respawn (:pos (:data slept)))
       body)))
 
