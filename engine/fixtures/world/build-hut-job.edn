@@ -1,0 +1,25 @@
+;; Card 4d734dca: jobs.build.hut picks the blueprint whose blocks cost least, a site sized to it (farm.find-spot), saves the placed
+;; plan as the body's and builds it through build.from-plan.
+;; hut-built-from-carried-blocks (should-succeed): the starter-hut kit carried; the job ends done naming its plan (a from-plan call
+;; alone names none).
+;; nothing-carried-no-fetch-waits-no-items (should-fail): empty bag, :ways #{:carried}: the job waits :no-items naming the blueprint
+;; before any child starts, so no plan is saved and nothing is placed.
+;; Glowstone lights the plot; the cases need no clock.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8}
+  :blocks [[:set [16 0 8] "glowstone"]]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 500}
+ :cases
+ [{:name "hut-built-from-carried-blocks"
+   :body {:inventory [["stone_pickaxe" 1] ["torch" 4] ["cobblestone" 64] ["oak_planks" 64] ["oak_log" 16] ["glass_pane" 8]
+                      ["crafting_table" 1] ["oak_stairs" 2] ["chest" 1] ["white_bed" 1] ["oak_door" 1]]}
+   :act [[:job (jobs.build.hut {:worth 1200 :blueprints ["starter-hut"] :plan "$plan:hut"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :plan "$plan:hut"}} :within-s 450 :of-job true}]}
+  {:name "nothing-carried-no-fetch-waits-no-items"
+   :body {:inventory []}
+   :act [[:job (jobs.build.hut {:worth 1200 :blueprints ["starter-hut"] :plan "$plan:hut" :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-items :blueprint "starter-hut"}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :child_started} :for-s 20}]
+   :limit-s 60}]}

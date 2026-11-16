@@ -1,5 +1,6 @@
 (ns jobs.lib.world
-  "What a job reads of its body's world (jobs.lib.world-files): plans, zones, claims, shared markers, plan authors and footprints."
+  "What a job reads of its body's world (jobs.lib.world-files): plans, blueprints, zones, claims, shared markers, plan authors and
+  footprints; and save-plan!, the one write."
   (:require [engine.ctx :as ctx]
             [jobs.lib.world-files :as world]))
 
@@ -9,6 +10,16 @@
   when the file is bad now and this is its last good copy."
   [ctx id]
   (world/plan (:world (:engine ctx)) id))
+
+(defn blueprint
+  "The body's world's blueprint id, nil when there is none or it was never readable."
+  [ctx id]
+  (world/blueprint (:world (:engine ctx)) id))
+
+(defn save-plan!
+  "Record plan (named by its :id) as a plan of the body's world (world-files/save-plan!): every job then reads it, its cells claimed."
+  [ctx plan]
+  (world/save-plan! (:world (:engine ctx)) plan))
 
 (defn unreadable?
   "Whether a plan answer is missing or broken: the plan may be saved or fixed later, so a job waits for it."

@@ -1577,7 +1577,7 @@
     (is (= :later (bound (safe-of 'jobs.animals.cull) night-hut {:center {:x 15 :z 0}})))))
 
 (deftest farm-and-build-jobs-bind-the-place-of-their-args
-  (doseq [job (remove '#{jobs.build.light-area jobs.build.from-plan jobs.build.repair jobs.farm.irrigate} work-jobs)]
+  (doseq [job (remove '#{jobs.build.light-area jobs.build.from-plan jobs.build.hut jobs.build.repair jobs.farm.irrigate} work-jobs)]
     (are [args world expected] (= expected (lit 0 15 #(bound (safe-of job) world args)))
       {:at [40 64 0]} night-hut :later
       {:at [6 64 0]} night-hut :ok)))

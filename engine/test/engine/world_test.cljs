@@ -1,6 +1,7 @@
 (ns engine.world-test
   "jobs.lib.world-files: the pure bookkeeping without a disk, then the reader over a temp dir."
   (:require [cljs.test :refer [deftest is are async]]
+            [cljs.reader]
             ["fs" :as fs]
             ["path" :as path]
             [engine.test-util :as tu]
@@ -126,6 +127,15 @@
     (is (= wheat (:plan (world/plan w "field"))))
     (is (= 1 (count (:cells (world/plan w "huts")))))
     (is (nil? (world/plan w "notes")))))
+
+(deftest a-saved-plan-is-a-file-every-reader-sees-at-once
+  (let [{:keys [plans bps w]} (reader)]
+    (write! bps "hut" (pr-str hut-bp))
+    (world/save-plan! w huts)
+    (is (= huts (:plan (world/answer @(:state w) "huts"))) "read back without waiting for the interval")
+    (is (= #{[5 64 5]} (set (keys @(:footprints @(:state w))))) "its cells are claimed")
+    (is (= [["huts.edn"] huts] [(vec (fs/readdirSync plans)) (cljs.reader/read-string (fs/readFileSync (path/join plans "huts.edn") "utf8"))])
+        "one whole file, no temp file left")))
 
 (deftest an-edit-of-the-asked-plan-is-seen-at-once-and-other-files-after-the-interval
   (let [{:keys [plans clock w]} (reader)]

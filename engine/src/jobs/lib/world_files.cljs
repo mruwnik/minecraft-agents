@@ -1,5 +1,5 @@
 (ns jobs.lib.world-files
-  "The world's shared knowledge as a body reads it. Bodies only read; nothing here writes a file.
+  "The world's shared knowledge as a body reads it. Bodies read; the one write is save-plan!, a plan a job placed.
   Files:
     worlds/<world>/plans/<id>.edn  plans, parsed with plan.parse and expanded with plan.shape
     blueprints/<id>.edn            the blueprints plans place (repo root)
@@ -397,6 +397,26 @@
     (let [file (some-> (get-in w [:opts :plans-dir]) (path/join (str id ".edn")))]
       (refresh! w (and file (not= (file-stamp file) (get-in @(:state w) [:plans id :stamp])))))
     (answer @(:state w) id)))
+
+(defn blueprint
+  "The last good copy of blueprint id, nil when there is none or it was never readable (nil for a nil world)."
+  [w id]
+  (when w
+    (refresh! w)
+    (value (get-in @(:state w) [:blueprints id]))))
+
+(defn save-plan!
+  "Write plan (named by its :id) as the world's plan file, whole and at once (a temp file renamed over it), then read the
+  files again: a job recording a plan it placed. A world without files (of-data) keeps it in memory."
+  [w plan]
+  (if-let [dir (get-in w [:opts :plans-dir])]
+    (let [file (path/join dir (str (:id plan) ".edn"))
+          temp (str file "." (.-pid js/process) ".tmp")]
+      (.mkdirSync fs dir #js {:recursive true})
+      (.writeFileSync fs temp (str (pr-str plan) "\n"))
+      (.renameSync fs temp file)
+      (refresh! w true))
+    (swap! (:state w) #(expand-all (assoc-in % [:plans (:id plan)] {:value plan}) %))))
 
 (defn first-time!
   "True the first time key is given to this world, false after: for warns said once per body process."

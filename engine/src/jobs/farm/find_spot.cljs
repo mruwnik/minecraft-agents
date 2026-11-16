@@ -16,18 +16,18 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Pick where a farm patch would go: the footprint of :plan (a plan id), else :w x :h. Ranks patches by their price in seconds
+  "Pick where a farm patch would go: the footprint of :plan (a plan id) or of :blueprint (a blueprint id), else :w x :h. Ranks patches by their price in seconds
   (jobs.lib.patch score-patch). It tries patches nearest-first and stops once ::limit spots are found that no farther ring can beat
   (the best score a farther ring could have, less its walk, is no more than the worst kept). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
   anything. A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
   parent does.
   The search is one jobs.explore.search child with :patch, its walks priced against a 3-day food reserve (cost/food-search-worth): it looks round and scans the area round :center (or the body); while no patch
   is found it walks that job's legs and scans where each ends (with :center, the centre again: spots stay within :range of it), and stops at the first patch.
-  With a :plan the patch is as big as the plan's cells in x and z, the farmland score counts only when the plan has crops or farmland, and
-  the plan's own cells are not in the way.
+  With a :plan or :blueprint the patch is as big as its cells in x and z, the farmland score counts only when it has crops or farmland, and
+  a plan's own cells are not in the way.
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible with cause and :why :distance (no leg left), :legs
-  (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
-  missing or unreadable), the search's :text and :best, the patch fewest cells short of a spot
+  (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan or
+  blueprint is missing or unreadable), the search's :text and :best, the patch fewest cells short of a spot
   {:pos :w :h :short :no-floor :foreign :steep :over-step :dark :unfarmable :far :away} (cells with lava or magma on top,
   another's; off height, a step over :max-step, too dark or untillable where the crops do not pay for the fix; :far, short 0, a patch whose crops pay for
   all but the walk). A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
@@ -48,6 +48,7 @@
 
 (a/defargs args
   {:plan {:doc "a plan id: the patch is the size of its cells; nil: :w x :h" :spec a/name? :default nil}
+   :blueprint {:doc "a blueprint id, without a :plan: the patch is the size of its cells" :spec a/name? :default nil}
    :w {:doc "patch width (x), 1 to 16; without a :plan" :spec (a/int-in 1 16) :default 5}
    :h {:doc "patch height (z), 1 to 16; without a :plan" :spec (a/int-in 1 16) :default 5}
    :range {:doc "patches lie within this many blocks of :center in x and z, 1 to 48" :spec (a/int-in 1 48) :default 24}
@@ -60,7 +61,7 @@
    ::limit {:default 3 :doc "How many spots to keep; the scan stops once that many good ones are found." :spec (a/int-in 1 8)}
    ::job-time-s {:default 300 :doc "Seconds the call may take, exploring included (a guess until measured)." :spec (a/num-in 0 nil)}})
 
-(def target [:center :plan :w :h])
+(def target [:center :plan :blueprint :w :h])
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe?
@@ -105,12 +106,13 @@
     (need/item-price c "bucket" 1 (need/fetch-opts c) nil)))
 
 (defn patch-of
-  "The :patch arg of the search for c's args a, or nil when the plan is missing, unreadable or empty."
+  "The :patch arg of the search for c's args a, or nil when the plan or blueprint is missing, unreadable or empty."
   [c a]
-  (let [fp (if (:plan a)
-             (let [pl (known/plan c (:plan a))]
-               (when-not (known/unreadable? pl) (footprint (:cells pl))))
-             (select-keys a [:w :h]))]
+  (let [fp (cond
+             (:plan a) (let [pl (known/plan c (:plan a))]
+                         (when-not (known/unreadable? pl) (footprint (:cells pl))))
+             (:blueprint a) (some-> (known/blueprint c (:blueprint a)) (shape/placed-cells {:at [0 0 0]} nil) footprint)
+             :else (select-keys a [:w :h]))]
     (when fp
       (merge fp (select-keys a [:plan :range :max-step]) (when-some [w (:patch-worth a)] {:worth w}) {:torches (torch/torches-held (:primitives c)) :bucket-s (bucket-s c)}
              {:depth (settings/get settings ::depth) :limit (settings/get settings ::limit)}))))
@@ -130,7 +132,7 @@
                   (ctx/end c :done nil {:spot (:pos (first spots)) :spots spots}))
               (let [why (or (:why res) :time)]
                 (ctx/end c :nothing-possible why (cond-> {:spot nil :why why} (:text res) (assoc :text (:text res)) (:best res) (assoc :best (:best res)))))))))
-      (ctx/end c :nothing-possible :no-plan {:spot nil :why :no-plan :text (str "plan " (:plan a) " is missing, unreadable or has no cells")}))))
+      (ctx/end c :nothing-possible :no-plan {:spot nil :why :no-plan :text (str (if (:plan a) "plan " "blueprint ") (or (:plan a) (:blueprint a)) " is missing, unreadable or has no cells")}))))
 
 (defn ^:async round
   "The whole attempt: the search child."
