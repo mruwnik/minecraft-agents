@@ -41,7 +41,7 @@
   - {:reason :not-loaded :pos}.
 
   A plant, flower or snow layer in the cell (jobs.lib.block-sets/clearable) is dug first with a jobs.blocks.dig child (no tool
-  needed, the drop is not collected); so is a leaves block alone in the way of the eye to a cell within reach (:see). When the walk to a stand that sees the cell fails, the first seen terrain block in the line within twice the reach (jobs.lib.blocks/through-natural; not :for-plan's own cell) is dug (a jobs.blocks.dig child), as a player does. Out of reach, the round walks within 3 cells (go-to child). In reach it places
+  needed, the drop is not collected); so is a leaves block alone in the way of the eye to a cell within reach (:see). The first seen terrain block in the line within twice the reach (jobs.lib.blocks/through-natural; not :for-plan's own cell) is dug (a jobs.blocks.dig child), as a player does, before any walk, unless a seen open cell beside the cell has ground to stand on (jobs.lib.blocks/open-side?: the walk to a stand that sees the cell goes first, and the dig follows when it fails). Out of reach, the round walks within 3 cells (go-to child). In reach it places
   through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
   jobs.survival.restore-broken.
 
@@ -273,7 +273,7 @@
       (= :done (:kind e)) :again)))
 
 (defn ^:async dig-through!
-  "A walk to a stand that sees pos failed and a seen terrain block (not :for-plan's own cell) lies in the line within reach:
+  "A seen terrain block (not :for-plan's own cell) lies in the line within reach:
   dig it, as a player does, unless it roofs the body's room at a shelter price over the place's worth (b/roof-kept against ctx/worth). :continue, :again, or nil when there is none or it could not be dug."
   [c pos]
   (let [hit (when (:through (:args c)) (b/through-cell c pos))
@@ -392,13 +392,14 @@
         (if (= :cleared w) :again w))
       dug dug
       (not (b/in-reach? c pos (:see (:args c))))
-      (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
-        (if (:unreachable w)
-          (or (await (dig-through! c pos))
-              (if-let [sight (b/sight-text c pos)]
-                (unreachable c pos items :out-of-sight sight)
-                (unreachable c pos items (:unreachable w) (:text w))))
-          w))
+      (or (when-not (b/open-side? c pos) (await (dig-through! c pos)))
+          (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
+            (if (:unreachable w)
+              (or (await (dig-through! c pos))
+                  (if-let [sight (b/sight-text c pos)]
+                    (unreachable c pos items :out-of-sight sight)
+                    (unreachable c pos items (:unreachable w) (:text w))))
+              w)))
       (= :own-body (:reason (place-verdict c pos items)))
       (let [r (await (step-off/step-off-zoned! c pos {}))]
         (cond (= :continue r) :continue

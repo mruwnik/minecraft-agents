@@ -410,6 +410,21 @@
           (is (= :out-of-sight (:why out)))
           (is (re-find #"no face of \[2 64 0\] is in sight from here, blocked by stone" (:text out))))))))
 
+(deftest sealed-water-in-reach-is-opened-by-a-dig-before-any-walk-and-filled
+  ;; Q209: water sealed in stone beside a stair cut; no stand sees it, so a walk to one tours away from the cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              env (bd/failing-walks (bd/setup {:self body :inventory (conj cobble {:name "iron_pickaxe" :count 1})
+                                               :blocks {"2,64,0" "water" "1,64,0" "stone" "3,64,0" "stone" "2,65,0" "stone"
+                                                        "2,64,1" "stone" "2,64,-1" "stone"}})
+                                    walks)
+              out (await (tu/child-outcome (:eng env) job {:pos [2 64 0] :item "cobblestone"} 20))]
+          (is (= :done (:status out)) (pr-str out))
+          (is (= 0 @walks))
+          (is (= "cobblestone" (bd/block-at (:p env) {:x 2 :y 64 :z 0}))))))))
+
 (deftest a-top-level-place-whose-walk-has-no-way-ends-instead-of-waiting
   (async done
     (tu/run-async done

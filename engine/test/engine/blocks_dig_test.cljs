@@ -604,7 +604,7 @@
 (deftest open-side-wants-safe-ground-under-a-seen-open-cell-beside-the-block
   (are [floor want] (let [env (setup {:self in-pit :blocks (assoc pit-blocks "5,62,0" "dirt" "6,62,0" "air" "6,61,0" floor)})
                           _ (tu/seeing-all (:p env))]
-                      (= want (boolean (dig/open-side? {:primitives (:p env)} {:x 5 :y 62 :z 0}))))
+                      (= want (boolean (b/open-side? {:primitives (:p env)} {:x 5 :y 62 :z 0}))))
     "stone" true
     "lava" false
     "water" false

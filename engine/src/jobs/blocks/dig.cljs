@@ -23,7 +23,6 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
-            [jobs.lib.reach :as reach]
             [jobs.lib.shelter.keep :as keep]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
@@ -47,7 +46,7 @@
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
-  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails), and unless that block roofs the body's room (jobs.lib.blocks/roof-price over 0, which skips the open-side rule) and go-to's quote of the walk costs less than the dig and that price (the walk keeps the shelter); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
+  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (jobs.lib.blocks/open-side?: the walk goes there first, and digs through only when that walk fails), and unless that block roofs the body's room (jobs.lib.blocks/roof-price over 0, which skips the open-side rule) and go-to's quote of the walk costs less than the dig and that price (the walk keeps the shelter); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); when that walk fails, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call, unless :pillar is false, and not from under a block that roofs the body's room when its shelter costs more than the dig's :worth: roof-kept!), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
   column to a cell beside it on a seen floor (a go-to child), then digs; with none to stand on it ends {:reason :hazard
@@ -406,22 +405,6 @@
                   :hazards (mapv :reason (:hazards (access/may-dig? (b/rules-in c) pos)))
                   :text (str "dig under the feet at " (pr-str [x y z]) ": " (name decision))}))))
 
-(defn open-side?
-  "Whether a seen open cell on or beside an open face of the block at pos has seen ground a body can stand on (not lava, water or any harmful block, not the block itself) and is not the body's own cell: a stand the walk may find, so nothing is dug through yet. It does not know whether that cell connects to the body: a failed walk falls back to the dig-through."
-  [c pos]
-  (let [[x y z] (b/cell pos)
-        feet (b/feet-cell c)
-        name-at (fn [x y z] (some-> (u/seen-block (:primitives c) {:x x :y y :z z}) .-name))
-        kind (fn [x y z] (some-> (u/seen-block (:primitives c) {:x x :y y :z z}) reach/kind-of))
-        ground? (fn [x y z] (let [n (name-at x y z)]
-                              (and n (= :solid (kind x y z)) (not (bs/fluids n)) (not (bs/harms-in-cell n)))))
-        stand? (fn [sx sy sz] (and (not= [sx sy sz] feet) (not= [sx (dec sy) sz] [x y z]) (= :open (kind sx sy sz)) (ground? sx (dec sy) sz)))]
-    (some (fn [[dx dy dz]]
-            (let [nx (+ x dx) ny (+ y dy) nz (+ z dz)]
-              (and (= :open (kind nx ny nz))
-                   (some (fn [[ex ez]] (stand? (+ nx ex) ny (+ nz ez))) [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
-          b/neighbours)))
-
 (defn roof-kept!
   "Whether breaking cell would cost more shelter than the dig is worth (b/roof-kept against ctx/worth): noted as :roof-kept in memory for the ending's data."
   [c cell]
@@ -445,7 +428,7 @@
   A block that roofs the body's room costs its shelter (b/roof-price): before-walk? it is left for the walk when the walk's
   quote (walk-cheaper?) costs less than the dig and that price; after a failed walk it is the only way, dug unless the
   price is over the dig's worth (roof-kept!).
-  Before the walk a block with an open side (open-side?) is left for the walk too, unless it roofs the room.
+  Before the walk a block with an open side (b/open-side?) is left for the walk too, unless it roofs the room.
   :again, :continue, or nil when there is no such block, it is kept, or the child could not dig it."
   [c pos before-walk?]
   (when-let [hit (when (:through (:args c)) (b/through-cell c pos))]
@@ -453,7 +436,7 @@
           walk (when (pos? price) (await (walk-cheaper? c pos hit price)))]
       (cond
         (= :continue walk) :continue
-        (and before-walk? (zero? price) (open-side? c pos)) nil
+        (and before-walk? (zero? price) (b/open-side? c pos)) nil
         (or walk (roof-kept! c hit)) nil
         :else
         (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]

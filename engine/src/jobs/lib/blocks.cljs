@@ -6,6 +6,7 @@
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.reach :as reach]
             [jobs.lib.cost.table :as table]
             [jobs.lib.aim :as aim]
             [engine.contract :as contract]
@@ -251,6 +252,22 @@
   (fresh-mem (ctx/mem c) pos))
 
 (def neighbours [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
+
+(defn open-side?
+  "Whether a seen open cell on or beside an open face of the block at pos has seen ground a body can stand on (not lava, water or any harmful block, not the block itself) and is not the body's own cell: a stand the walk may find, so nothing is dug through yet. It does not know whether that cell connects to the body: a failed walk falls back to the dig-through."
+  [c pos]
+  (let [[x y z] (cell pos)
+        feet (feet-cell c)
+        name-at (fn [x y z] (some-> (u/seen-block (:primitives c) {:x x :y y :z z}) .-name))
+        kind (fn [x y z] (some-> (u/seen-block (:primitives c) {:x x :y y :z z}) reach/kind-of))
+        ground? (fn [x y z] (let [n (name-at x y z)]
+                              (and n (= :solid (kind x y z)) (not (bs/fluids n)) (not (bs/harms-in-cell n)))))
+        stand? (fn [sx sy sz] (and (not= [sx sy sz] feet) (not= [sx (dec sy) sz] [x y z]) (= :open (kind sx sy sz)) (ground? sx (dec sy) sz)))]
+    (some (fn [[dx dy dz]]
+            (let [nx (+ x dx) ny (+ y dy) nz (+ z dz)]
+              (and (= :open (kind nx ny nz))
+                   (some (fn [[ex ez]] (stand? (+ nx ex) ny (+ nz ez))) [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
+          neighbours)))
 
 (defn unseen-near?
   "Whether the body has not sensed the cell pos or one of its six neighbours."
