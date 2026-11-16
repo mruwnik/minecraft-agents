@@ -189,6 +189,11 @@
                (not (== 1 (aget (.-doorHalf table) own)))
                (zero? (aget (.-climb table) own))))))))
 
+(defn- with-one-way
+  "steps with :one-way on each the planner marked oneWay (isOneWay: a step the body cannot undo)."
+  [steps ^js js-steps]
+  (into [] (map-indexed (fn [i s] (cond-> s (.-oneWay (aget js-steps i)) (assoc :one-way true)))) steps))
+
 (defn path-steps
   "The executor's steps for a planner path over pw: lava beside a step, corner free sides and hops, high corners, gap ceilings
   and drops onto a bouncing block marked, the planned damage of each, and over a masked snapshot the unseen floors (jobs.lib.walk.sight) and
@@ -202,7 +207,7 @@
                   executor/policy
                   (executor/with-high-corners
                     executor/policy
-                    (executor/with-corner-hops (executor/with-free-sides (with-light (with-damage (executor/with-lava-sides (executor/steps-of (.-steps path)) (wworld/lava-fn pw)) (.-steps path)) (.-steps path)) solid?) solid?)
+                    (executor/with-corner-hops (executor/with-free-sides (with-light (with-damage (executor/with-lava-sides (with-one-way (executor/steps-of (.-steps path)) (.-steps path)) (wworld/lava-fn pw)) (.-steps path)) (.-steps path)) solid?) solid?)
                     solid?)
                   solid?)
                 (wworld/bounce-fn pw)
@@ -418,12 +423,9 @@
              (not (and speculative? (not small?) (sealed? p (vec at)) (no-way? {:drop-steps (way-steps/barred-steps c)}))))))))
 
 (defn one-way-step?
-  "Whether step b after step a lands after a drop of 2 or more, a gap jump down (a step the body cannot undo) or any drop
-  onto a floor not seen (it may be a deeper fall)."
-  [a b]
-  (and (#{:drop :gap} (:move b))
-       (> (:y a) (:y b))
-       (or (:unseen-floor b) (> (- (:y a) (:y b)) (if (= :gap (:move b)) 0 1)))))
+  "Whether step b (after step a) is one the body cannot undo, by the planner's own judgement (isOneWay, :one-way on the step)."
+  [_a b]
+  (boolean (:one-way b)))
 
 (defn drop-index
   "Index in steps of the first one-way-step?, nil when none."

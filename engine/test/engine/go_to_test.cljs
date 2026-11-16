@@ -1559,3 +1559,10 @@
           (is (= [0 64 0] (at p)))
           (let [e (:ending (meta @out))]
             (is (= [:nothing-possible :aboard :dismount-failed] [(:kind e) (:cause e) (:cause (:because e))]))))))))
+
+(deftest one-way-step-is-the-planners-judgement-not-the-drop-height
+  (let [a {:x 0 :y 70 :z 0}]
+    (are [b one-way?] (= one-way? (wplan/one-way-step? a b))
+      {:x 1 :y 68 :z 0 :move :drop} false
+      {:x 1 :y 69 :z 0 :move :drop :unseen-floor true} false
+      {:x 1 :y 68 :z 0 :move :drop :one-way true} true)))

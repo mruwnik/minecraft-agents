@@ -359,3 +359,23 @@
           [x] (last-cell r)]
       (is (= ["partial" "budget"] [(:status r) (:reason r)]))
       (is (<= x 10) "on the field, not in the lane"))))
+
+(def ledge-far [(stone -2 -2 60 60 70) (stone 61 -2 62 6 67) (stone 61 7 62 60 67)])
+(def ledge-goal (near 62 67 2))
+
+(deftest a-found-path-marks-the-drop-it-cannot-undo-and-no-other-step
+  (let [steps (get-in (run ledge-far plateau ledge-goal) [:path :steps])]
+    (is (= "found" (:status (run ledge-far plateau ledge-goal))))
+    (is (= [true] (vec (keep :oneWay steps))))
+    (is (= DROP (:move (first (filter :oneWay steps)))))))
+
+(deftest a-returnable-drop-is-not-marked
+  (let [steps (get-in (run [(stone -2 -2 10 6 70) (stone 11 -2 20 6 69)] plateau (near 18 69 2)) [:path :steps])]
+    (is (some #(= DROP (:move %)) steps))
+    (is (empty? (keep :oneWay steps)))))
+
+(deftest the-way-round-a-one-way-step-searches-no-more-nodes-than-the-search-made
+  (let [closed (run ledge-far plateau ledge-goal {:oneWayClosed true})
+        whole-land (run (conj ledge-far (stone 80 -2 90 6 70)) plateau (near 85 70 2))]
+    (is (= {:move DROP :x 61 :y 67 :z 2} (one-way-of closed)) "no way round")
+    (is (< (:expanded closed) (/ (:expanded whole-land) 2)))))

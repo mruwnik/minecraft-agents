@@ -79,6 +79,8 @@
             (when (pos? (aget (.-airs s) i)) (unchecked-set step "air" (aget (.-airs s) i)))
             (let [dmg (- (aget (.-dmgs s) i) (if (neg? (aget (.-parents s) i)) 0 (aget (.-dmgs s) (aget (.-parents s) i))))]
               (when (pos? dmg) (unchecked-set step "damage" dmg)))
+            (when (and (or (== (aget (.-moves s) i) MOVE-DROP) (== (aget (.-moves s) i) MOVE-GAP)) (>= (aget (.-parents s) i) 0) ^boolean (.isOneWay s i))
+              (unchecked-set step "oneWay" true))
             (when (pos? (aget (.-opens s) i)) (unchecked-set step "opens" (aget ^js (.-open-lists s) (dec (aget (.-opens s) i)))))
             (let [p (aget (.-parents s) i)
                   wall (.hatchWall s x (aget (.-ys s) i) z)]
