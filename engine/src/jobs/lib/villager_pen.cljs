@@ -115,11 +115,16 @@
   (some->> (boxed p ws) :entry (filter #(solid? (name-at p %))) first))
 
 (defn luring
-  "The layout of the pen built at ws with the body boxed in its stand (boxed) and the near end open: the body sees out
-  only through the pen, where a villager walks in; else nil."
+  "The layout of the pen at ws with the body boxed in its stand (no side open to walk out by), the top slab on, no shut
+  cell seen open and the near end open: the body sees out only through the pen, where a villager walks in; else nil.
+  Shut cells never seen count for it: from the stand the eye does not reach the pen's walls (jobs.village.pen looks)."
   [p ws]
-  (let [lay (boxed p ws)]
-    (when (and lay (not (plug-shut? p lay))) lay)))
+  (some (fn [side]
+          (let [lay (layout ws side)]
+            (when (and (at-stand? p lay) (not (way-in? p lay)) (top-slab? p (:slab lay))
+                       (not-any? #(name-at p %) (owed p (:shut lay))) (not (plug-shut? p lay)))
+              lay)))
+        sides))
 
 (defn built?
   "Whether a pen stands at workstation cell ws: a top slab seen where one side's layout puts it."

@@ -13,6 +13,7 @@
             [jobs.lib.look :as look]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.util :as u]
             [jobs.village.roll :as roll]))
 
 (def job 'jobs.village.roll)
@@ -164,12 +165,25 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"4,64,0" "air" "4,65,0" "air"}
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")] {:pos {:x 4 :y 64 :z 0}})] :blocks {"4,64,0" "air" "4,65,0" "air"}
                                             :wrap #(do (tu/seeing-all (:p %)) %)
                                             :scripts [[(offer "enchanted_book")]]}
                                            {}))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) (pr-str result))
           (is (not-any? #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "no pen child: the pen stands but is open"))))))
+
+(deftest a-villager-working-the-lectern-from-inside-an-open-pen-is-shut-in-before-the-break
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pen-waits (fn [env]
+                          (let [j (get (:jobs (:eng env)) 'jobs.village.pen)]
+                            (assoc-in env [:eng :jobs 'jobs.village.pen] (assoc j :round (fn ^:async waiting [c] :continue)))))
+              [_ p seen] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"4,64,0" "air" "4,65,0" "air"}
+                                       :wrap (comp pen-waits #(do (tu/seeing-all (:p %)) %))}
+                                      {:spend {:wall-time 30}}))]
+          (is (some #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "the pen child plugs the near end")
+          (is (zero? (digs p)) "no break while the near end is open behind the villager"))))))
 
 (deftest a-villager-nearer-another-job-site-than-its-lectern-is-penned-before-the-first-break
   (async done
@@ -526,6 +540,36 @@
                                                    #(do (tu/seeing-all (:p %)) %))}
                                       {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
+          (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
+
+(defn walls-unseen-from-the-stand
+  "env whose body has not seen the pen cell's walls and roof until it first stands outside the stand (the eye in the
+  stand does not reach them)."
+  [{:keys [p] :as env}]
+  (let [hidden #{[3 64 1] [3 65 1] [3 66 1] [3 64 -1] [3 65 -1] [3 66 -1] [3 66 0]}
+        out? (atom false)
+        sensed (.-sensedAt p)]
+    (tu/set-sensed! p (fn [pos]
+                        (when (not= [1 64 0] (u/cell-vec (.-pos (.self p)))) (reset! out? true))
+                        (if (and (not @out?) (hidden [(.-x pos) (.-y pos) (.-z pos)]))
+                          #js {:unknown true :pos pos}
+                          (.call sensed p pos))))
+    env))
+
+(deftest a-villager-out-of-view-of-the-body-boxed-in-a-pen-whose-walls-it-never-saw-is-left-to-the-pen-not-walked-toward
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (roll {:entities [(jobless {:pos {:x 60 :y 64 :z 3}})] :keeps-job? true
+                                            :blocks {"4,64,0" "air" "4,65,0" "air" "4,63,0" "stone" "8,64,0" "lectern"}
+                                            :inventory [{:name "cobblestone" :count 8} {:name "torch" :count 2}]
+                                            :wrap (comp walls-unseen-from-the-stand (walks-in-and-takes-the-job [(offer "enchanted_book")] 60000)
+                                                        (ticking! 1000) #(do (tu/seeing-all (:p %)) %))}
+                                           {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])) (pr-str result))
+          (is (some #(and (= :child_started (:kind %)) (= :pen (:slot %))) @seen) "the pen child looks at the walls and waits")
+          (is (not-any? #(and (= :child_started (:kind %)) (= :walk (:slot %)) (not (re-find #"/pen/" (str (:job %))))) @seen)
+              "no walk of the roll's own")
           (is (= ["cobblestone" "cobblestone"] (map #(get-in @(fake/state p) [:blocks %]) [[4 64 0] [4 65 0]]))))))))
 
 (deftest a-penned-villager-kept-from-its-free-workstation-by-anothers-claim-takes-it-after-one-break

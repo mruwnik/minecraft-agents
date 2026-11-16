@@ -295,7 +295,7 @@
         lay (lay-of c)
         block (vp/name-at p ws)
         in? (boolean (and e lay (vp/inside? lay e)))]
-    (when (and e lay) (ctx/update-mem! c assoc :side (:side lay)))
+    (when lay (ctx/update-mem! c assoc :side (:side lay)))
     (cond
       (and (nil? e) (nil? lay)) (stop! c :condition-failed :villager-out-of-view)
       (nil? lay) (stop! c :nothing-possible :no-room {:text (str "no side of " (pr-str ws) " has a cell, a stand and a near end open for a villager")})

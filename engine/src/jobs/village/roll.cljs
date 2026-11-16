@@ -479,15 +479,18 @@
 
 (defn held?
   "Whether the villager e is shut in its pen, or at its site (at-its-site?) with no pen built round the workstation, or
-  working it (it has a job) with the workstation in reach of the body, a pen standing or not. A jobless one at a built pen is
-  the pen child's: it plugs the end behind it."
+  working it (it has a job) from outside a built pen's cell with the workstation in reach of the body. One in the cell of
+  a pen whose near end is open is the pen child's, jobless or not: it plugs the end behind it, else the break sends the
+  villager out."
   [c e]
   (let [p (:primitives c)
-        pos (:pos (b/parse (:args c)))]
+        pos (:pos (b/parse (:args c)))
+        ws (b/cell pos)]
     (or (penned? c e)
         (and (at-its-site? c e)
-             (or (not (vp/built? p (b/cell pos)))
-                 (and (not= "unemployed" (.-profession e)) (b/in-reach? c pos true)))))))
+             (or (not (vp/built? p ws))
+                 (and (not= "unemployed" (.-profession e)) (b/in-reach? c pos true)
+                      (not-any? #(and (vp/top-slab? p (:slab %)) (vp/inside? % e)) (map #(vp/layout ws %) vp/sides))))))))
 
 (defn ^:async pen!
   "The villager is not shut in its pen: a jobs.village.pen child (slot :pen) shuts it in. :again once it is, or once the
