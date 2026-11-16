@@ -192,8 +192,10 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :locked}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "absent-villager-is-gone"
-   :act [[:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000003" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 30 :of-job true}]
+   ;; by day the roll searches round the workstation first (jobs.lib.villager/search!): a radius inside the plot
+   :act [[:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-000500000003" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.lib.villager/search-radius 12}})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :search}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 200 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "other-block-on-the-cell-waits-occupied"
    :blocks [[:fill [16 0 16] [16 0 16] "stone"]]

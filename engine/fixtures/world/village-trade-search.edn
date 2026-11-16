@@ -20,6 +20,7 @@
    :expect [{:event {:source :job :kind :completed :data {:profession "farmer"}} :within-s 220 :of-job true}]
    :after [[:item "bread" 0] [:item "emerald" 8]]}
   {:name "trade-with-no-villager-in-the-search-radius-ends-gone"
-   :act [[:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-000b0000034b" :buy "bread" :count 6})]]
+   ;; a search radius that keeps the search inside the plot (the body stands 7.5 blocks from its east edge)
+   :act [[:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-000b0000034b" :buy "bread" :count 6 :settings {:jobs.lib.villager/search-radius 7}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 220 :of-job true}]
    :after [[:item "bread" 0] [:item "emerald" 8]]}]}
