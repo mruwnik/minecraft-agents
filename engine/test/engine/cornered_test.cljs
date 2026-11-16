@@ -2719,3 +2719,24 @@
     (ran-at! 500)
     (ran-at! 900)
     (is (= [500 900] ((juxt :legs-at :ran-at) @m)) "a later leg keeps the first leg's time")))
+
+;; Brindle S9-U8: a pillar in the order is taken only while a fresh weigh, with the inputs of the first (back-off, fight walk),
+;; still names it the cheapest answer under fire.
+(defn ^:async pillars-vs-skeletons
+  "The jumpPlace calls of a flight from a doorway room with skeletons at the xs (and a creeper beside if creeper?), arrows felt if shot?."
+  [creeper? xs shot?]
+  (let [{:keys [eng p]} (setup {:blocks doorway :inventory [{:name "cobblestone" :count 3}]
+                                :entities (into (if creeper? [(creeper 0 64 2.5)] [])
+                                                (map-indexed (fn [i x] (assoc (skeleton x 64 0.5) :id (+ 20 i) :visible true)) xs))})]
+    (when shot?
+      (dotimes [_ 3] (mem/write! (:store eng) :hurt {:amount 2 :damageType "minecraft:arrow" :attacker {:id 20 :name "skeleton"}} {:cap 50 :ttl 60000})))
+    (core/submit! eng (order eng retreat) {})
+    (js/setTimeout #(swap! (fake/state p) assoc :entities []) 3000)
+    (await (core/tick! eng))
+    (count (calls p "jumpPlace"))))
+
+(deftest a-pillar-is-not-built-under-fire-once-a-fresh-weigh-prices-it-dearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (zero? (await (pillars-vs-skeletons true [3 4 5] true))) "skeletons 3-5 off and a shot felt: the pillar tops in their line of fire")))))
