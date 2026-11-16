@@ -99,13 +99,28 @@
   [p lay]
   (boolean (some (fn [pair] (every? #(bs/passable? (name-at p %)) pair)) (partition 2 (:box lay)))))
 
+(defn owed-with-villager-in
+  "The shut cells of lay owed (owed) while a villager stands in V, V's floor and roof never seen left out: from the stand
+  the top slab hides them, the villager standing there is held up by the floor, and no villager climbs walls three high."
+  [p lay]
+  (let [[x y z] (:cell lay)
+        hidden #{[x (dec y) z] [x (+ y 2) z]}]
+    (filterv #(not (and (hidden %) (nil? (name-at p %)))) (owed p (:shut lay)))))
+
+(defn owed-shut
+  "The shut cells of lay owed: owed-with-villager-in when an adult villager stands in its cell, else all of owed."
+  [p lay]
+  (if (some #(inside? lay %) (villager/adults p))
+    (owed-with-villager-in p lay)
+    (owed p (:shut lay))))
+
 (defn boxed
   "The layout of the pen built at workstation cell ws (its shut cells solid, the top slab on) whose stand the body stands
   boxed in (no side open to walk out by), else nil: a dead end next to a workstation is no pen."
   [p ws]
   (some (fn [side]
           (let [lay (layout ws side)]
-            (when (and (at-stand? p lay) (not (way-in? p lay)) (empty? (owed p (:shut lay))) (top-slab? p (:slab lay)))
+            (when (and (at-stand? p lay) (not (way-in? p lay)) (empty? (owed-shut p lay)) (top-slab? p (:slab lay)))
               lay)))
         sides))
 
@@ -130,14 +145,6 @@
   "Whether a pen stands at workstation cell ws: a top slab seen where one side's layout puts it."
   [p ws]
   (boolean (some #(top-slab? p (:slab (layout ws %))) sides)))
-
-(defn owed-with-villager-in
-  "The shut cells of lay owed (owed) while a villager stands in V, V's floor and roof never seen left out: from the stand
-  the top slab hides them, the villager standing there is held up by the floor, and no villager climbs walls three high."
-  [p lay]
-  (let [[x y z] (:cell lay)
-        hidden #{[x (dec y) z] [x (+ y 2) z]}]
-    (filterv #(not (and (hidden %) (nil? (name-at p %)))) (owed p (:shut lay)))))
 
 (defn penned
   "The layout of the pen at workstation cell ws holding villager entity e (id its ident): shut (owed-with-villager-in),

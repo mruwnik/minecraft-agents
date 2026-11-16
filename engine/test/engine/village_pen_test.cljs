@@ -80,6 +80,14 @@
     (is (nil? (exit (world (merge plug box)))) "no pen round the lectern: a wall is no way out of a pen")
     (is (nil? (exit (world full {:slab? false}))))))
 
+(deftest a-body-boxed-in-with-the-villager-in-the-cell-has-an-exit-cell-though-the-cell-s-floor-and-roof-are-never-seen
+  (let [hidden #{[1 63 0] [1 66 0]}
+        p (tu/fake (merge {:self at-stand :entities [(jobless {:x 1.5 :y 64 :z 0.5})]} (world (merge shut plug box))))
+        sensed (.-sensedAt p)]
+    (tu/set-sensed! p (fn [q] (if (hidden [(.-x q) (.-y q) (.-z q)]) #js {:unknown true :pos q} (sensed q))))
+    (is (some? (vp/boxed p ws)))
+    (is (some? (vp/exit-cell p ws)))))
+
 (deftest a-villager-is-penned-only-shut-in-under-the-slab-alone-lit-and-the-body-boxed-in-behind
   (let [in (clj->js {:pos {:x 1.5 :y 64 :z 0.5}})
         penned? (fn [spec] (some? (vp/penned (tu/fake (merge {:self at-stand} spec)) ws in)))
