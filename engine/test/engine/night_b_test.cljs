@@ -574,6 +574,21 @@
       (is (= {:x 0 :y 64 :z 0} (pit-site/relocation-site c))))
     (is (= 1 @tested) "the nearest site is the cheapest: no other column is tested")))
 
+(deftest a-relocation-site-reads-each-ground-block-s-harvest-tools-and-each-failed-site-s-radius-once-not-per-column
+  (let [dirt (into {} (for [x (range -12 13) z (range -12 13)] [(str x ",63," z) "dirt"]))
+        p (tu/seeing-all (tu/fake {:blocks dirt}))
+        c {:primitives p :id "j" :args {:for :night} :slots [] :engine {:warned (atom #{})} :view (fn [] {:now 0 :data {}})}
+        harvest (atom {})
+        radius (atom 0)
+        real-tools (.-harvestTools p)
+        real-radius pit-site/site-radius]
+    (aset p "harvestTools" (fn [n] (swap! harvest update n (fnil inc 0)) (real-tools n)))
+    (with-redefs [pit-site/failed (constantly [{:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor}])
+                  pit-site/site-radius (fn [e] (swap! radius inc) (real-radius e))]
+      (is (some? (pit-site/relocation-site c))))
+    (is (= {"dirt" 2} @harvest) "once for the columns, all dirt, once in the winner's whole test (pit-site?)")
+    (is (= 2 @radius) "once where the walk is priced from (walk-from), once for the columns")))
+
 (deftest a-relocation-site-passes-a-cheapest-column-that-fails-the-whole-test
   (let [dirt (into {} (for [x (range -4 5) z (range -4 5)] [(str x ",63," z) "dirt"]))
         p (tu/seeing-all (tu/fake {:blocks (assoc dirt "0,63,-1" "water")}))

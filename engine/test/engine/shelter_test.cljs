@@ -2,6 +2,7 @@
   "Surviving the night: the night trigger and the night, sleep,
   log-out and dig-in jobs against the fake world."
   (:require [jobs.lib.shelter.fill :as fill]
+            [jobs.lib.reach.room :as reach-room]
             [cljs.test :refer [deftest is are async]]
             [engine.settings :as settings]
             [engine.registry :as registry]
@@ -1641,6 +1642,15 @@
     (is (= #{{:x 5 :y 64 :z -3} {:x 5 :y 65 :z -3} {:x 4 :y 65 :z -3} {:x 6 :y 64 :z -3} {:x 6 :y 65 :z -3}}
            (set (fill/open-cells p {:x 5 :y 64 :z -2})))
         "the outside side and corners, the cell over the chest, none in the room")))
+
+(deftest open-cells-of-a-body-with-no-roof-over-it-or-beside-it-flood-no-room
+  ;; every room the fill spares holds the feet or a column beside them and is roofed over every cell (Q202: a decision fits a tick)
+  (let [p (tu/seeing-all (tu/fake {}))
+        floods (atom 0)
+        real reach-room/room-flood]
+    (with-redefs [reach-room/room-flood (fn [& xs] (swap! floods inc) (apply real xs))]
+      (is (= 10 (count (fill/open-cells p {:x 0 :y 64 :z 0}))) "sides, support, roof"))
+    (is (zero? @floods))))
 
 (deftest open-cells-leave-a-doorless-closed-room-the-body-stands-in-the-wall-of
   (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z -2} {"5,64,-2" "air" "5,65,-2" "air" "5,64,2" "cobblestone" "5,65,2" "cobblestone"}))]

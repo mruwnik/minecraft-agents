@@ -100,34 +100,39 @@
 
 (defn shut-rooms
   "The rooms (reach-room/room*'s answers) room-columns takes its columns from, but for the hostiles in them; kept per body
-  while the world and its memory stay the same (reach-room/kept): a shelter's quote and its checks ask it several times."
+  while the world and its memory stay the same (reach-room/kept): a shelter's quote and its checks ask it several times.
+  None, and no flood, when neither the feet cell nor a column beside it is roofed: every room taken holds one of those cells
+  (its flood's start) and is roofed over every cell."
   [p {:keys [x y z] :as feet}]
   (reach-room/kept
    p (str "shut-rooms|" x "|" y "|" z)
    (fn [_]
-     (let [base (reach-room/shut-kind-at p)
-           kind-at (reach-room/room-kind-at p (fn [cx cy cz] (if (and (== cx x) (== cz z) (<= y cy (inc y))) :solid (base cx cy cz))))
-           roofed? (fn [{:keys [cells]}]
-                     (every? (fn [[cx cy cz]] (let [cell {:x cx :y cy :z cz}]
-                                                (and (sh-sense/room-roofed? p cell) (<= (u/dist feet cell) sh-sense/spawn-free-radius))))
-                             cells))]
-       (if (reach-room/kept-flood p x y z false)
-         (let [room (reach-room/room p feet)
-               beside? (fn [{cx :x cy :y cz :z}] (and (== y cy) (== 1 (+ (js/Math.abs (- cx x)) (js/Math.abs (- cz z))))))]
-           (if (and room (seq (:doors room)) (roofed? room) (every? #(or (nil? (open-openable p (:cell %))) (beside? (:cell %))) (:doors room)))
-             [room]
-             []))
-         (first
-          (reduce (fn [[rooms found :as acc] [dx dz]]
-                    (let [col [(+ x dx) (+ z dz)]]
-                      (if (or (contains? found col) (not (sh-sense/room-roofed? p {:x (first col) :y y :z (second col)})))
-                        acc
-                        (let [room (reach-room/room* p {:x (first col) :y y :z (second col)} kind-at)]
-                          (if (and room (contains? (:cells room) [(first col) y (second col)]) (roofed? room))
-                            [(conj rooms room) (into found (map (fn [[cx _ cz]] [cx cz])) (:cells room))]
-                            acc)))))
-                  [[] #{}]
-                  (concat sides corners))))))))
+     (if (and (not (sh-sense/room-roofed? p feet))
+              (not-any? (fn [[dx dz]] (sh-sense/room-roofed? p {:x (+ x dx) :y y :z (+ z dz)})) (concat sides corners)))
+       []
+       (let [base (reach-room/shut-kind-at p)
+             kind-at (reach-room/room-kind-at p (fn [cx cy cz] (if (and (== cx x) (== cz z) (<= y cy (inc y))) :solid (base cx cy cz))))
+             roofed? (fn [{:keys [cells]}]
+                       (every? (fn [[cx cy cz]] (let [cell {:x cx :y cy :z cz}]
+                                                  (and (sh-sense/room-roofed? p cell) (<= (u/dist feet cell) sh-sense/spawn-free-radius))))
+                               cells))]
+         (if (reach-room/kept-flood p x y z false)
+           (let [room (reach-room/room p feet)
+                 beside? (fn [{cx :x cy :y cz :z}] (and (== y cy) (== 1 (+ (js/Math.abs (- cx x)) (js/Math.abs (- cz z))))))]
+             (if (and room (seq (:doors room)) (roofed? room) (every? #(or (nil? (open-openable p (:cell %))) (beside? (:cell %))) (:doors room)))
+               [room]
+               []))
+           (first
+            (reduce (fn [[rooms found :as acc] [dx dz]]
+                      (let [col [(+ x dx) (+ z dz)]]
+                        (if (or (contains? found col) (not (sh-sense/room-roofed? p {:x (first col) :y y :z (second col)})))
+                          acc
+                          (let [room (reach-room/room* p {:x (first col) :y y :z (second col)} kind-at)]
+                            (if (and room (contains? (:cells room) [(first col) y (second col)]) (roofed? room))
+                              [(conj rooms room) (into found (map (fn [[cx _ cz]] [cx cz])) (:cells room))]
+                              acc)))))
+                    [[] #{}]
+                    (concat sides corners)))))))))
 
 (defn room-columns
   "The [x z] columns beside the feet whose feet-height cell lies in a closed room (reach-room/room*, the

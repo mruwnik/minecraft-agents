@@ -85,10 +85,13 @@
   (let [here (sh-sense/feet (:primitives c))]
     (boolean (some #(<= (u/dist here (:pos (:data %))) (shut-night/futile-radius)) (ctx/entries c :night-exposed)))))
 
-(defn clear-of?
-  "Whether feet cell f is at least site-radius+1 from every one of the failed sites (entries of failed)."
-  [fails f]
-  (every? #(>= (u/dist (:pos %) f) (inc (site-radius %))) fails))
+(defn clear-of-fn
+  "(f) -> whether feet cell f is at least site-radius+1 from every one of the failed sites (entries of failed)."
+  [fails]
+  (let [far (mapv (fn [e] [(:pos e) (inc (site-radius e))]) fails)]
+    (fn [f] (every? (fn [[pos r]] (>= (u/dist pos f) r)) far))))
+
+(defn clear-of? "clear-of-fn's answer for feet cell f." [fails f] ((clear-of-fn fails) f))
 
 (defn clear-of-failed?
   "Whether feet cell f is at least site-radius+1 from every failed site."
@@ -98,16 +101,16 @@
 (defn- unseen-or-room? [name] (or (nil? name) (solid/room? name)))
 
 (defn standing?
-  "Whether the three block names (below, at, over the feet; each a fn of no args) leave standing room over ground the carried tools dig and a body can stand on (not bs/bad-floor)."
-  [p below at over]
-  (and (solid/solid? (below)) (not (bs/bad-floor (below))) (unseen-or-room? (at)) (unseen-or-room? (over)) (tools/can-harvest? p (below))))
+  "Whether the three block names (below, at, over the feet; each a fn of no args) leave standing room over ground the carried tools dig (harvest?, a fn of the block name) and a body can stand on (not bs/bad-floor)."
+  [harvest? below at over]
+  (and (solid/solid? (below)) (not (bs/bad-floor (below))) (unseen-or-room? (at)) (unseen-or-room? (over)) (harvest? (below))))
 
 (defn pit-site?
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
   ground the carried tools dig, no fluid beside it. How deep the ground goes is left to the pit, which stops a bad site."
   [p {:keys [x y z] :as f}]
   (let [below {:x x :y (dec y) :z z}]
-    (and (standing? p #(u/seen-name p below) #(u/seen-name p f) #(u/seen-name p {:x x :y (inc y) :z z}))
+    (and (standing? #(tools/can-harvest? p %) #(u/seen-name p below) #(u/seen-name p f) #(u/seen-name p {:x x :y (inc y) :z z}))
          (not (dig-cells/wet? p f)) (not (dig-cells/wet? p {:x x :y (inc y) :z z}))
          (not (dig-cells/wet? p below))
          (not (dig-cells/lateral-fluid p below)))))
@@ -159,7 +162,8 @@
                            :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))]
                        [dx dz])
                      (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))))
-        fails (failed c)
+        clear? (clear-of-fn (failed c))
+        harvest? (memoize #(tools/can-harvest? p %))
         walk #(walk-pick/walk-s from {:pos %})
         lower-bounds (fn [[dx dz] n]
                        (let [cx (+ x dx)
@@ -169,7 +173,7 @@
                          (keep-indexed (fn [i dy]
                                          (let [f {:x cx :y (+ y dy) :z cz}
                                                at #(deref (names (+ dy %)))]
-                                           (when (and (clear-of? fails f) (standing? p #(at -1) #(at 0) #(at 1)))
+                                           (when (and (clear? f) (standing? harvest? #(at -1) #(at 0) #(at 1)))
                                              [(+ w (stay-toll-s c danger-near f)) n i f false])))
                                        [0 -1 1 -2 2])))]
     (loop [[col & more :as left] columns n 0 pool (sorted-set)]
