@@ -8,6 +8,7 @@
 ;; A body boxed in its stand cannot see the pen's side walls: the pen cases start
 ;; beside the pen, look at it from both sides, and are teleported into the stand before the job; roll-librarian-boxed-in-never-seen-pen-walls-digs-out-to-look
 ;; starts boxed in: the pen child digs the box's entry, walks out to see the walls and shuts the box again.
+;; The three sealed-pen cases (sealed-cell, through-the-lectern, sealed-in-dirt) show the body the pen's y+2 cells from inside the villager's cell first: from the stand the roof cells are out of sight, and an unseen cell counts as owed.
 ;; roll-three-times-in-one-call: three rerolls in one call (no villager offers a netherite ingot), then no-match; the report counts every lectern picked up (yields = uses).
 ;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
 ;; roll-villager-walled-in-at-night-is-waited-for-not-gone: a named villager out of sight at night is waited for till day, not :gone.
@@ -105,7 +106,9 @@
             [:set [13 1 16] "oak_slab[type=top]"] [:set [12 2 16] "glowstone"] [:fill [15 0 16] [15 1 16] "stone"]]
    :body {:at [14.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [12.5 0 16.5] "{UUID:[I;20260,7,5,10],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
-         [:wait-s 2]
+         [:wait-s 2] [:rcon "execute positioned $X $Y $Z run tp $BODY ~12 ~ ~16 0 -30"] [:wait-s 2]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 -30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -40"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -80"] [:wait-s 1]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~14 ~ ~16 90 0"] [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-00050000000a" :pos #at [13 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
    :after [[:block [13 0 16] "lectern"] [:block [13 1 15] "stone"] [:block [13 1 17] "stone"] [:block [12 1 15] "stone"]
@@ -123,7 +126,9 @@
             [:set [16 2 16] "glowstone"] [:set [18 2 16] "stone"] [:fill [18 0 15] [18 1 15] "stone"] [:fill [18 0 17] [18 1 17] "stone"] [:fill [19 0 16] [19 1 16] "stone"]]
    :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [16.4 0 16.5] "{UUID:[I;20260,7,5,11],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
-         [:wait-s 2]
+         [:wait-s 2] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16 0 -30"] [:wait-s 2]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 -30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -40"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -80"] [:wait-s 1]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~18 ~ ~16 90 0"] [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-00050000000b" :pos #at [17 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
    :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
@@ -157,7 +162,9 @@
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [18 2 15] #at [19 6 17]] :want "dirt"}]}]
    :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [16.4 0 16.5] "{UUID:[I;20260,7,5,31],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
-         [:wait-s 2]
+         [:wait-s 2] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16 0 -30"] [:wait-s 2]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 -30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -40"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -80"] [:wait-s 1]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~18 ~ ~16 90 0"] [:wait-s 2]
          [:job (jobs.village.roll {:worth 1200 :villager "00004f24-0000-0007-0000-00050000001f" :pos #at [17 0 16] :profession "librarian" :want "netherite_ingot" :ways #{:carried} :settings {:jobs.village.roll/max-rolls 3}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 230 :of-job true}]
    :after [[:block [18 2 16] "dirt"] [:block [18 3 16] "dirt"] [:block [18 4 16] "dirt"] [:block [19 0 16] "dirt"] [:block [18 0 15] "dirt"] [:block [18 0 17] "dirt"]]}
