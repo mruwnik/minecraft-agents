@@ -647,7 +647,8 @@
     (is (= "forceload add 20000 20000 20031 20031" (first cmds)))
     (is (every? (set cmds) (f/clear-commands grid origin 31 "stone")) "the plot is cleared to its full height")
     (is (some #(re-find #"^kill " %) cmds))
-    (is (= "forceload remove 20000 20000 20031 20031" (last cmds)))
+    (is (= ["forceload remove 20000 20000 20031 20031" "forceload remove 25000 20000 25031 20031"] (take-last 2 cmds))
+        "the far respawn pad's forceload goes too: a killed runner would leave it loaded")
     (is (not-any? #(re-find #"^tp " %) cmds))))
 
 (deftest clean-start-forgets-memory-and-seen-blocks

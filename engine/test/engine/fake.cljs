@@ -24,6 +24,7 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [engine.fake.animals :as animals]
+            [engine.far-spawn :as far-spawn]
             [engine.fake.enchant :as enchant]
             [engine.fake.anvil :as anvil]
             [engine.fake.furnace :as furnace]
@@ -92,10 +93,10 @@
    "wooden_pickaxe" {:count 1 :needs {"oak_planks" 3 "stick" 2} :table true}
    "stone_pickaxe" {:count 1 :needs {"cobblestone" 3 "stick" 2} :table true}})
 (def default-self
-  "World spawn 5000 blocks off, as for a body dropped far out (tools/fresh-drop.mjs: 5000 or more from every base)."
+  "World spawn engine.far-spawn/blocks off, as for a body dropped far out (tools/fresh-drop.mjs: 5000 or more from every base)."
   {:username "Fake" :pos [0 64 0] :health 20 :food 20 :foodSaturation 5 :oxygen 20 :onFire false :inWater false
    :inLava false :onGround true :isSleeping false :effects [] :experience {:level 0 :points 0 :progress 0}
-   :dimension "overworld" :minY -64 :worldSpawn [5000 64 0]})
+   :dimension "overworld" :minY -64 :worldSpawn [far-spawn/blocks 64 0]})
 (def equipment-parts ["head" "torso" "legs" "feet" "offHand"])
 
 

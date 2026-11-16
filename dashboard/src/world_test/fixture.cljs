@@ -7,6 +7,7 @@
             [clojure.string :as str]
             [clojure.walk :as walk]
             [agent-tools.jobs :as jobs]
+            [engine.far-spawn :as far-spawn]
             [world-test.expect :as x]
             [world-test.lease :as lease]))
 
@@ -211,25 +212,18 @@
   "The absolute height of a :spawnpoint :far pad: over the terrain and under build height (its air reaches 252)."
   250)
 
-(def far-spawn-blocks
-  "Blocks east of the start a :spawnpoint :far pad lies: past the walk back that beats the despawn of a death's items
-  (cost.value/fetch-cost, about 1300), as for a body whose bed is lost or far from its work. The trial bodies' deaths
-  that woke that far woke 2200 to 18500 blocks off; the fake world's spawn is 5000 off, so unit tests and world cases
-  price a death alike."
-  5000)
-
 (defn far-spawn?
   "Whether the case asks for a far respawn point (:spawnpoint :far)."
   [c]
   (= :far (get-in c [:body :spawnpoint])))
 
 (defn respawn-cell
-  "The block the game respawns the body in: :spawnpoint (:far: far-spawn-blocks east of the start at far-spawn-y, absolute), else the start, floored
+  "The block the game respawns the body in: :spawnpoint (:far: far-spawn/blocks east of the start at far-spawn-y, absolute), else the start, floored
   (/spawnpoint takes only integers; a fractional one is refused and the body would respawn at the world spawn)."
   [c]
   (let [{:keys [spawnpoint at]} (:body c)
         floor-y (if (= :sky (light-of c)) (:y default-grid) (:y underground))
-        p (if (= :far spawnpoint) (some-> at (assoc 1 (- far-spawn-y floor-y)) (update 0 + far-spawn-blocks)) (or spawnpoint at))]
+        p (if (= :far spawnpoint) (some-> at (assoc 1 (- far-spawn-y floor-y)) (update 0 + far-spawn/blocks)) (or spawnpoint at))]
     (some->> p (mapv #(js/Math.floor %)))))
 
 (defn seeded-night?
@@ -937,15 +931,18 @@
 
 (defn reset-plot-commands
   "Clear a plot that may hold a left-over case (its full height), without a body connected: forceload, kill, clear,
-  forceload removed. The runner sends it for the plot the body was last left on, before the body starts."
+  forceload removed, and the far respawn pad's forceload (its cell lies in the plot's columns, far-spawn east). The runner sends it for the plot the body was last left on, before the body starts."
   [grid origin]
-  (let [plot {:plot {:height 31 :floor "stone"}}]
+  (let [plot {:plot {:height 31 :floor "stone"}}
+        far-origin (update origin 0 + far-spawn/blocks)
+        unload (-> (vec (forceload-commands "remove" grid origin))
+                   (into (forceload-commands "remove" grid far-origin)))]
     (if (:underground? grid)
       (-> (vec (forceload-commands "add" grid origin))
           (conj (kill-command grid origin (:underground max-height)))
           (into (solid-commands grid origin (:underground max-height)))
-          (into (forceload-commands "remove" grid origin)))
-      (into (setup-commands grid origin plot) (forceload-commands "remove" grid origin)))))
+          (into unload))
+      (into (setup-commands grid origin plot) unload))))
 
 (def clean-start-files
   "The body's files (in its engine dir) a clean start deletes: engine memory and the seen-blocks memory, whose cells
