@@ -2740,3 +2740,14 @@
     (tu/run-async done
       (fn ^:async t []
         (is (zero? (await (pillars-vs-skeletons true [3 4 5] true))) "skeletons 3-5 off and a shot felt: the pillar tops in their line of fire")))))
+
+(deftest an-unarmed-body-walled-off-underground-from-a-zombie-fights-it-a-wall-only-puts-the-fight-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (first-round '(jobs.survival.respond-to-hostile)
+                                                   {:time 6000 :blocks dead-end :self {:pos [0.5 64 0.5]} :inventory [{:name "cobblestone" :count 20}]
+                                                    :entities [(zombie 5.5 64 0.5)]}))]
+          (is (= [:fight] (mapv :decision (filter #(= :hostile.decided (:kind %)) @seen)))
+              "no tool, no sun under the rock: the zombie stays, walls are the same fight later and a failed wall's fight ends the stay")
+          (is (empty? (placed-cells p))))))))

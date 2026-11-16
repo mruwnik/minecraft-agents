@@ -221,10 +221,11 @@
 
 (defn repeat-price
   "The price at body of answer taken again each time its mobs stay (its :stays): the fixed point p = base + lives x stays x p
-  (base its price with no :stays or :then, lives the chance it leaves body alive), ##Inf when it never ends."
+  (base its price with no :stays or :then, lives the chance its own blows leave body alive, as answer-price* pays :stays:
+  a death in its :outcomes, e.g. a failed cover's fight, ends that branch, never a stay), ##Inf when it never ends."
   [body {:keys [stays] :as answer} at death]
   (let [base (dissoc answer :stays :then)
-        k (* stays (- 1 (answer-death-chance body base at death)))]
+        k (* stays (- 1 (blows-chance body base)))]
     (if (< k 1) (/ (answer-price* body base at death) (- 1 k)) ##Inf)))
 
 (declare threat-answers)

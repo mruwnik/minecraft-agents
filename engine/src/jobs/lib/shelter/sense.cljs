@@ -274,8 +274,13 @@
   [p goal]
   (boolean (some #(some-> (u/seen-name p (update goal :y + %)) solid/solid? not) (range 1 (inc (roof-height))))))
 
+(defn roof-seen?
+  "Whether the body has seen a solid block over cell within 32 cells: no sun reaches it there."
+  [p cell]
+  (boolean (some #(solid-at? p (update cell :y + %)) (range 1 33))))
+
 (defn sky-reaches-from-above?
   "Whether sky light reaches the cell straight down its own column: some sky light there and no solid block seen over it within 32 cells (leaves let it through dimmed; a stair step lit round a corner has stone over it). An unseen cell counts as open: an unseen roof is no shelter."
   [p cell]
   (and (pos? (or (sky-light-at p cell) 0))
-       (not-any? #(solid-at? p (update cell :y + %)) (range 1 33))))
+       (not (roof-seen? p cell))))
