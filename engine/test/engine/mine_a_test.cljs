@@ -660,22 +660,17 @@
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
           (is (= "air" (block-at s 6 63 0))))))))
 
-(deftest an-open-platform-over-unseen-floor-tries-the-unseen-sides-then-digs-a-stair-to-the-ore-with-or-without-a-cap
-  ;; a look is the way to learn a floor, so the sides are tried whether the budget or a cap refuses the 13 drop; the
-  ;; floors felt for turn out not there. Either way it never takes the drop (no hurt): uncapped, the drop is refused for
-  ;; its hp cost at full health (:damage-budget), capped by the cap (:one-way); it digs a stair down the platform's face to the ore and mines it.
+(deftest an-open-platform-over-unseen-floor-digs-a-stair-to-the-ore-with-or-without-a-cap
+  ;; go-near! walks :one-way :closed: no step onto a floor not seen, so no side is felt for; the 13 drop is refused for its
+  ;; hp cost at full health (:damage-budget) or by the cap (:one-way). Either way it never takes the drop (no hurt): it digs a
+  ;; stair down the platform's face to the ore and mines it.
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [settings [{} {:jobs.lib.walk.world/max-damage 0}]]
           (let [s (await (drop-to-ore 77 false settings))
-                e (done-event s)
-                ;; the walks over the sides, before the stair: a stair's own walks may learn the floor at its foot
-                learned (->> @(:seen s) (take-while #(not= :go-to.escalated (:kind %))) (filter #(= :replan (:kind %))) (mapcat :learned))]
+                e (done-event s)]
             (is (= [:completed 1] ((juxt :status :got) e)) (pr-str settings))
-            (is (seq learned) (pr-str settings))
-            (is (every? (fn [[x y z]] (contains? #{nil "air"} (block-at s x y z))) learned)
-                (str (pr-str settings) ": every floor learned absent is air"))
             (is (= 20 (.-health (.self (:p s)))) (str (pr-str settings) ": no drop hurt the body"))
             (is (every? (fn [[x y z]] (and (<= -4 x 6) (<= 63 y 76) (<= -4 z 4))) (dug-cells s)) (str (pr-str settings) ": digs only the platform and its stair"))
             (is (= "air" (block-at s 6 63 0)) (pr-str settings))))))))

@@ -990,7 +990,8 @@
   within leg-margin of the line, then, when no end is reached there and none was dearer than the goal is worth, round
   what blocks it (a column of lava, bedrock or another's claim) within the leg's own length of its two ends, that box
   doubled while it alone kept the search from an end (dig-route's :boxed), each sliced as the first; an end but the goal
-  over seen air is the cell over the first floor under it, left out when that floor is unseen or there is none, and one
+  over seen air is the cell over the first floor under it and then the stand of the land nearest the end (neither when
+  that floor is unseen or there is none), and one
   no route ends in (lava, bedrock, a claim) the stand nearest it (searched outward ring by ring, as many cells as the
   call's budget buys at cost/search-read-s) that is nearer the goal than from. The wider boxes'
   searches are bounded by the least of opts :bound-s, :worth-s and the way without a dig route (memory :route-search
@@ -1023,25 +1024,29 @@
           scan-cells (/ budget-s (cost/search-read-s))
           read-cells (fn [r] (js/Math.pow (inc (* 2 r)) 3))
           ;; a leg end over seen air is no stand a dig route makes (it lays no floor): the body lands under it, the fall
-          ;; priced by the route, on a floor seen (one never seen under seen air is no landing to plan a leg to: none); one no
+          ;; priced by the route, on a floor seen (one never seen under seen air is no landing to plan a leg to: none), then the
+          ;; stand of the land nearest the end (a fall no route takes is no way down; a stair down the land's face is); one no
           ;; route can end in (inside lava, bedrock or a claim) is the stand nearest it, within
           ;; nearer the goal than the body, searched outward (no stand nearer the goal lies beyond the two distances' sum); the goal is the call's own
           ends (distinct
-                (keep (fn [[x y z :as end]]
-                       (when-let [end (if (or (= end goal) (not (dig-route/open? (block-at [x (dec y) z]))))
-                                        end
-                                        (when-let [f (some #(when-not (dig-route/open? (block-at [x (dec %) z])) %) (range (dec y) (places/min-y p) -1))]
-                                          (when-not (dig-look/unknown? p [x (dec f) z]) [x f z])))]
-                         (let [reach (js/Math.ceil (+ (gap end goal) (gap from goal)))]
-                           (if (or (= end goal) (stand? end))
-                             end
-                             (or (some (fn [r] (->> (shell r)
-                                                    (keep #(let [c (mapv + end %)] (when (and (< (gap c goal) (gap from goal)) (stand? c)) c)))
-                                                    (sort-by #(gap % end))
-                                                    first))
-                                       (take-while #(<= (read-cells %) scan-cells) (range 1 (inc reach))))
-                                 end)))))
-                     (leg-ends from goal)))
+                (mapcat (fn [[x y z :as at]]
+                          (let [landing (when-not (or (= at goal) (not (dig-route/open? (block-at [x (dec y) z]))))
+                                          (when-let [f (some #(when-not (dig-route/open? (block-at [x (dec %) z])) %) (range (dec y) (places/min-y p) -1))]
+                                            (when-not (dig-look/unknown? p [x (dec f) z]) [x f z])))
+                                nearest (fn [end]
+                                          (if (or (= end goal) (stand? end))
+                                            end
+                                            (or (some (fn [r] (->> (shell r)
+                                                                   (keep #(let [c (mapv + end %)] (when (and (< (gap c goal) (gap from goal)) (stand? c)) c)))
+                                                                   (sort-by #(gap % end))
+                                                                   first))
+                                                      (take-while #(<= (read-cells %) scan-cells) (range 1 (inc (js/Math.ceil (+ (gap end goal) (gap from goal)))))))
+                                                end)))]
+                            (cond
+                              (or (= at goal) (not (dig-route/open? (block-at [x (dec y) z])))) [(nearest at)]
+                              landing (let [c (nearest at)] (cond-> [(nearest landing)] (stand? c) (conj c)))
+                              :else [])))
+                        (leg-ends from goal)))
           ;; [cells seconds], :searching, :dearer, or the seconds the boxed searches spent when the box cut every end off
           leg (fn [margin route-opts]
                 (loop [ends ends dear? false boxed-s nil]
