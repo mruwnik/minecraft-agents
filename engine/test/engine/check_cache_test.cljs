@@ -74,3 +74,13 @@
     (swap! state update :instances dissoc "j1")
     (cc/keyed (c "j2/kid") :planned 1 (constantly 1))
     (is (= #{"j2/kid"} (ids)) "j1 ended: it and its children are gone; j10 is no instance either")))
+
+(deftest an-ended-child-calls-entries-go-after-unused-windows-while-its-root-lives
+  (let [state (atom {:instances {"j1" {}}})
+        eng {:warned (atom #{}) :state state}
+        c (fn [id t] (assoc (ctx-at id t) :engine eng))
+        w (cc/ttl-ms)
+        ids #(set (map first (keys @(cc/entries-of (c "j1" 0)))))]
+    (doseq [i (range 20)] (cc/keyed (c (str "j1/c" i) 0) :t 1 (constantly 1)))
+    (cc/keyed (c "j1" (* 11 w)) :t 1 (constantly 1))
+    (is (= #{"j1"} (ids)) "the children's entries, unused for 10 windows, are freed; the root lives on")))

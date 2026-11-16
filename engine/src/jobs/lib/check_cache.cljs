@@ -35,9 +35,12 @@
       (into {} (filter (fn [[[job]]] (or (= job (:id c)) (contains? live (root-id job))))) m))))
 
 (defn store
-  "m with entry e under id; an entry of a new job id also frees those of ended jobs."
+  "m with entry e under id, without the entries unused for 10 windows (a child call that ended leaves its own: only its
+  root's end frees them otherwise); an entry of a new job id also frees those of ended jobs."
   [c m id e]
-  (assoc (if (some (fn [[[job]]] (= job (first id))) m) m (without-ended c m)) id e))
+  (let [now (ctx/now c)
+        m (into {} (remove (fn [[_ x]] (> (- now (:t x)) (* 10 (ttl-ms))))) m)]
+    (assoc (if (some (fn [[[job]]] (= job (first id))) m) m (without-ended c m)) id e)))
 
 (defn fresh
   "c whose cached reads read the world anew (and renew the entries): for a check asked again because the world changed."
@@ -54,7 +57,7 @@
     (if (and hit (not (::fresh c)) (fresh? now hit))
       (:v hit)
       (let [v (thunk)]
-        (swap! entries (fn [m] (store c (into {} (remove (fn [[_ e]] (and (not (:recent e)) (> (- now (:t e)) (* 10 (ttl-ms)))))) m) id {:t now :v v})))
+        (swap! entries (fn [m] (store c m id {:t now :v v})))
         v))))
 
 (defn cached
@@ -84,7 +87,7 @@
         same? (fn [e] (and (identical? (:values e) (:values look)) (= (:scope e) (:scope look)) (= (:in e) inputs)))
         hit (when-not (::fresh c) (first (filter same? (:recent (get @entries id)))))]
     (if hit
-      (:v hit)
+      (do (swap! entries (fn [m] (cond-> m (contains? m id) (assoc-in [id :t] now)))) (:v hit))
       (let [v (thunk)]
         (swap! entries (fn [m] (store c m id {:t now :recent (into [] (take (settings/get settings ::keep)) (cons (assoc look :v v) (remove same? (:recent (get m id)))))})))
         v))))
