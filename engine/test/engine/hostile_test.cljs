@@ -463,6 +463,20 @@
           (is (pos? (count (calls (:p creeper-slow) "moveTo"))))
           (is (nil? (decision-cut quick)) "a decision within its tick acts on its answer alone"))))))
 
+(deftest a-refired-reflex-does-not-act-first-again-on-the-mob-it-already-acted-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig clock/now ticks (atom 0)
+              s (setup-flight {:self {:health 20} :inventory sword :entities [(zombie 3 0)]})]
+          (set! clock/now #(* 500 (swap! ticks inc)))
+          (try (dotimes [_ 2]
+                 (core/submit! (:eng s) (tu/order respond) {})
+                 (await (core/tick! (:eng s))))
+               (finally (set! clock/now orig)))
+          (is (= [true false] (mapv :acted (filter #(= :hostile.decision-cut (:kind %)) @(:seen s))))
+              "the second job decides: the first-act of the first round was the one for this mob"))))))
+
 (deftest a-decision-past-its-deadline-takes-no-glance-and-no-price-inputs
   (async done
     (tu/run-async done

@@ -430,7 +430,7 @@
         target (when-not (some combat/enderman? near) (first (hostile/fought p near)))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))
         specs (when-not (some combat/enderman? near) (when (in-time? :covers (room-lib/flee-hold-s c)) (cover-specs c near sealing)))
-        _ (when (>= (- (clock/now) t0) (settings/physics-ms p)) (vreset! acted (boolean (await (first-act/act! c near)))))
+        _ (when (>= (- (clock/now) t0) (settings/physics-ms p)) (vreset! acted (boolean (await (first-act/act! c near (struck-policy))))))
         caught (when-not (or @acted (some combat/enderman? near)) (await (cover/caught-chance! c specs)))
         fight (when-not (or @acted (some combat/enderman? near)) (hostile/fight-answer c near #(struck-of c %) (when (and target (in-time? :fight-walk 0) (combat/ranged? target)) (await (pick/quote! c (hostile/fight-walk-args p target)))) caught))
         walk (when-not (or @acted (some combat/enderman? near)) (hostile/flee-answer c near fight felt caught))

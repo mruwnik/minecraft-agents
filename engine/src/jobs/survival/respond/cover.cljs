@@ -290,7 +290,7 @@
       (ctx/emit! c :retreat.look-ahead :debug (assoc price :took? took? :cells (vec (take (:looks price) cells))))
       (when took?
         (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
-        (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
+        (await (room-lib/waiting! c #(sense/look-at-unknown! c cells dig-look/max-floor-looks)))
         (assoc (await (respond.goal/judge! c threats (:homes judged) (:room judged) covered? (dead-end-covers c) nil)) :homes (:homes judged))))))
 
 (defn ^:async flight-target!

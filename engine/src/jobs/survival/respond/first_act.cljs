@@ -4,6 +4,7 @@
   nearest melee mob within close-radius over the cells the body senses."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
+            [engine.memory :as mem]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-fight :as hostile]
@@ -26,12 +27,13 @@
 
 (defn ^:async act!
   "Swing at (armed, no creeper, in reach) or step away from the nearest melee mob of near (within close-radius), once per
-  call; nothing when none is near or no cell gains on it. true when the body acted."
-  [c near]
+  mob (memory :first-acted under policy, which outlives the job: the call yields :continue and the reflex refires as a new
+  job); nothing when none is near or no cell gains on it. true when the body acted."
+  [c near policy]
   (let [p (:primitives c)
-        mob (when-not (:first-acted (ctx/mem c)) (nearest-melee p near))]
+        mob (some-> (nearest-melee p near) (as-> m (when-not (= (.-id m) (:data (mem/latest (ctx/view c) :first-acted))) m)))]
     (when mob
-      (ctx/update-mem! c assoc :first-acted true)
+      (ctx/remember! c :first-acted (.-id mob) policy)
       (let [weapon (combat/best-weapon p (combat/weapons c))
             at (danger-q/mob-pos p mob)
             cell (when-not (and weapon (not (combat/creeper? mob)) (in-reach? c mob)) (hostile/back-cell-of c mob))]
