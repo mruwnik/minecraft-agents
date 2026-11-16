@@ -52,16 +52,38 @@
        (let [blocks (flight/blocks c)]
          (boolean (or (pit/pit-plan c pos blocks) (:unseen (pit/stop-of c blocks pos)))))))
 
-(defn site-open?
-  "The cheap tests of site x, asked of every site before the search (the dear ones, ground-ok? and cave-needed, only of
-  its pick): clear of failed sites, and ground where a pit looks diggable (pit-site/pit-site?), a cave dry at both cells."
-  [c {:keys [kind pos]}]
-  (let [p (:primitives c)]
-    (and (pit-site/clear-of-failed? c pos)
-         (case kind
-           :ground (pit-site/pit-site? p pos)
-           :cave (and (not (dig-cells/wet? p pos)) (not (dig-cells/wet? p (update pos :y inc))))
-           true))))
+(defn site-looks-open?
+  "Whether site x looks fit by what the body has seen around it: ground where a pit looks diggable (pit-site/pit-site?), a
+  cave dry at both cells."
+  [p {:keys [kind pos]}]
+  (case kind
+    :ground (pit-site/pit-site? p pos)
+    :cave (and (not (dig-cells/wet? p pos)) (not (dig-cells/wet? p (update pos :y inc))))
+    true))
+
+(defonce ^:private site-looks (js/WeakMap.))
+
+(defn site-open
+  "A fn of site x: the cheap tests asked of every site before the search (the dear ones, ground-ok? and cave-needed, only
+  of its pick): clear of tonight's failed sites (read once) and site-looks-open?, which is kept per body for each site
+  while nothing near it is written again (sense/site-memory; none without a perception) and the body carries the same:
+  after a move most of the land around is as it was."
+  [c]
+  (let [p (:primitives c)
+        fails (pit-site/failed c)
+        carried (into #{} (map :name) (u/inventory p))
+        old (.get site-looks p)
+        ^js before (if (= carried (:carried old)) (:looks old) (js/Map.))
+        ^js looks (js/Map.)]
+    (.set site-looks p {:carried carried :looks looks})
+    (fn [{:keys [kind pos] :as x}]
+      (and (pit-site/clear-of? fails pos)
+           (let [k (str (name kind) (:x pos) "," (:y pos) "," (:z pos))
+                 memory (sense/site-memory p pos)
+                 ^js hit (or (.get looks k) (.get before k))
+                 open? (if (and hit (some? memory) (= memory (aget hit 0))) (aget hit 1) (site-looks-open? p x))]
+             (.set looks k #js [memory open?])
+             open?)))))
 
 (defn cave-sites
   "Feet cells over the seen solids [{:name :pos}] under a roof (a seen solid block 2..roof-height above), with two seen
@@ -194,7 +216,7 @@
             target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
             walk #(assoc (flee-args %) :floor cost-health/spend-down)
             t0 (clock/now)
-            site (await (pick/searched! c (filter #(site-open? c %) (untried (sites p look/memory-radius)))
+            site (await (pick/searched! c (filter (site-open c) (untried (sites p look/memory-radius)))
                                         {:target target :walk walk :ok? ok? :quote pick/quote-once! :state (search-state c p)
                                          :rejected? #(rejected? c %) :reject! #(reject! c %)}))
             ;; the home at any distance is quoted on its own (past a search's nodes go-to still plans the long walk), in

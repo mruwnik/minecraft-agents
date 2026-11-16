@@ -8,9 +8,11 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.look-line :as look-line]
@@ -677,6 +679,17 @@
       (= :searching picked) :searching
       (and bed (or (:bed-down (ctx/mem c)) set-safe? (await (bed-walk-safe? c bed)))) bed)))
 
+(defn pass-ms "Ms of the clock since the pass began." [c] (- (clock/now) (::t0 c)))
+
+(defn tick-spent?
+  "Whether the pass stops at step k to go on at the next (Q202: a decision fits one tick): it has run past one tick since
+  it began (pass-ms), and has not stopped at k yet in this decision. The next pass takes on its answers (its walk-pick
+  pass memo): a pass that stops has moved and built nothing, so they are as fresh as those of one long pass."
+  [c k]
+  (let [carry (::carry c)]
+    (boolean (when (and carry (> (pass-ms c) (settings/ticks->ms 1)) (not (contains? (:stopped @carry) k)))
+               (swap! carry #(-> % (update :stopped conj k) (assoc :memo (::pick/pass c))))))))
+
 (defn emit-answers! [c pick prices]
   (let [shown (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)]
     (ctx/emit! c :night.answers :debug {:pick pick :prices shown
@@ -719,7 +732,7 @@
   (flee/flee!), or the night in the open: stay! while another way is priced, else exposed! (none is left)."
   [c]
   (hold/busy! c)
-  (let [r (await (shelter-prices c))]
+  (let [r (if (tick-spent? c :shelter) :searching (await (shelter-prices c)))]
     (if (= :searching r)
       :again
       (let [[prices t] r
@@ -908,7 +921,10 @@
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c0]
-  (let [c (assoc c0 ::pick/pass (atom {}))
+  (let [carry (::carry c0)
+        memo (or (some-> carry deref :memo) (atom {}))
+        _ (some-> carry (swap! #(if (:memo %) (dissoc % :memo) {:stopped #{}})))
+        c (assoc c0 ::pick/pass memo ::t0 (clock/now))
         p (:primitives c)
         breached (sh/breached-home? p (ctx/view c))
         roofed (and (sh-sense/roofed? p (sh-sense/roof-height)) (not breached))
@@ -945,12 +961,14 @@
             :else (ctx/end c :done nil (ending/done-data c (:sheltered (ctx/mem c))))))
       :else
       (let [bed (when bed-way (await (walkable-bed c)))
+            stop? (or (= :searching bed) (tick-spent? c :bed))
             bed-wanted (and bed-way (carried-bed-wanted? c))
             door (sh/open-room-door p (ctx/view c))
             home-way? (walk-home-wanted? c)
-            home (when-not roofed
+            home (when-not (or roofed stop?)
                    (await (walkable-home c (not bed) (fn ^:async bound [] (if bed-wanted ##Inf (bed-down/home-bound-s c (vals (await (night-prices c bed false bed-way nil)))))))))
-            door-call (when door (await (door-decision c bed bed-wanted bed-way)))
+            stop? (or stop? (tick-spent? c :home))
+            door-call (when (and door (not stop?)) (await (door-decision c bed bed-wanted bed-way)))
             offered (when (and home-way? (map? home) (or (:walkable? home) bed-wanted)) home)]
         (when (and bed-way (not bed)) (note-bed-far! c))
         (when breached
@@ -958,7 +976,7 @@
           (when-not (or door (not (may-enclose? (ctx/mem c) (sh-sense/feet p))) (pit-site/failed-here? c) (not (ctx/way? c :shelter)))
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
-          (= :searching bed) (do (hold/busy! c) :again)
+          stop? (do (hold/busy! c) :again)
           (and door (pos? (:worth door-call))) (await (enter-room! c nil false nil (:worth door-call)))
           (:bed-down (ctx/mem c)) (let [{:keys [bed answer]} (:bed-down (ctx/mem c))] (await (bed-down-step c bed answer)))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil false nil (await (room-worth c bed bed-wanted bed-way :bed))))
@@ -971,4 +989,5 @@
 (defn ^:async round
   "The whole night in one round (see doc): passes until one ends it or done? holds."
   [c]
-  (await (pace/steps! c #(pass c))))
+  (let [carry (atom {:stopped #{}})]
+    (await (pace/steps! c #(pass (assoc c ::carry carry))))))

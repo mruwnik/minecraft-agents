@@ -509,6 +509,78 @@
             (is (= 2 @asked) "a failed site now remembered: asked again")
             (finally (set! ctx/quote quote) (set! ctx/entries entries))))))))
 
+(deftest a-flee-site-is-judged-again-only-once-the-land-near-it-is-written
+  ;; card 0ed400bc: each flee-target call judged every seen site again (pit-site/pit-site?, ~2300 sites: 240 ms), moved or not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [judged (atom 0)
+              written (atom 0)
+              looks flee/site-looks-open?
+              site-memory sense/site-memory
+              out (atom nil)
+              {:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})
+              pass! (fn ^:async pass [c]
+                      (let [before @judged]
+                        (await (flee/flee-target (assoc c ::pick/pass (atom {})) false))
+                        (- @judged before)))
+              probe (tu/job (fn ^:async probe-round [c]
+                              (let [first-pass (await (pass! c))
+                                    again (await (pass! c))
+                                    _ (swap! (fake/state p) assoc-in [:self :pos] [1 64 0])
+                                    moved (await (pass! c))
+                                    _ (swap! written inc)
+                                    rewritten (await (pass! c))]
+                                (reset! out [first-pass again moved rewritten])
+                                (ctx/end c :done nil))))
+              eng (assoc eng :jobs (assoc registry/jobs 'flee-probe probe))]
+          (tu/seeing-all p)
+          (set! flee/site-looks-open? (fn [p x] (swap! judged inc) (looks p x)))
+          (set! sense/site-memory (fn [_ _] @written))
+          (try
+            (core/submit! eng (tu/order '(flee-probe)) {})
+            (await (tu/run-until-empty eng 20))
+            (finally (set! flee/site-looks-open? looks)
+                     (set! sense/site-memory site-memory)))
+          (let [[first-pass again moved rewritten] @out]
+            (is (pos? first-pass))
+            (is (zero? again) "nothing written: no site judged again")
+            (is (< moved first-pass) "a step aside: only the sites newly in sight are judged")
+            (is (<= first-pass rewritten) "the land near every site written: each judged again")))))))
+
+(deftest a-night-pass-past-its-tick-stops-at-each-step-once-and-the-next-takes-on-its-answers
+  ;; card 0ed400bc: a pass after a move priced the bed walk, the home walk and the shelter ways in one go (200-400 ms, Q202: one tick)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})
+              pass-ms night/pass-ms
+              pass night/pass
+              spent? night/tick-spent?
+              this-pass (atom nil)
+              passes (atom [])]
+          (tu/seeing-all p)
+          (st/dawn-after! p 12)
+          (set! night/pass-ms (constantly ##Inf))
+          (set! night/tick-spent? (fn [c k] (let [r (spent? c k)] (when r (swap! this-pass assoc :stopped k :memo (::pick/pass c))) r)))
+          (set! night/pass (fn ^:async g [c]
+                             (let [calls (count (.-calls (.-world p)))
+                                   _ (reset! this-pass {})
+                                   r (await (pass c))]
+                               (swap! passes conj (assoc @this-pass :acted (some #(not= "look" (.-name %)) (drop calls (.-calls (.-world p))))))
+                               r)))
+          (try
+            (core/submit! eng (tu/order '(jobs.survival.night {})) {})
+            (await (tu/run-until-empty eng 60))
+            (finally (set! night/pass-ms pass-ms)
+                     (set! night/pass pass)
+                     (set! night/tick-spent? spent?)))
+          (let [[stopped [decided]] (split-with :stopped (drop-while (complement :stopped) @passes))]
+            (is (= [:bed :home :shelter] (map :stopped stopped)) "each step stops once, in order")
+            (is (not-any? :acted stopped) "a pass that stops changes nothing (a look to decide aside)")
+            (is (:acted decided) "the pass after the stops acts")
+            (is (= 1 (count (distinct (map :memo stopped)))) "the passes of one decision share one pass memo: nothing asked twice")))))))
+
 (deftest with-nothing-seen-the-night-looks-around-and-then-flees-to-the-ground-it-saw
   (async done
     (tu/run-async done
