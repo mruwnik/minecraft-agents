@@ -66,19 +66,19 @@
     [(js/Math.abs (- x (.-x (.-pos (.self p))))) (some #(when (#{:completed :stopped} (:kind %)) (:reason %)) @seen)
      (some #(when (#{:completed :stopped} (:kind %)) (mapv :job (:next %))) @seen)]))
 
-(deftest go-home-in-the-ground-stays-when-the-quoted-walk-there-and-back-costs-more-than-sheltering-here
-  ;; the trigger fires for a buried body too; go-home, called with :commute?, prices go-to's own quote
-  (is (true? (holds? 11500 [[:home 60 0 70]] stair-home-world)))
+(deftest go-home-in-the-ground-weighs-the-walk-against-working-on-with-the-dark-priced
+  ;; the alternative to the walk is working on (Q213), not a shut-in's dig: in the dark the stay risk buys the far walk, with the dark nearly over it stays
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [far (await (go-home-from-the-ground 60 70 {:commute? true}))
-              near (await (go-home-from-the-ground 6 64 {:commute? true}))
+        (let [dawn-near (assoc stair-home-world :time 23800)
+              dark-far (await (go-home-from-the-ground 60 70 {:commute? true}))
+              dawn-far (await (go-home-from-the-ground 60 70 {:commute? true} dawn-near))
               plain (await (go-home-from-the-ground 60 70 {}))]
-          (is (> (first far) 50) "the far home is not walked to")
-          (is (= :shelter-cheaper (second far)))
-          (is (= ["jobs.survival.night"] (nth far 2)) "the night job the reflex runs, not go-home again")
-          (is (< (first near) 3) "a close home is walked to")
+          (is (< (first dark-far) 3) "the far home is walked to through the dark")
+          (is (> (first dawn-far) 50) "little dark left: the walk is lost work")
+          (is (= :shelter-cheaper (second dawn-far)))
+          (is (= ["jobs.survival.night"] (nth dawn-far 2)) "the night job the reflex runs, not go-home again")
           (is (< (first plain) 3) "without :commute? the call walks home"))))))
 
 (deftest go-home-in-the-ground-walks-when-nothing-can-shelter-the-body-where-it-stands

@@ -12,8 +12,7 @@
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.clock :as sh-clock]
-            [jobs.lib.util :as u]
-            [jobs.survival.shut-in-night :as sin]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, walking on through the
@@ -25,7 +24,7 @@
   nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
   With :commute? (the :dusk-home trigger's) a body in the ground (jobs.lib.shelter/in-ground?: its work goes on through the
-  night) whose walk there and back, by go-to's quote, costs more than sheltering where it stands (jobs.lib.cost/commute-s, against shut-in's quote)
+  night) whose walk there and back, by go-to's quote, costs more than working on where it stands, the dark's stay risk priced (jobs.lib.cost/commute-s, against stay-s)
   stays: nothing-possible {:reason :shelter-cheaper}, :next the night job (the :night trigger's). Other endings carry :next too (jobs.lib.next-call): what a failed walk names, then the call again.
   Quote: time by the straight distance at cost/walk-speed; done 1 visit.")
 
@@ -101,14 +100,20 @@
       :else (ctx/end c :nothing-possible {:reason :walk-failed :walk (contract/cause-key e)}
                       {:text (or (get-in e [:data :text]) "could not walk home")}))))
 
+(defn stay-s
+  "What working on where the body stands costs through the night: the work it loses (cost/night-lost-s, none in the ground) and the dark's stay risk (worth-of)."
+  [c]
+  (let [[_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])]
+    (+ (cost/night-lost-s true left 0) (worth-of c))))
+
 (defn ^:async commute-dearer?
-  "Whether the call is priced (:commute?), the body in the ground and go-to's quote of the way to pos (at the call's worth, as the walk that follows) dearer than sheltering here
-  (shut-in's quote, its time: shut-in-night/time-s)."
+  "Whether the call is priced (:commute?), the body in the ground and go-to's quote of the way to pos (at the call's worth, as the walk that follows) dearer than working on here
+  through the dark (stay-s), not than a shut-in nobody would choose."
   [c pos]
   (let [p (:primitives c)]
     (and (:commute? (:args c)) (sh/in-ground? p (ctx/view c))
          (let [r (:route (await (ctx/quote c 'jobs.movement.go-to (goal c pos))))]
-           (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (sin/time-s (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))))))
+           (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (stay-s c))))))))
 
 (defn ^:async round [c]
   (let [pos (place c)
