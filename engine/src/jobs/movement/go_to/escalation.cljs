@@ -587,6 +587,14 @@
                (mapcat :cells (filter #(= :dig-route (:step %)) (:then e))))
        (mapv :cell)))
 
+(defn fill-noted
+  "Memory m after a fill-gap at cell: the cell is kept (:filled); a cell filled before and still the one chosen shows the fill changed nothing, so fill-gap is ruled out for the call."
+  [m cell]
+  (let [cell (vec cell)]
+    (if (contains? (:filled m) cell)
+      (update m :skipped-steps (fnil conj #{}) :fill-gap)
+      (update m :filled (fnil conj #{}) cell))))
+
 (defn escalated!
   "The child made a way (or part of one, done false): start a climb's next way at once when it made all of it
   (route-ways/next-way; a stair whose guessed floor is now seen to be none, route-ways/floor-gone, chooses the ways again at once), walk on after its last, else walk again from a fresh count, or escalate again at once after an
@@ -618,6 +626,7 @@
                           nxt (assoc :escalation (cond-> nxt (:own-cut e) (assoc :own-cut true)) :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
                           ;; a cut of its own build (a pen open to the animals): put back at once, the walk on not waited for
                           (and (:own-cut e) (or (not= :dig-route step) (not done?))) (assoc :restore-now true)
+                          (and (= :fill-gap step) (:cell e)) (fill-noted (:cell e))
                           (not (#{:approach :fill-gap} step)) (assoc :restore-pending true)))
     (when gone
       (ctx/emit! c :go-to.climb-replanned :info {:at feet :floor gone :text "the climb's next stair rests on a floor now seen to be none: choosing the way again"}))

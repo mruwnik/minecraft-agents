@@ -738,6 +738,12 @@
       {:step :leave-shelter} 9 :fill-gap)
     (is (< (cw/fill-cost 9) (cw/fill-cost 2)) "the last blocks of the pack cost a fetch")))
 
+(deftest a-fill-at-a-cell-filled-before-rules-fill-gap-out-for-the-call
+  (let [once (esc/fill-noted {} [5 63 0])]
+    (is (not (contains? (:skipped-steps once) :fill-gap)) "the first fill is a way made")
+    (is (contains? (:skipped-steps (esc/fill-noted once [5 63 0])) :fill-gap) "the same cell again: it changed nothing")
+    (is (not (contains? (:skipped-steps (esc/fill-noted once [6 63 0])) :fill-gap)) "another cell is a new bridge")))
+
 (def doorway-hole
   "Floor y 63 with a 1-cell hole at x 5 (floor under it at y 62), and a floor 1 higher from x 6: the doorway of a hut whose sill was dug."
   (-> (merge (box -2 62 -2 4 63 4 "stone") (box 5 62 -2 5 62 4 "stone") (box 6 62 -2 12 64 4 "stone"))))
