@@ -152,6 +152,18 @@
           (is (= ["oak_fence" nil] (mapv #(block p %) (:plug lay))))
           (is (= ["oak_slab" "top"] [(block p [2 65 0]) (get-in @(fake/state p) [:states [2 65 0] :type])])))))))
 
+(deftest the-box-is-shut-with-the-blocks-the-body-breaks-out-of-quickest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (run (assoc (world (merge shut plug))
+                                            :entities [(jobless {:x 1 :y 64 :z 0})]
+                                            :inventory [{:name "cobblestone" :count 24} {:name "oak_planks" :count 12} {:name "iron_axe" :count 1} {:name "oak_fence" :count 1} {:name "torch" :count 2}])
+                                     {} 400))
+              lay (vp/layout ws [-1 0])]
+          (is (= :done (:status result)) (pr-str result))
+          (is (every? #(= "oak_planks" (block p %)) (:box lay))))))))
+
 (deftest a-pen-over-a-drop-floors-the-near-end-and-the-boxs-entry-too
   (async done
     (tu/run-async done

@@ -17,6 +17,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.villager :as villager]
             [jobs.lib.villager-pen :as vp]))
@@ -170,19 +171,42 @@
     (await (built! c :workstation (await (child! c :workstation 'jobs.blocks.place (merge {:pos ws :item item} (place-ways c))))
                    #(not= item (vp/name-at (:primitives c) ws))))))
 
+(defn quick-blocks
+  "The building blocks the body breaks out of quickest with what it carries (dirt by hand, planks with an axe): the box
+  is dug out by hand, so a villager stays in view while it opens."
+  [c]
+  (let [names (choose/filler-names c :build)
+        ms (into {} (map (juxt identity #(tools/clear-ms (:primitives c) %))) names)
+        best (apply min (vals ms))]
+    (filterv #(= best (ms %)) names)))
+
+(defn quick-carried
+  "How many quick-blocks the body carries."
+  [c]
+  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))]
+    (transduce (map #(get have % 0)) + 0 (quick-blocks c))))
+
 (defn ^:async fill!
   "Fill cells with building blocks, fetched first when too few are carried (the call's ways); extra goes to the
-  fill-cells child."
+  fill-cells child. With :quick the quick-blocks are fetched first when too few are carried and a fetch can get them
+  (once a call; else what is carried is used)."
   [c slot cells & [extra]]
-  (let [{:keys [short]} (choose/fillers-for c :build (count cells))
-        opts (some-> (need/fetch-opts c) (assoc :avoid (some-> (lay-of c) vp/cells)))]
+  (let [opts (some-> (need/fetch-opts c) (assoc :avoid (some-> (lay-of c) vp/cells)))
+        quick? (and (:quick extra) opts (not (:quick-failed (ctx/mem c))) (< (quick-carried c) (count cells)))
+        use-quick? (and (:quick extra) (>= (quick-carried c) (count cells)))
+        extra (cond-> (dissoc extra :quick) use-quick? (assoc :use {:blocks (quick-blocks c)}))
+        names (if quick? (quick-blocks c) (choose/filler-names c :build))
+        short (if quick?
+                (- (count cells) (quick-carried c))
+                (:short (choose/fillers-for c :build (count cells))))]
     (cond
       (zero? short) (await (built! c slot (await (child! c slot 'jobs.blocks.fill-cells (merge {:cells cells :clear-loose true} extra)))
                                    #(= cells (vp/owed (:primitives c) cells))))
-      (nil? opts) (stop! c :condition-failed :need {:any-of (choose/filler-names c :build) :count short})
-      :else (let [e (await (need/blocks! c (choose/filler-names c :build) short opts))]
+      (nil? opts) (stop! c :condition-failed :need {:any-of names :count short})
+      :else (let [e (await (need/blocks! c names short opts))]
               (cond (= :continue e) :continue
                     (= :done (:kind e)) :again
+                    quick? (do (ctx/update-mem! c assoc :quick-failed true) :again)
                     :else (ctx/end c (:kind e) (:cause e) (:data e)))))))
 
 (defn wood-item
@@ -332,7 +356,7 @@
         (await (dig-open! c :exit lay :entry))
         (await (plug! c lay)))
       (not (vp/at-stand? p lay)) (if (vp/way-in? p lay) (await (step-in! c lay)) (await (dig-open! c :entry lay :entry)))
-      (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/with-floors p lay (:box lay)) {:in-place true}))
+      (seq (vp/owed p (:box lay))) (await (fill! c :box (vp/with-floors p lay (:box lay)) {:in-place true :quick true}))
       (or (nil? block) (bs/air block)) (await (workstation! c ws))
       (and (not in?) (seq (vp/employed-in p lay (some-> e villager/ident))))
       (stop! c :condition-failed :workstation-taken {:villager (villager/ident (first (vp/employed-in p lay (some-> e villager/ident))))})

@@ -4,6 +4,7 @@
 ;; the lectern's sides 15/17 0 16 walled, the body boxed in its stand 16 0 15).
 ;; pen-plugs-a-villager-whose-box-overlaps-the-near-end (card 88333a5e: the near end plugged with a fence, whose post
 ;; clears the box of a villager standing at the cell's edge).
+;; Every case carries cobblestone only: the box is shut with dirt fetched (a quick hand-dig to open), the near end and walls with cobblestone (card b798d0e7).
 ;; pen-closes-the-stand-beside-a-second-villager (card 7cb975da: a second jobless villager beside the open stand; the
 ;; stand's box is shut, so no cell next to the lectern is left for it).
 ;; pen-lures-a-villager-from-outside-with-the-lectern (card 956f6431: AI villagers, no lectern at the start; the named
@@ -32,7 +33,7 @@
            [:block [16 2 17] "cobblestone"] [:block [15 0 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
            [:block [16 0 18] "oak_fence"] [:block [16 1 18] "air"]
            [:block [15 0 16] "cobblestone"] [:block [15 1 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [17 1 16] "cobblestone"] [:block [16 2 15] "cobblestone"]
-           [:block [15 1 15] "cobblestone"] [:block [17 1 15] "cobblestone"] [:block [16 1 14] "cobblestone"]]}
+           [:block [15 1 15] "dirt"] [:block [17 1 15] "dirt"] [:block [16 1 14] "dirt"]]}
   {:name "pen-plugs-a-villager-whose-box-overlaps-the-near-end"
    ;; card 88333a5e: the villager stands at z 17.8 in the cell, its box (0.6 wide) reaching 0.1 into the near end, as an AI
    ;; one works its lectern; the server refuses a full block there (:mob-in-cell), a fence's post (0.375 in) clears it
@@ -48,7 +49,7 @@
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-000500000051" :pos #at [16 1 16] :profession "librarian"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :after [[:block [16 1 16] "lectern"] [:block [16 0 18] "cobblestone"] [:block [16 1 18] "oak_fence"] [:block [16 2 18] "air"]
-           [:block [16 0 14] "cobblestone"] [:block [16 0 17] "cobblestone"] [:block [16 0 15] "cobblestone"]]}
+           [:block [16 0 14] "dirt"] [:block [16 0 17] "cobblestone"] [:block [16 0 15] "cobblestone"]]}
   {:name "pen-shuts-over-a-wall-torch-without-the-body-walking-into-the-ring"
    ;; card 512e8f37: a wall torch stands in the pen's east wall cell (17 0 17); the shut fill digs it and no longer picks the drop up, so the body
    ;; never steps into the cells it encloses: the pen completes, the wall is cobblestone and the body stays in its stand 16 0 15
@@ -63,8 +64,8 @@
          [:summon "villager" [14.5 0 15.5] "{NoAI:1b,UUID:[I;20260,7,5,43],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.pen {:worth 1200 :villager "00004f24-0000-0007-0000-00050000002a" :pos #at [16 0 16] :profession "librarian"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
-   :after [[:block [15 0 15] "cobblestone"] [:block [15 1 15] "cobblestone"] [:block [17 0 15] "cobblestone"]
-           [:block [17 1 15] "cobblestone"] [:block [16 0 14] "cobblestone"] [:block [16 1 14] "cobblestone"]
+   :after [[:block [15 0 15] "dirt"] [:block [15 1 15] "dirt"] [:block [17 0 15] "dirt"]
+           [:block [17 1 15] "dirt"] [:block [16 0 14] "dirt"] [:block [16 1 14] "dirt"]
            [:block [15 0 16] "cobblestone"] [:block [17 0 16] "cobblestone"]]}
   {:name "pen-lures-a-villager-from-outside-with-the-lectern"
    :blocks [[:fill [16 0 16] [16 0 16] "air"]]
