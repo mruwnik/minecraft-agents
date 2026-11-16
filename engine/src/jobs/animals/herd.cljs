@@ -6,6 +6,7 @@
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
+            [clojure.string :as str]
             [engine.contract :as contract]
             [jobs.lib.animals :as animals]
             [jobs.lib.cost :as cost]
@@ -19,10 +20,10 @@
             [jobs.lib.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.lib.bait :as bait]
-            [jobs.animals.herd-run :refer [adults after-shut! away-from-pen? pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms stage transient-keys]]
+            [jobs.animals.herd-run :refer [adults after-shut! away-from-pen? blocker-look-s pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms stage transient-keys]]
             [jobs.lib.pace :as pace]
             [jobs.animals.herd-survey :refer [pen-refusal survey!]]
-            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell line-up-from-stage! look-wait! max-leaves nearer-stage! on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
+            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! lane-blocker let-go-cell line-up-from-stage! look-wait! max-leaves nearer-stage! on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [food-first! leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
@@ -67,6 +68,10 @@
   - Approach the cell 4 out from the gate (the first of out-4 .. out-2 that is no fence-gate cell and lies in no other closed fenced pen, else out-1) and wait until the animal rests (up to 8 s). A walk (or lure) that cannot reach it tries the cell one nearer, down to out-1, for the rest of the run, before ending :unreachable.
   An adult standing in a closed pocket of ground that does not hold that cell (a pit) is given up :no-exit before it is lured; walls of the pit never seen are walked to and looked at first, and a wall still unknown is no verdict.
   - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate); adults outside the gate crowd nothing.
+    A mob or player whose box reaches into the cell outside the gate or the gate cell from the side and leaves it
+    narrower than the animal is looked at again every 5 s while another look is worth its price (cost/try-again?
+    :blocker-wait); one still there gives the animal up :gate-blocked (info herd.gate-blocked naming it and its cell)
+    and lets it go outside.
   - Line up on the cells 3, 2 and 1 out (each waits up to 8 s for the animal to rest), open the gate
     (jobs.access.toggle), then step through the gate and 5 cells in. Each of those stops waits up to 6 s.
   - An animal still too far behind is pinned. The body steps back one cell and tries again, twice. Then it
@@ -114,7 +119,8 @@
   :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. An animal is booked brought once, however often it is led. Reasons:
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
-  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked; the text and :walk say go-to's reason), :gate-stuck, :lost, :no-exit (every animal left stands in a pit it cannot leave),
+  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked; the text and :walk say go-to's reason), :gate-stuck, :lost, :no-exit (every animal left stands in a pit it cannot leave), :gate-blocked (none brought and a
+  mob kept the way through the gate too narrow; :blockers [{:name :cell}] names them),
   :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
   :none (nobody left to fetch), or :no-leash with the leash child's ending as the :because. The body ends outside with the gate shut. Endings: done when the pen
   holds :target (:brought, :full) or the call's :least (default 1) animals were brought; else condition-failed for
@@ -239,6 +245,30 @@
           :else (do (await (child/call-walk* c :walk {:pos leg :range 1 :doors :never :ways #{:walk :clear-seal}}))
                     :continue))))))
 
+(defn gate-blocked!
+  "The way through the gate stays too narrow beside blocker e and another look is not worth its price: the animal is given
+  up :gate-blocked and let go outside; :gate-blocks names the blocker and its cell, for the result."
+  [c e]
+  (let [{:keys [x y z] :as pos} (u/pos-of (.-pos e))
+        blocker {:name (.-name e) :cell [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]}
+        mob (:mob (:args c))
+        m (ctx/mem c)]
+    (ctx/emit! c :herd.gate-blocked :info {:animal (:animal m) :blocker (:name blocker) :cell (:cell blocker) :pos pos
+                                           :text (str "the " (:name blocker) " at " (str/join "," (:cell blocker)) " leaves the way through the gate too narrow for a "
+                                                      mob " and did not move off: the " mob " is let go outside")})
+    (set-phase! c :give-up-walk {:give-up-reason :gate-blocked :blocker-fails nil
+                                 :gate-blocks (assoc (:gate-blocks m) (:animal m) blocker)})))
+
+(defn ^:async blocker-wait!
+  "A mob narrows the way through the gate: hold blocker-look-s and look again while that is worth its price
+  (cost/try-again? :blocker-wait after the looks it stayed, at the call's worth), else gate-blocked!."
+  [c e]
+  (let [fails (inc (:blocker-fails (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :blocker-fails fails)
+    (if (cost/try-again? c :blocker-wait {:fails fails :try-s (blocker-look-s)})
+      (do (await (child/pause! c (blocker-look-s) :gate-blocked)) :continue)
+      (gate-blocked! c e))))
+
 (defn ^:async step! [c phase]
   (let [m (ctx/mem c)
         axis-cell #(nth (:axis m) %)]
@@ -251,8 +281,10 @@
       :approach (if-not (:walked m)
                   (await (lure-approach! c))
                   (await (settle-at! c (stage c) (settle-out-ms) #(set-phase! c :clear-out))))
-      :clear-out (await (wait-clear! c (crowded-near? c (axis-cell in-1) (crowd-out-radius)) (crowd-ms) :out
-                                     #(line-up-from-stage! c)))
+      :clear-out (if-let [b (lane-blocker c)]
+                   (await (blocker-wait! c b))
+                   (await (wait-clear! (doto c (ctx/update-mem! dissoc :blocker-fails)) (crowded-near? c (axis-cell in-1) (crowd-out-radius)) (crowd-ms) :out
+                                       #(line-up-from-stage! c))))
       :line-up (let [i (:pos-index m)]
                  (await (settle-at! c i (settle-out-ms)
                                     #(if (= i out-1) (set-phase! c :open) (set-phase! c :line-up {:pos-index (inc i)})))))
@@ -289,7 +321,7 @@
       :shut-side (shut-side! c)
       :census (census! c)
       :shut-back-in (await (go-then! c (axis-cell in-1) :shut-out))
-      :give-up-walk (await (go-then! c (axis-cell 1) :give-up-unleash {:given-up (assoc (:given-up m) (:animal m) :jammed)}))
+      :give-up-walk (await (go-then! c (axis-cell 1) :give-up-unleash {:given-up (assoc (:given-up m) (:animal m) (:give-up-reason m :jammed))}))
       :give-up-unleash (await (release-step! c #(released! c :exit-out)))
       :let-go (await (release-step! c #(do (ctx/update-mem! c dissoc :release-tried :releasing :unleash-failed)
                                           (set-phase! c :shut-gate))))

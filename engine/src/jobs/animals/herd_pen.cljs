@@ -452,6 +452,42 @@
         g (gate-cell c)]
     (boolean (some #(overlaps-cell? (u/pos-of (.-pos %)) w g) (adults c)))))
 
+(defn lane-gap
+  "The width left free across the lane cell [x _ z] (walked along d = [dx dz]) beside the boxes ({:pos {:x :z} :half w})
+  that reach into it from the side. One centred on the lane is none: the body walking the lane shoves it along."
+  [[cx _ cz] [dx _] boxes]
+  (let [along #(if (zero? dx) (:z %) (:x %))
+        across #(if (zero? dx) (:x %) (:z %))
+        a0 (if (zero? dx) cz cx)
+        c0 (if (zero? dx) cx cz)
+        [lo hi] (reduce (fn [[lo hi] {:keys [pos half]}]
+                          (let [a (along pos) q (across pos)]
+                            (cond
+                              (or (<= (+ a half) a0) (>= (- a half) (inc a0)) (<= c0 q (inc c0))) [lo hi]
+                              (>= q (+ c0 0.5)) [lo (min hi (- q half))]
+                              :else [(max lo (+ q half)) hi])))
+                        [c0 (inc c0)] boxes)]
+    (- hi lo)))
+
+(defn lane-blocker
+  "A seen mob or player not led by this run whose box narrows the cell outside the gate or the gate cell below the
+  mob's width, or nil: the entity push holds a led animal off the gap (a 0.9 cow beside a box leaving 0.85 never got
+  in, card 70d3c88b)."
+  [c]
+  (let [m (ctx/mem c)
+        g (gate-cell c)
+        d (axis-dir g (cell (:inside-cell m)))
+        need (* 2 (half-width (:mob (:args c))))
+        led (set (:led m))
+        box #(hash-map :pos (u/pos-of (.-pos %)) :half (if-let [w (.-width %)] (/ w 2) (half-width (.-name %))))
+        es (->> (look/seen-objs (:primitives c) {:radius (+ 2 (u/dist (u/self-pos c) (u/cell-pos g)))})
+                (filter #(#{"passive" "hostile" "player"} (.-kind %)))
+                (remove #(led (animals/key-of %))))]
+    (some (fn [lane-cell]
+            (when (< (lane-gap lane-cell d (map box es)) need)
+              (first (filter #(< (lane-gap lane-cell d [(box %)]) 1) es))))
+          [(nth (:axis m) out-1) g])))
+
 (defn ^:async wait-clear!
   "on-clear when crowded? is false; else look again in 500 ms, and after limit-ms go on with one info herd.crowded-gate."
   [c crowded? limit-ms where on-clear]

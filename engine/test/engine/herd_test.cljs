@@ -360,6 +360,18 @@
           (is (= :brought (:reason (done-event s))))
           (is (empty? (filter #(= :out (:where %)) (events-of s :herd.crowded-gate)))))))))
 
+(deftest a-still-cow-narrowing-the-way-through-the-gate-gives-the-led-one-up
+  ;; card 70d3c88b: its box leaves the cell outside the gate 0.85 wide; live, the push held the led cow off the gap
+  ;; at every try, and the old steps walked in and backed out until it was :jammed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3) (cow 8 9.3 4.3 {:pin true})]} 500))]
+          (is (= :gate-blocked (get-in (done-event s) [:given-up "u1"])) (pr-str (done-event s)))
+          (is (= :gate-blocked (:reason (done-event s))))
+          (is (= [{:name "cow" :cell [9 64 4]}] (:blockers (done-event s))))
+          (is (= 1 (count (events-of s :herd.gate-blocked)))))))))
+
 (deftest another-shut-try-is-priced-at-the-worth-given-not-the-calls
   ;; herd's shut-worth: the pen's loss through an open gate can be worth a try the call's own worth is not
   (with-redefs [ctx/mem (constantly {:fruitless {:shut-gate 2} :fruitless-s {:shut-gate 5}})]

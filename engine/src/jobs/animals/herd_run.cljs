@@ -22,6 +22,7 @@
    ::follow-range {:default 10 :doc "Blocks within which an animal follows the food in the body's hand." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 500 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-out-ms {:default 8000 :doc "How long the body waits for the animal to rest at a position outside the gate." :spec (a/int-in 0 nil)}
+   ::blocker-look-s {:default 5 :doc "Seconds the body holds still before it looks again at a mob that narrows the way through the gate." :spec (a/num-in 0 nil)}
    ::crowd-ms {:default 10000 :doc "How long the cells inside the gate may stay crowded before the body goes on." :spec (a/int-in 0 nil)}
    ::shut-look-ms {:default 6000 :doc "How long a shut waits for the animals to clear the gate cell." :spec (a/int-in 0 nil)}
    ::exit-shut-ms {:default 2000 :doc "How long the shut from outside waits before stepping back in." :spec (a/int-in 0 nil)}
@@ -32,6 +33,7 @@
 (defn approach-range [] (settings/get settings ::approach-range))
 (defn follow-range [] (settings/get settings ::follow-range))
 (defn settle-ms [] (settings/get settings ::settle-ms))
+(defn blocker-look-s [] (settings/get settings ::blocker-look-s))
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
 
 (def out-1 "Index in the axis cells of the cell outside the gate." 3)
@@ -181,7 +183,10 @@
         given-up (:given-up (ctx/mem c))]
     (str "herd done: " (name reason) ", " (pen-count-text n target)
          (cond
-           (seq given-up) (str " (given up: " (str/join ", " (map (fn [[k r]] (str k " " (name r))) given-up)) ")")
+           (seq given-up) (str " (given up: " (str/join ", " (map (fn [[k r]] (str k " " (name r))) given-up)) ")"
+                               (when-let [bs (seq (distinct (vals (:gate-blocks (ctx/mem c)))))]
+                                 (str "; the way through the gate stayed too narrow beside "
+                                      (str/join ", " (map #(str "the " (:name %) " at " (str/join "," (:cell %))) bs)))))
            (= :no-food reason) (str " (no " (str/join " or " (get animals/breeding-food mob)) " carried, none could be got)")
            (= :short reason) (str " (no other grown " mob " to fetch within " radius " blocks)")))))
 
@@ -209,11 +214,13 @@
         reason (or reason
                    (cond (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought
                          (and (empty? (:brought m)) (seq (:given-up m)) (every? #{:no-exit} (vals (:given-up m)))) :no-exit
+                         (and (empty? (:brought m)) (seq (:gate-blocks m))) :gate-blocked
                          :else :short))
         kind (ending-kind reason (count brought) least)
         text (str (end-text c reason (count inside)) (detail-text extra))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
                        :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0) :animals rows}
+                      (when (seq (:gate-blocks m)) {:blockers (vec (distinct (vals (:gate-blocks m))))})
                       extra)]
     (ctx/update-mem! c assoc :finished true)
     (when (:gate m) (drop-gate! c))

@@ -326,7 +326,7 @@
     (case (step-in-step backs (boolean (:retried m)))
       :back (set-phase! c :step {:pos-index (max out-1 (dec idx)) :back-step true :backs (inc backs) :deepest-tried false})
       :retry-from-out (set-phase! c :retry-back {:backs 0 :retried true :deepest-tried false})
-      :give-up (set-phase! c :give-up-walk))))
+      :give-up (set-phase! c :give-up-walk {:give-up-reason :jammed}))))
 
 (defn step-position!
   "One round of the step through the gate: walk to the position and settle; settled goes on to the next one (the last

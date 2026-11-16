@@ -33,15 +33,25 @@
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   ;; card abc1c5e2: a still cow outside beside the gate, 2.2 from the cell inside it, cannot walk out, so it holds no
-  ;; trip (the old count waited 10 s for it at every line-up); the other cow is brought. It stands a cow's width clear of
-  ;; the lane (z 17.7, lane z 16..17): beside the lane at z 17.3 it shoves the led cow against the gate's fence arm and the
-  ;; 1-wide gate (cow 0.9 wide) cannot be passed (card 70d3c88b)
+  ;; trip (the old count waited 10 s for it at every line-up); the other cow is brought. Its box stays clear of the lane.
   {:name "cow-outside-beside-the-gate-crowds-nothing"
    :act [[:summon "cow" [10.5 0 18.5]]
          [:summon "cow" [17.7 0 17.7] "{NoAI:1b}"]
          [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :herd.crowded-gate :data {:where :out}} :for-s 240 :until {:source :job :kind :completed}}]
+   :after [[:block [18 0 16] "oak_fence_gate[open=false]"]]}
+  ;; card 70d3c88b: a cow that never moves stands beside the lane outside the gate; its box leaves 0.85 of the cell outside
+  ;; the gate for a 0.9-wide cow, and the push held the led cow off the gap at every try (live, z 16.30..16.41 against
+  ;; 16.45 needed). The run looks again while that is worth its price (:blocker-wait, about 55 s at worth 1200), then
+  ;; declines: the led cow let go outside, the run ends :gate-blocked naming the cow and its cell.
+  {:name "still-cow-narrowing-the-gate-lane-declines-gate-blocked"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:summon "cow" [17.3 0 17.3] "{NoAI:1b}"]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.gate-blocked :data {:blocker "cow" :cell #at [17 0 17]}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :gate-blocked}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :herd.crowded-gate :data {:where :out}} :for-s 240 :until {:source :job :kind :stopped}}]
    :after [[:block [18 0 16] "oak_fence_gate[open=false]"]]}
   ;; card 4f377f2f: the ground round the pen is one block higher than the pen floor, so the gate stands a step above the inside cells
   {:name "gate-a-step-above-the-pen-floor-cow-brought"
