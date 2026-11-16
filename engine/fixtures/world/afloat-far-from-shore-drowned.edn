@@ -1,0 +1,20 @@
+;; Card 31df5cc8 (Tamsin S3): afloat far from any shore with a trident drowned 8 blocks below, walls cannot be placed (no cell has a block to be
+;; placed against or a support chain), so they are no cover and the reflex decides a fight or a flee instead of 10 placements that fail while the tridents land.
+;; Water x 4..28, z 4..28, y 0..12 inside a stone ring; the body floats at its middle on the top layer (stone floor 12 below, shore 12 off). The drowned is NoAI and helmeted (it never throws).
+;; Should-succeed: hostile.decided names a fight or a flee, and no walls.open is ever emitted.
+{:defaults
+ {:tags [:hostile :survival :water]
+  :time :any
+  :register [{:trigger :suffocating}
+             {:trigger :hostile-near}]
+  :blocks [[:fill [3 0 3] [29 12 29] "stone"]
+           [:fill [4 0 4] [28 12 28] "water"]]
+  :body {:at [16.5 12 16.5] :inventory [["cobblestone" 24]] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "afloat-far-from-shore-with-a-trident-drowned-builds-no-walls"
+   :act [[:summon "drowned" [16.5 4 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:trident\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 1]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision #{:fight :flee}}} :within-s 20}
+            {:no-event {:source :job :kind :walls.open} :for-s 25}]
+   :limit-s 60}]}
