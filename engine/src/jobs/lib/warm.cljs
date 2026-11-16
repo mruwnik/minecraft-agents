@@ -4,18 +4,22 @@
             [engine.path.blocks :as blocks]
             [engine.settings :as settings]
             [jobs.lib.cost.caught :as caught]
+            [jobs.lib.cost.table :as table]
             [jobs.lib.cost.value :as value]))
 
 (defn steps
   "The warm-up, one fn per table or posterior."
   []
   (concat
-   ;; measured-worth prices the tree at these four bases: one table each, so one step each
-   (for [find (value/tree-finds)] #(value/tree-each @game/version "stone" find))
-   [#(value/measured-worth @game/version)
-    #(value/item-value [{:name "stone"}])
-    #(value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version)))
-    blocks/default-state-table]
+   ;; a worth table is three passes (table/table-for): a pass per step, so none holds the loop long
+   (for [find (value/tree-finds) passes (range 1 4)]
+     #(binding [table/*passes* passes] (value/tree-each @game/version "stone" find)))
+   [#(value/measured-worth @game/version)]
+   (for [passes (range 1 4)] #(binding [table/*passes* passes] (value/item-value [{:name "stone"}])))
+   (for [passes (range 1 4)]
+     #(binding [table/*passes* passes]
+        (value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version)))))
+   [blocks/default-state-table]
    (for [which [::caught/flights ::caught/fights]
          [group counts] (settings/get caught/settings which)
          :when (not= [::caught/flights :creeper] [which group])]

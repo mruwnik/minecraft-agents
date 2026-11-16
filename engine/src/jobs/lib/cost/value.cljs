@@ -197,7 +197,7 @@
     (when (pos? per) (max 0 (/ (reduce + (map #(- (:s %) (* (:got %) (:a %))) rows)) per)))))
 
 (defn tree-finds
-  "The four :find bases measured prices the recipe tree at (ore scan and terrain 0 and 1 over the default): one worth table each."
+  "[base scan-1 terrain-0 terrain-1]: the four :find bases measured prices the recipe tree at (ore scan and terrain 0 and 1 over the default): one worth table each."
   []
   (let [terrain (get-in tbl/default-basis [:find :terrain])]
     [{:ore-scan-s 0 :terrain terrain} {:ore-scan-s 1 :terrain terrain} {:ore-scan-s 0 :terrain 0} {:ore-scan-s 0 :terrain 1}]))
@@ -207,11 +207,12 @@
    (fn [version counts k]
      (let [md (facts/data version)
            terrain (get-in tbl/default-basis [:find :terrain])
-           tree #(tree-each version %1 {:ore-scan-s %2 :terrain %3})
+           [base scan-1 terrain-0 terrain-1] (tree-finds)
+           tree #(tree-each version %1 %2)
            rows (for [[n {:keys [s got]}] counts
                       :when (aget (.-itemsByName md) n)
-                      :let [a (tree n 0 terrain) at (tree n 0 0)]]
-                  {:n n :s s :got got :a a :b (- (tree n 1 terrain) a) :at at :bt (- (tree n 0 1) at)})
+                      :let [a (tree n base) at (tree n terrain-0)]]
+                  {:n n :s s :got got :a a :b (- (tree n scan-1) a) :at at :bt (- (tree n terrain-1) at)})
            ores (filter #(pos? (:b %)) rows)
            others (remove #(pos? (:b %)) rows)
            scan (fit ores)

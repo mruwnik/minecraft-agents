@@ -396,33 +396,42 @@
         (let [w (->> pickaxes (filter #(<= tier (weapon/tool-tier (.-name %)))) (keep #(let [w (get table (.-name %))] (when (and w (js/isFinite w)) (/ w (.-maxDurability %))))) (apply min js/Infinity))]
           (if (js/isFinite w) w 0))))))
 
-(defn build-table
-  "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
-  (default-basis with the deep-merged :basis): built again with the pickaxes' prices of the table before, once per harvest
-  tier above the default (a diamond pickaxe is made of ore an iron pickaxe digs, so one pass would price it without the iron
-  pickaxe; three passes settle the diamond tier). The extra args only key table-for's memo."
-  [version overrides basis & _]
-  (let [md (facts/data version)
-        basis* (full-basis basis)
-        build (table-builder version overrides basis)]
-    (nth (iterate #(build (tool-price-fn md basis* %)) (build (constantly 0))) 2)))
-
-(defonce ^{:doc "Tables table-for built in this process and the ms they took: counters, so a body.stall says whether a table build held the loop."}
+(defonce ^{:doc "Table passes built in this process (:n; three make a worth table) and the ms they took: counters, so a body.stall says whether a table build held the loop."}
   builds #js {:n 0 :ms 0})
 
 (heap/counter! :worth-tables #(.-n builds))
 (heap/counter! :worth-table-ms #(js/Math.round (.-ms builds)))
 
-(def table-for
-  "build-table, memoized on what it reads: its arguments and the settings the hp prices come from."
-  (let [built (memoize (fn [& args]
-                         (let [t0 (js/performance.now)
-                               table (apply build-table args)]
-                           (set! (.-n builds) (inc (.-n builds)))
-                           (set! (.-ms builds) (+ (.-ms builds) (- (js/performance.now) t0)))
-                           table)))]
-    (fn [version overrides basis]
-      (built version overrides basis (health/hp-seconds) (health/heal-s-per-hp) (craft-step) (smelt-step)))))
+(def ^:dynamic *passes*
+  "How many passes table-for runs: 3 settles the table; warm runs one per turn."
+  3)
+
+(def table-pass
+  "(fn [k version overrides basis]) -> the table after pass k (0-based), memoized on what it reads: its arguments and the
+  settings the hp prices come from. Pass 0 prices blocks with no tool price, each next with the pickaxes' prices of the pass
+  before, once per harvest tier above the default (a diamond pickaxe is made of ore an iron pickaxe digs, so one pass would
+  price it without the iron pickaxe; three passes settle the diamond tier). The builder (what no tool price changes) is shared by the passes."
+  (let [builder (memoize (fn [version overrides basis _] (table-builder version overrides basis)))
+        passes (atom {})]
+    (fn pass [k version overrides basis]
+      (let [settings [(health/hp-seconds) (health/heal-s-per-hp) (craft-step) (smelt-step)]
+            args [k version overrides basis settings]]
+        (if-let [hit (get @passes args)]
+          hit
+          (let [before (when (pos? k) (pass (dec k) version overrides basis))
+                t0 (js/performance.now)
+                build (builder version overrides basis settings)
+                table (build (if before (tool-price-fn (facts/data version) (full-basis basis) before) (constantly 0)))]
+            (set! (.-ms builds) (+ (.-ms builds) (- (js/performance.now) t0)))
+            (set! (.-n builds) (inc (.-n builds)))
+            (swap! passes assoc args table)
+            table))))))
+
+(defn table-for
+  "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
+  (default-basis with the deep-merged :basis), after *passes* passes (table-pass)."
+  [version overrides basis]
+  (table-pass (dec *passes*) version overrides basis))
 
 (defn groups-of
   "The override groups item name belongs to."
