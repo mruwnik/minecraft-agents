@@ -16,6 +16,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.body :as body]
+            [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
             [jobs.survival.recover-drops :as recover-drops]
@@ -793,41 +794,22 @@
                                              :item {:name name :count count}})
                items))
 
-;; ------------------------------------- a mob striking the body backs the trip off
+;; ------------------------------------- a mob striking the body: out of its reach, then the pile weighed again
 
-(defn struck-back-off
-  "The :recover-danger entry and the facts the struck tests check: the strike is named, the price alone said fetch, and the pile stays."
-  [eng]
-  (let [d (danger-remembered eng)]
-    {:named (boolean (re-find #"struck by zombie" (str (:text d))))
-     :price-said-fetch (> (est/ev-worth d) (+ (:cost d) (cfg/margin)))
-     :recovered (recovered eng)}))
-
-(deftest a-mob-striking-the-respawned-body-backs-the-trip-off-though-the-pile-is-worth-it
+(deftest a-mob-striking-the-respawned-body-is-run-from-then-the-pile-is-fetched
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :inventory sword :entities (conj (vec (pile-drops death-pile-of-the-field-report)) zombie-by-the-way)})]
+        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5}}
+              {:keys [eng p seen]} (setup {:floor tu/walk-floor :inventory sword :entities (conj (vec (pile-drops death-pile-of-the-field-report)) zombie)})]
           (die! eng {:pos death-pos :inventory death-pile-of-the-field-report})
           (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 3 :attacker {:id 7 :name "zombie"}}))
           (core/submit! eng (tu/order job) {})
-          (await (run-until-empty eng 10))
-          (is (= {:named true :price-said-fetch true :recovered nil} (struck-back-off eng))
-              "no hostile reflex is registered: the trip itself backs off, its hold priced, and does not walk on under blows")
-          (is (empty? (tu/walked-to eng))))))))
-
-(deftest a-trip-under-way-backs-off-when-a-mob-strikes-the-body
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [zombie {:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos [19 64 1]}
-              {:keys [eng p clock]} (setup {:floor tu/walk-floor :inventory sword :entities (pile-drops death-pile-of-the-field-report)})]
-          (die! eng {:pos death-pos :inventory death-pile-of-the-field-report})
-          (appear-after-first-leg! p clock zombie true)
-          (core/submit! eng (tu/order (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1}})) {})
-          (await (run-until-empty eng 10))
-          (is (= {:named true :price-said-fetch true :recovered nil} (struck-back-off eng)))
-          (is (< (.-x (.-pos (.self p))) 19) "the body did not walk on to the pile"))))))
+          (await (run-until-empty eng 30))
+          (is (= "zombie" (:mob (first (emitted seen :recover-drops.fled)))))
+          (is (< (cost-danger/melee-reach) (:gap (first (emitted seen :recover-drops.fled))))
+              "no hostile reflex is registered: the trip itself takes the body out of the striker's reach")
+          (is (= :collected (:decision (recovered eng))) "weighed again away from the blows, the pile is still worth the walk"))))))
 
 (defn ^:async picked-up-before-the-trip
   "The :recovered of a trip for a 42-item pile whose 36 cobblestone the body picked up at pickup-pos before the job."
