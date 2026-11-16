@@ -511,8 +511,9 @@
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again, one return more, from a mob's :again (the distance it is met at
-  on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught, or got away and
-  met again by flee-meets) unless the way back passes one nearer than it stands. A catch sets off every creeper (its blast is
+  on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught at the prior, or got away and
+  met again by flee-meets) unless the way back passes one nearer than it stands; caught by its way, the chaser is on the body
+  when the run ends: later follows at once (:outcomes, at the health the run leaves). A catch sets off every creeper (its blast is
   in :caught), so with creepers :stays is the got-away share alone and a catch is followed (:outcomes) by the cheapest of the
   walk again from the rest and the fight with them (spent-later, a fn of their indexes in mobs; default later). :caught: each flight is caught by its way (caught: the flee
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast, at caught-blast blocks when the flee search knows where its fuse ends, else at its swell start) over the flight, a melee mob over
@@ -612,7 +613,10 @@
                                              rest-then (when (and idxs (pos? c)) (walk-from idxs))]
                                          (cond-> (assoc w :stays (* (- 1 c) (flee-meets)))
                                            rest-then (assoc :outcomes [[c {:damage 0 :hit 0 :seconds 0 :then rest-then}]])))
-                                       (assoc w :stays (- 1 (* (- 1 c) (- 1 (flee-meets))))))))
+                                       ;; caught by its way, the chaser is still on the body when the run ends: the fight follows at once
+                                       (let [cw (if later (- 1 (js/Math.pow (- 1 way) times)) 0)]
+                                         (cond-> (assoc w :stays (- 1 (* (- 1 c) (- 1 (flee-meets))) cw))
+                                           (pos? cw) (assoc :outcomes [[cw {:damage 0 :hit 0 :seconds 0 :then [later] :at-once true}]]))))))
             left (assoc walk :then (walk-from left))
             :else walk))))))
 

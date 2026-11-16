@@ -292,6 +292,14 @@
            (:caught (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :caught 1})))
         "a shooter is no melee race: its arrows land all the flight")))
 
+(deftest a-run-every-way-of-which-is-caught-costs-the-fight-at-its-end-on-top-of-the-run
+  (let [zombies [(mob "zombie" 2 35) (mob "zombie" 3 35)]
+        f (cost/fight-answer (assoc (apply fight nil zombies) :health 10))
+        run #(cost/flee-answer {:health 10 :food 20 :mobs zombies :later f :caught % :caught-s 0.5})
+        price #(cost/answer-price (body 10) % here)]
+    (is (< (price f) (price (run 1))) "the chaser is still on the body when the run ends: the run, then the fight, not a second run that gets away")
+    (is (< (price (run 0)) (price (run 1))) "a free way leaves the zombies behind")))
+
 (deftest a-flight-caught-by-a-creeper-takes-the-blast-at-the-distance-the-search-puts-the-body-when-the-fuse-ends
   (let [creeper (mob "creeper" 4)
         caught #(:caught (cost/flee-answer (merge {:food 20 :mobs [creeper] :caught 1} %)))
