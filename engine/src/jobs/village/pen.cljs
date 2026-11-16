@@ -186,13 +186,27 @@
   (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))]
     (transduce (map #(get have % 0)) + 0 (quick-blocks c))))
 
+(defn quick-wins?
+  "Whether fetching the quick-blocks pays: the quickest fetch's price (need/item-price) is below the hand-dig time it
+  saves over the block the body would shut the cells with otherwise. A fetch under way goes on."
+  [c cells opts]
+  (let [p (:primitives c)
+        short (- (count cells) (quick-carried c))
+        quick (quick-blocks c)
+        carried (choose/filler c :build)
+        saved-s (if carried
+                  (/ (* (count cells) (- (tools/clear-ms p carried) (tools/clear-ms p (first quick)))) 1000)
+                  ##Inf)]
+    (or (some? (get-in (ctx/mem c) [:children :need]))
+        (< (apply min (map #(need/item-price c % short opts nil) quick)) saved-s))))
+
 (defn ^:async fill!
   "Fill cells with building blocks, fetched first when too few are carried (the call's ways); extra goes to the
-  fill-cells child. With :quick the quick-blocks are fetched first when too few are carried and a fetch can get them
-  (once a call; else what is carried is used)."
+  fill-cells child. With :quick the quick-blocks are fetched first when too few are carried and the fetch's price is
+  below the hand-dig time it saves (quick-wins?); else what is carried is used."
   [c slot cells & [extra]]
   (let [opts (some-> (need/fetch-opts c) (assoc :avoid (some-> (lay-of c) vp/cells)))
-        quick? (and (:quick extra) opts (not (:quick-failed (ctx/mem c))) (< (quick-carried c) (count cells)))
+        quick? (and (:quick extra) opts (< (quick-carried c) (count cells)) (quick-wins? c cells opts))
         use-quick? (and (:quick extra) (>= (quick-carried c) (count cells)))
         extra (cond-> (dissoc extra :quick) use-quick? (assoc :use {:blocks (quick-blocks c)}))
         names (if quick? (quick-blocks c) (choose/filler-names c :build))
@@ -206,7 +220,6 @@
       :else (let [e (await (need/blocks! c names short opts))]
               (cond (= :continue e) :continue
                     (= :done (:kind e)) :again
-                    quick? (do (ctx/update-mem! c assoc :quick-failed true) :again)
                     :else (ctx/end c (:kind e) (:cause e) (:data e)))))))
 
 (defn wood-item

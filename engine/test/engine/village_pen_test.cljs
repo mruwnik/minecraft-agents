@@ -164,6 +164,35 @@
           (is (= :done (:status result)) (pr-str result))
           (is (every? #(= "oak_planks" (block p %)) (:box lay))))))))
 
+(deftest a-fetch-of-quick-blocks-cheaper-than-the-hand-digs-it-saves-is-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom nil)]
+          (with-redefs [need/item-price (constantly 0.5)
+                        need/fetch! (fn [_ _ args _ _ _] (reset! asked args) {:kind :condition-failed :cause {:reason :need}})]
+            (await (run (assoc (world (merge shut plug))
+                               :entities [(jobless {:x 1 :y 64 :z 0})]
+                               :inventory [{:name "cobblestone" :count 24} {:name "oak_fence" :count 1} {:name "torch" :count 2}])
+                        {} 400)))
+          (is (some #{"dirt"} (:any-of @asked)) (pr-str @asked)))))))
+
+(deftest a-fetch-of-quick-blocks-dearer-than-the-hand-digs-it-saves-is-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom nil)
+              [result p] (with-redefs [need/item-price (constantly 1e6)
+                                       need/fetch! (fn [_ _ args _ _ _] (reset! asked args) {:kind :condition-failed :cause {:reason :need}})]
+                           (await (run (assoc (world (merge shut plug))
+                                              :entities [(jobless {:x 1 :y 64 :z 0})]
+                                              :inventory [{:name "cobblestone" :count 24} {:name "oak_fence" :count 1} {:name "torch" :count 2}])
+                                       {} 400)))
+              lay (vp/layout ws [-1 0])]
+          (is (nil? @asked) (pr-str @asked))
+          (is (= :done (:status result)) (pr-str result))
+          (is (every? #(= "cobblestone" (block p %)) (:box lay))))))))
+
 (deftest a-pen-over-a-drop-floors-the-near-end-and-the-boxs-entry-too
   (async done
     (tu/run-async done
