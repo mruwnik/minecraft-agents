@@ -1,25 +1,26 @@
-;; Card eff5ca7b: a mob striking the body is the hostile reflex's, though the :died entry comes first in the register.
-;; The body dies at [22 0 22] (RCON kill) and respawns at [4 0 4] with an iron sword (given); a husk (no loot pick-up) stands
-;; by the pile and comes for the body. The pile (diamonds, iron) is worth the trip past one husk, so before the fix the trip
-;; walked on under its blows and the hostile reflex could not cut it. Should-succeed: hostile-near fires before the pile is
-;; collected (recover-drops waits :hostile-near or ends between steps), the husk is answered, then the pile is collected.
-;; Resistance III keeps the body alive while the blows still land (they must, to count as hits).
+;; Card eff5ca7b: a mob striking the body backs the recover-drops trip off, though the pile is worth the walk past it.
+;; The body dies at [22 0 22] (RCON kill) and respawns at [4 0 4]; the pile (32 diamonds, iron) is worth far more than a
+;; trip past one husk. No reflex is registered: the trip must not lean on one. Should-succeed: a husk summoned by the
+;; respawn strikes the body and the trip waits :danger naming the strike (before the fix it walked on under the blows,
+;; the price alone saying fetch). Should-fail: with no husk the pile is collected and nothing is struck.
+;; Resistance IV keeps the body alive while the blows still land (they must, to count as hits).
 {:defaults
  {:tags [:survival :death :jobs]
-  :register [{:trigger :died}
-             {:trigger :hostile-near}]
   :body {:at [22.5 0 22.5] :spawnpoint [4 0 4] :effects [["resistance" 600 3]]
          :inventory [["diamond" 32] ["raw_iron" 24] ["cobblestone" 64]]}
   :mobs :keep
   :act [[:kill-body]
         [:await {:source :body :kind :respawned} 30]
-        [:rcon "give $BODY iron_sword 1"]
-        [:summon "husk" [20.5 0 20.5] "{CanPickUpLoot:0b,PersistenceRequired:1b}"]]
-  :limit-s 220}
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]]
+  :limit-s 150}
  :cases
- [{:name "husk-striking-the-body-is-answered-before-the-pile"
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 120}
-            {:no-event {:source :reflex :kind :ended :data {:decision :collected}} :for-s 200
-             :until {:source :reflex :kind :fired :context {:reflex-id :hostile-near}}}
-            {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 200}]
+ [{:name "husk-striking-the-body-backs-the-trip-off"
+   :act [[:summon "husk" [6.5 0 5.5] "{CanPickUpLoot:0b,PersistenceRequired:1b}"]
+         [:job (jobs.survival.recover-drops {:worth 1200})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :danger :text [:contains "struck by husk"]}} :within-s 90}]}
+  {:name "no-mob-the-pile-is-collected"
+   :act [[:job (jobs.survival.recover-drops {:worth 1200})]]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :danger}} :for-s 120
+             :until {:source :job :kind :completed :data {:decision :collected}}}]
    :after [[:item "diamond" 32]]}]}

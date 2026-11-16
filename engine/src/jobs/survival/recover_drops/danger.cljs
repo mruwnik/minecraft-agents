@@ -1,6 +1,7 @@
 (ns jobs.survival.recover-drops.danger
   "The dangers near a recover-drops trip and the declines they cause."
   (:require [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.body :as body]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ready :as ready]
@@ -23,10 +24,14 @@
                               :ignore-heard? (body/heard-muted? (ctx/view c))})))
 
 (defn struck?
-  "Whether a mob's blow hurt the body within jobs.lib.danger/::hit-s and the hostile-near trigger would hold (ready/hostile-now?):
-  the danger the trip priced has come, and the hostile reflex answers it."
+  "Whether a mob's blow hurt the body within jobs.lib.danger/::hit-s (danger-q/hit-ids)."
   [c]
-  (boolean (and (seq (danger-q/hit-ids (ctx/view c))) (ready/hostile-now? c))))
+  (boolean (seq (danger-q/hit-ids (ctx/view c)))))
+
+(defn striker
+  "The name of the latest attacker that hurt the body, or nil."
+  [c]
+  (some #(get-in % [:data :attacker :name]) (reverse (mem/entries (ctx/view c) :hurt))))
 
 (defn hit-since?
   "Whether the body was hurt since the decision was taken."
