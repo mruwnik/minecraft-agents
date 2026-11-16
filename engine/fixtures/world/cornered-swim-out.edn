@@ -16,6 +16,7 @@
   :limit-s 90}
  :cases
  [{:name "bare-body-swims-to-the-shore-and-does-not-fight"
+   :body {:inventory [["iron_ingot" 6]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]
          [:summon "drowned" [9.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 12]] ; hold: the body takes this long to leave the water

@@ -7,7 +7,7 @@
   :time :any
   :mobs :keep
   :register [{:trigger :hostile-near}]
-  :body {:at [12.5 0 16.5] :yaw 270 :inventory [] :effects [["resistance" 600 3]]}
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["iron_ingot" 6]] :effects [["resistance" 600 3]]}
   :limit-s 45}
  :cases
  [{:name "a-flight-from-an-open-home-moves-off-at-once"

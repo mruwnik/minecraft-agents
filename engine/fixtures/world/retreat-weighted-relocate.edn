@@ -13,6 +13,7 @@
   :body {:spawnpoint :far :at [16.5 0 16.5] :settle-s 3}}
  :cases
  [{:name "flee-two-zombies-east-west"
+   :body {:inventory [["iron_ingot" 6]]}
    :time :any
    :plot {:width 64 :light :dark}
    :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
