@@ -1291,3 +1291,11 @@
                        ((juxt :why #(get-in % [:coverage :legs])) (not-found-of state))))]
           (is (not= [:price 0] (await (legs {}))) "a 3 s walk over level ground is under the 12 s worth")
           (is (= [:price 0] (await (legs pit))) "the same walk to a floor 10 blocks down costs its climb back as well"))))))
+
+(deftest a-leg-too-dear-to-walk-is-skipped-and-a-level-leg-farther-off-is-walked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rim (merge (tu/box -40 63 -40 40 63 40 "air") (tu/box -40 53 -40 40 53 40 "grass_block") (tu/box 12 63 -40 40 63 40 "grass_block") {"0,63,0" "grass_block"})
+              {:keys [state]} (await (search-quoted! (fn [_ _] {:uses {:job-time [3 3 9]}}) rim))]
+          (is (pos? (get-in (not-found-of state) [:coverage :legs])) "the nearer legs down the pit cost their climb back, the level ground beyond them does not"))))))

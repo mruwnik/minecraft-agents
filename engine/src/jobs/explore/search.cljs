@@ -106,7 +106,7 @@
    :forage {:doc "whether the search is for food (the body hunts or picks it to eat); nil: every target is a food animal or food block. A search for wool or leather from a food animal says false" :spec boolean? :default nil}
    :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}
    :within {:doc "blocks (XZ) from the origin a leg may go and a noted or remembered target counts at most, a caller's own scope (a site, a pen's radius); nil: the max-distance setting" :spec (a/num-in 1 nil) :default nil}
-   :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.walk-pick/quoted-s of go-to's quote, the body as it is now) is weighed against it; the search ends :price at the first that costs more. nil: the call's worth" :spec (a/num-in 0 nil) :default nil}})
+   :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.walk-pick/quoted-s of go-to's quote, the body as it is now) is weighed against it; a leg that costs more is skipped and the next tried; the search ends :price when every leg left costs more. nil: the call's worth" :spec (a/num-in 0 nil) :default nil}})
 
 (a/defargs settings
   {::max-distance {:default 96 :doc "How far (XZ) from the origin a leg may go and a noted or remembered target still counts." :spec (a/int-in 1 nil)}
@@ -622,6 +622,24 @@
       ((one-way/climb-back-fn (:primitives c) {:x x :y y :z z} level) (- level y))
       0)))
 
+(defn ^:async quote-leg!
+  "price-leg!'s quote: nil when affordable (or no route is known), :continue while go-to's quote search goes on, :dear
+  (the price and chance noted in a map at mem's :dear-now) when the price is more than the worth times the chance."
+  [c leg sure? step?]
+  (let [worth (worth-of c)
+        p (:primitives c)
+        [x _ z] leg
+        q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg (:dig-out? (ctx/mem c)) step?)))
+        price (+ (pick/quoted-s c q) (climb-back-s c leg))
+        chance (if sure? 1 (cost/chance-of (or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c)) (ledger/own-cells c)) 1) 0))]
+    (cond
+      (:estimate q) :continue
+      (infinite? price) nil
+      (cost/leg-stops? price chance (pick/ev-worth worth q))
+      (do (ctx/update-mem! c assoc :dear-now {:next-price price :next-chance chance :next-climb nil :next-risk (when-let [t (second (get-in q [:uses :job-time]))] (js/Math.round (- price t))) :next-dark (js/Math.round (get-in q [:risk :dark-s] 0))})
+          :dear)
+      :else nil)))
+
 (defn ^:async price-leg!
   "The price of a walk toward leg before it starts (jobs.lib.walk-pick/quoted-s of go-to's quote: its time
   and the hp its plan risks, its walk risk): nil when it is affordable (or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
@@ -629,18 +647,11 @@
   there finds one (cost/look-leg-chance: over every live searched note, :use-notes false too, or for ore the rock seen
   round the body; 1 for logs and other blocks, and for a walk to a noted target, sure?)."
   [c leg sure? step?]
-  (let [worth (worth-of c)]
-    (let [p (:primitives c)
-          [x y z] leg
-          q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg (:dig-out? (ctx/mem c)) step?)))
-          price (+ (pick/quoted-s c q) (climb-back-s c leg))
-          chance (if sure? 1 (cost/chance-of (or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c)) (ledger/own-cells c)) 1) 0))]
-      (cond
-        (:estimate q) :continue
-        (infinite? price) nil
-        (cost/leg-stops? price chance (pick/ev-worth worth q)) (do (ctx/update-mem! c assoc :next-price price :next-chance chance :next-climb nil :next-risk (when-let [t (second (get-in q [:uses :job-time]))] (js/Math.round (- price t))) :next-dark (js/Math.round (get-in q [:risk :dark-s] 0)))
-                                                                  (finish! c :not-found :price))
-        :else nil))))
+  (let [r (await (quote-leg! c leg sure? step?))]
+    (if (= :dear r)
+      (do (ctx/update-mem! c #(merge % (:dear-now %)))
+          (finish! c :not-found :price))
+      r)))
 
 (defn sheltered-dark
   "ready/sheltered-dark when it is later (:dark), else nil."
@@ -825,17 +836,19 @@
               (await (walk! c))))
       :else
       (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)
-            priced (when leg (await (price-leg! c leg false (boolean step))))]
+            priced (when leg (await (quote-leg! c leg false (boolean step))))]
         (if (= :continue priced)
           :continue
           (do
             (ctx/update-mem! c (fn [m] (-> m
-                                           (update :tried (fnil into []) tried)
+                                           (update :tried (fnil into []) (cond-> tried (and column (= :dear priced)) (conj column)))
+                                           (cond-> (= :dear priced) (update :dear #(if (< (:next-price % ##Inf) (:next-price (:dear-now m))) % (:dear-now m))))
                                            (update :failed (fnil into []) failed)
                                            (update :skipped (fnil + 0) skipped)
                                            (assoc :choosing (boolean (and more (not leg))))
                                            (assoc :deferred (when (and more (not leg)) unloaded)))))
             (cond
+              (= :dear priced) :again
               leg (or priced
                       (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
                                                          (update :legs (fnil + 0) (if step 0 1)))))
@@ -855,6 +868,7 @@
                                 (note-leg-start! c leg)
                                 (await (walk! c)))))
                   :else (finish! c :not-found (if (zero? (:legs m 0)) :no-way-out :distance))))
+              (and (empty? unloaded) (:dear m)) (do (ctx/update-mem! c #(merge % (:dear %))) (finish! c :not-found :price))
               (empty? unloaded) (finish! c :not-found :distance)
               (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded) false false))
                                             (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
