@@ -834,6 +834,22 @@
           (is (= ["zombie" "zombie"] (mapv :mob (emitted seen :recover-drops.answered)))
               "the trip answers the first blow with respond-to-hostile, then the next one with it again"))))))
 
+(deftest a-blow-is-answered-then-the-pile-weighed-again-and-declined-when-dear
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 7 :name "zombie" :kind "hostile" :invulnerable true :pos [3.5 64 0.5]}
+              {:keys [eng p seen]} (setup-flight {:entities (vec (pile-drops diamonds))})]
+          (die! eng {:pos death-pos :inventory diamonds} 5000 far-respawn)
+          (swap! (fake/state p) update :entities conj zombie)
+          (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 1 :attacker {:id 7 :name "zombie"}}))
+          (core/submit! eng (tu/order (list (first job) {:value-overrides far-held-values})) {})
+          (await (run-until-empty eng 30))
+          (is (= ["zombie"] (mapv :mob (emitted seen :recover-drops.answered))) "the blow is answered once")
+          (is (re-find #"zombie" (:text (danger-remembered eng))) "the pile weighed again with the zombie near is dear: declined for danger")
+          (is (= [:danger] (mapv :reason (declined-events seen))) "the trip ends there")
+          (is (empty? (emitted seen :completed))))))))
+
 (defn ^:async picked-up-before-the-trip
   "The :recovered of a trip for a 42-item pile whose 36 cobblestone the body picked up at pickup-pos before the job."
   [pickup-pos]

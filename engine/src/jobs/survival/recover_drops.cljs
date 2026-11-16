@@ -163,7 +163,8 @@
   "A skip for danger backs off while the trip can still come back: report it, forget the estimate, remember the danger
   (:recover-danger, for ::danger-memory-ms; at most the pile's surplus seconds (est/surplus-s), and until the walk back from
   the flight's end (est/flight-s) and the collect (arrive-s) would end at the despawn)
-  and end condition-failed :danger: the hostile reflex takes the body away. The died trigger and the check rest for this
+  and end condition-failed :danger (retreat!: at once when asked :retry or once a blow was answered, else the remembered
+  danger makes can-run? :later). The died trigger and the check rest for this
   death meanwhile, then the danger is weighed anew. A hold shorter than the flight, with no mob seen, is no wait, and neither is a second hold
   for the same mobs where a finished hold saw them: the pile is left (its worth is under the full cost, danger in; Q367 rules out
   waiting, not leaving)."
