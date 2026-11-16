@@ -319,14 +319,17 @@
   [c target]
   (let [tpos (aim-pos c target)]
     (cond
-      (in-reach? c target) :there
-      ;; in water, standing or afloat, the wait holds its cell: a current would carry a body that only waits away (into a cave)
-      (hostile/held? c target) (do (if (breath/in-water? (:primitives c))
-                                     (await (ctx/act c :swim #js {:ms chase-gap-ms :tread true :hold true}))
-                                     (await (combat/wait-gap! c (ctx/now c) chase-gap-ms)))
-                                   :held)
+      (in-reach? c target) (do (ctx/update-mem! c dissoc :hold-cell) :there)
+      ;; in water, standing or afloat, the wait holds the cell the hold began in: swim :hold only steers to the cell its own
+      ;; call began in, so a current would creep the body on from one poll to the next; after a drift the body walks back
+      (hostile/held? c target) (let [anchor (or (:hold-cell (ctx/mem c)) (let [cell (near/cell-of (u/self-pos c))] (ctx/update-mem! c assoc :hold-cell cell) cell))]
+                                 (cond
+                                   (not (breath/in-water? (:primitives c))) (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
+                                   (u/within? anchor (u/self-pos c) 0) (await (ctx/act c :swim #js {:ms chase-gap-ms :tread true :hold true}))
+                                   :else (await (near/go-near! c anchor 0 (assoc (walk-opts c target) :leg-s 1))))
+                                 :held)
       :else
-      (case (await (near/go-near! c tpos 2 (walk-opts c target)))
+      (case (do (ctx/update-mem! c dissoc :hold-cell) (await (near/go-near! c tpos 2 (walk-opts c target))))
         :there :arrived
         :partial :partial
         :blocked))))

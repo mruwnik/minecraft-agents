@@ -2631,6 +2631,25 @@
           (is (not (breath/swimming? p)) "wading, feet on the floor")
           (is (some #(true? (.-hold (.-args %))) (calls p "swim")) "the wait holds the body's cell against the current"))))))
 
+(deftest a-held-fight-in-a-current-swims-from-the-cell-its-hold-began-in-after-a-drift
+  ;; swim :hold steers to the cell its own call began in, so a call made after the current moved the body would hold the new cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-flight {:floor flight-floor :blocks (into {} (for [x (range -4 5) z (range -2 3)] [(str x ",64," z) "water"]))
+                                             :self {:pos [0.5 64 0.5] :health 20} :inventory sword
+                                             :entities [(assoc (zombie 6.5 0.5) :visible true)]})
+              from (atom [])]
+          (.override (.-world p) "swim"
+                     (fn [_ _ _]
+                       (swap! from conj (js/Math.floor (first (:pos (:self @(fake/state p))))))
+                       (fake/swap-self! p update :pos #(update % 0 + 1))
+                       (js/Promise.resolve #js {:status "timeout"})))
+          (core/submit! eng (tu/order '(jobs.combat.attack {:targets :hostiles :radius 8 :hold true})) {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (< 1 (count @from)) "the wait swam again after the drift")
+          (is (= #{0} (set @from)) "every held swim began in the cell the hold began in, the current's drift walked back"))))))
+
 (deftest a-shooter-that-no-walk-reaches-ends-the-fight-however-hurt-the-body-is
   ;; every swing is out of reach and a walk to it finds no way, the shooter hurting the body between them: the count of
   ;; blocked tries restarted at each hp loss and the fight never gave up
