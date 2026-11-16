@@ -23,25 +23,29 @@
       :open
       (kind-of b))))
 
-(defn flood-visit
-  "Breadth-first over (next-cells x y z) from start [x y z], expanding at most budget cells: {:cells #js [[x y z]..] in
-  visiting order, :closed? whether every reachable cell was expanded within budget}, fewer where reach/*search* runs out
-  (its cells charged). An abort? (cell #js [x y z]) that is true for a cell about to be expanded ends the flood there,
-  not closed."
-  ([next-cells start budget] (flood-visit next-cells start budget nil))
-  ([next-cells [sx sy sz] budget abort?]
+(defn flood-begin
+  "A flood-visit kept to go on in steps (flood-step!), its *search* meter the one bound now."
+  [next-cells [sx sy sz] budget abort?]
   (let [key (keyer sx sz)
-        seen (js/Set.)
-        queue #js [#js [sx sy sz]]
-        cap (reach/metered-cap budget :read-s)
-        end (fn [closed? cut?] (reach/charge! (min (.-size seen) cap) :read-s cut?) {:cells queue :closed? closed?})]
+        seen (js/Set.)]
     (.add seen (key sx sy sz))
-    (loop [head 0]
+    {:next-cells next-cells :key key :seen seen :queue #js [#js [sx sy sz]] :head (volatile! 0) :budget budget :abort? abort?
+     :meter reach/*search* :cap (reach/metered-cap budget :read-s)}))
+
+(defn flood-step!
+  "Go on with flood f (flood-begin) until it ends, its flood-visit answer, or, after a cell at least, until due? (nil:
+  never) is true: nil."
+  [{:keys [next-cells key ^js seen ^js queue head budget abort? meter cap]} due?]
+  (let [end (fn [closed? cut?]
+              (when meter (reach/spend! meter (* (min (.-size seen) cap) (:read-s meter)) cut?))
+              {:cells queue :closed? closed?})]
+    (loop [h @head first? true]
       (cond
-        (== head (.-length queue)) (end true false)
+        (== h (.-length queue)) (end true false)
+        (and due? (not first?) (due?)) (do (vreset! head h) nil)
         (>= (.-size seen) cap) (end false (< cap budget))
-        (and abort? (abort? (aget queue head))) (end false false)
-        :else (let [c (aget queue head)
+        (and abort? (abort? (aget queue h))) (end false false)
+        :else (let [c (aget queue h)
                     nexts (next-cells (aget c 0) (aget c 1) (aget c 2))]
                 (dotimes [i (.-length nexts)]
                   (let [n (aget nexts i)
@@ -49,7 +53,16 @@
                     (when-not (.has seen k)
                       (.add seen k)
                       (.push queue n))))
-                (recur (inc head))))))))
+                (recur (inc h) false))))))
+
+(defn flood-visit
+  "Breadth-first over (next-cells x y z) from start [x y z], expanding at most budget cells: {:cells #js [[x y z]..] in
+  visiting order, :closed? whether every reachable cell was expanded within budget}, fewer where reach/*search* runs out
+  (its cells charged). An abort? (cell #js [x y z]) that is true for a cell about to be expanded ends the flood there,
+  not closed."
+  ([next-cells start budget] (flood-visit next-cells start budget nil))
+  ([next-cells start budget abort?]
+   (flood-step! (flood-begin next-cells start budget abort?) nil)))
 
 (defn flood-cells
   "flood-visit's cells when every reachable cell was expanded within budget (none stopping it, abort?), else nil."

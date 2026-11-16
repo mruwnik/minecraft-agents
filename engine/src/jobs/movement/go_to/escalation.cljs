@@ -51,7 +51,7 @@
             [jobs.movement.go-to.cut :refer [walk-tolls]]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [column-target way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? pickaxe-fetch route-tool gap-fill
-                                                         goal-way dig-leg dig-toward dig-way drop-fill out-of-sight? refused-drop? damage-refused? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
+                                                         goal-way dig-leg dig-toward dig-way drop-fill drop-fill-sliced out-of-sight? refused-drop? damage-refused? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
                                                          route-owner searched-cells-of route-slice route-epoch routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.lib.stair-memory :as stair-mem]
@@ -347,6 +347,7 @@
         goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
         shut? (delay (escape/walk-enclosed? c))
         opts (merge (way-opts c feet (fetch-tool? (:primitives c) (:doors (:args c)) shut?) slice) (range-opts c pos))
+        _ (when-let [fill (drop-fill-sliced c result (:skip opts) feet)] (await fill))
         worth (ctx/worth c)
         gap? (gap-walled? c result (skips c))
         into? (or (goal-walled? c result shut?) (and gap? (not @shut?)))

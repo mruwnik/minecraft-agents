@@ -40,6 +40,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk-risk :as walk-risk]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.cut :refer [walk-tolls]]
@@ -163,54 +164,108 @@
     (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
       {:step :fill-gap :cell cell :item item :count carried})))
 
+;; drop-fill's floods as tasks: (fn [due?]) goes on until it answers, or ::pending once due? (nil: never) is true; so the
+;; same code answers at once (run-task) or in tick slices (run-sliced!).
+
+(defn done "A task answering v." [v] (fn [_] v))
+
+(defn task-then
+  "The task that runs t, then the task (f its answer)."
+  [t f]
+  (let [next (volatile! nil)]
+    (fn [due?]
+      (if-let [n @next]
+        (n due?)
+        (let [v (t due?)]
+          (if (keyword-identical? ::pending v)
+            v
+            (let [n (f v)] (vreset! next n) (n due?))))))))
+
+(defn run-task "Task t's answer, worked out at once." [t] (t nil))
+
+(defn ^:async run-sliced!
+  "Task t's answer, letting the event loop run each tick between its steps (walk-pick/tick-slice!)."
+  [c t]
+  (loop []
+    (let [v (t #(zero? (walk-pick/slice-left-ms)))]
+      (if (keyword-identical? ::pending v)
+        (do (await (walk-pick/tick-slice! c)) (recur))
+        v))))
+
+(defn flood-task
+  "reach-room/flood-visit as a task."
+  [next-cells start budget abort?]
+  (let [f (reach-room/flood-begin next-cells start budget abort?)]
+    (fn [due?] (or (reach-room/flood-step! f due?) ::pending))))
+
+(defn search-task
+  "Planner search s run to its end as a task, its result; in slices, each step the nodes the tick's time left buys
+  (cost/search-cell-ceiling-s)."
+  [^js s]
+  (fn [due?]
+    (loop []
+      (cond
+        (.step s (if due? (max 1 (js/Math.ceil (/ (walk-pick/slice-left-ms) 1000 (cost/search-cell-ceiling-s)))) js/Infinity)) (.result s)
+        (due?) ::pending
+        :else (recur)))))
+
+(defn drop-edges-task
+  "drop-edges as a task."
+  [p starts feet]
+  (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
+        level (fn [x y z] (.filter (reach/forward kind-at x y z) (fn [n] (>= (aget n 1) (dec y)))))
+        open? (fn [x y z] (keyword-identical? :open (kind-at x y z)))
+        [tx _ tz] feet]
+    (task-then
+      (flood-task level (first starts) reach-room/room-cells nil)
+      (fn [{:keys [cells closed?]}]
+        (if-not closed?
+          (done nil)
+          (let [key (reach/keyer (first feet) (nth feet 2))
+                sides [[1 0] [-1 0] [0 1] [0 -1]]
+                near (for [[dx dz] sides dy [-1 0 1]] [dx dz dy])
+                edges (->> (for [c cells
+                                 :let [x (aget c 0) y (aget c 1) z (aget c 2)]
+                                 [dx dz] sides
+                                 :let [nx (+ x dx) nz (+ z dz)]
+                                 :when (and (open? nx y nz) (open? nx (inc y) nz) (open? nx (dec y) nz) (open? nx (- y 2) nz))]
+                             [nx y nz])
+                           distinct)
+                pending (js/Set. (clj->js (map (fn [[nx y nz]] (key nx y nz)) edges)))]
+            (task-then
+              (if (seq edges)
+                (flood-task #(reach/forward kind-at %1 %2 %3) feet reach-room/room-cells
+                            (fn [^js h]
+                              (doseq [[dx dz dy] near]
+                                (.delete pending (key (- (aget h 0) dx) (- (aget h 1) dy) (- (aget h 2) dz))))
+                              (zero? (.-size pending))))
+                (done nil))
+              (fn [r]
+                (let [stood (js/Set.)
+                      _ (doseq [^js c (:cells r)] (.add stood (key (aget c 0) (aget c 1) (aget c 2))))
+                      steps-on? (fn [nx y nz] (some (fn [[dx dz dy]] (.has stood (key (+ nx dx) (+ y dy) (+ nz dz)))) near))]
+                  (done (->> (for [[nx y nz] edges :when (steps-on? nx y nz)] [nx (dec y) nz])
+                             distinct
+                             (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz))))))))))))))))
+
 (defn drop-edges
   "The floor cells [x y z] a body would drop off by 2 or more (or into a pit with no floor) when it leaves the region it
   can step back into (level, or one up or down) from the first of starts and that the body at feet can step onto once
   filled, nearest to the [x _ z] target first; nil when the region is not closed within the room cells. The body's own
   flood runs only when an edge passes the open-air tests, and ends once every such edge has a cell it can step from."
   [p starts feet]
-  (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
-        level (fn [x y z] (.filter (reach/forward kind-at x y z) (fn [n] (>= (aget n 1) (dec y)))))
-        {:keys [cells closed?]} (reach-room/flood-visit level (first starts) reach-room/room-cells)
-        open? (fn [x y z] (keyword-identical? :open (kind-at x y z)))
-        [tx _ tz] feet]
-    (when closed?
-      (let [key (reach/keyer (first feet) (nth feet 2))
-            sides [[1 0] [-1 0] [0 1] [0 -1]]
-            near (for [[dx dz] sides dy [-1 0 1]] [dx dz dy])
-            edges (->> (for [c cells
-                             :let [x (aget c 0) y (aget c 1) z (aget c 2)]
-                             [dx dz] sides
-                             :let [nx (+ x dx) nz (+ z dz)]
-                             :when (and (open? nx y nz) (open? nx (inc y) nz) (open? nx (dec y) nz) (open? nx (- y 2) nz))]
-                         [nx y nz])
-                       distinct)
-            pending (js/Set. (clj->js (map (fn [[nx y nz]] (key nx y nz)) edges)))
-            mine (when (seq edges)
-                   (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) feet reach-room/room-cells
-                                                   (fn [^js h]
-                                                     (doseq [[dx dz dy] near]
-                                                       (.delete pending (key (- (aget h 0) dx) (- (aget h 1) dy) (- (aget h 2) dz))))
-                                                     (zero? (.-size pending))))))
-            stood (js/Set.)
-            _ (doseq [^js c mine] (.add stood (key (aget c 0) (aget c 1) (aget c 2))))
-            steps-on? (fn [nx y nz] (some (fn [[dx dz dy]] (.has stood (key (+ nx dx) (+ y dy) (+ nz dz)))) near))]
-        (->> (for [[nx y nz] edges :when (steps-on? nx y nz)] [nx (dec y) nz])
-             distinct
-             (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz))))))))))
+  (run-task (drop-edges-task p starts feet)))
 
-(defn late-flood
-  "The result of the planner's late goal flood (wider than its early one: no sealed test) toward the goal within range of to
-  [x y z] over pw before any search, over at most the room-cells drop-edges closes the goal's region in; fill-cells (nil:
-  none) its options.fillCells. pw: a pathWorld (wworld/path-world)."
+(defn late-flood-search
+  "The planner's late goal flood (wider than its early one: no sealed test) toward the goal within range of to [x y z]
+  over pw before any search, over at most the room-cells drop-edges closes the goal's region in, as a search not yet run
+  (search-task); fill-cells (nil: none) its options.fillCells. pw: a pathWorld (wworld/path-world)."
   [c ^js pw to range fill-cells]
-  (let [^js s (planner/create-search (.-snapshot pw) (wplan/plan-query c to range)
-                                     (doto (wplan/plan-options pw 1 nil nil)
-                                       (unchecked-set "preFlood" 0) (unchecked-set "floodAfter" 0) (unchecked-set "maxNodes" 1)
-                                       (unchecked-set "goalFlood" reach-room/room-cells)
-                                       (unchecked-set "fillCells" fill-cells)))]
-    (.step s js/Infinity)
-    (.result s)))
+  (planner/create-search (.-snapshot pw) (wplan/plan-query c to range)
+                         (doto (wplan/plan-options pw 1 nil nil)
+                           (unchecked-set "preFlood" 0) (unchecked-set "floodAfter" 0) (unchecked-set "maxNodes" 1)
+                           (unchecked-set "goalFlood" reach-room/room-cells)
+                           (unchecked-set "fillCells" fill-cells))))
 
 (defn shut-result?
   "Whether a planner result proves the goal walled in or cut off by a drop (or the start shut in): the proof behind a
@@ -218,12 +273,8 @@
   [^js r]
   (boolean (#{"goal-enclosed" "goal-cut-off" "start-enclosed"} (.-reason r))))
 
-(defn joining-fill
-  "The fill of fills (floor cells [x y z], nearest first) whose block alone, read solid, leaves goal ({:x :y :z}) no longer
-  proven shut by the planner's late goal flood (late-flood, over the call's read: c's :unknown). One labelled flood over
-  the world with every fill solid (options.fillCells) names a candidate; a flood with that fill alone confirms it, since
-  the labelled flood's budget is shared by every label and its other fills' blocks can wall off a way. nil when it does not
-  free the goal; the first of fills when the goal is not proven shut with none filled, or without a path world."
+(defn joining-fill-task
+  "joining-fill as a task."
   [c goal fills]
   (let [pw (wworld/path-world (:primitives c) (:unknown c))
         fills (vec fills)
@@ -231,55 +282,103 @@
         within (:range (:args c) 1)
         filled #(wworld/with-walls pw (map (fn [cell] (zipmap [:x :y :z] cell)) %))]
     (cond
-      (nil? pw) (first fills)
-      (empty? fills) nil
-      :else (let [stands (js/Map.)
-                  _ (doseq [[i [x y z]] (map-indexed vector fills)] (.set stands (planner/cell-key x (inc y) z) (inc i)))
-                  r (late-flood c (filled fills) to within stands)
-                  joined (.-joined r)]
-              (cond
-                (shut-result? r) nil
-                (pos? joined) (let [fill (fills (dec joined))]
-                                (when-not (shut-result? (late-flood c (filled [fill]) to within nil))
-                                  fill))
-                :else (first fills))))))
+      (nil? pw) (done (first fills))
+      (empty? fills) (done nil)
+      :else (let [stands (js/Map.)]
+              (doseq [[i [x y z]] (map-indexed vector fills)] (.set stands (planner/cell-key x (inc y) z) (inc i)))
+              (task-then
+                (search-task (late-flood-search c (filled fills) to within stands))
+                (fn [^js r]
+                  (let [joined (.-joined r)]
+                    (cond
+                      (shut-result? r) (done nil)
+                      (pos? joined) (let [fill (fills (dec joined))]
+                                      (task-then (search-task (late-flood-search c (filled [fill]) to within nil))
+                                                 (fn [r] (done (when-not (shut-result? r) fill)))))
+                      :else (done (first fills))))))))))
+
+(defn joining-fill
+  "The fill of fills (floor cells [x y z], nearest first) whose block alone, read solid, leaves goal ({:x :y :z}) no longer
+  proven shut by the planner's late goal flood (late-flood-search, over the call's read: c's :unknown). One labelled flood over
+  the world with every fill solid (options.fillCells) names a candidate; a flood with that fill alone confirms it, since
+  the labelled flood's budget is shared by every label and its other fills' blocks can wall off a way. nil when it does not
+  free the goal; the first of fills when the goal is not proven shut with none filled, or without a path world."
+  [c goal fills]
+  (run-task (joining-fill-task c goal fills)))
 
 (defonce ^{:doc "Per body (its primitives): the last drop-fill asked, {:key :unknown :v}."} drop-fills (js/WeakMap.))
 
-(defn drop-fill-of
-  "drop-fill's answer, without the kept one."
+(defn drop-fill-asked?
+  "Whether drop-fill has floods to run for result: a :goal-cut-off or :goal-enclosed one, the fill not skipped."
+  [result skip]
+  (and (contains? #{:goal-cut-off :goal-enclosed} (some-> (:reason result) keyword)) (not (skip :fill-gap))))
+
+(defn drop-fill-task
+  "drop-fill's answer, without the kept one, as a task."
   [c result skip feet]
-  (when (and (contains? #{:goal-cut-off :goal-enclosed} (some-> (:reason result) keyword)) (not (skip :fill-gap)))
+  (if-not (drop-fill-asked? result skip)
+    (done nil)
     (let [p (:primitives c)
           {:keys [item] carried :count} (escape/pillar-item c)
           goal (some-> (places/parse-pos (:pos (:args c))) :pos)
           kind-at (reach/seen-lookup p reach-room/body-kind-of)
           starts (when goal (filter (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
                                     (for [dy [0 1] [dx dz] [[0 0] [1 0] [-1 0] [0 1] [0 -1]]]
-                                      [(+ (:x goal) dx) (+ (:y goal) dy) (+ (:z goal) dz)])))
-          cell (when (and item (seq starts)) (joining-fill c goal (drop-edges p starts feet)))]
-      (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
-        {:step :fill-gap :cell cell :item item :count carried}))))
+                                      [(+ (:x goal) dx) (+ (:y goal) dy) (+ (:z goal) dz)])))]
+      (if-not (and item (seq starts))
+        (done nil)
+        (task-then (drop-edges-task p starts feet)
+                   (fn [edges]
+                     (task-then (joining-fill-task c goal edges)
+                                (fn [cell]
+                                  (done (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
+                                          {:step :fill-gap :cell cell :item item :count carried}))))))))))
+
+(defn drop-fill-key
+  "What drop-fill's kept answer holds for: the world it read (threat-field/world-epoch), the call's read and the
+  question; nil when none is kept (no epoch, or under check-cache/fresh)."
+  [c result skip feet]
+  (let [epoch (threat-field/world-epoch (:primitives c))
+        u (:unknown c)]
+    (when (and (some? epoch) (not (::check-cache/fresh c)))
+      [epoch feet (some-> (:reason result) keyword) (boolean (skip :fill-gap)) (:pos (:args c)) (:range (:args c))
+       (:ignore-zones? (:args c)) (escape/pillar-item c) (some-> u .-missed .-size) (some-> u .-blocked .-size)])))
+
+(defn kept-drop-fill
+  "The kept {:key :unknown :v} for key k of c's body, else nil."
+  [c k]
+  (let [kept (.get drop-fills (:primitives c))]
+    (when (and k kept (identical? (:unknown c) (:unknown kept)) (= k (:key kept)))
+      kept)))
 
 (defn drop-fill
   "{:step :fill-gap :cell :item} when result is :goal-cut-off or :goal-enclosed (the goal's region ends at a drop the body cannot climb back
   from), a carried block can fill the floor of the cell beyond a drop edge that the planner's goal flood then no longer
   proves walled in (joining-fill), and no zone refuses the place: the bridge a player lays over the hole before a door;
-  else nil. Kept per body while the world it read (threat-field/world-epoch), the call's read and the question hold (never
-  under check-cache/fresh): the escalate? that keeps a give-up and the choice after it ask the same."
+  else nil. Kept per body (drop-fill-key): the escalate? that keeps a give-up and the choice after it ask the same, and
+  drop-fill-sliced works it out ahead in tick slices."
   [c result skip feet]
-  (let [p (:primitives c)
-        epoch (threat-field/world-epoch p)
-        u (:unknown c)
-        k [epoch feet (some-> (:reason result) keyword) (boolean (skip :fill-gap)) (:pos (:args c)) (:range (:args c))
-           (:ignore-zones? (:args c)) (escape/pillar-item c) (some-> u .-missed .-size) (some-> u .-blocked .-size)]
-        keep? (and (some? epoch) (not (::check-cache/fresh c)))
-        kept (.get drop-fills p)]
-    (if (and keep? kept (identical? u (:unknown kept)) (= k (:key kept)))
+  (let [k (drop-fill-key c result skip feet)]
+    (if-let [kept (kept-drop-fill c k)]
       (:v kept)
-      (let [v (drop-fill-of c result skip feet)]
-        (when keep? (.set drop-fills p {:key k :unknown u :v v}))
+      (let [v (run-task (drop-fill-task c result skip feet))]
+        (when k (.set drop-fills (:primitives c) {:key k :unknown (:unknown c) :v v}))
         v))))
+
+(defn ^:async drop-fill-slices!
+  [c k result skip feet]
+  (let [v (await (run-sliced! c (drop-fill-task c result skip feet)))]
+    (.set drop-fills (:primitives c) {:key k :unknown (:unknown c) :v v})
+    v))
+
+(defn drop-fill-sliced
+  "nil when drop-fill would answer from what it keeps or without a flood (or not at all: the walk does not escalate);
+  else a promise of drop-fill's answer, its floods run in tick slices (run-sliced!) and the answer kept for drop-fill
+  under the key of the world it began on."
+  [c result skip feet]
+  (let [k (drop-fill-key c result skip feet)]
+    (when (and k (ways/escalating? c) (drop-fill-asked? result skip) (nil? (kept-drop-fill c k)))
+      (drop-fill-slices! c k result skip feet))))
 
 (defn own-stair
   "The body's own stair cut again (climb/recut) as the way out for a body standing on it under goal: what stands in its

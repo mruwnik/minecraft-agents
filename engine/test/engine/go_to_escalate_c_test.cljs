@@ -763,6 +763,11 @@
       (rays/pass! (aget p "perception")))
     (swap! (fake/state p) assoc-in [:self :pos] home)))
 
+(defn late-flood
+  "The late goal flood's result (choose/late-flood-search, run to its end)."
+  [c pw to range fill-cells]
+  (choose/run-task (choose/search-task (choose/late-flood-search c pw to range fill-cells))))
+
 (defn read-ctx
   "A go-to ctx toward goal within range with the default read (the call's mask spec, as go-to's :unknown true makes it)."
   [eng goal range]
@@ -776,7 +781,7 @@
         c (read-ctx eng [0 64 0] 1)]
     (looked-round! p [[-2.5 59 0.5] [0.5 59 -2.5] [0.5 59 2.5] [4.5 59 0.5] [6.5 65 0.5]])
     (is (sense/unknown? p [0 63 0]) "the pocket is unseen: no x-ray")
-    (is (choose/shut-result? (choose/late-flood c (wworld/path-world p (:unknown c)) [0 64 0] 1 nil)) "its shell seen from round the pit proves it walled in")
+    (is (choose/shut-result? (late-flood c (wworld/path-world p (:unknown c)) [0 64 0] 1 nil)) "its shell seen from round the pit proves it walled in")
     (is (= [[4 64 0]] (take 1 (choose/drop-edges p [[1 65 0]] [6 65 0]))) "the ledge's drop edge nearest the body")
     (is (= [4 64 0] (with-redefs [choose/shut-result? (constantly false)] (:cell (choose/drop-fill (assoc c :jobs.lib.check-cache/fresh true) {:reason :goal-enclosed} #{} [6 65 0]))))
         "with no planner proof, the fill the old rule offered")
@@ -799,7 +804,7 @@
         pw (wworld/path-world p (:unknown c))]
     (is (= {:early-proof false :late-proof true :edges [[3 69 0]] :fill nil}
            {:early-proof (wplan/enclosed-before-search? c pw [1 70 0] 0)
-            :late-proof (choose/shut-result? (choose/late-flood c pw [1 70 0] 0 nil))
+            :late-proof (choose/shut-result? (late-flood c pw [1 70 0] 0 nil))
             :edges (vec (choose/drop-edges p [[1 70 0]] [6 71 0]))
             :fill (:cell (choose/drop-fill c {:reason :goal-cut-off} #{} [6 71 0]))}))))
 
@@ -817,7 +822,7 @@
   (let [{:keys [eng p]} (gt/setup {:self {:pos [11.5 64 0.5]} :blocks two-trenched-lanes :inventory [{:name "dirt" :count 9}]})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [-3 64 2] :range 0} :round 1})
         pw (wworld/path-world p nil)
-        shut? (fn [cells] (choose/shut-result? (choose/late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) [-3 64 2] 0 nil)))]
+        shut? (fn [cells] (choose/shut-result? (late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) [-3 64 2] 0 nil)))]
     (is (= {:none true :alone [true true false] :pair false :fill [4 63 4]}
            {:none (shut? [])
             :alone (mapv #(shut? [%]) [[3 63 0] [5 63 0] [4 63 4]])
@@ -839,12 +844,47 @@
   (let [{:keys [eng p]} (gt/setup {:self {:pos [0.5 64 17.5]} :blocks two-rooms-off-a-walled-goal :inventory [{:name "dirt" :count 9}]})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [0 64 0] :range 0} :round 1})
         pw (wworld/path-world p nil)
-        shut? (fn [cells] (choose/shut-result? (choose/late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) [0 64 0] 0 nil)))]
+        shut? (fn [cells] (choose/shut-result? (late-flood c (wworld/with-walls pw (map #(zipmap [:x :y :z] %) cells)) [0 64 0] 0 nil)))]
     (is (= {:none true :alone [true true] :both false :fill nil}
            {:none (shut? [])
             :alone (mapv #(shut? [%]) [[-6 63 0] [6 63 0]])
             :both (shut? [[-6 63 0] [6 63 0]])
             :fill (choose/joining-fill c {:x 0 :y 64 :z 0} [[-6 63 0] [6 63 0]])}))))
+
+(deftest drop-fill-floods-in-tick-slices-let-the-event-loop-run-and-answer-as-at-once
+  ;; card 50caff72: drop-edges' floods and joining-fill's late floods ran in one stretch (about 75 ms at worst, live
+  ;; clock); there was no task to run in slices. Here the clock moves a ms a read and a planner node is priced at a ms.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ms (atom 1000)
+              yields (atom 0)
+              now clock/now
+              yield! wplan/yield!
+              ceiling cost/search-cell-ceiling-s
+              rooms (gt/setup {:self {:pos [0.5 64 17.5]} :blocks two-rooms-off-a-walled-goal :inventory [{:name "dirt" :count 9}]})
+              rc (core/make-ctx (:eng rooms) {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [0 64 0] :range 0} :round 1})
+              fills [[-6 63 0] [6 63 0]]
+              lanes (gt/setup {:self {:pos [11.5 64 0.5]} :blocks two-trenched-lanes :inventory [{:name "dirt" :count 9}]})
+              lc (core/make-ctx (:eng lanes) {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [-3 64 2] :range 0} :round 1})
+              deck (:p (gt/setup {:self {:pos [-3.5 64 15.5]} :inventory [{:name "dirt" :count 9}] :light [15 15] :seen [[-40 60 -40 70 80 70]]
+                                  :blocks (merge (box -40 63 -40 70 63 70 "stone") (box 0 69 0 9 69 9 "stone"))}))
+              sliced (fn ^:async sliced [t] (reset! yields 0) [(await (choose/run-sliced! (dissoc rc :alive?) t)) @yields])]
+          (set! clock/now #(swap! ms inc))
+          (set! wplan/yield! (fn [] (swap! yields inc) (yield!)))
+          (set! cost/search-cell-ceiling-s (constantly 0.001))
+          (try
+            (let [[edges edge-yields] (await (sliced (choose/drop-edges-task deck [[2 70 2]] [-4 64 15])))
+                  [fill fill-yields] (await (sliced (choose/joining-fill-task rc {:x 0 :y 64 :z 0} fills)))
+                  [lane-fill] (await (sliced (choose/joining-fill-task lc {:x -3 :y 64 :z 2} [[3 63 0] [5 63 0] [4 63 4]])))]
+              (is (= {:edges (vec (choose/drop-edges deck [[2 70 2]] [-4 64 15])) :fill (choose/joining-fill rc {:x 0 :y 64 :z 0} fills) :lane-fill [4 63 4]}
+                     {:edges (vec edges) :fill fill :lane-fill lane-fill})
+                  "the same answers as at once")
+              (is (< 1 edge-yields) "the event loop ran between drop-edges' flood steps")
+              (is (< 1 fill-yields) "the event loop ran between the late flood's steps"))
+            (finally (set! clock/now now)
+                     (set! wplan/yield! yield!)
+                     (set! cost/search-cell-ceiling-s ceiling))))))))
 
 (def hut-door-over-a-hole
   "A cobblestone hut (planks floor y 64, inside x 11..13, z 11..13, feet y 65, roof y 67) on stone ground (top y 63) whose
@@ -859,8 +899,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [asked (atom 0)
-              joining choose/joining-fill
-              {:keys [out p seen]} (with-redefs [choose/joining-fill (fn [& args] (swap! asked inc) (apply joining args))]
+              joining choose/joining-fill-task
+              {:keys [out p seen]} (with-redefs [choose/joining-fill-task (fn [& args] (swap! asked inc) (apply joining args))]
                                      (await (run-job! {:self {:pos {:x 12.5 :y 64 :z 20.5}} :blocks hut-door-over-a-hole :seeing-all true
                                                        :states {"12,65,14" {:open false :half "lower" :facing "south"}
                                                                 "12,66,14" {:open false :half "upper" :facing "south"}}
@@ -2416,11 +2456,11 @@
   ;; Old drop-edges flooded the body's region before knowing the goal's region closed: a deck past the room cells
   ;; (40 by 40) is no closed region, so only its own flood is needed; the 10 by 10 deck closes and needs both.
   (let [floods (atom 0)
-        visit rr/flood-visit
+        begin rr/flood-begin
         edges (fn [deck]
                 (let [{:keys [p]} (gt/setup {:self {:pos [-3.5 64 15.5]} :inventory [{:name "dirt" :count 9}] :light [15 15] :seen [[-40 60 -40 70 80 70]]
                                              :blocks (merge (box -40 63 -40 70 63 70 "stone") (box 0 69 0 (dec deck) 69 (dec deck) "stone"))})]
-                  (with-redefs [rr/flood-visit (fn ([a b c] (visit a b c)) ([a b c d] (swap! floods inc) (visit a b c d)))]
+                  (with-redefs [rr/flood-begin (fn [& args] (swap! floods inc) (apply begin args))]
                     (reset! floods 0)
                     [(vec (choose/drop-edges p [[2 70 2]] [-4 64 15])) @floods])))]
     (is (= [[[] 1] [[] 2]] [(edges 40) (edges 10)]))))

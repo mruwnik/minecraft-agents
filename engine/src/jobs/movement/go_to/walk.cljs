@@ -795,6 +795,7 @@
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+                    _ (when-let [fill (choose/drop-fill-sliced c result (choose/skips c) (end/feet-cell c))] (await fill))
                     result (dive-end c pos (if (choose/escalate? c tries result) result (dark-end c result)))
                     ended (cond-> (if (choose/escalate? c tries result) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]

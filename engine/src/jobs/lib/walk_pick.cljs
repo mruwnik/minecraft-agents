@@ -256,11 +256,17 @@
 
 (defonce ^:private turned (volatile! 0))
 
+(defn slice-left-ms
+  "ms left of the tick since tick-slice! last let the event loop run; 0 once it is due to (a clock set back cannot tell)."
+  []
+  (let [d (- (clock/now) @turned)]
+    (if (<= 0 d (settings/ticks->ms 1)) (- (settings/ticks->ms 1) d) 0)))
+
 (defn ^:async tick-slice!
   "Let the event loop run (wplan/yield!) once a tick has passed since tick-slice! last did (Q202: the body reacts each
   tick), between the items of a long sync loop."
   [c]
-  (when-not (<= 0 (- (clock/now) @turned) (settings/ticks->ms 1)) ; a clock set back cannot tell: let it run
+  (when (zero? (slice-left-ms))
     (await (wplan/yield!))
     (wplan/stop-if-cut! c)
     (vreset! turned (clock/now))))
