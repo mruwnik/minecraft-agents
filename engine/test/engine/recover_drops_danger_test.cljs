@@ -291,20 +291,12 @@
 
 (defn hostile-cut! [eng] (mem/write! (:store eng) :hostile {:name "zombie"} {:cap 5 :ttl 1000000}))
 
-(deftest a-trip-cut-by-hostiles-twice-is-abandoned-as-danger
+(deftest a-trip-cut-by-hostiles-twice-goes-on-while-the-pile-is-worth-its-priced-danger
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (await ((resume-run {:cuts 1} hostile-cut!)))]
-          (is (= {:decision :abandoned :reason :danger} (select-keys (recovered eng) [:decision :reason])))
-          (is (false? (died/died nil (mem/view (:store eng)) {})) "the died trigger stops firing"))))))
-
-(deftest hostile-cuts-count-while-the-trip-is-blocked
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (await ((resume-run {:cuts 1 :blocked true} hostile-cut!)))]
-          (is (= {:decision :abandoned :reason :danger} (select-keys (recovered eng) [:decision :reason]))))))))
+          (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest benign-cuts-are-not-hostile-cuts
   (async done

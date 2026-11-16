@@ -225,9 +225,6 @@
           (end/finish! c :abandoned (assoc decided :reason :unreachable :detail (est/unreachable-detail c pos)))
           (end/finish! c :skip decided)))
 
-      (>= (:cuts (ctx/mem c) 0) (cfg/max-hostile-cuts))
-      (end/finish! c :abandoned (assoc decided :reason :danger))
-
       (child/exhausted? c :go)
       (end/finish! c :abandoned (assoc decided :reason :unreachable :detail (est/unreachable-detail c pos)))
 

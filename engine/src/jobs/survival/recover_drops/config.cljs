@@ -10,7 +10,6 @@
    ::max-collect-passes {:default 3 :doc "Walks back to the pile after a collect pass that left visible items of it behind." :spec (a/int-in 0 nil)}
    ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
    ::search-radius {:default 3 :doc "Blocks out from the pile, on the four compass sides, at which the body looks for items that are not in sight at the pile." :spec (a/int-in 1 nil)}
-   ::max-hostile-cuts {:default 2 :doc "Resumes of one trip that followed a cut by a hostile reflex, or a decline for a danger, before it is given up as :danger." :spec (a/int-in 1 nil)}
    ::seal-radius {:default 5 :doc "Scaffold blocks this body placed within this many blocks of the pile (a flee seal) are taken back when they keep it out of reach." :spec (a/num-in 0 nil)}
    ::seal-sight {:default 4 :doc "The body walks to within this many blocks of the nearest own seal block, to see it, before the seal is taken back." :spec (a/num-in 0 nil)}
    ::deep-drop {:default 8 :doc "A pile this many blocks or more below the body is reached by a stair down (jobs.access.tunnel) once the walk did not arrive, if the despawn window left holds the stair." :spec (a/int-in 1 nil)}
@@ -38,7 +37,6 @@
 
 (defn moved-blocks [] (settings/get settings ::moved-blocks))
 
-(defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
 
 
 (def settle-ms
